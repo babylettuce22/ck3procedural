@@ -1,0 +1,76 @@
+﻿# Broken tusks: a scar, not an inheritance.
+#
+# The drawing is done by the gen_race_tusks group of the generated
+# gfx/portraits/portrait_modifiers/99_gen_race_morphs.txt (Emit/RaceMorphWriter.cs TuskGroup), which
+# shows the snapped variant for either flag below. The inherited shapes — standard, stubby, great —
+# live in the DNA and need nothing here.
+#
+# Two ways to a broken tusk, both for anyone who has tusks (an orc, or a half-orc at half size):
+#   - at game start, a few of the adult cast already carry one, more of the fighters;
+#   - later, a bad wound (wounded_2 or worse, maimed, disfigured) may snap one. Rolled at most once
+#     every three years per character, so a lasting wound is a risk, not a certainty.
+# Permanent: tusks do not grow back.
+
+gen_break_tusk_effect = {
+	random_list = {
+		50 = { add_character_flag = gen_tusk_broken_left }
+		50 = { add_character_flag = gen_tusk_broken_right }
+	}
+}
+
+# Game start: the cast was not born yesterday.
+gen_tusks_game_start_effect = {
+	if = {
+		limit = {
+			gen_has_tusks_trigger = yes
+			is_adult = yes
+			NOT = { gen_has_broken_tusk_trigger = yes }
+		}
+		random = {
+			chance = 4
+			modifier = {
+				add = 4
+				prowess >= 12
+			}
+			modifier = {
+				add = 6
+				has_trait = scarred
+			}
+			gen_break_tusk_effect = yes
+		}
+	}
+}
+
+# The yearly pulse (00_phenotype_on_actions.txt): a bad wound may snap a tusk.
+gen_tusks_upkeep_effect = {
+	if = {
+		limit = {
+			gen_has_tusks_trigger = yes
+			is_adult = yes
+			NOT = { gen_has_broken_tusk_trigger = yes }
+			NOT = { has_character_flag = gen_tusk_wound_rolled }
+			OR = {
+				has_trait = wounded_2
+				has_trait = wounded_3
+				has_trait = maimed
+				has_trait = disfigured
+			}
+		}
+		add_character_flag = {
+			flag = gen_tusk_wound_rolled
+			years = 3
+		}
+		random = {
+			chance = 20
+			gen_break_tusk_effect = yes
+			if = {
+				limit = { is_ai = no }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tusk_broken_toast
+					left_icon = root
+				}
+			}
+		}
+	}
+}

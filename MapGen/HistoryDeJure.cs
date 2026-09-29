@@ -57,8 +57,32 @@ public sealed partial class HistorySim
     public IEnumerable<(Title Title, Title Parent)> Drifted
         => _deJure.Where(kv => kv.Value != kv.Key.Parent).Select(kv => (kv.Key, kv.Value));
 
-    /// <summary>Takes the tree as the written world has it, for the counties the simulation runs over.</summary>
-    private void SeatDeJure()
+    /// <summary>Every title partway through drifting now, in title order. Carried by <see cref="AppliedHistory"/>.</summary>
+    internal IEnumerable<(Title Title, Title Toward, double Progress, int Since)> DriftClocks
+        => _driftClock.OrderBy(kv => kv.Key.Index).Select(kv => (kv.Key, kv.Value.Toward, kv.Value.Progress, kv.Value.Since));
+
+    /// <summary>
+    /// Takes the tree as the written world has it, for the counties the simulation runs over, and
+    /// the drift an earlier history left partway done — every clock it had running goes on from
+    /// where it stood, unless the title has since drifted where it was going.
+    /// </summary>
+    private void SeatDeJure(AppliedHistory? earlier = null)
+    {
+        SeatDeJureTree();
+        if (earlier is not { DriftClocks.Count: > 0 }) return;
+
+        var byKey = new Dictionary<string, Title>(StringComparer.Ordinal);
+        foreach (var t in _driftDuchies.Concat(_driftKingdoms)
+                     .Concat(_driftDuchies.Select(d => d.Parent!)).Concat(_driftKingdoms.Select(k => k.Parent!)))
+            byKey.TryAdd(t.Key, t);
+
+        foreach (var clock in earlier.DriftClocks)
+            if (byKey.TryGetValue(clock.Title, out var title) && byKey.TryGetValue(clock.Toward, out var toward)
+                && _deJure.TryGetValue(title, out var parent) && parent != toward && toward.Tier == parent.Tier)
+                _driftClock[title] = (toward, clock.Progress, clock.Since);
+    }
+
+    private void SeatDeJureTree()
     {
         var duchies = new HashSet<Title>();
         foreach (var county in _sim.Owner.Keys)

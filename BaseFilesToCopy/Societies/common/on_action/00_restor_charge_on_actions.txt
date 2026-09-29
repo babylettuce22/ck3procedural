@@ -1,0 +1,32 @@
+﻿# The Restorationists' charges on the calendar. See 00_restor_charge_effects.txt.
+#
+#   restor_charge_pulse       listed in restor_member_yearly (00_restor_on_actions.txt): each member,
+#                             once a year at a random time. Offers, checks, the AI's work, and a
+#                             player's chance to act.
+#   restor_charge_quarterly   players only, four times a year: checks an open charge so a player who
+#                             has done the work is paid within the season, not at the next pulse.
+
+restor_charge_pulse = {
+	trigger = {
+		restor_active_trigger = yes
+		has_trait = restor_member
+	}
+	effect = {
+		restor_charge_pulse_effect = yes
+	}
+}
+
+quarterly_playable_pulse = {
+	on_actions = { restor_charge_quarterly }
+}
+
+restor_charge_quarterly = {
+	trigger = {
+		restor_active_trigger = yes
+		is_ai = no
+		has_variable = restor_charge
+	}
+	effect = {
+		restor_charge_check_effect = yes
+	}
+}

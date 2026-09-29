@@ -163,6 +163,7 @@ public sealed partial class HistorySim
             colonist.Counties.Add(county);
             _sim.Owner[county] = colonist;
             _sim.CountyCulture[county] = colonist.Culture;
+            PeoplesSettled(county, colonist);
             var near = _sim.Adjacent.TryGetValue(county, out var had) ? had : _sim.Adjacent[county] = [];
             foreach (var n in Neighbours(county))
             {
@@ -209,6 +210,7 @@ public sealed partial class HistorySim
             _wild.Add(county);
             _settledIn.Remove(county);
             _fellIn[county] = _sim.Year;
+            PeoplesFell(county);
             touched.Add(county);
 
             _sim.Log(FormationKind.Ruined, county, realm, null, 0,

@@ -1,0 +1,236 @@
+﻿l_english:
+
+ # ---- The planner group -------------------------------------------------------------------------
+
+ activity_group_type_restor_group:0 "$restor_society_name$"
+
+ restor_gathering_requires_membership_tt:0 "You are sworn to $restor_society_name$, and House $restor_house_name$ has not yet been restored"
+ restor_gathering_requires_rank_tt:0 "You are a #high Captain#! of the Sworn or higher, or the Keeper"
+
+ # ---- The Gathering -----------------------------------------------------------------------------
+ # No datafunctions in _desc: an activity's desc is rendered without a character root.
+
+ activity_restor_gathering_host_an_a: "$host_activity_a$"
+ activity_restor_errand_host_an_a: "$host_activity_a$"
+ activity_restor_gathering:0 "Call a Gathering"
+ activity_restor_gathering_name:0 "Call a Gathering"
+ activity_restor_gathering_owner:0 "Called by [ROOT.Char.GetTitledFirstName]"
+ activity_restor_gathering_selection_tooltip:0 "Call the Sworn to your hall to renew the oath, plan the rising, or deal with a member who stayed away."
+ activity_restor_gathering_host_desc:0 "You are the host. If the Gathering is discovered, it was your hall."
+ activity_restor_gathering_guest_desc:0 "Only the Sworn can be invited."
+ activity_restor_gathering_guest_help_text:0 "Members of $restor_society_name$ you can reach. Nobody else can be invited or attend."
+ activity_restor_gathering_destination_selection:0 "Your own hall"
+ activity_restor_gathering_predicted_cost:0 "No gold. Everyone who comes gains #N 3#! exposure."
+ activity_restor_gathering_conclusion_desc:0 "The Sworn have gone home."
+ activity_restor_gathering_desc:0 "The Sworn meet rarely, in a Captain's or the Keeper's own hall, with the doors barred. Once everyone has arrived, the host decides what the meeting is for: renewing the oath, planning the rising, or judging a member who was asked and stayed away.\n\nEveryone who comes takes a risk. The host is paid for it."
+ TRAVEL_NAME_FOR_activity_restor_gathering:0 "Journey to the Gathering"
+ activity_restor_gathering_province_desc:0 "Your own seat. The Sworn arrive after dark."
+
+ restor_gathering_intent:0 "Keep the Oath"
+ restor_gathering_intent_desc:0 "You are here because you are sworn."
+ restor_gathering_phase:0 "The Gathering"
+ restor_gathering_phase_desc:0 "Two weeks behind barred doors."
+
+ restor_invite_rule_court:0 "Sworn at Court"
+ restor_invite_rule_court_desc:0 "Members of $restor_society_name$ at your own court."
+ restor_invite_rule_elsewhere:0 "Sworn Elsewhere"
+ restor_invite_rule_elsewhere_desc:0 "Every other member of $restor_society_name$ you know of."
+
+ # ---- The Errand --------------------------------------------------------------------------------
+
+ activity_restor_errand:0 "Go on an Errand"
+ activity_restor_errand_name:0 "Errand for the Sworn"
+ activity_restor_errand_owner:0 "[ROOT.Char.GetTitledFirstName]'s Errand"
+ activity_restor_errand_selection_tooltip:0 "Ride into a county of $restor_crown_name$ on the business of the Sworn: stir the old loyalties, raise money for the heir, or find soldiers."
+ activity_restor_errand_host_desc:0 "You lead the errand, and you answer for what happens on it."
+ activity_restor_errand_guest_desc:0 "Up to two of the Sworn from your court can ride with you."
+ activity_restor_errand_guest_help_text:0 "Only the Sworn can come."
+ activity_restor_errand_destination_selection:0 "Which county of $restor_crown_name$?"
+ activity_restor_errand_predicted_cost:0 "No gold. You come home with between #N 2#! and #N 12#! exposure, depending on the errand and how you go about it."
+ activity_restor_errand_conclusion_desc:0 "You are home."
+ activity_restor_errand_desc:0 "A month's journey into a county of $restor_crown_name$, under some other excuse, on the business of the Sworn. You choose before you leave what the errand is for.\n\nWhat it pays, and how much it exposes you, depends on how carefully you go about it."
+ TRAVEL_NAME_FOR_activity_restor_errand:0 "Errand into $restor_crown_name$"
+ activity_restor_errand_province_desc:0 "A county of $restor_crown_name$."
+
+ restor_errand_intent:0 "See It Done"
+ restor_errand_intent_desc:0 "You are here on the business of the Sworn."
+ restor_errand_phase:0 "The Errand"
+ restor_errand_phase_desc:0 "About a month away from home."
+
+ restor_errand_purpose:0 "What the Errand Is For"
+ restor_errand_stir:0 "Stir the Old Loyalties"
+ restor_errand_stir_desc:0 "Talk to the headmen and priests who remember the old kings. #bold The county is stirred for 10 years, which raises support. The most exposure.#!"
+ restor_errand_coin:0 "Raise Coin from Old Friends"
+ restor_errand_coin_desc:0 "Ask the people who did well under the old kings for money. #bold 60 gold for the heir, 100 if you hurry, and favour for you. The least exposure.#!"
+ restor_errand_soldiers:0 "Find Old Soldiers"
+ restor_errand_soldiers_desc:0 "Look for the children of those who fought for the old kings. #bold A knight of the crown's people joins your court, and can be sworn in.#!"
+ restor_errand_coin_needs_pretender_tt:0 "House $restor_house_name$ has a living heir to send the money to"
+
+ # ---- restor.0901 -------------------------------------------------------------------------------
+
+ restor.0901.t:0 "The Sworn Gather"
+ restor.0901.desc:0 "[restor_gathering_count|0] of the Sworn have come to your hall, most of them by back roads and under some other excuse. The doors are barred and the servants have been sent to bed.\n\nEveryone here has risked their neck to come. They will want the night to be for something."
+ restor.0901.desc_alone:0 "You called the Sworn to your hall, and nobody has come."
+ restor.0901.desc_absent:0 "\n\nOne seat is empty. [restor_absentee.GetTitledFirstName] was asked, and has not come."
+ restor.0901.desc_end:0 "\n\nWhat is this Gathering for?"
+ restor.0901.a:0 "We renew the oath, every one of us."
+ restor.0901.b:0 "We plan the rising."
+ restor.0901.b.tt:0 "Choose counties of $restor_crown_name$ to stir: one for each of the Sworn here who holds land"
+ restor.0901.c:0 "We decide what to do about [restor_absentee.GetFirstNameNoTooltip]."
+ restor.0901.c.tt:0 "Judge [restor_absentee.GetTitledFirstName] for staying away, or forgive [restor_absentee.GetHerHim]"
+
+ # ---- restor.0902 -------------------------------------------------------------------------------
+
+ restor.0902.t:0 "Plan the Rising"
+ restor.0902.desc:0 "The talk turns to the old kingdom. When the heir of House $restor_house_name$ raises the standard, it will matter which villages open their gates and which bar them. Villages do not change their minds in a season. Someone has to start on them now.\n\n[restor_rising_n|0] of you here can carry the word home, one county each. [restor_rising_own_count|0] counties of $restor_crown_name$ that nobody has stirred yet are held by someone in this hall. [restor_rising_near_count|0] more lie next to your lands, in other hands."
+ restor.0902.a:0 "Start at home, in our own counties."
+ restor.0902.a.tt:0 "Up to #high [restor_rising_n|0]#! counties of $restor_crown_name$ held by the Sworn in this hall gain #high Old Loyalties Stirred#! for 10 years. Their people will think a little less of their lords."
+ restor.0902.b:0 "Send word into our neighbours' counties."
+ restor.0902.b.tt:0 "Up to #high [restor_rising_n|0]#! counties of $restor_crown_name$ next to our lands, held by others, gain #high Old Loyalties Stirred#! for 10 years. It is their lords who lose goodwill, and yours the risk."
+ restor.0902.c:0 "Not yet. It's too soon to be sending messages."
+ restor.0902.toast:0 "The Old Loyalties Stirred"
+ restor.0902.toast.tt:0 "#high [restor_stirred_now|0]#! counties of $restor_crown_name$ now carry #high Old Loyalties Stirred#!. Support for House $restor_house_name$ is recounted."
+
+ # ---- restor.0903 -------------------------------------------------------------------------------
+
+ restor.0903.title:0 "An Empty Seat"
+ restor.0903.desc:0 "[restor_absentee.GetTitledFirstName] was asked to come and did not. No message, no excuse. Everyone in the hall has noticed, and some of them are watching you to see what you will do about it.\n\nA member who stays away could be ill, or careful, or losing [restor_absentee.GetHerHis] nerve. Once the others start wondering which, it is hard to make them stop."
+ restor.0903.desc_none:0 "Everyone who was asked has come. There is nobody to answer for staying away."
+ restor.0903.a:0 "Name [restor_absentee.GetHerHim] before the Sworn."
+ restor.0903.b:0 "[restor_absentee.GetSheHe|U] will have had [restor_absentee.GetHerHis] reasons. Let it go."
+ restor.0903.c:0 "Good. Let's get on."
+
+ # ---- restor.0904 -------------------------------------------------------------------------------
+
+ restor.0904.t:0 "Raise One of the Sworn"
+ restor.0904.desc:0 "Before the Sworn go home, the host names the one of them who has done the most. [restor_candidate.GetTitledFirstName] has been talked about all week.\n\nYou could name [restor_candidate.GetHerHim]. You could also point out that nobody has done more for the cause than the one who risked [ROOT.Char.GetHerHis] own hall to hold this Gathering."
+ restor.0904.desc_alone:0 "Before the Sworn go home, the host names the one of them who has done the most. There is nobody here to name but yourself."
+ restor.0904.a:0 "[restor_candidate.GetFirstNameNoTooltip] has earned it."
+ restor.0904.a.toast:0 "Raised Before the Sworn"
+ restor.0904.b:0 "I have done more for this than anyone here."
+ restor.0904.c:0 "Nobody is raised this time."
+
+ # ---- restor.0905 -------------------------------------------------------------------------------
+
+ restor.0905.t:0 "The Gathering"
+ restor.0905.desc:0 "You reach [host.GetTitledFirstName]'s hall after dark, as you were told to. [restor_gathering_count|0] of the Sworn are there, [host.GetFirstNameNoTooltip] among them. Some of them you know. Some of them you had no idea were sworn."
+ restor.0905.desc_nohost:0 "You have come to the Gathering. [restor_gathering_count|0] of the Sworn are there."
+ restor.0905.desc_pretender_here:0 "\n\n[restor_pretender.GetTitledFirstName] is here in person. The heir of House $restor_house_name$ does not travel for nothing."
+ restor.0905.desc_pretender_away:0 "\n\n[restor_pretender.GetTitledFirstName] has not come. The heir rarely does. It would be the end of everything if [restor_pretender.GetSheHe] were caught in a room like this."
+ restor.0905.desc_keeper_here:0 "\n\nThe Keeper, [restor_keeper.GetTitledFirstName], sits at the end of the table and says very little."
+ restor.0905.desc_keeper_away:0 "\n\nThe Keeper, [restor_keeper.GetTitledFirstName], is not here."
+ restor.0905.desc_end:0 "\n\nEveryone in this room could hang for being in it. How much you say tonight is up to you."
+ restor.0905.a:0 "Speak up for the heir."
+ restor.0905.b:0 "Listen, and keep to the back of the room."
+
+ # ---- restor.0906 -------------------------------------------------------------------------------
+
+ restor.0906.t:0 "What the Sworn Decided"
+ restor.0906.desc_oath:0 "On the last night [host.GetTitledFirstName] had every one of the Sworn in the hall renew the oath to House $restor_house_name$, one after another, with the doors barred. Nobody refused."
+ restor.0906.desc_rising:0 "[host.GetTitledFirstName] spent the Gathering on plans for the rising. When the Sworn ride home, they will carry word to [restor_stirred_now|0] counties of $restor_crown_name$ that the heir is coming back."
+ restor.0906.desc_judged:0 "[restor_absentee.GetTitledFirstName] was asked to come and stayed away, and [host.GetTitledFirstName] named [restor_absentee.GetHerHim] for it in front of everyone. [restor_absentee.GetSheHe|U] will hear of it soon enough."
+ restor.0906.desc_forgiven:0 "[restor_absentee.GetTitledFirstName] was asked to come and stayed away. [host.GetTitledFirstName] said [restor_absentee.GetSheHe] would have had [restor_absentee.GetHerHis] reasons, and nobody argued."
+ restor.0906.desc_quiet:0 "The Sworn talked about the rising for most of the Gathering, but [host.GetTitledFirstName] decided nothing. It is too soon, [host.GetSheHe] says."
+ restor.0906.a:0 "Understood."
+
+ # ---- restor.0907 -------------------------------------------------------------------------------
+
+ restor.0907.t:0 "Named Before the Sworn"
+ restor.0907.t_forgiven:0 "Excused by the Sworn"
+ restor.0907.desc:0 "A letter reaches you from one of the Sworn. At [host.GetTitledFirstName]'s Gathering your seat was empty, and [host.GetFirstNameNoTooltip] said so in front of everyone. Your name was spoken as the name of someone who cannot be relied on.\n\nThe Sworn will remember it. So will you."
+ restor.0907.desc_forgiven:0 "A letter reaches you from one of the Sworn. At [host.GetTitledFirstName]'s Gathering your seat was empty, and some wanted you named for it. [host.GetFirstNameNoTooltip] would not hear of it, and said you would have had your reasons."
+ restor.0907.a:0 "Write to [host.GetFirstNameNoTooltip] and apologise."
+ restor.0907.b:0 "[host.GetFirstNameNoTooltip] can think what [host.GetSheHe] likes."
+ restor.0907.c:0 "I owe [host.GetFirstNameNoTooltip] for that."
+
+ # ---- restor.0908 -------------------------------------------------------------------------------
+
+ restor.0908.t:0 "Talk in Town"
+ restor.0908.desc:0 "Your steward has come to you with a problem. The town below your hall has noticed the riders: a dozen of them in a week, arriving after dark, none of them wearing their colours. People are asking who they are."
+ restor.0908.desc_usurper:0 "\n\nOne of the people asking is a merchant who sells to [restor_usurper.GetTitledFirstName]'s household, and talks to it too."
+ restor.0908.desc_nousurper:0 "\n\nSooner or later somebody will ask the wrong person."
+ restor.0908.a:0 "Tell them it's a hunting party."
+ restor.0908.a.success:0 "The Story Holds"
+ restor.0908.a.success.tt:0 "The town believes it was a hunt"
+ restor.0908.a.failure:0 "Nobody Believes the Story"
+ restor.0908.b:0 "Pay a few people to talk about something else."
+ restor.0908.b.tt:0 "The talk dies down"
+ restor.0908.c:0 "Let them talk."
+
+ # ---- restor.0910 -------------------------------------------------------------------------------
+
+ restor.0910.t:0 "Setting Out"
+ restor.0910.desc_stir:0 "You leave for [restor_errand_county.GetNameNoTier] tomorrow. At home you have said it is to see about some land. In fact you are going to talk to village headmen and priests who remember the old kings of $restor_crown_name$, and remind them that House $restor_house_name$ has not forgotten them.\n\nIf it goes well, the county will start saying the old king's name again, and support for the heir will grow."
+ restor.0910.desc_coin:0 "You leave for [restor_errand_county.GetNameNoTier] tomorrow. At home you have said it is to visit a cousin. In fact there are people there who did well under the old kings of $restor_crown_name$: merchants, a few minor lords, an abbot or two.\n\nSome of them may be willing to give money to the heir of House $restor_house_name$, if they are asked the right way."
+ restor.0910.desc_soldiers:0 "You leave for [restor_errand_county.GetNameNoTier] tomorrow. At home you have said it is to buy horses. In fact you are looking for fighting men and women whose families served the last kings of $restor_crown_name$, and who might serve House $restor_house_name$ again.\n\nIf you find someone worth having, you will bring them home to your court."
+ restor.0910.a:0 "Saddle the horses."
+ restor.0910.a.tt:0 "The errand takes about a month. You are paid when you come home, and how much you are exposed depends on how you go about it."
+
+ # ---- restor.0911 -------------------------------------------------------------------------------
+
+ restor.0911.t:0 "Riding Out"
+ restor.0911.desc:0 "[host.GetTitledFirstName] has asked you to ride with [host.GetHerHim] to [restor_errand_county.GetNameNoTier] on the business of $restor_society_name$. [host.GetSheHe|U] has not said exactly what the business is, and you have not asked."
+ restor.0911.a:0 "I'll keep my eyes open."
+ restor.0911.a.tt:0 "When the errand ends you gain a little #high standing#! with the Sworn, and a little exposure"
+
+ # ---- restor.0912 -------------------------------------------------------------------------------
+
+ restor.0912.t:0 "On the Road"
+ restor.0912.desc_stir:0 "You have reached [restor_errand_county.GetNameNoTier]. The villages here remember the old kings better than you expected. In one, an old woman keeps the royal arms of $restor_crown_name$, painted on a board, behind her door.\n\nYou could take your time: a few words in each village, and never the same inn twice. Or you could call the headmen together, say it once, loudly, and be gone before anyone thinks to send word."
+ restor.0912.desc_coin:0 "You have reached [restor_errand_county.GetNameNoTier] and found the people you came to see. They are willing to listen. They are less willing to hand money to someone they barely know.\n\nYou could take your time: visit each of them, eat at their tables, and let them come round slowly. Or you could put it to them all together, plainly, and ask for more."
+ restor.0912.desc_soldiers:0 "You have reached [restor_errand_county.GetNameNoTier]. It does not take long to hear of old soldiers here, and of their children who were raised on the stories of the old wars.\n\nYou could take your time, see each of them alone, and find out who can keep quiet. Or you could put the word out in the alehouses and take the best of whoever turns up."
+ restor.0912.a:0 "We take our time."
+ restor.0912.a.tt:0 "Careful: no extra exposure, and any trouble on the road can be dealt with quietly"
+ restor.0912.b:0 "We get it done quickly."
+ restor.0912.b.tt:0 "Hasty: a bigger result when you come home, and #N 2#! more exposure"
+
+ # ---- restor.0913 -------------------------------------------------------------------------------
+
+ restor.0913.t:0 "Seen on the Road"
+ restor.0913.desc_named:0 "[restor_witness.GetTitledFirstName], who serves [restor_errand_county.GetHolder.GetTitledFirstName], was in the inn the night you talked about the old kingdom. [restor_witness.GetSheHe|U] has been asking questions about you ever since."
+ restor.0913.desc_usurper:0 "A tax collector who answers to [restor_usurper.GetTitledFirstName] was in the inn the night you talked about the old kingdom, and has been asking questions about you ever since."
+ restor.0913.desc_unnamed:0 "A reeve of the local lord was in the inn the night you talked about the old kingdom, and has been asking questions about you ever since."
+ restor.0913.desc_careful:0 "\n\nYou have been careful, and nobody has anything they could prove. You know where the witness lives and who they drink with. This can be dealt with quietly."
+ restor.0913.desc_hasty:0 "\n\nYou have not been careful. Too many people have seen your face and heard what you came for. There is no quiet way out of this now: pay, press on and hope, or turn back."
+ restor.0913.a:0 "Deal with it quietly."
+ restor.0913.clean.tt:0 "The witness is dealt with: #P no extra exposure#! when you come home"
+ restor.0913.b:0 "Pay [restor_witness.GetHerHim] to forget it."
+ restor.0913.b_unnamed:0 "Pay the witness to forget it."
+ restor.0913.c:0 "Press on. Nothing can be proven."
+ restor.0913.c.tt:0 "#N 3#! more exposure when you come home, and even odds that the witness talks"
+ restor.0913.d:0 "Turn back. It isn't worth it."
+ restor.0913.d.tt:0 "The errand is abandoned. You come home with nothing, and #N 1#! exposure"
+
+ # ---- restor.0914 -------------------------------------------------------------------------------
+
+ restor.0914.t:0 "Home"
+ restor.0914.desc_stir:0 "You are home from [restor_errand_county.GetNameNoTier]. The headmen you spoke to will do the rest: at markets, at weddings, at church. By next spring half the county will be saying the old king's name again."
+ restor.0914.desc_coin:0 "You are home from [restor_errand_county.GetNameNoTier] with purses that are not yours. The old friends of House $restor_house_name$ gave more than you expected. It will go to the heir, quietly, the way it came."
+ restor.0914.desc_soldiers:0 "You are home from [restor_errand_county.GetNameNoTier], and you did not come back alone. The soldiers you found are riding in behind you, glad of a lord who remembers what their families did for the old kings."
+ restor.0914.desc_abandoned:0 "You are home from [restor_errand_county.GetNameNoTier] with nothing to show for the journey. You turned back when it got dangerous, and you are still free because of it."
+ restor.0914.desc_blank:0 "\n\nNobody needs to know you went."
+ restor.0914.desc_clean:0 "\n\nNobody followed you home. As far as anyone knows, you were away on your own business."
+ restor.0914.desc_messy:0 "\n\nYou left a witness behind, and people who saw your face. What you did there will be talked about."
+ restor.0914.a:0 "It wasn't worth hanging for."
+ restor.0914.a.tt:0 "Nothing is gained"
+ restor.0914.b:0 "The county will remember its kings."
+ restor.0914.b.hasty_tt:0 "A neighbouring county of $restor_crown_name$ is stirred as well"
+ restor.0914.support_tt:0 "Support for House $restor_house_name$ is recounted"
+ restor.0914.c:0 "Send the money to the heir."
+ restor.0914.d:0 "Find them places at my court."
+ restor.0914.d.tt:0 "A soldier of $restor_crown_name$ joins your court as a knight"
+ restor.0914.d.hasty_tt:0 "A second soldier comes with them"
+ restor.0914.witness_talks:0 "[restor_witness.GetFirstNameNoTooltip] Talks"
+ restor.0914.witness_quiet:0 "[restor_witness.GetFirstNameNoTooltip] Keeps Quiet"
+ restor.0914.witness_secret_tt:0 "[restor_witness.GetFirstNameNoTooltip] learns that you are one of the Sworn"
+ restor.0914.witness_quiet_tt:0 "Nothing more comes of it"
+
+ # ---- restor.0915 -------------------------------------------------------------------------------
+
+ restor.0915.t:0 "An Old Soldier"
+ restor.0915.desc:0 "[restor_old_soldier.GetTitledFirstName] has settled in among your knights. [restor_old_soldier.GetSheHe|U] knows more or less why [restor_old_soldier.GetSheHe] was brought here: [restor_old_soldier.GetHerHis] family fought for the old kings of $restor_crown_name$, and you asked a great many questions about that.\n\nYou could swear [restor_old_soldier.GetHerHim] to $restor_society_name$ now. Or you could wait, and watch [restor_old_soldier.GetHerHim] a while first."
+ restor.0915.desc_two:0 "[restor_old_soldier.GetTitledFirstName] and [restor_second_soldier.GetTitledFirstName] have settled in among your knights. Both come from families that fought for the old kings of $restor_crown_name$, and both know more or less why you brought them here.\n\nYou could swear them to $restor_society_name$ now. Or you could wait, and watch them a while first."
+ restor.0915.a:0 "Swear [restor_old_soldier.GetHerHim] in."
+ restor.0915.a_two:0 "Swear them both in."
+ restor.0915.b:0 "Not yet. Let's see how they serve."
+ restor.0915.b.tt:0 "They stay on as knights, and are not sworn"

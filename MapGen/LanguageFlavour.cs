@@ -713,10 +713,46 @@ public sealed class LanguageFlavour
         Adjectival = ["ish", "ic"],
     };
 
+    /// <summary>
+    /// The hornkin's tongue: from the back of the throat. Where Harsh (the orcs') is a clatter of
+    /// front stops and sibilants — g, k, z, sh — this sits further back: uvular q, the fricatives kh
+    /// and gh, a breathy h and glottal stops, over broad open vowels that are often held long. Names
+    /// come out like Qorghal or Haar'ukh rather than Gashnak.
+    /// </summary>
+    public static readonly LanguageFlavour Guttural = new()
+    {
+        Name = "Guttural",
+        Fantasy = true,
+        Consonants = Sounds("q:5 kh:5 gh:4 h:4 r:5 ':3 m:3 n:3 l:2 k:2 g:2 d:2 b:2 t:1 v:1?"),
+        Vowels = Sounds("a:6 o:4 u:4 aa:1.5 oo:1 uu:1 e:1 i:1"),
+        Templates = [0.4, 3, 6, 0.5, 1, 0.8, 1, 0.3],
+        OnsetFamilies = OnsetFamily.ObstruentLiquid,
+        CodaFamilies = CodaFamily.LiquidObstruent | CodaFamily.NasalStop | CodaFamily.FricativeStop,
+        CodaSet = W("q kh gh r n m l h"),
+        MaxBoundaryCluster = 2,
+        Gemination = true,
+        InitialVowel = 0.15,
+        FinalOpen = 0.25,
+        Spelling = Sp(("'", "'")),
+        LongVowelStyles = [Orthography.LongStyle.Double, Orthography.LongStyle.Plain],
+        Barony = W("qor ghal khar haar rukh uqh maar ghun horq khol"),
+        County = W("ghal haar"),
+        Duchy = W("qor khar"),
+        Kingdom = W("khar qor ghal"),
+        Folk = W("ukh aq"),
+        MaleEndings = W("uq ogh arr ukh orn"),
+        FemaleEndings = W("a ha rra uqa"),
+        FeminineMarkers = W("a"),
+        Dithematic = 0.4,
+        RootEnding = 0.5,
+        Patronym = PatronymStyle.Suffix,
+        Adjectival = ["ic", "ish"],
+    };
+
     public static readonly LanguageFlavour[] All =
     [
         Anglic, Norse, Germanic, Latinate, Hellenic, Slavic, Desert, Celtic, Steppe, Finnic,
-        Sanskritic, Iberic, Insular, Savanna, Sylvan, Dwarven, Harsh,
+        Sanskritic, Iberic, Insular, Savanna, Sylvan, Dwarven, Harsh, Guttural,
     ];
 
     public static LanguageFlavour? ByName(string name)

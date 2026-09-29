@@ -1,0 +1,165 @@
+﻿l_english:
+
+ # ---- Interactions ------------------------------------------------------------------------------
+
+ restor_carry_letter_interaction:0 "Carry the Heir's Letter"
+ restor_carry_letter_interaction_desc:0 "Carry a letter from the heir of House $restor_house_name$ to this lord. A lord who reads it kindly will listen if offered the oath. One who does not may show it to the usurper."
+ restor_forge_charters_interaction:0 "Forge the Old Charters"
+ restor_forge_charters_interaction_desc:0 "Have charters of old $restor_crown_name$ forged, granting this lord's best land in the old kingdom, or the crown itself if this lord wears it, to House $restor_house_name$. If the forgery holds, the heir has a claim on it."
+ restor_shelter_heir_interaction:0 "Shelter the Heir"
+ restor_shelter_heir_interaction_desc:0 "Take the landless heir of House $restor_house_name$ into your court and keep [recipient.GetHerHim] safe."
+ restor_grant_heir_seat_interaction:0 "Grant the Heir a Seat"
+ restor_grant_heir_seat_interaction_desc:0 "Give the landless heir of House $restor_house_name$ one of your counties, one in $restor_crown_name$ if you have one. The heir becomes your vassal, and an heir with land can reach for the crown."
+ restor_silence_witness_interaction:0 "Silence a Witness"
+ restor_silence_witness_interaction_desc:0 "This character knows the secret of one of the Sworn. Pay them, frighten them, or arrange an accident."
+ restor_expel_interaction:0 "Expel from the Oath"
+ restor_expel_interaction_desc:0 "Throw this member out of $restor_society_name$. They keep what they know, and they may take it to the usurper."
+
+ # ---- Requirements ------------------------------------------------------------------------------
+
+ restor_power_needs_trusted_tt:0 "You are at least #high Trusted#! among the Sworn"
+ restor_power_needs_captain_tt:0 "You are at least a #high Captain#! of the Sworn"
+ restor_power_needs_elder_tt:0 "You are an #high Elder#! of the Sworn, or the Keeper"
+ restor_power_favour_20_tt:0 "You have at least #high 20#! favour with $restor_society_name$"
+ restor_power_favour_40_tt:0 "You have at least #high 40#! favour with $restor_society_name$"
+ restor_power_favour_60_tt:0 "You have at least #high 60#! favour with $restor_society_name$"
+ restor_power_needs_pretender_tt:0 "House $restor_house_name$ has a living heir"
+ restor_power_heir_landless_tt:0 "The heir holds no land"
+ restor_power_heir_not_adventurer_tt:0 "The heir does not lead an adventurer's camp"
+ restor_shelter_heir_already_sheltered_tt:0 "The heir is not already at the court of one of the Sworn"
+ restor_grant_heir_seat_county_tt:0 "You hold a county besides your capital that you can give away"
+ restor_expel_not_pretender_tt:0 "The heir of House $restor_house_name$ cannot be expelled"
+
+ # ---- Effects -----------------------------------------------------------------------------------
+
+ restor_carry_letter_player_tt:0 "[restor_letter_lord.GetTitledFirstName] decides how to answer the letter"
+ restor_power_letter_sympathetic_tt:0 "[restor_letter_lord.GetFirstNameNoTooltip] will listen if the Sworn offer [restor_letter_lord.GetHerHim] the oath in the next five years"
+ restor_power_letter_to_usurper_tt:0 "The letter is brought to [restor_usurper.GetTitledFirstName]"
+ restor_forge_charters_caught_tt:0 "The forger is caught, and the heir gains no claim"
+ restor_shelter_heir_quiet_tt:0 "Nobody outside the Sworn takes any notice"
+ restor_grant_heir_seat_quiet_tt:0 "The handover passes quietly"
+ restor_silence_witness_choice_tt:0 "You choose how it is done: gold, threats, or an accident"
+ restor_power_silenced_tt:0 "[restor_witness.GetFirstNameNoTooltip] can never expose the Sworn whose secrets [restor_witness.GetSheHe] knows, and each of them loses #P 5#! exposure. Nobody can be made to forget, only to keep quiet."
+ restor_expel_grudge_tt:0 "[restor_expelled.GetFirstNameNoTooltip] may go quietly, or go to the usurper with every name [restor_expelled.GetSheHe] knows"
+
+ # ---- restor.0401-0405: Carry the Heir's Letter ------------------------------------------------
+
+ restor.0401.t:0 "The Letter Is Well Received"
+ restor.0401.desc:0 "Your rider is back from [restor_letter_lord.GetTitledFirstName]'s hall. [restor_letter_lord.GetSheHe|U] read [restor_pretender.GetTitledFirstName]'s letter twice, asked a great many questions about the heir of House $restor_house_name$, and kept the rider at [restor_letter_lord.GetHerHis] table until late.\n\nThere was no written answer. But [restor_letter_lord.GetSheHe] said [restor_letter_lord.GetSheHe] would be glad to hear from the heir again."
+ restor.0401.a:0 "Good. That is a door we can use."
+ restor.0401.a.tt:0 "[restor_letter_lord.GetFirstNameNoTooltip] will listen if the Sworn offer [restor_letter_lord.GetHerHim] the oath in the next five years"
+
+ restor.0402.t:0 "No Answer"
+ restor.0402.desc:0 "[restor_letter_lord.GetTitledFirstName] took [restor_pretender.GetTitledFirstName]'s letter, thanked your rider, fed him, and sent him home the next morning with nothing to carry back.\n\nNobody was arrested and nothing was burned. [restor_letter_lord.GetSheHe|U] has simply not decided that House $restor_house_name$ is worth the risk. Not yet."
+ restor.0402.a:0 "Then we will give [restor_letter_lord.GetHerHim] more reasons."
+
+ restor.0403.t:0 "The Letter Is Handed Over"
+ restor.0403.desc:0 "[restor_letter_lord.GetTitledFirstName] did not answer the heir's letter. [restor_letter_lord.GetSheHe|U] sent it on, seal and all, to [restor_usurper.GetTitledFirstName].\n\nThe letter does not name you. The rider who carried it could, if anyone asks him the right way, and people have seen him coming and going from your lands."
+ restor.0403.a:0 "Then I must be more careful who I write to."
+
+ restor.0404.t:0 "A Letter from the Heir"
+ restor.0404.desc:0 "A rider in plain clothes has brought you a sealed letter. It is from [restor_pretender.GetTitledFirstName], who calls [restor_pretender.GetHerselfHimself] the rightful heir to $restor_crown_name$, the kingdom House $restor_house_name$ lost in $restor_fell_year$.\n\nThe letter asks for nothing yet: only your goodwill, and your memory of the old kingdom. The rider will not say who sent him, but he came from [restor_letter_bearer.GetTitledFirstName]'s lands."
+ restor.0404.a:0 "Tell the heir I remember House $restor_house_name$ kindly."
+ restor.0404.b:0 "Thank the rider, and send him home."
+ restor.0404.c:0 "Send the letter to [restor_usurper.GetTitledFirstName]."
+
+ restor.0405.t:0 "A Letter from the Pretender"
+ restor.0405.desc:0 "[restor_letter_lord.GetTitledFirstName] has sent you a letter, still sealed as it was when it reached [restor_letter_lord.GetHerHim]. It is from [restor_pretender.GetTitledFirstName], who claims the throne of $restor_crown_name$ for House $restor_house_name$, and it asks [restor_letter_lord.GetFirstNameNoTooltip] for [restor_letter_lord.GetHerHis] friendship.\n\nThe rider who carried it came from [restor_letter_bearer.GetTitledFirstName]'s lands."
+ restor.0405.a:0 "Reward [restor_letter_lord.GetFirstNameNoTooltip] for [restor_letter_lord.GetHerHis] loyalty."
+ restor.0405.b:0 "I will remember the name [restor_letter_bearer.GetFirstNameNoTooltip]."
+
+ # ---- restor.0410-0412: Forge the Old Charters --------------------------------------------------
+
+ restor.0410.t:0 "The Charters Hold"
+ restor.0410.desc:0 "The charters are finished: a grant from the old kings of $restor_crown_name$, under the old royal seal, giving [restor_forged_title.GetNameNoTier] to House $restor_house_name$ for ever. The ink has been aged, the wax is the right colour, and two old clerks have sworn they remember the originals.\n\nNobody who has seen them doubts them. [restor_pretender.GetTitledFirstName] now has a claim on [restor_forged_title.GetNameNoTier] that [restor_forge_victim.GetTitledFirstName] cannot laugh off."
+ restor.0410.a:0 "Put them somewhere safe."
+ restor.0410.a.tt:0 "[restor_pretender.GetFirstNameNoTooltip] has a #high pressed claim#! on [restor_forged_title.GetName]"
+
+ restor.0411.t:0 "The Charters Are Doubted"
+ restor.0411.desc:0 "The charters giving [restor_forged_title.GetNameNoTier] to House $restor_house_name$ have been shown around, and not everyone is convinced. [restor_forge_victim.GetTitledFirstName]'s clerks say the seal is wrong and the hand is too new.\n\nThey cannot prove it. The claim stands, but [restor_pretender.GetTitledFirstName] will have to press it before anyone fights for it."
+ restor.0411.a:0 "A weak claim is still a claim."
+ restor.0411.a.tt:0 "[restor_pretender.GetFirstNameNoTooltip] has an #high unpressed claim#! on [restor_forged_title.GetName]"
+
+ restor.0412.t:0 "The Forger Is Caught"
+ restor.0412.desc:0 "The clerk you hired to forge the old charters of [restor_forged_title.GetNameNoTier] has been arrested by [restor_forge_victim.GetTitledFirstName]'s men, with the half-finished documents and a copy of the old royal seal on the table in front of him.\n\nHe has not named you yet. He will. [restor_forge_victim.GetTitledFirstName] already has a good idea who paid him."
+ restor.0412.a:0 "Deny everything."
+
+ # ---- restor.0420-0421: Shelter the Heir -------------------------------------------------------
+
+ restor.0420.t:0 "The Heir Arrives"
+ restor.0420.desc:0 "[restor_pretender.GetTitledFirstName] has arrived at your court with a few servants and very little baggage. To anyone who asks, [restor_pretender.GetSheHe] is a distant relation of yours, come to stay a while.\n\nThe heir of House $restor_house_name$ sleeps under your roof now. The Sworn know it, and they think better of you for it."
+ restor.0420.a:0 "Make [restor_pretender.GetHerHim] welcome."
+
+ restor.0421.t:0 "Talk of a Guest"
+ restor.0421.desc:0 "[restor_pretender.GetTitledFirstName] is settled at your court, but people have noticed. A guest who is never introduced, never goes hunting, and is always somewhere else when visitors come is exactly the kind of guest people talk about.\n\nThe talk has reached [restor_usurper.GetTitledFirstName]'s people. Nobody has come asking questions yet."
+ restor.0421.a:0 "Let them talk. [restor_pretender.GetSheHe|U] stays."
+
+ # ---- restor.0430-0432: Grant the Heir a Seat --------------------------------------------------
+
+ restor.0430.t:0 "The Heir Takes the Seat"
+ restor.0430.desc:0 "[restor_pretender.GetTitledFirstName] now holds [restor_granted_county.GetName], given out of your own lands. The people there remember House $restor_house_name$, and they turned out to watch the heir ride in.\n\nFor the first time in years, one of the old royal family rules part of $restor_crown_name$ again."
+ restor.0430.a:0 "It is a beginning."
+ restor.0430.a.tt:0 "[restor_granted_county.GetName] is in the heir's hands and its people are stirred. Both count toward support for House $restor_house_name$."
+
+ restor.0431.t:0 "A Seat for the Heir"
+ restor.0431.desc:0 "You have given [restor_granted_county.GetName] to [restor_pretender.GetTitledFirstName]. The heir of House $restor_house_name$ holds land again, with a hall, a household and somewhere to stand.\n\nThe handover was quiet. As far as anyone outside the Sworn knows, you have rewarded a loyal follower."
+ restor.0431.a:0 "Now [restor_pretender.GetSheHe] can build."
+
+ restor.0432.t:0 "A Grant Noticed"
+ restor.0432.desc:0 "You have given [restor_granted_county.GetName] to [restor_pretender.GetTitledFirstName], and the heir of House $restor_house_name$ holds land again.\n\nIt did not go unnoticed. [restor_usurper.GetTitledFirstName]'s people want to know why you would give a county to an exile with a dangerous name. So far, nobody has given them a good answer."
+ restor.0432.a:0 "I'll think of one."
+
+ # ---- restor.0440-0443: Silence a Witness ------------------------------------------------------
+
+ restor.0440.t:0 "The Witness"
+ restor.0440.desc:0 "[restor_witness.GetTitledFirstName] knows something [restor_witness.GetSheHe] should not: the name of at least one of $restor_society_name$. So far [restor_witness.GetSheHe] has kept it to [restor_witness.GetHerselfHimself].\n\nYour people have found out where [restor_witness.GetSheHe] sleeps, who [restor_witness.GetSheHe] owes money to, and what frightens [restor_witness.GetHerHim]. You can pay [restor_witness.GetHerHim], frighten [restor_witness.GetHerHim], or arrange an accident."
+ restor.0440.a:0 "Pay [restor_witness.GetHerHim] to keep quiet."
+ restor.0440.a.player_tt:0 "[restor_witness.GetFirstNameNoTooltip] decides whether to take the gold"
+ restor.0440.a.success:0 "[restor_witness.GetFirstNameNoTooltip] Takes the Gold"
+ restor.0440.a.failure:0 "[restor_witness.GetFirstNameNoTooltip] Refuses the Gold"
+ restor.0440.b:0 "Make sure [restor_witness.GetSheHe] understands what talking would cost."
+ restor.0440.b.player_tt:0 "[restor_witness.GetFirstNameNoTooltip] decides whether to be frightened"
+ restor.0440.b.success:0 "[restor_witness.GetFirstNameNoTooltip] Is Frightened into Silence"
+ restor.0440.b.failure:0 "[restor_witness.GetFirstNameNoTooltip] Will Not Be Frightened"
+ restor.0440.c:0 "Arrange an accident."
+ restor.0440.c.success:0 "[restor_witness.GetFirstNameNoTooltip] Is Dead"
+ restor.0440.c.success.tt:0 "What [restor_witness.GetFirstNameNoTooltip] knew dies with [restor_witness.GetHerHim]"
+ restor.0440.c.survived:0 "[restor_witness.GetFirstNameNoTooltip] Survives the Accident"
+ restor.0440.c.failure:0 "[restor_witness.GetFirstNameNoTooltip] Survives, and Knows Who Tried"
+
+ restor.0442.t:0 "An Offer of Gold"
+ restor.0442.desc:0 "A man from [restor_silencer.GetTitledFirstName]'s household has come to see you alone. He puts a heavy purse on the table and says [restor_silencer.GetFirstNameNoTooltip] would take it as a kindness if you forgot what you have heard about $restor_society_name$.\n\nHe does not say what happens if you don't."
+ restor.0442.a:0 "I've already forgotten."
+ restor.0442.b:0 "Take your purse and go."
+
+ restor.0443.t:0 "A Warning"
+ restor.0443.desc:0 "Two of [restor_silencer.GetTitledFirstName]'s men stopped you on the road today. They were polite. They asked after your family by name, and mentioned where each of them sleeps.\n\nThen they said that what you have heard about $restor_society_name$ is best forgotten, and rode off."
+ restor.0443.a:0 "I've heard nothing. I know nothing."
+ restor.0443.b:0 "I won't be threatened. Everyone will hear of this."
+
+ # ---- restor.0450-0454: Expel from the Oath ----------------------------------------------------
+
+ restor.0450.t:0 "Cast Out"
+ restor.0450.desc:0 "[restor_expeller.GetTitledFirstName], Keeper of $restor_society_name$, has thrown you out. The message was short: you are no longer sworn, you are not to contact any of the Sworn, and you are to forget what you know.\n\nYou know a great deal. Names, meeting places, what the heir of House $restor_house_name$ means to do next. There are people who would pay to hear it."
+ restor.0450.a:0 "I'll go quietly."
+ restor.0450.b:0 "Then [restor_usurper.GetTitledFirstName] will hear every name I know."
+ restor.0450.b.tt:0 "Every one of the Sworn you know gains #N 10#! exposure, and [restor_expeller.GetFirstNameNoTooltip] will not forgive it"
+
+ restor.0451.t:0 "Gone Quietly"
+ restor.0451.desc:0 "[restor_expelled.GetTitledFirstName] has read your message and done as [restor_expelled.GetSheHe] was told. [restor_expelled.GetSheHe|U] has not written to any of the Sworn, and nobody has seen [restor_expelled.GetHerHim] near anyone who matters.\n\nPeople who go quietly sometimes stay quiet."
+ restor.0451.a:0 "Good. Keep an eye on [restor_expelled.GetHerHim] all the same."
+
+ restor.0452.t:0 "Gone to the Enemy"
+ restor.0452.desc:0 "[restor_expelled.GetTitledFirstName] did not go quietly. [restor_expelled.GetSheHe|U] went straight to [restor_usurper.GetTitledFirstName] and told [restor_usurper.GetHerHim] everything [restor_expelled.GetSheHe] knew about $restor_society_name$: names, places, and your name first of all.\n\nThe Sworn [restor_expelled.GetFirstNameNoTooltip] knew have been warned. Some of them blame you."
+ restor.0452.a:0 "I should have had [restor_expelled.GetHerHim] watched."
+ restor.0452.a.tt:0 "Every one of the Sworn [restor_expelled.GetFirstNameNoTooltip] knew, you among them, gained #N 10#! exposure"
+
+ restor.0453.t:0 "A Sworn Turns"
+ restor.0453.desc:0 "[restor_expelled.GetTitledFirstName] has come to your court with a story. Until recently, [restor_expelled.GetSheHe] says, [restor_expelled.GetSheHe] was one of $restor_society_name$, who want House $restor_house_name$ back on the throne of $restor_crown_name$. Their Keeper threw [restor_expelled.GetHerHim] out.\n\n[restor_expelled.GetSheHe|U] has given your spymaster a list of names. Some of them you would never have guessed."
+ restor.0453.a:0 "Pay [restor_expelled.GetHerHim] for the names."
+ restor.0453.b:0 "Traitors sell to anyone. Send [restor_expelled.GetHerHim] away."
+
+ restor.0454.t:0 "Named"
+ restor.0454.desc:0 "[restor_expelled.GetTitledFirstName], whom [restor_expeller.GetTitledFirstName] threw out of $restor_society_name$, has gone to [restor_usurper.GetTitledFirstName] and given up the names of the Sworn [restor_expelled.GetSheHe] knew.\n\nYours was one of them."
+ restor.0454.a:0 "Then I lie low for a while."
+ restor.0454.a.tt:0 "Your exposure rose by #N 10#!"

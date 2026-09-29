@@ -7,7 +7,13 @@ namespace Ck3MapGen.AppGUI;
 /// One line of the Quick page's chronicle: the year, what happened, and the colour of the realm
 /// it happened to as the map shows it, for a swatch.
 /// </summary>
-internal readonly record struct ChronicleLine(int Year, string Text, (byte R, byte G, byte B)? Colour);
+internal readonly record struct ChronicleLine(int Year, string Text, (byte R, byte G, byte B)? Colour, MapMark? Mark = null);
+
+/// <summary>
+/// Where a chronicle line happened on the history map, to light up: counties by their place in
+/// <see cref="CountyCanvas.Counties"/>, in the colour of the kind of thing that happened.
+/// </summary>
+internal sealed record MapMark(int[] Counties, (byte R, byte G, byte B) Colour);
 
 /// <summary>
 /// The written world's history, run on from its start date for the Quick page's last step: the
@@ -88,9 +94,25 @@ internal sealed class QuickHistory
                     result.ProvinceOrder, (int)Math.Round(result.Config.Scaled(result.Config.SeaBridgePixelsAtVanilla))))
                 : null;
 
-            var sim = HistorySim.Resume(realms, startYear, rulers: rulers, prehistory: prehistory, wilds: wilds, earlier: applied);
+            var sim = HistorySim.Resume(realms, startYear, rulers: rulers, prehistory: prehistory, wilds: wilds, earlier: applied,
+                peoples: PeoplesOf(written, result.Config));
             return sim is null ? null : new QuickHistory(sim, canvas, realms, rulers, prehistory, applied, kept);
         });
+    }
+
+    /// <summary>
+    /// The peoples a written world's history runs over: its faiths as written, the cultures and
+    /// faiths it was generated with, and each culture's race when the world has races. Null for a
+    /// mod written before the world model was kept, which then assimilates nothing. Shared with the
+    /// History workspace.
+    /// </summary>
+    internal static PeopleGround? PeoplesOf(Emit.WrittenContent written, Config.MapConfig cfg)
+    {
+        if (written.World is not { } world) return null;
+        var ethnicities = written.Ethnicities;
+        bool races = cfg.EnableFantasyEthnicities && cfg.RaceMode != Config.MapConfig.FantasyRaceMode.HumanOnly;
+        return new PeopleGround(written.Faiths, world.Cultures, world.Faiths,
+            races ? c => ethnicities.For(c).Archetype : null);
     }
 
     /// <summary>The year the world stands in now.</summary>
@@ -102,10 +124,48 @@ internal sealed class QuickHistory
     /// <summary>Whether anything has happened since the world was last written.</summary>
     public bool Moved => _sim.Year > _sim.StartYear;
 
+    /// <summary>
+    /// What the peoples did in the history, in a line: counties that took their lords' culture and
+    /// faith, and the duchies that turned. Empty when nothing did.
+    /// </summary>
+    public string PeoplesSummary()
+    {
+        int cultures = _sim.PeopleChanges.Count(c => c.Culture is not null);
+        int faiths = _sim.PeopleChanges.Count(c => c.Faith is not null);
+        // Tension 1 is a duchy turning; 0, one county's own line.
+        int assimilated = _sim.Events.Count(e => e.Kind == FormationKind.Assimilated && e.Tension > 0);
+        int converted = _sim.Events.Count(e => e.Kind == FormationKind.Converted && e.Tension > 0);
+        return cultures + faiths == 0 ? ""
+            : $"; {cultures} counties took their lords' culture and {faiths} their faith, "
+              + $"{assimilated} duchies turned to a new people and {converted} to a new faith";
+    }
+
+    /// <summary>The rules in force: the world's own, all of them, unless the command line narrows them.</summary>
+    public RealmRules Rules
+    {
+        get => _sim.Rules;
+        set => _sim.Rules = value;
+    }
+
+    /// <summary>
+    /// Counties whose independent realm changed since the chronicle was last read, with the realm
+    /// each answered to before — what a war won, a collapse or a fall is marked on the map by.
+    /// </summary>
+    private readonly Dictionary<Title, int> _changedFrom = [];
+
     /// <summary>One year on.</summary>
     public void Tick()
     {
+        var before = new int[_canvas.Counties.Count];
+        for (int c = 0; c < before.Length; c++) before[c] = _sim.OwnerOf(_canvas.Counties[c])?.Root.Id ?? -1;
+
         _sim.Tick();
+
+        for (int c = 0; c < before.Length; c++)
+        {
+            var county = _canvas.Counties[c];
+            if ((_sim.OwnerOf(county)?.Root.Id ?? -1) != before[c]) _changedFrom.TryAdd(county, before[c]);
+        }
 #if DEBUG
         // The one place a broken rule would otherwise go unseen until the mod failed to load.
         var problems = _sim.Check();
@@ -161,10 +221,97 @@ internal sealed class QuickHistory
             var about = e.Actor ?? e.Subject;
             bool fallen = e.Kind == FormationKind.Standing && e.Tension == 0;
             var colour = !fallen && _sim.OwnerOf(about) is { } owner ? ColourOf(owner.Root) : ((byte, byte, byte)?)null;
-            lines.Add(new ChronicleLine(e.Year, text, colour));
+            lines.Add(new ChronicleLine(e.Year, text, colour, Mark(e)));
         }
+        _changedFrom.Clear();
         return lines;
     }
+
+    // What each kind of news is marked in on the map: bright enough to read over any realm's colour.
+    private static readonly (byte R, byte G, byte B) WarMark = (235, 64, 52), RealmMark = (250, 246, 232),
+        SettleMark = (120, 225, 110), RuinMark = (36, 30, 26), DriftMark = (190, 150, 255),
+        CultureMark = (70, 205, 240), FaithMark = (255, 205, 70), HouseMark = (215, 110, 235);
+
+    /// <summary>
+    /// Where a headline happened, as the map now stands: the land a war or a fall moved, the realm
+    /// that broke free or changed hands, the county settled, ruined or converted, the duchy that
+    /// turned or drifted. Null when there is nowhere to point.
+    /// </summary>
+    private MapMark? Mark(FormationEvent e)
+    {
+        var owner = _sim.OwnerOf(e.Actor ?? e.Subject);
+        IEnumerable<Title> place;
+        (byte, byte, byte) colour;
+        switch (e.Kind)
+        {
+            // What changed hands this year to either side of it.
+            case FormationKind.WarEnded or FormationKind.Absorbed:
+            {
+                var sides = new[] { e.Actor, e.Counterpart }.OfType<Title>()
+                    .Select(t => _sim.OwnerOf(t)?.Root).OfType<Polity>().ToHashSet();
+                place = _changedFrom.Keys.Where(c => _sim.OwnerOf(c)?.Root is { } r && sides.Contains(r));
+                colour = WarMark;
+                break;
+            }
+            // Everything that walked out of the realm this year.
+            case FormationKind.Collapsed:
+            {
+                int was = owner?.Id ?? -1;
+                place = _changedFrom.Where(kv => kv.Value == was).Select(kv => kv.Key)
+                    .Concat(owner is null ? [] : Bloc(owner));
+                colour = RealmMark;
+                break;
+            }
+            // The realm itself, with whoever answers to it.
+            case FormationKind.Vassalized or FormationKind.Freed or FormationKind.Fragmented
+                or FormationKind.Partitioned or FormationKind.Usurped:
+                place = owner is null ? [e.Subject] : Bloc(owner);
+                colour = RealmMark;
+                break;
+            case FormationKind.Colonised:
+                place = [e.Subject];
+                colour = SettleMark;
+                break;
+            case FormationKind.Ruined:
+                place = [e.Subject];
+                colour = RuinMark;
+                break;
+            // A county, or the duchy it tipped.
+            case FormationKind.Assimilated or FormationKind.Converted:
+                place = e.Tension > 0 && e.Subject.Parent is { } duchy ? CountiesOf(duchy) : [e.Subject];
+                colour = e.Kind == FormationKind.Assimilated ? CultureMark : FaithMark;
+                break;
+            // Logged at the drifted title's capital: a county for a duchy, a duchy for a kingdom.
+            case FormationKind.Drifted:
+                place = CountiesOf(e.Subject.Tier == "c" && e.Subject.Parent is { } title ? title : e.Subject);
+                colour = DriftMark;
+                break;
+            case FormationKind.Feud:
+                place = [e.Subject];
+                colour = HouseMark;
+                break;
+            case FormationKind.Standing:
+                place = e.Tension > 0 && owner is not null ? Bloc(owner.Root) : [e.Subject];
+                colour = HouseMark;
+                break;
+            default:
+                return null;
+        }
+
+        var counties = place.Where(_canvas.Index.ContainsKey).Select(c => _canvas.Index[c]).Distinct().ToArray();
+        if (counties.Length == 0 && _canvas.Index.TryGetValue(e.Subject, out int subject)) counties = [subject];
+        return counties.Length == 0 ? null : new MapMark(counties, colour);
+    }
+
+    /// <summary>A realm's counties and those of every realm that answers to it.</summary>
+    private IEnumerable<Title> Bloc(Polity p)
+        => _sim.Realms.Where(q => { for (var r = q; r is not null; r = r.Suzerain) if (r == p) return true; return false; })
+                      .SelectMany(q => q.Counties);
+
+    private static IEnumerable<Title> CountiesOf(Title title) => Titles.Flatten([title]).Where(t => t.Tier == "c");
+
+    /// <summary>A mark as a picture to lay over the map. See <see cref="CountyCanvas.Mask"/>.</summary>
+    public (Bitmap Mask, Rectangle Bounds)? Paint(MapMark mark) => _canvas.Mask(mark.Counties, mark.Colour);
 
     private static string? Headline(FormationEvent e)
     {
@@ -182,7 +329,8 @@ internal sealed class QuickHistory
             // Only wars someone won: one abandoned, ended in a white peace or won for no land is
             // left out.
             FormationKind.WarEnded => e.Note is { } note && note.Contains(" won ") && !note.Contains("none of it") ? note : null,
-            FormationKind.Partitioned or FormationKind.Usurped or FormationKind.Drifted or FormationKind.Ruined => e.Note,
+            FormationKind.Partitioned or FormationKind.Usurped or FormationKind.Drifted or FormationKind.Ruined
+                or FormationKind.Assimilated or FormationKind.Converted => e.Note,
             // A feud begun is a headline; one cooling is detail.
             // Houses: a rivalry or a feud begun (not a feud cooling, nor a quarrel), a house become
             // the greatest, one of the greatest fallen.

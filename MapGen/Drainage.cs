@@ -82,6 +82,13 @@ public sealed class Drainage
             }
         });
 
+        // Two noise fields of the drainage's own, off the world seed rather than the shared rng
+        // so nothing drawn after this stage moves.
+        var meanderNoise = new SimplexNoise(Rng.For(cfg.Seed, 0x3D7A, 0));
+        var flatNoise = new SimplexNoise(Rng.For(cfg.Seed, 0x3D7A, 1));
+        AddMeander(contouredElev, landMask, width, height, meanderNoise);
+        var flatCost = FlatCost(landMask, width, height, flatNoise);
+
         // 2. Sea against lake, so the flood knows which water is base level and which is terrain.
         var (body, area, isSea) = WaterBodies(landMask, width, height);
         var drains = new byte[n];
@@ -96,7 +103,7 @@ public sealed class Drainage
         // 3. Monotonic Priority Flood (guarantees every cell has a strictly lower downhill route)
         var filled = new float[n];
         var receiver = new int[n];
-        FloodMonotonic(contouredElev, drains, landMask, width, height, filled, receiver);
+        FloodMonotonic(contouredElev, drains, landMask, flatCost, width, height, cfg.Seed, filled, receiver);
 
         // 4. Exact In-Degree Topological Flow Accumulation
         var flow = AccumulateTopological(drains, width, height, receiver, Weights(runoffMm, landMask));
@@ -122,8 +129,89 @@ public sealed class Drainage
         return drainage;
     }
 
+    // How far the drainage wanders off the fall line on an even slope: the meander term's gradient
+    // as a fraction of the slope's, so about 0.6 turns the flow some 30 degrees either way. Kept
+    // under 1 so the term never out-climbs the slope and digs pits of its own.
+    private const double MeanderRatio = 0.6;
+    private const double MeanderWavelength = 48.0;    // province px between bends
+    private const float MeanderCap = 4f;              // elevation units, about the contour noise's own
+
+    // Spread of the lift across a flat, as the log of the ratio between its dearest and cheapest
+    // cells. The route across a flat is the cheapest chain of lifts, so this is what bends it.
+    private const double FlatCostSpread = 2.0;
+    private const double FlatWavelength = 40.0;
+
+    /// <summary>
+    /// Bends the drainage off the fall line on even slopes. The flood hands each cell to its lowest
+    /// neighbour, which on a plain with a steady tilt is the same one of eight directions cell after
+    /// cell, so a stream came down a gentle plain as a ruler-straight line, several of them in
+    /// parallel. The contour noise above is a fixed few units and does nothing against a tilt of
+    /// any size. This term is scaled to the local slope instead — the slope of the surface being
+    /// routed, contour noise included, so a plain the heightmap has perfectly level still bends —
+    /// and turns the flow by about the same angle on any gentle ground; on steep ground the cap
+    /// leaves the valleys in charge. It only steers the routing: the terrain is never touched.
+    /// </summary>
+    private static void AddMeander(float[] contoured, byte[] landMask, int width, int height, SimplexNoise noise)
+    {
+        int n = width * height;
+        var elevation = (float[])contoured.Clone();
+        var slope = new float[n];
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int i = y * width + x;
+                if (landMask[i] == 0) continue;
+                int xl = Math.Max(0, x - 1), xr = Math.Min(width - 1, x + 1);
+                int yu = Math.Max(0, y - 1), yd = Math.Min(height - 1, y + 1);
+                float gx = (elevation[y * width + xr] - elevation[y * width + xl]) / Math.Max(1, xr - xl);
+                float gy = (elevation[yd * width + x] - elevation[yu * width + x]) / Math.Max(1, yd - yu);
+                slope[i] = MathF.Sqrt(gx * gx + gy * gy);
+            }
+        });
+        slope = Field.BlurRunning(slope, width, height, (int)(MeanderWavelength / 4), 2);
+
+        // A unit-amplitude wave of wavelength L has a gradient of about 2π/L at its steepest.
+        double amplitudePerSlope = MeanderRatio * MeanderWavelength / (2 * Math.PI);
+        double f = 1.0 / MeanderWavelength;
+
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int i = y * width + x;
+                if (landMask[i] == 0) continue;
+                double amplitude = Math.Min(MeanderCap, slope[i] * amplitudePerSlope);
+                contoured[i] += (float)(amplitude * Field.Fbm(noise, x * f + 41.7, y * f - 12.9, 2));
+            }
+        });
+    }
+
+    /// <summary>
+    /// What it costs the flood to lift a cell across a flat, as a multiple of the base increment.
+    /// With one increment everywhere the flood crossed a flat as a breadth-first wave, and the
+    /// route from any cell back to the spill was a straight or diagonal ray of it. A river
+    /// crossing a filled basin, or a plain the contour noise had pitted, was drawn as a ruled
+    /// line. Varying the cost makes the route the cheapest winding path through it instead.
+    /// </summary>
+    private static float[] FlatCost(byte[] landMask, int width, int height, SimplexNoise noise)
+    {
+        var cost = new float[width * height];
+        double f = 1.0 / FlatWavelength;
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int i = y * width + x;
+                if (landMask[i] == 0) continue;    // water's lift is fixed
+                cost[i] = (float)Math.Exp(FlatCostSpread * Field.Fbm(noise, x * f, y * f, 3));
+            }
+        });
+        return cost;
+    }
+
     private static void FloodMonotonic(
-        float[] elevation, byte[] drains, byte[] landMask, int width, int height,
+        float[] elevation, byte[] drains, byte[] landMask, float[] flatCost, int width, int height, int seed,
         float[] filled, int[] receiver)
     {
         int n = width * height;
@@ -183,7 +271,8 @@ public sealed class Drainage
                 if (nextLevel <= curLevel)
                 {
                     // Slightly lift flooded depression so water slopes strictly towards outlet
-                    nextLevel = curLevel + (landMask[nb] != 0 ? EpsilonLand : EpsilonWater);
+                    // Land's lift varies (FlatCost) and stays dearer than water's at its cheapest.
+                    nextLevel = curLevel + (landMask[nb] != 0 ? EpsilonLand * flatCost[nb] : EpsilonWater);
                 }
 
                 level[nb] = nextLevel;
@@ -191,7 +280,63 @@ public sealed class Drainage
             }
         }
 
+        FollowFallLine(level, landMask, width, height, seed, receiver);
+
         for (int i = 0; i < n; i++) filled[i] = (float)level[i];
+    }
+
+    /// <summary>
+    /// Re-points each land cell's receiver along the true direction of descent. The flood hands a
+    /// cell to whichever neighbour reached it first, which is its lowest, and a diagonal neighbour
+    /// lies √2 further off and so is lowest for most directions of fall. A stream on even ground
+    /// therefore came down as a string of identical steps, nearly always diagonal, and was drawn as
+    /// a ruled 45° line. Here the fall line is measured across the cell (the flood's own levels,
+    /// lifts on a flat included), and the receiver is one of the two neighbours bracketing it,
+    /// chosen with odds set by how near each lies to it — the Rho8 idea — so a course follows the
+    /// fall line on average and bends where it bends. Only a strictly lower neighbour is taken, so
+    /// the tree stays acyclic; lakes keep the flood's route, which a major river has to stay wet on.
+    /// </summary>
+    private static void FollowFallLine(double[] level, byte[] landMask, int width, int height, int seed, int[] receiver)
+    {
+        // Direction m (0..7) counter-clockwise from +x, in steps of 45°.
+        int[] mx = [1, 1, 0, -1, -1, -1, 0, 1];
+        int[] my = [0, 1, 1, 1, 0, -1, -1, -1];
+        ulong salt = (ulong)(uint)seed * 0x9E3779B97F4A7C15UL ^ 0x5F3A_17C9UL;
+
+        Parallel.For(1, height - 1, y =>
+        {
+            for (int x = 1; x < width - 1; x++)
+            {
+                int i = y * width + x;
+                if (landMask[i] == 0 || receiver[i] == i) continue;
+
+                double gx = level[i + 1] - level[i - 1];
+                double gy = level[i + width] - level[i - width];
+                if (gx == 0 && gy == 0) continue;
+
+                double a = Math.Atan2(-gy, -gx) / (Math.PI / 4);
+                if (a < 0) a += 8;
+                int lo = (int)Math.Floor(a) & 7, hi = (lo + 1) & 7;
+                double towardsHi = a - Math.Floor(a);
+
+                bool pickHi = Unit(salt, (ulong)i) < towardsHi;
+                int first = pickHi ? hi : lo, second = pickHi ? lo : hi;
+
+                int c1 = (y + my[first]) * width + x + mx[first];
+                int c2 = (y + my[second]) * width + x + mx[second];
+                if (level[c1] < level[i]) receiver[i] = c1;
+                else if (level[c2] < level[i]) receiver[i] = c2;
+            }
+        });
+
+        static double Unit(ulong salt, ulong key)
+        {
+            ulong z = salt + key * 0xBF58476D1CE4E5B9UL;
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+            z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+            z ^= z >> 31;
+            return (z >> 11) * (1.0 / (1UL << 53));
+        }
     }
 
     /// <summary>

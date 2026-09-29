@@ -1,0 +1,945 @@
+﻿# The Restorationists' powers. restor.0400-0499.
+#
+#   restor_carry_letter_interaction       Trusted, 20 favour     a letter from the heir to a lord of the crown
+#   restor_forge_charters_interaction     Captain, 60 favour     the heir gains a claim on a lord's crown title
+#   restor_shelter_heir_interaction       any landed member      a landless heir comes to your court
+#   restor_grant_heir_seat_interaction    Trusted                give the landless heir one of your counties
+#   restor_silence_witness_interaction    Elder or Keeper, 40    someone who knows a Sworn's secret
+#   restor_expel_interaction              the Keeper             throw a member out of the oath
+#
+# Each is a character_interaction, after the prototype (../../../SocietyPrototype): the recipient is
+# the target, `cooldown` is the cooldown, is_valid_showing_failures_only explains the greyed button.
+# Favour is a variable, which `cost` cannot hold, so it is checked in a custom_tooltip and spent by
+# restor_favour_spend_effect in on_accept. Membership is asserted in is_shown -- a non-member must
+# never see one of these exist -- and again in is_available for the AI.
+#
+# Every power ends in a roll or a choice with several results, and every result is reported: an
+# event for the member who used it (restor.0401-0454), a toast where a toast is enough. Each one
+# moves something the support meter or the society's safety reads: a lord's opinion of the heir,
+# a claim, the heir's land and court, a witness, a member.
+#
+# Letter, charters, silence and expel are underground only. Shelter and seat are for the heir, who
+# only exists underground -- the triumph clears the slot -- so they gate on restor_active_trigger.
+
+# =====================================================================================
+#  CARRY THE HEIR'S LETTER                                                     (Trusted)
+# =====================================================================================
+#
+# A letter from the pretender to a lord who holds land of the crown. A player lord answers it
+# themselves (restor.0404); an AI lord's answer is rolled. Warm: better opinion of the heir, and the
+# lord is marked restor_sounded_sympathetic for five years, which the recruiters' Offer the Oath
+# reads. Ignored: a little opinion. Shown to the usurper: exposure for the one who sent it.
+
+restor_carry_letter_interaction = {
+	category = interaction_category_friendly
+	icon = send_poem_interaction
+	interface_priority = 40
+	common_interaction = no
+
+	desc = restor_carry_letter_interaction_desc
+
+	auto_accept = yes
+
+	cooldown = { months = 6 }
+	cooldown_against_recipient = { years = 5 }
+
+	is_shown = {
+		restor_underground_trigger = yes
+		scope:actor = { has_trait = restor_member }
+		scope:actor != scope:recipient
+		scope:recipient = {
+			is_landed = yes
+			restor_holds_crown_land_trigger = yes
+			NOT = { has_trait = restor_member }
+			NOT = { restor_is_usurper_trigger = yes }
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = restor_power_needs_trusted_tt
+			scope:actor = { restor_rank_at_least_trigger = { RANK = 25 } }
+		}
+		custom_tooltip = {
+			text = restor_power_favour_20_tt
+			scope:actor = {
+				has_variable = restor_favour
+				var:restor_favour >= 20
+			}
+		}
+		custom_tooltip = {
+			text = restor_power_needs_pretender_tt
+			exists = global_var:restor_pretender
+		}
+		scope:actor = { is_imprisoned = no }
+		scope:recipient = {
+			is_adult = yes
+			is_imprisoned = no
+		}
+	}
+
+	on_accept = {
+		scope:actor = {
+			restor_save_scopes_effect = yes
+			save_scope_as = restor_letter_bearer
+			restor_favour_spend_effect = { VALUE = 20 }
+		}
+		scope:recipient = { save_scope_as = restor_letter_lord }
+
+		if = {
+			limit = { scope:recipient = { is_ai = no } }
+			custom_tooltip = restor_carry_letter_player_tt
+			hidden_effect = {
+				scope:recipient = { trigger_event = { id = restor.0404 days = 2 } }
+			}
+		}
+		else = {
+			random_list = {
+				40 = {
+					modifier = {
+						add = 15
+						scope:recipient = {
+							opinion = {
+								target = scope:restor_pretender
+								value >= 0
+							}
+						}
+					}
+					modifier = {
+						add = 10
+						scope:recipient = { culture = scope:restor_pretender.culture }
+					}
+					modifier = {
+						add = 10
+						scope:actor = { diplomacy >= 12 }
+					}
+					modifier = {
+						add = 10
+						scope:recipient = { has_trait = ambitious }
+					}
+					restor_power_letter_warm_effect = yes
+				}
+				40 = {
+					restor_power_letter_ignored_effect = yes
+				}
+				20 = {
+					trigger = { exists = scope:restor_usurper }
+					modifier = {
+						add = 15
+						scope:recipient = {
+							any_liege_or_above = { restor_is_usurper_trigger = yes }
+						}
+					}
+					modifier = {
+						add = 10
+						scope:recipient = {
+							opinion = {
+								target = scope:restor_usurper
+								value >= 30
+							}
+						}
+					}
+					modifier = {
+						add = -10
+						scope:actor = { intrigue >= 12 }
+					}
+					restor_power_letter_betrayed_effect = yes
+				}
+			}
+		}
+	}
+
+	is_available = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		restor_rank_at_least_trigger = { RANK = 25 }
+	}
+
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		max = 10
+	}
+	ai_targets = {
+		ai_recipients = vassals
+		max = 10
+	}
+	ai_targets = {
+		ai_recipients = peer_vassals
+		max = 10
+	}
+	ai_targets = {
+		ai_recipients = liege
+	}
+
+	ai_frequency = 24
+
+	ai_will_do = {
+		base = 10
+		modifier = {
+			add = 10
+			scope:actor = { has_trait = gregarious }
+		}
+		modifier = {
+			add = -5
+			scope:actor = { has_trait = shy }
+		}
+		# The win-over charge names this lord.
+		modifier = {
+			add = 50
+			scope:actor = {
+				has_variable = restor_charge
+				var:restor_charge = flag:win_over
+				has_variable = restor_charge_target
+				var:restor_charge_target = scope:recipient
+			}
+		}
+		modifier = {
+			factor = 0
+			scope:recipient = { has_character_flag = restor_sounded_sympathetic }
+		}
+	}
+}
+
+# =====================================================================================
+#  FORGE THE OLD CHARTERS                                                      (Captain)
+# =====================================================================================
+#
+# The pretender gains a claim on the target's best title inside the crown: the crown itself if the
+# target wears it (a usurped crown), else a duchy of it, else their most developed county of it. Flawless: pressed. Doubted: unpressed. Caught:
+# no claim, and the forger is badly exposed. Forging is never quiet: +8 exposure whatever happens.
+
+restor_forge_charters_interaction = {
+	category = interaction_category_hostile
+	icon = icon_claim_pressed
+	interface_priority = 40
+	common_interaction = no
+
+	desc = restor_forge_charters_interaction_desc
+
+	auto_accept = yes
+
+	cooldown = { years = 3 }
+	cooldown_against_recipient = { years = 10 }
+
+	is_shown = {
+		restor_underground_trigger = yes
+		scope:actor = { has_trait = restor_member }
+		scope:actor != scope:recipient
+		exists = global_var:restor_pretender
+		scope:recipient = {
+			is_landed = yes
+			NOT = { has_trait = restor_member }
+			NOT = { restor_is_pretender_trigger = yes }
+			NOT = {
+				any_liege_or_above = { restor_is_pretender_trigger = yes }
+			}
+			any_held_title = { restor_power_forgeable_title_trigger = yes }
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = restor_power_needs_captain_tt
+			scope:actor = { restor_rank_at_least_trigger = { RANK = 50 } }
+		}
+		custom_tooltip = {
+			text = restor_power_favour_60_tt
+			scope:actor = {
+				has_variable = restor_favour
+				var:restor_favour >= 60
+			}
+		}
+		scope:actor = { is_imprisoned = no }
+	}
+
+	on_accept = {
+		scope:actor = {
+			restor_save_scopes_effect = yes
+			save_scope_as = restor_forger
+			restor_favour_spend_effect = { VALUE = 60 }
+			restor_exposure_gain_effect = { VALUE = 8 }
+		}
+		scope:recipient = {
+			save_scope_as = restor_forge_victim
+			# Highest tier first: the crown itself when this lord wears it, else the duchy with the
+			# most counties, else the richest county.
+			if = {
+				limit = {
+					has_title = global_var:restor_crown
+					global_var:restor_crown = { restor_power_forgeable_title_trigger = yes }
+				}
+				global_var:restor_crown = { save_scope_as = restor_forged_title }
+			}
+			else_if = {
+				limit = {
+					any_held_title = {
+						tier = tier_duchy
+						restor_power_forgeable_title_trigger = yes
+					}
+				}
+				ordered_held_title = {
+					limit = {
+						tier = tier_duchy
+						restor_power_forgeable_title_trigger = yes
+					}
+					order_by = {
+						value = 0
+						every_de_jure_county = { add = 1 }
+					}
+					save_scope_as = restor_forged_title
+				}
+			}
+			else = {
+				ordered_held_title = {
+					limit = {
+						tier = tier_county
+						restor_power_forgeable_title_trigger = yes
+					}
+					order_by = development_level
+					save_scope_as = restor_forged_title
+				}
+			}
+		}
+
+		random_list = {
+			55 = {
+				modifier = {
+					add = 10
+					scope:actor = { learning >= 12 }
+				}
+				modifier = {
+					add = 10
+					scope:actor = { intrigue >= 12 }
+				}
+				modifier = {
+					add = 10
+					scope:actor = { has_trait = deceitful }
+				}
+				scope:restor_pretender = { add_pressed_claim = scope:restor_forged_title }
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = restor.0410 days = 3 } }
+				}
+			}
+			30 = {
+				scope:restor_pretender = { add_unpressed_claim = scope:restor_forged_title }
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = restor.0411 days = 3 } }
+				}
+			}
+			15 = {
+				modifier = {
+					add = 10
+					scope:recipient = { intrigue >= 12 }
+				}
+				modifier = {
+					add = 5
+					scope:recipient = { has_trait = paranoid }
+				}
+				modifier = {
+					add = -5
+					scope:actor = { has_trait = deceitful }
+				}
+				custom_tooltip = restor_forge_charters_caught_tt
+				scope:actor = { restor_exposure_gain_effect = { VALUE = 20 } }
+				scope:recipient = {
+					add_opinion = {
+						target = scope:actor
+						modifier = angry_opinion
+						opinion = -20
+					}
+				}
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = restor.0412 days = 3 } }
+				}
+			}
+		}
+	}
+
+	is_available = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		restor_rank_at_least_trigger = { RANK = 50 }
+	}
+
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		max = 10
+	}
+	ai_targets = {
+		ai_recipients = vassals
+		max = 10
+	}
+	ai_targets = {
+		ai_recipients = peer_vassals
+		max = 10
+	}
+
+	ai_frequency = 60
+
+	ai_will_do = {
+		base = 5
+		modifier = {
+			add = 15
+			scope:actor = { intrigue >= 12 }
+		}
+		modifier = {
+			add = 10
+			scope:actor = { has_trait = deceitful }
+		}
+		modifier = {
+			add = 20
+			scope:recipient = { restor_is_usurper_trigger = yes }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = {
+				has_variable = restor_exposure
+				var:restor_exposure >= 15
+			}
+		}
+		modifier = {
+			factor = 0
+			scope:actor = { has_trait = honest }
+		}
+	}
+}
+
+# =====================================================================================
+#  SHELTER THE HEIR                                                            (any rank)
+# =====================================================================================
+#
+# A landless heir who is not already at a sworn lord's court comes to yours. The host gains favour
+# and standing, and the heir remembers it. Whether anyone notices is rolled.
+
+restor_shelter_heir_interaction = {
+	category = interaction_category_friendly
+	icon = guest
+	interface_priority = 50
+	common_interaction = no
+
+	desc = restor_shelter_heir_interaction_desc
+
+	auto_accept = yes
+
+	cooldown = { years = 1 }
+
+	is_shown = {
+		restor_active_trigger = yes
+		scope:actor = {
+			has_trait = restor_member
+			NOT = { restor_is_pretender_trigger = yes }
+			is_landed = yes
+		}
+		scope:recipient = { restor_is_pretender_trigger = yes }
+	}
+
+	is_valid_showing_failures_only = {
+		scope:recipient = {
+			custom_tooltip = {
+				text = restor_power_heir_landless_tt
+				is_landed = no
+			}
+			custom_tooltip = {
+				text = restor_power_heir_not_adventurer_tt
+				is_landless_adventurer = no
+			}
+			custom_tooltip = {
+				text = restor_shelter_heir_already_sheltered_tt
+				NOT = {
+					court_owner ?= { has_trait = restor_member }
+				}
+			}
+			is_imprisoned = no
+		}
+	}
+
+	on_accept = {
+		scope:actor = {
+			restor_save_scopes_effect = yes
+			save_scope_as = restor_host
+			add_courtier = scope:recipient
+			restor_favour_gain_effect = { VALUE = 30 }
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = 5
+			}
+		}
+		scope:recipient = {
+			add_opinion = {
+				target = scope:actor
+				modifier = restor_sheltered_the_heir_opinion
+			}
+		}
+		random_list = {
+			75 = {
+				modifier = {
+					add = 10
+					scope:actor = { intrigue >= 12 }
+				}
+				custom_tooltip = restor_shelter_heir_quiet_tt
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = restor.0420 days = 2 } }
+				}
+			}
+			25 = {
+				trigger = {
+					exists = scope:restor_usurper
+					scope:actor != scope:restor_usurper
+				}
+				modifier = {
+					add = 15
+					scope:actor = {
+						any_liege_or_above = { restor_is_usurper_trigger = yes }
+					}
+				}
+				scope:actor = { restor_exposure_gain_effect = { VALUE = 10 } }
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = restor.0421 days = 5 } }
+				}
+			}
+		}
+	}
+
+	is_available = {
+		restor_active_trigger = yes
+		has_trait = restor_member
+		is_landed = yes
+	}
+
+	ai_targets = {
+		ai_recipients = guests
+	}
+	ai_targets = {
+		ai_recipients = family
+	}
+	ai_targets = {
+		ai_recipients = dynasty
+		max = 20
+	}
+
+	ai_frequency = 12
+
+	ai_will_do = {
+		base = 30
+		modifier = {
+			add = 20
+			scope:actor = { has_trait = generous }
+		}
+		modifier = {
+			add = 60
+			scope:actor = {
+				has_variable = restor_charge
+				var:restor_charge = flag:shelter
+			}
+		}
+		modifier = {
+			factor = 0.5
+			scope:actor = {
+				has_variable = restor_exposure
+				var:restor_exposure >= 15
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  GRANT THE HEIR A SEAT                                                       (Trusted)
+# =====================================================================================
+#
+# Give the landless heir one of your counties: one of the crown's if you hold one, the richest of
+# them first. The heir becomes your vassal and landed, which is what the crown decision needs, and
+# the county counts toward support at once. Vanilla's own grant (court.8040): a granted change.
+
+restor_grant_heir_seat_interaction = {
+	category = interaction_category_friendly
+	icon = icon_transfer_county
+	interface_priority = 50
+	common_interaction = no
+
+	desc = restor_grant_heir_seat_interaction_desc
+
+	auto_accept = yes
+
+	cooldown = { years = 5 }
+
+	is_shown = {
+		restor_active_trigger = yes
+		scope:actor = {
+			has_trait = restor_member
+			NOT = { restor_is_pretender_trigger = yes }
+			is_landed = yes
+		}
+		scope:recipient = {
+			restor_is_pretender_trigger = yes
+			is_landed = no
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = restor_power_needs_trusted_tt
+			scope:actor = { restor_rank_at_least_trigger = { RANK = 25 } }
+		}
+		custom_tooltip = {
+			text = restor_grant_heir_seat_county_tt
+			scope:actor = {
+				any_held_title = { restor_power_grantable_county_trigger = yes }
+			}
+		}
+		scope:recipient = {
+			custom_tooltip = {
+				text = restor_power_heir_not_adventurer_tt
+				is_landless_adventurer = no
+			}
+			is_imprisoned = no
+		}
+	}
+
+	on_accept = {
+		scope:actor = {
+			restor_save_scopes_effect = yes
+			save_scope_as = restor_granter
+			ordered_held_title = {
+				limit = { restor_power_grantable_county_trigger = yes }
+				order_by = {
+					value = development_level
+					if = {
+						limit = { restor_crown_county_trigger = yes }
+						add = 1000
+					}
+				}
+				save_scope_as = restor_granted_county
+			}
+			create_title_and_vassal_change = {
+				type = granted
+				save_scope_as = change
+				add_claim_on_loss = no
+			}
+			scope:restor_granted_county = {
+				change_title_holder = {
+					holder = scope:recipient
+					change = scope:change
+				}
+			}
+			resolve_title_and_vassal_change = scope:change
+			restor_favour_gain_effect = { VALUE = 80 }
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = 20
+			}
+		}
+		scope:recipient = {
+			add_opinion = {
+				target = scope:actor
+				modifier = received_title_county
+			}
+		}
+
+		random_list = {
+			40 = {
+				trigger = {
+					scope:restor_granted_county = { restor_crown_county_trigger = yes }
+				}
+				scope:restor_granted_county = {
+					add_county_modifier = {
+						modifier = restor_county_stirred
+						years = 10
+					}
+				}
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = restor.0430 days = 3 } }
+				}
+			}
+			40 = {
+				custom_tooltip = restor_grant_heir_seat_quiet_tt
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = restor.0431 days = 3 } }
+				}
+			}
+			20 = {
+				trigger = {
+					exists = scope:restor_usurper
+					scope:actor != scope:restor_usurper
+				}
+				modifier = {
+					add = 10
+					scope:actor = {
+						any_liege_or_above = { restor_is_usurper_trigger = yes }
+					}
+				}
+				scope:actor = { restor_exposure_gain_effect = { VALUE = 10 } }
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = restor.0432 days = 5 } }
+				}
+			}
+		}
+
+		# The map moved: the meter is recomputed now rather than at the next yearly pulse.
+		hidden_effect = { restor_support_refresh_effect = yes }
+	}
+
+	is_available = {
+		restor_active_trigger = yes
+		has_trait = restor_member
+		is_landed = yes
+		restor_rank_at_least_trigger = { RANK = 25 }
+	}
+
+	ai_targets = {
+		ai_recipients = courtiers
+	}
+	ai_targets = {
+		ai_recipients = guests
+	}
+
+	ai_frequency = 24
+
+	ai_will_do = {
+		base = 20
+		modifier = {
+			add = 20
+			scope:actor = { has_trait = generous }
+		}
+		modifier = {
+			add = -15
+			scope:actor = { has_trait = greedy }
+		}
+		# A lord with land to spare gives more readily than one with two counties.
+		modifier = {
+			add = 20
+			scope:actor = {
+				any_held_title = {
+					count >= 4
+					tier = tier_county
+				}
+			}
+		}
+		modifier = {
+			factor = 0
+			scope:actor = {
+				NOT = {
+					any_held_title = {
+						count >= 2
+						tier = tier_county
+					}
+				}
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  SILENCE A WITNESS                                                     (Elder or Keeper)
+# =====================================================================================
+#
+# Someone who is not sworn knows a Sworn's secret. The member chooses how in restor.0440: gold,
+# threats, or an accident. A player witness answers the gold and the threat themselves.
+
+restor_silence_witness_interaction = {
+	category = interaction_category_hostile
+	icon = secret
+	interface_priority = 40
+	common_interaction = no
+
+	desc = restor_silence_witness_interaction_desc
+
+	auto_accept = yes
+
+	cooldown = { years = 2 }
+	cooldown_against_recipient = { years = 5 }
+
+	is_shown = {
+		restor_underground_trigger = yes
+		scope:actor = { has_trait = restor_member }
+		scope:actor != scope:recipient
+		scope:recipient = {
+			NOT = { has_trait = restor_member }
+			NOT = { restor_is_usurper_trigger = yes }
+			any_known_secret = { secret_type = secret_restor_member }
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = restor_power_needs_elder_tt
+			scope:actor = {
+				OR = {
+					restor_rank_at_least_trigger = { RANK = 75 }
+					restor_is_keeper_trigger = yes
+				}
+			}
+		}
+		custom_tooltip = {
+			text = restor_power_favour_40_tt
+			scope:actor = {
+				has_variable = restor_favour
+				var:restor_favour >= 40
+			}
+		}
+		scope:actor = { is_imprisoned = no }
+		scope:recipient = { is_adult = yes }
+	}
+
+	on_accept = {
+		scope:actor = {
+			restor_save_scopes_effect = yes
+			save_scope_as = restor_silencer
+			restor_favour_spend_effect = { VALUE = 40 }
+		}
+		scope:recipient = { save_scope_as = restor_witness }
+		custom_tooltip = restor_silence_witness_choice_tt
+		hidden_effect = {
+			scope:actor = { trigger_event = restor.0440 }
+		}
+	}
+
+	is_available = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		OR = {
+			restor_rank_at_least_trigger = { RANK = 75 }
+			restor_is_keeper_trigger = yes
+		}
+	}
+
+	ai_targets = {
+		ai_recipients = courtiers
+	}
+	ai_targets = {
+		ai_recipients = vassals
+		max = 15
+	}
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		max = 15
+	}
+	ai_targets = {
+		ai_recipients = liege
+	}
+
+	ai_frequency = 36
+
+	ai_will_do = {
+		base = 5
+		# Their own neck first.
+		modifier = {
+			add = 40
+			scope:recipient = {
+				any_known_secret = {
+					secret_type = secret_restor_member
+					secret_owner = scope:actor
+				}
+			}
+		}
+		modifier = {
+			add = 10
+			scope:actor = { has_trait = paranoid }
+		}
+		modifier = {
+			add = 10
+			scope:actor = { restor_is_keeper_trigger = yes }
+		}
+	}
+}
+
+# =====================================================================================
+#  EXPEL FROM THE OATH                                                         (Keeper)
+# =====================================================================================
+#
+# The Keeper throws a member out. The expelled chooses in restor.0450: go quietly, or go to the
+# usurper and name every Sworn they know.
+
+restor_expel_interaction = {
+	category = interaction_category_hostile
+	icon = icon_hostile
+	interface_priority = 30
+	common_interaction = no
+
+	desc = restor_expel_interaction_desc
+
+	auto_accept = yes
+
+	cooldown = { years = 1 }
+
+	is_shown = {
+		restor_underground_trigger = yes
+		scope:actor = { restor_is_keeper_trigger = yes }
+		scope:actor != scope:recipient
+		scope:recipient = { has_trait = restor_member }
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = restor_expel_not_pretender_tt
+			scope:recipient = {
+				NOT = { restor_is_pretender_trigger = yes }
+			}
+		}
+	}
+
+	on_accept = {
+		scope:actor = {
+			restor_save_scopes_effect = yes
+			save_scope_as = restor_expeller
+		}
+		scope:recipient = {
+			save_scope_as = restor_expelled
+			restor_leave_effect = yes
+			add_opinion = {
+				target = scope:actor
+				modifier = restor_named_before_the_sworn_opinion
+			}
+			hidden_effect = {
+				trigger_event = { id = restor.0450 days = 2 }
+			}
+		}
+		custom_tooltip = restor_expel_grudge_tt
+	}
+
+	is_available = {
+		restor_underground_trigger = yes
+		restor_is_keeper_trigger = yes
+	}
+
+	ai_targets = {
+		ai_recipients = realm_characters
+		max = 30
+	}
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		max = 15
+	}
+
+	ai_frequency = 60
+
+	ai_will_do = {
+		base = 0
+		# A member everybody suspects is a danger to the rest.
+		modifier = {
+			add = 15
+			scope:recipient = {
+				has_variable = restor_exposure
+				var:restor_exposure >= 25
+			}
+		}
+		modifier = {
+			add = 15
+			scope:actor = { has_relation_rival = scope:recipient }
+		}
+		modifier = {
+			add = 10
+			scope:recipient = {
+				opinion = {
+					target = scope:actor
+					value <= -30
+				}
+			}
+		}
+		modifier = {
+			factor = 0
+			scope:actor = { is_close_or_extended_family_of = scope:recipient }
+		}
+	}
+}

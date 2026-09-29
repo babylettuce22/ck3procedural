@@ -15,8 +15,12 @@ internal sealed record EarShape(
     double Length, double Out, double Up, double Back, double Taper, double Thin,
     double MaskLo = 0.25, double PivotHeight = 0.45)
 {
-    /// <summary>Long, swept up and back, tapering to a fine point. Seen in game 2026-09-28.</summary>
-    public static readonly EarShape HighElf = new(Length: 4.2, Out: 0.22, Up: 0.80, Back: 0.56, Taper: 0.72, Thin: 0.35);
+    /// <summary>
+    /// Long, swept up and back, tapering to a fine point. Seen in game 2026-09-28 at Out 0.22; raised
+    /// to 0.40 so the tips break the head's outline in the front and three-quarter views CK3 shows
+    /// portraits in (0.50 began to splay).
+    /// </summary>
+    public static readonly EarShape HighElf = new(Length: 4.2, Out: 0.40, Up: 0.80, Back: 0.56, Taper: 0.72, Thin: 0.35);
 }
 
 /// <summary>
@@ -78,6 +82,17 @@ internal static class PointedEars
         ShapeSide(p, q, skinIx, skinW, influences, count, leftBone, +1.0, s);
         ShapeSide(p, q, skinIx, skinW, influences, count, rightBone, -1.0, s);
 
+        return Finish(p, q, n, ta, tri);
+    }
+
+    /// <summary>
+    /// A head blendshape's streams from moved positions <paramref name="q"/>: positions to float,
+    /// and every normal and tangent turned by however much the surface under it turned. Shared with
+    /// <see cref="Horns"/>' skin mound, which moves the head the same way for a different reason.
+    /// </summary>
+    internal static Result Finish(float[] p, double[] q, float[] n, float[] ta, int[] tri)
+    {
+        int count = p.Length / 3;
         var groups = WeldGroups(p, count);
         var n0 = VertexNormals(ToDouble(p), tri, groups, count);
         var n1 = VertexNormals(q, tri, groups, count);

@@ -1,0 +1,339 @@
+﻿# THE ERRAND -- a member rides into the old kingdom on the society's business. Events restor.0910-0915.
+#
+# A port of the prototype's errand (../../../../SocietyPrototype/common/activities/activity_types/
+# 00_society_errand_activity.txt): the same staged spine, the same rule that only the last event
+# pays, the same gating. What changed is where it goes and what it is for.
+#
+# WHERE: a county of the fallen crown, anywhere in the world. `is_location_valid`'s root is the
+# PROVINCE (not a title -- the prototype hit that), so the county is reached through `county`, and
+# only the county's own capital province is offered so the map shows one pin per county. The crown
+# is generated, so there is no static title key to give `province_filter = landed_title`; the
+# filter is `all` for players and the host's top realm for the AI, which is where an AI's crown
+# land is if it has any.
+#
+# WHAT FOR, chosen in the planner (the `restor_errand_purpose` option category), because it
+# decides what the member is risking before they set out:
+#
+#   restor_errand_stir       Stir the Old Loyalties   the county gets restor_county_stirred for
+#                                                     10 years (what the charges pack's "stir"
+#                                                     charge checks) and support is recomputed
+#   restor_errand_coin       Raise Coin from Old      gold for the pretender, favour for you
+#                            Friends
+#   restor_errand_soldiers   Find Old Soldiers        a veteran of the crown's people joins your
+#                                                     court and is sworn in
+#
+# THE SPINE (host only; a guest gets one beat):
+#
+#   restor.0910   day  1   Setting Out            what the member told people at home
+#   restor.0912   day 10   On the Road            careful or hasty
+#   restor.0913   day 18   The Witness            one of the usurper's people sees too much
+#   restor.0914   day 26   Home                   the ONLY event that pays
+#   restor.0915           the veteran, if one was found: swear them in now or later
+#
+# Exposure scales with the purpose (stirring a county is the loudest thing a member can do), with
+# haste, and with how the witness was handled. See restor.0914.
+#
+# Traps kept from the prototype: guest_invite_rules indexed (`rules = { 1 = x }`, a bare list is a
+# loose value); background with environment + ambience; every read of scope:activity is `?=`, so
+# the DebugPanel can fire any of these outside an activity without a wall of "Undefined event
+# target" errors.
+
+activity_restor_errand = {
+	activity_group_type = restor_group
+
+	# Above the Gathering: this is the one a new member can actually do.
+	sort_order = 10
+
+	# ---- Gate: any member, underground ----------------------------------------------------
+	#
+	# No rank gate. The Errand is how a new member earns standing; gating it would close the loop
+	# the prototype warned about.
+	is_shown = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+
+		is_playable_character = yes
+
+		trigger_if = {
+			limit = { is_ai = yes }
+			is_at_war = no
+			NOT = { has_variable = conqueror }
+			NOT = { has_realm_law = uncrowned }
+		}
+	}
+
+	can_always_plan = no
+
+	can_start_showing_failures_only = {
+		is_available_adult = yes
+		NOT = { is_activity_type_on_cooldown = activity_restor_errand }
+
+		custom_tooltip = {
+			text = restor_gathering_requires_membership_tt
+			has_trait = restor_member
+			restor_underground_trigger = yes
+		}
+	}
+
+	is_valid = {
+		NOT = { has_variable = activity_invalidated }
+		scope:host = {
+			is_playable_character = yes
+			is_incapable = no
+			has_trait = restor_member
+		}
+	}
+
+	on_host_death = {
+		scope:activity = {
+			set_variable = { name = activity_invalidated }
+		}
+	}
+
+	on_invalidated = {
+		invalidation_imprisoned_effect = yes
+		invalidation_incapable_effect = yes
+	}
+
+	###################
+	# WHAT FOR
+	###################
+
+	# Read back with
+	#   scope:activity ?= { has_activity_option = { category = restor_errand_purpose option = X } }
+	options = {
+		restor_errand_purpose = {
+			restor_errand_stir = {
+				default = yes
+				is_shown = { always = yes }
+				ai_will_do = {
+					value = 40
+					if = {
+						limit = {
+							has_variable = restor_charge
+							var:restor_charge = flag:stir
+						}
+						add = 100
+					}
+				}
+			}
+
+			restor_errand_coin = {
+				is_shown = { always = yes }
+				is_valid = {
+					custom_tooltip = {
+						text = restor_errand_coin_needs_pretender_tt
+						exists = global_var:restor_pretender
+					}
+				}
+				ai_will_do = {
+					value = 30
+					if = {
+						limit = { has_trait = greedy }
+						add = -15
+					}
+				}
+			}
+
+			restor_errand_soldiers = {
+				is_shown = { always = yes }
+				ai_will_do = {
+					value = 20
+					if = {
+						limit = { has_trait = brave }
+						add = 10
+					}
+				}
+			}
+		}
+	}
+
+	###################
+	# WHERE
+	###################
+
+	province_filter = all
+	ai_province_filter = top_realm
+	is_single_location = yes
+	max_province_icons = 30
+
+	is_location_valid = {
+		has_province_owner = yes
+		county ?= {
+			restor_crown_county_trigger = yes
+			title_province = root
+		}
+	}
+
+	# An unstirred county is the better target, and the one the host's charge names the best.
+	ai_will_select_province = {
+		value = 10
+		if = {
+			limit = {
+				county ?= {
+					NOT = { has_county_modifier = restor_county_stirred }
+				}
+			}
+			add = 20
+		}
+		if = {
+			limit = {
+				scope:host = {
+					has_variable = restor_charge
+					var:restor_charge = flag:stir
+					has_variable = restor_charge_target
+				}
+				# restor_charge_target is a county for a stir charge and a character for the others;
+				# tiger types it by its first set (a character). Guarded above by the charge kind.
+				#tiger-ignore(key=scopes)
+				county ?= { this = scope:host.var:restor_charge_target }
+			}
+			add = 100
+		}
+	}
+
+	province_description = {
+		desc = activity_restor_errand_province_desc
+	}
+
+	###################
+	# WHEN
+	###################
+
+	wait_time_before_start = { months = 1 }
+	max_guest_arrival_delay_time = { months = 2 }
+
+	# Three years, as the prototype: the Errand pays well, and a member who could run one every
+	# spring would out-earn everything else the society offers.
+	cooldown = { years = 3 }
+
+	###################
+	# THE CHAIN
+	###################
+
+	phases = {
+		restor_errand_phase = {
+			is_predefined = yes
+
+			on_phase_active = {
+				if = {
+					limit = { this = scope:host }
+					scope:activity = { progress_activity_phase_after = { weeks = 4 } }
+					trigger_event = { id = restor.0910 days = 1 }
+					trigger_event = { id = restor.0912 days = 10 }
+					trigger_event = { id = restor.0913 days = 18 }
+					trigger_event = { id = restor.0914 days = 26 }
+				}
+				else = {
+					trigger_event = { id = restor.0911 days = 2 }
+				}
+			}
+		}
+	}
+
+	###################
+	# WHO
+	###################
+
+	host_intents = {
+		default = restor_errand_intent
+		intents = { restor_errand_intent }
+	}
+
+	guest_intents = {
+		default = restor_errand_intent
+		intents = { restor_errand_intent }
+	}
+
+	# Two at most, and none is fine: a new member IS a lone member.
+	max_guests = 2
+	allow_zero_guest_invites = yes
+	open_invite = no
+
+	guest_invite_rules = {
+		rules = {
+			1 = restor_invite_rule_court
+		}
+	}
+
+	can_be_activity_guest = {
+		has_trait = restor_member
+		restor_underground_trigger = yes
+		is_adult = yes
+		is_healthy = yes
+		in_diplomatic_range = scope:host
+	}
+
+	guest_join_chance = {
+		base = 40
+		base_activity_modifier = yes
+		activity_guest_shared_ai_accept_modifier = yes
+	}
+
+	# ---- Payment ----
+	#
+	# The host is paid in restor.0914 and nowhere else, because what they earn depends on how the
+	# Errand went. A guest's share does not, so it is paid here: a little standing for coming,
+	# and a little exposure for having been seen on the road.
+	on_complete = {
+		if = {
+			limit = { NOT = { this = scope:host } }
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = 4
+			}
+			restor_exposure_gain_effect = { VALUE = 1 }
+		}
+	}
+
+	###################
+	# AI
+	###################
+
+	ai_will_do = {
+		value = 5
+		if = {
+			limit = {
+				has_variable = restor_charge
+				var:restor_charge = flag:stir
+			}
+			add = 25
+		}
+		if = {
+			limit = {
+				has_variable = restor_exposure
+				var:restor_exposure >= 15
+			}
+			add = -20
+		}
+		if = {
+			limit = { has_trait = craven }
+			add = -5
+		}
+	}
+
+	ai_check_interval_by_tier = {
+		barony = 120
+		county = 120
+		duchy = 120
+		kingdom = 120
+		empire = 120
+		hegemony = 120
+	}
+
+	background = {
+		texture = "gfx/interface/illustrations/event_scenes/dungeon.dds"
+		environment = "environment_event_dungeon"
+		ambience = "event:/SFX/Ambience/2DAmbience/Interface/dungeon"
+	}
+
+	window_characters = {
+		host = {
+			camera = camera_body
+			effect = {
+				scope:host = { save_scope_as = selected_character }
+			}
+		}
+	}
+}

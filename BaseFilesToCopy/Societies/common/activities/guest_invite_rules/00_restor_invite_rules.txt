@@ -1,0 +1,51 @@
+﻿# Who the Gathering's and the Errand's guest lists may offer.
+#
+# A rule is a BUILDER, not a filter (see the prototype's 00_society_invite_rules.txt): the tab shows
+# whatever the effect put in `characters`, so every route in carries its own membership limit. The
+# hard gate is still each activity's `can_be_activity_guest`, which the engine asks of every
+# candidate however they were proposed.
+#
+# Unlike the prototype, the Restorationists keep a world-wide roster (global list restor_roster,
+# maintained by the swear-in and leave effects), so "elsewhere" is one walk over it instead of a
+# guess from vassals, kin and liege. Diplomatic range is left to can_be_activity_guest.
+#
+# Both rules are listed under `rules`, never `defaults`, in the activities: a default rule arrives
+# ticked and the host never gets to choose whom to name to whom.
+#
+# `bannable_serving_diarch_trigger = no` is copied from every vanilla rule: a serving diarch cannot
+# leave, so offering one is offering a name that always declines.
+
+# Sworn members at the host's own court.
+restor_invite_rule_court = {
+	effect = {
+		every_courtier = {
+			limit = {
+				has_trait = restor_member
+				is_adult = yes
+				bannable_serving_diarch_trigger = no
+			}
+			add_to_list = characters
+		}
+	}
+}
+
+# Every other living member of the roster.
+restor_invite_rule_elsewhere = {
+	effect = {
+		if = {
+			limit = { restor_active_trigger = yes }
+			every_in_global_list = {
+				variable = restor_roster
+				limit = {
+					is_alive = yes
+					is_adult = yes
+					has_trait = restor_member
+					NOT = { this = root }
+					NOT = { is_courtier_of = root }
+					bannable_serving_diarch_trigger = no
+				}
+				add_to_list = characters
+			}
+		}
+	}
+}

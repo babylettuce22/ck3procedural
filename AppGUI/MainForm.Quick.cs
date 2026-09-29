@@ -136,11 +136,13 @@ public sealed partial class MainForm
 
         if (completed)
         {
-            // The world's history runs on from here until the player accepts it; a world with no
-            // grown realms to run goes straight to the done screen.
+            // The world's history is readied but not started: the done screen asks whether to run
+            // it on first. A world with no grown realms to run is simply done.
             (_quickModDir, _quickTook) = (modDir, took);
-            _quickHistory = null;
-            if (await StartQuickHistoryAsync()) return;
+            _quickHistory = await PrepareQuickHistoryAsync();
+            _quickHistoryWritten = false;
+            _quick.Run.PaintMark = _quickHistory is { } marks ? marks.Paint : null;
+            if (_quickHistory is { } history) _quick.Run.OfferHistory(history.Began);
 
             _quick.ShowDone(modDir, took);
             FinishLauncherRun(_quick.Run);
@@ -263,6 +265,10 @@ public sealed partial class MainForm
         var (width, height) = choices.Pixels;
         var switchedOff = _forge.AdoptPreset(type.PresetPathFor(choices.Mountains), choices.Seed, width, height);
 
+        // A set-piece map type draws its crater (or whatever it is built around) for this seed
+        // over the guide the preset shipped with; the Terrain workspace shows it as paint.
+        QuickFeatures.Draw(_forge.Session.Pipeline, type.Feature, choices.Seed);
+
         // The relief choice bends the preset's own relief stages; the Terrain workspace shows the
         // result as ordinary parameter values, so it can be tuned further from there.
         QuickTerrain.Apply(_forge.Session.Pipeline, choices.Relief);
@@ -330,23 +336,9 @@ public sealed partial class MainForm
     private TimeSpan _quickTook;
 
     /// <summary>
-    /// Readies the written world's history and starts it on the page. False when there is none to
-    /// run — the world's realms were not grown — or it could not be prepared; the caller then shows
-    /// the done screen as before.
+    /// The written world's history, readied to run on from its start date. Null when there is none
+    /// to run — the world's realms were not grown — or it could not be prepared.
     /// </summary>
-    private async Task<bool> StartQuickHistoryAsync()
-    {
-        var history = await PrepareQuickHistoryAsync();
-        if (history is null) return false;
-
-        _quickHistory = history;
-        _quickHistoryWritten = false;
-        _quick.ShowHistory(history.Began);
-        ShowHistoryYear();
-        SetHistoryPlaying(true);
-        return true;
-    }
-
     private async Task<QuickHistory?> PrepareQuickHistoryAsync()
     {
         if (_result is not { } result || _written is not { } written) return null;
@@ -446,8 +438,9 @@ public sealed partial class MainForm
     }
 
     /// <summary>
-    /// Back from the done screen to the history, from where it was accepted. After a write that is
-    /// the world as written, picked up again; otherwise the same simulation simply carries on.
+    /// From the done screen to the history: started for the first time when the player says yes to
+    /// it, or carried on from where it was accepted. After a write that is the world as written,
+    /// picked up again; otherwise the same simulation simply carries on.
     /// </summary>
     private async Task ContinueQuickHistoryAsync()
     {
@@ -466,6 +459,7 @@ public sealed partial class MainForm
             }
             _quickHistory = resumed;
             _quickHistoryWritten = false;
+            _quick.Run.PaintMark = resumed.Paint;
         }
 
         ShowHistoryYear();

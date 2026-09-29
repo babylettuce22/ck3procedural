@@ -1,0 +1,9 @@
+﻿# Instantiates the society panel.
+#
+# Names the HOST type, not the window itself: the host is what exists from startup at zero size,
+# and the window it contains is what appears when the decision sets the flag. Nothing in script
+# can create a window, so without an entry here the file loads and nothing is ever drawn.
+#
+# The registry resolves a top-level widget INSTANCE rather than a type, so the named widget must
+# also be instantiated by a bare `gen_society_panel_host = {}` on the last line of the .gui.
+gui/gen_society_panel.gui = gen_society_panel_host

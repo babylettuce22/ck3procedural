@@ -44,7 +44,17 @@ public sealed partial class HistorySim
     /// <summary>Realms that broke free, by id: the overlord they broke from, and until when they will not swear to its bloc.</summary>
     private readonly Dictionary<int, (int FromRoot, int Until)> _sovereign = [];
 
-    private void SeatIndependence() => _sim.Submits = Submits;
+    /// <param name="earlier">The history the written world was applied from, if any: a realm it had
+    /// just set free still refuses its old bloc for the rest of its years.</param>
+    private void SeatIndependence(AppliedHistory? earlier = null)
+    {
+        _sim.Submits = Submits;
+        foreach (var refusal in earlier?.Refusals ?? [])
+            if (refusal.Until > StartYear) _sovereign[refusal.Realm] = (refusal.FromRoot, refusal.Until);
+    }
+
+    /// <summary>The realms refusing homage to the bloc they broke from, by id. Carried by <see cref="AppliedHistory"/>.</summary>
+    internal IReadOnlyDictionary<int, (int FromRoot, int Until)> Refusals => _sovereign;
 
     /// <summary>
     /// Whether <paramref name="vassal"/> will swear to <paramref name="suzerain"/>: not while it is

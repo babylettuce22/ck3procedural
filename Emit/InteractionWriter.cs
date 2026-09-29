@@ -17,11 +17,34 @@ public static class InteractionWriter
 			}
 			add = -75
 		}
+
+		# [Generated Hornborn Marriage Reluctance]
+		modifier = {
+			desc = AI_HORNS_SHOWING_MARRIAGE_PENALTY
+			trigger = {
+				exists = scope:secondary_actor
+				exists = scope:secondary_recipient
+				OR = {
+					AND = {
+						scope:secondary_actor = { gen_hornborn_horns_showing_trigger = yes }
+						scope:secondary_recipient = { NOT = { gen_has_horns_trigger = yes } }
+					}
+					AND = {
+						scope:secondary_recipient = { gen_hornborn_horns_showing_trigger = yes }
+						scope:secondary_actor = { NOT = { gen_has_horns_trigger = yes } }
+					}
+				}
+			}
+			add = -50
+		}
 """;
 
     /// <summary>
     /// Adds the cross-race reluctance modifier to the <c>ai_accept</c> of both marriage
-    /// interactions.
+    /// interactions, and the Hornborn one: a match where one side shows Hornborn horns and the other
+    /// has none is harder to make, which is the main reason to file them down (see the header of
+    /// <c>BaseFilesToCopy/Fantasy/common/traits/00_hornborn_trait.txt</c>). Hornborn with Hornborn,
+    /// or with the horned people, is no obstacle.
     ///
     /// Both, or neither: patching one leaves the AI happy to marry across races in whichever
     /// direction the other interaction covers, which reads as the feature being broken rather than

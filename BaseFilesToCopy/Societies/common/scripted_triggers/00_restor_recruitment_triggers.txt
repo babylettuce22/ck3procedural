@@ -1,0 +1,55 @@
+﻿# Recruitment's questions. See events/restor_recruitment_events.txt.
+
+# Is there room on the roll for AI recruiting? The society should grow to 10-20 over a few decades,
+# not to hundreds, and a bigger crown carries a few more. Bands rather than a computed cap, so the
+# comparison stays a plain number.
+restor_recruit_roster_open_trigger = {
+	OR = {
+		restor_roster_size_value < 12
+		AND = {
+			restor_roster_size_value < 16
+			restor_crown_county_count_value >= 12
+		}
+		AND = {
+			restor_roster_size_value < 20
+			restor_crown_county_count_value >= 24
+		}
+	}
+}
+
+# THIS is someone scope:restor_recruiter would sensibly approach: of the house anywhere, or a lord
+# of the old people or holding the old land within reach. Cheap tests first -- this runs over every
+# ruler in the world, a few times a year.
+restor_recruit_candidate_trigger = {
+	is_adult = yes
+	NOT = { has_trait = restor_member }
+	NOT = { this = scope:restor_recruiter }
+	restor_recruitable_trigger = yes
+	OR = {
+		restor_of_the_blood_trigger = yes
+		AND = {
+			is_landed = yes
+			OR = {
+				AND = {
+					exists = global_var:restor_seat
+					culture = global_var:restor_seat.culture
+				}
+				restor_holds_crown_land_trigger = yes
+			}
+			in_diplomatic_range = scope:restor_recruiter
+		}
+	}
+}
+
+# THIS is a lord of the restored king's realm who could be asked to join the order openly.
+restor_recruit_public_candidate_trigger = {
+	restor_restored_trigger = yes
+	exists = global_var:restor_crown.holder
+	is_adult = yes
+	is_landed = yes
+	is_imprisoned = no
+	NOT = { has_trait = restor_member }
+	NOT = { has_character_flag = restor_refused_recently }
+	NOT = { this = global_var:restor_crown.holder }
+	any_liege_or_above = { this = global_var:restor_crown.holder }
+}

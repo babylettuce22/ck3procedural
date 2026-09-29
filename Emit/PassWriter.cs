@@ -64,4 +64,98 @@ public static class PassWriter
 
         Console.WriteLine($"  mountain passes: {passes.Count} barony(ies) given {Modifier}");
     }
+
+    /// <summary>
+    /// A landmark's two footprints in the game (see <see cref="Landmark"/>): a province modifier
+    /// named for it on every barony inside it, put there at game start the way the pass modifier
+    /// is, so its name shows in the province view; and a geographical region of the same baronies,
+    /// under the same name, for any decision or event that wants to speak of it.
+    ///
+    /// What holding one is worth goes by its kind, and is kept small: flavour a player notices on
+    /// the province, not a reason to rush for it.
+    /// </summary>
+    public static void WriteLandmarks(string modDir, IReadOnlyList<Landmark> landmarks)
+    {
+        if (landmarks.Count == 0) return;
+
+        var modifiers = new JominiBuilder();
+        modifiers.Comment("On every barony inside a landmark, put there at game start by zz_gen_landmark_on_actions.txt.");
+        var regions = new JominiBuilder();
+        regions.Comment("One region per landmark, the baronies inside it. Named in zz_gen_landmark_l_english.yml.");
+        var loc = new LocFile();
+
+        foreach (var landmark in landmarks)
+        {
+            string modifier = landmark.Key + "_modifier";
+            var (icon, effects, description) = Worth(landmark.Kind);
+            using (modifiers.Block(modifier))
+            {
+                modifiers.Field("icon", icon);
+                foreach (var (field, value) in effects) modifiers.Field(field, value, "0.0#");
+            }
+            modifiers.Blank();
+
+            using (regions.Block(landmark.Key))
+            using (regions.Block("provinces"))
+                foreach (var row in landmark.Baronies.Order().Chunk(10))
+                    regions.Token(string.Join(' ', row));
+            regions.Blank();
+
+            loc.Add(landmark.Key, landmark.Name);
+            loc.Add(modifier, landmark.Name);
+            loc.Add($"{modifier}_desc", description);
+        }
+
+        string modifierDir = Path.Combine(modDir, "common", "modifiers");
+        Directory.CreateDirectory(modifierDir);
+        ParadoxText.WriteBom(Path.Combine(modifierDir, "zz_gen_landmark_modifiers.txt"), modifiers.ToString());
+
+        string regionDir = Path.Combine(modDir, "map_data", "geographical_regions");
+        Directory.CreateDirectory(regionDir);
+        ParadoxText.WriteBom(Path.Combine(regionDir, "zz_gen_landmark_regions.txt"), regions.ToString());
+
+        const string setup = "gen_landmark_setup";
+        var actions = new JominiBuilder();
+        actions.Comment("Marks each landmark's baronies. See common/modifiers/zz_gen_landmark_modifiers.txt.");
+        using (actions.Block("on_game_start"))
+        using (actions.Block("on_actions"))
+            actions.Token(setup);
+        actions.Blank();
+        using (actions.Block(setup))
+        using (actions.Block("effect"))
+            foreach (var landmark in landmarks)
+                foreach (int id in landmark.Baronies.Order())
+                    using (actions.Block($"province:{id}"))
+                        actions.Field("add_province_modifier", landmark.Key + "_modifier");
+        string actionDir = Path.Combine(modDir, "common", "on_action");
+        Directory.CreateDirectory(actionDir);
+        ParadoxText.WriteBom(Path.Combine(actionDir, "zz_gen_landmark_on_actions.txt"), actions.ToString());
+
+        loc.Write(Path.Combine(modDir, "localization", "english", "zz_gen_landmark_l_english.yml"));
+        Console.WriteLine($"  landmarks: {landmarks.Count} named, {landmarks.Sum(l => l.Baronies.Length)} barony(ies) given their modifier");
+    }
+
+    /// <summary>A landmark's modifier by kind: its icon, its effects, and a line saying why.</summary>
+    private static (string Icon, (string Field, double Value)[] Effects, string Description) Worth(string kind) => kind switch
+    {
+        "basin" => ("county_modifier_development_positive",
+            [("development_growth_factor", 0.1), ("supply_limit_mult", 0.1)],
+            "This land lies low and sheltered inside the ring of the great crater, on ground made rich by the fire that dug it."),
+        "sea" => ("economy_positive",
+            [("tax_mult", 0.1), ("development_growth_factor", 0.05)],
+            "These shores ring a round sea in a crater's bowl, sheltered by the rim from every storm outside it."),
+        "scar" => ("stewardship_positive",
+            [("tax_mult", 0.1), ("travel_danger", 5)],
+            "The ground here is pocked with craters from something that fell out of the sky, and the iron dug from them fetches a good price."),
+        "rift" => ("county_modifier_development_positive",
+            [("development_growth_factor", 0.15)],
+            "The rift floor lies sunk between high walls. Its lakes and dark soil make it the richest land for many miles."),
+        "range" => ("martial_positive",
+            [("defender_holding_advantage", 3), ("supply_limit_mult", -0.1)],
+            "In the foothills of the great range, every valley can be held against an army, and every road is a climb."),
+        "wall" => ("martial_positive",
+            [("defender_holding_advantage", 4), ("garrison_size", 0.1)],
+            "The wall of mountains stands over this land. Its holds are built to watch the few ways through."),
+        _ => ("stewardship_positive", [], ""),
+    };
 }

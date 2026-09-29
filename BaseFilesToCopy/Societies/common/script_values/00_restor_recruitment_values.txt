@@ -1,0 +1,226 @@
+﻿# Recruitment: how far a non-member leans toward the cause, and how far away from it.
+# See events/restor_recruitment_events.txt for where these are read.
+#
+# Every one is evaluated in the scope of the person being approached. scope:restor_recruiter, when
+# it exists, is the member doing the approaching. The two leanings are kept apart rather than netted
+# into one number, because a lord can be both: of the old people AND the usurper's own brother. The
+# rolls use pull for the friendly answers and push for the dangerous ones, so such a lord is likely
+# to be warm and likely to be dangerous, and rarely indifferent.
+#
+# Read only behind restor_active_trigger.
+
+# Toward the cause.
+restor_recruit_pull_value = {
+	value = 0
+
+	# Blood, people, land.
+	if = {
+		limit = { restor_of_the_blood_trigger = yes }
+		add = 40
+	}
+	if = {
+		limit = {
+			exists = global_var:restor_seat
+			culture = global_var:restor_seat.culture
+		}
+		add = 20
+	}
+	if = {
+		limit = { restor_holds_crown_land_trigger = yes }
+		add = 10
+	}
+
+	# What they think of the heir.
+	if = {
+		limit = { exists = global_var:restor_pretender }
+		if = {
+			limit = { opinion = { target = global_var:restor_pretender value >= 50 } }
+			add = 25
+		}
+		else_if = {
+			limit = { opinion = { target = global_var:restor_pretender value >= 20 } }
+			add = 12
+		}
+		else_if = {
+			limit = { opinion = { target = global_var:restor_pretender value <= -25 } }
+			subtract = 15
+		}
+	}
+
+	# What they think of the one who holds what the house lost.
+	if = {
+		limit = { exists = global_var:restor_usurper }
+		if = {
+			limit = { opinion = { target = global_var:restor_usurper value <= -50 } }
+			add = 25
+		}
+		else_if = {
+			limit = { opinion = { target = global_var:restor_usurper value <= -20 } }
+			add = 12
+		}
+		else_if = {
+			limit = { opinion = { target = global_var:restor_usurper value >= 40 } }
+			subtract = 15
+		}
+		# Something to lose.
+		if = {
+			limit = { any_liege_or_above = { this = global_var:restor_usurper } }
+			subtract = 5
+		}
+		if = {
+			limit = {
+				has_trait = vengeful
+				opinion = { target = global_var:restor_usurper value < 0 }
+			}
+			add = 10
+		}
+	}
+
+	# What they think of the one asking.
+	if = {
+		limit = { exists = scope:restor_recruiter }
+		if = {
+			limit = { opinion = { target = scope:restor_recruiter value >= 40 } }
+			add = 15
+		}
+		else_if = {
+			limit = { opinion = { target = scope:restor_recruiter value >= 15 } }
+			add = 8
+		}
+		else_if = {
+			limit = { opinion = { target = scope:restor_recruiter value <= -20 } }
+			subtract = 10
+		}
+	}
+
+	# Temperament.
+	if = {
+		limit = { has_trait = ambitious }
+		add = 10
+	}
+	if = {
+		limit = { has_trait = content }
+		subtract = 10
+	}
+	if = {
+		limit = { has_trait = brave }
+		add = 5
+	}
+	if = {
+		limit = { has_trait = craven }
+		subtract = 8
+	}
+	if = {
+		limit = { has_trait = deceitful }
+		add = 5
+	}
+	# The just hold that a crown belongs to its rightful house -- and that treason is a crime. They
+	# pull both ways; see restor_recruit_push_value.
+	if = {
+		limit = { has_trait = just }
+		add = 5
+	}
+	if = {
+		limit = {
+			has_trait = zealous
+			exists = global_var:restor_pretender
+			faith = global_var:restor_pretender.faith
+		}
+		add = 8
+	}
+
+	min = 0
+}
+
+# Away from it: how likely they are to take the question to the usurper.
+restor_recruit_push_value = {
+	value = 0
+
+	if = {
+		limit = { exists = global_var:restor_usurper }
+		if = {
+			limit = { is_close_family_of = global_var:restor_usurper }
+			add = 40
+		}
+		if = {
+			limit = { any_liege_or_above = { this = global_var:restor_usurper } }
+			add = 12
+		}
+		if = {
+			limit = { is_councillor_of = global_var:restor_usurper }
+			add = 15
+		}
+		if = {
+			limit = { opinion = { target = global_var:restor_usurper value >= 50 } }
+			add = 20
+		}
+		else_if = {
+			limit = { opinion = { target = global_var:restor_usurper value >= 20 } }
+			add = 10
+		}
+	}
+
+	if = {
+		limit = {
+			exists = scope:restor_recruiter
+			opinion = { target = scope:restor_recruiter value <= -25 }
+		}
+		add = 15
+	}
+
+	if = {
+		limit = { has_trait = honest }
+		add = 10
+	}
+	if = {
+		limit = { has_trait = just }
+		add = 10
+	}
+	if = {
+		limit = { has_trait = paranoid }
+		add = 5
+	}
+	if = {
+		limit = {
+			has_trait = zealous
+			exists = global_var:restor_pretender
+			NOT = { faith = global_var:restor_pretender.faith }
+		}
+		add = 8
+	}
+
+	# Nobody informs on their own house's claim.
+	if = {
+		limit = { restor_of_the_blood_trigger = yes }
+		subtract = 30
+	}
+
+	min = 0
+}
+
+# The weight of taking a refused oath straight to the usurper: the push, past a threshold. A mildly
+# loyal lord refuses; only a committed one reports.
+restor_recruit_report_value = {
+	value = restor_recruit_push_value
+	subtract = 15
+	min = 0
+}
+
+# Which of the possible candidates a recruiter goes to first. Leaning, landed, and already known to
+# be sympathetic; less so the dangerous.
+restor_recruit_candidate_value = {
+	value = restor_recruit_pull_value
+	if = {
+		limit = { has_character_flag = restor_sounded_sympathetic }
+		add = 30
+	}
+	if = {
+		limit = { is_landed = yes }
+		add = 10
+	}
+	subtract = {
+		value = restor_recruit_push_value
+		divide = 2
+	}
+	min = 1
+}

@@ -1,0 +1,193 @@
+﻿# The Restorationist society's hooks into the game. Redeclaring a vanilla on_action appends to it;
+# see the on_actions memory note. Every block here is gated on restor_active_trigger, so on a world
+# with no fallen crown each one costs a single global-variable check.
+#
+# The per-pack pulses (restor_life_pulse and the rest) are defined in their own packs' on_action
+# files, and listed here so the yearly member pulse is the one place that says what a member's year
+# can contain.
+
+on_game_start_after_lobby = {
+	on_actions = { restor_after_lobby }
+}
+
+restor_after_lobby = {
+	trigger = { restor_active_trigger = yes }
+	effect = {
+		every_player = {
+			if = {
+				limit = { has_trait = restor_member }
+				trigger_event = { id = restor.0010 days = 2 }
+			}
+			else_if = {
+				limit = { restor_is_usurper_trigger = yes }
+				trigger_event = { id = restor.0011 days = 2 }
+			}
+			else_if = {
+				limit = { restor_of_the_blood_trigger = yes }
+				trigger_event = { id = restor.0012 days = 2 }
+			}
+		}
+	}
+}
+
+yearly_global_pulse = {
+	on_actions = { restor_yearly_global }
+}
+
+restor_yearly_global = {
+	trigger = { restor_active_trigger = yes }
+	effect = { restor_yearly_effect = yes }
+}
+
+# ---- A member's year ------------------------------------------------------------------------------
+
+random_yearly_everyone_pulse = {
+	on_actions = { restor_member_yearly }
+}
+
+restor_member_yearly = {
+	trigger = {
+		restor_active_trigger = yes
+		has_trait = restor_member
+		is_alive = yes
+	}
+	effect = {
+		restor_exposure_decay_effect = yes
+	}
+	on_actions = {
+		restor_life_pulse
+		restor_charge_pulse
+	}
+}
+
+# ---- Deaths ---------------------------------------------------------------------------------------
+
+on_death = {
+	on_actions = { restor_on_death }
+}
+
+restor_on_death = {
+	trigger = { restor_active_trigger = yes }
+	effect = {
+		if = {
+			limit = {
+				is_target_in_global_variable_list = {
+					name = restor_roster
+					target = root
+				}
+			}
+			remove_list_global_variable = {
+				name = restor_roster
+				target = root
+			}
+		}
+		if = {
+			limit = { restor_is_pretender_trigger = yes }
+			save_scope_as = restor_old_pretender
+			restor_pretender_succession_effect = yes
+		}
+		if = {
+			limit = { restor_is_keeper_trigger = yes }
+			restor_keeper_succession_effect = yes
+		}
+		if = {
+			limit = { restor_is_usurper_trigger = yes }
+			remove_global_variable = restor_usurper
+		}
+	}
+}
+
+# ---- The crown ------------------------------------------------------------------------------------
+
+on_title_gain = {
+	on_actions = { restor_on_title_gain }
+}
+
+restor_on_title_gain = {
+	trigger = {
+		restor_active_trigger = yes
+		scope:title = global_var:restor_crown
+	}
+	effect = {
+		if = {
+			# Home: the house has its crown back.
+			limit = {
+				restor_underground_trigger = yes
+				OR = {
+					restor_is_pretender_trigger = yes
+					restor_of_the_blood_trigger = yes
+				}
+			}
+			restor_triumph_effect = yes
+		}
+		else_if = {
+			# Somebody else CREATED it. The society's enemy has a name and a crown now. Only on
+			# creation: an usurper's crown passing to his son is not news, and a crown lost by the
+			# house is restor.0801's to announce.
+			limit = {
+				restor_underground_trigger = yes
+				exists = scope:transfer_type
+				scope:transfer_type = flag:created
+			}
+			restor_recompute_usurper_effect = yes
+			restor_notify_sworn_effect = { EVENT = restor.0604 DAYS = 2 }
+		}
+		else_if = {
+			limit = { restor_underground_trigger = yes }
+			restor_recompute_usurper_effect = yes
+		}
+	}
+}
+
+on_title_lost = {
+	on_actions = { restor_on_title_lost }
+}
+
+restor_on_title_lost = {
+	trigger = {
+		restor_restored_trigger = yes
+		scope:title = global_var:restor_crown
+	}
+	effect = {
+		if = {
+			# The king's own child of another house -- through a queen, most often. The society
+			# follows the blood rather than the name, and takes up the new house.
+			limit = {
+				exists = scope:new_holder
+				scope:new_holder = {
+					NOT = { restor_of_the_blood_trigger = yes }
+					any_parent = { this = root }
+				}
+			}
+			scope:new_holder = {
+				set_global_variable = {
+					name = restor_house
+					value = house
+				}
+			}
+			restor_notify_sworn_effect = { EVENT = restor.0712 DAYS = 2 }
+		}
+		else_if = {
+			limit = {
+				exists = scope:new_holder
+				scope:new_holder = { NOT = { restor_of_the_blood_trigger = yes } }
+			}
+			scope:new_holder = { save_scope_as = restor_new_holder }
+			restor_fall_effect = yes
+		}
+	}
+}
+
+on_title_destroyed = {
+	on_actions = { restor_on_title_destroyed }
+}
+
+restor_on_title_destroyed = {
+	trigger = {
+		restor_restored_trigger = yes
+		scope:landed_title = global_var:restor_crown
+	}
+	effect = {
+		restor_fall_effect = yes
+	}
+}

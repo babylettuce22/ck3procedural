@@ -1,0 +1,174 @@
+﻿# The Restorationists' charges: the decisions that let a member do a charge's work by hand.
+# Each is shown only to a member holding that kind of charge, so nobody else ever sees one.
+#
+#   restor_stir_the_county_decision     stir: gold and exposure; stirs the charge's county if you hold
+#                                       it, hold land beside it or in its duchy, or are standing in it
+#   restor_speak_for_the_heir_decision  win_over: prestige; the charge's lord warms to the heir.
+#                                       Once a year.
+#   restor_send_for_the_heir_decision   shelter: gold and exposure; the heir comes to your court
+#
+# The war-chest charge uses the core decision restor_give_to_the_cause_decision, and the recruit
+# charge the recruitment interactions.
+
+restor_stir_the_county_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
+	}
+	ai_check_interval = 36
+
+	desc = restor_stir_the_county_decision_desc
+	selection_tooltip = restor_stir_the_county_decision_tooltip
+
+	is_shown = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		has_variable = restor_charge
+		var:restor_charge = flag:stir
+		exists = var:restor_charge_target
+	}
+
+	is_valid_showing_failures_only = {
+		is_imprisoned = no
+	}
+
+	is_valid = {
+		custom_tooltip = {
+			text = restor_stir_the_county_reach_tt
+			restor_charge_can_reach_county_trigger = yes
+		}
+		custom_tooltip = {
+			text = restor_stir_the_county_not_stirred_tt
+			var:restor_charge_target = {
+				NOT = { has_county_modifier = restor_county_stirred }
+			}
+		}
+	}
+
+	cost = {
+		gold = 75
+	}
+
+	effect = {
+		restor_charge_stir_county_effect = { COUNTY = var:restor_charge_target }
+		restor_exposure_gain_effect = { VALUE = 5 }
+		hidden_effect = { restor_charge_check_effect = yes }
+	}
+
+	ai_potential = {
+		has_trait = restor_member
+	}
+
+	ai_will_do = {
+		base = 50
+	}
+}
+
+restor_speak_for_the_heir_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_realm.dds"
+	}
+	ai_check_interval = 24
+
+	desc = restor_speak_for_the_heir_decision_desc
+	selection_tooltip = restor_speak_for_the_heir_decision_tooltip
+
+	is_shown = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = global_var:restor_pretender
+		has_variable = restor_charge
+		var:restor_charge = flag:win_over
+		exists = var:restor_charge_target
+	}
+
+	is_valid_showing_failures_only = {
+		is_imprisoned = no
+		NOT = { has_character_flag = restor_spoke_for_the_heir }
+		var:restor_charge_target = {
+			is_alive = yes
+			is_imprisoned = no
+		}
+	}
+
+	cost = {
+		prestige = 75
+	}
+
+	effect = {
+		add_character_flag = {
+			flag = restor_spoke_for_the_heir
+			years = 1
+		}
+		var:restor_charge_target = {
+			if = {
+				limit = { root.diplomacy >= 15 }
+				add_opinion = {
+					target = global_var:restor_pretender
+					modifier = friendliness_opinion
+					opinion = 20
+				}
+			}
+			else = {
+				add_opinion = {
+					target = global_var:restor_pretender
+					modifier = friendliness_opinion
+					opinion = 15
+				}
+			}
+		}
+		restor_exposure_gain_effect = { VALUE = 3 }
+		hidden_effect = { restor_charge_check_effect = yes }
+	}
+
+	ai_potential = {
+		has_trait = restor_member
+	}
+
+	ai_will_do = {
+		base = 50
+	}
+}
+
+restor_send_for_the_heir_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
+	}
+	ai_check_interval = 24
+
+	desc = restor_send_for_the_heir_decision_desc
+	selection_tooltip = restor_send_for_the_heir_decision_tooltip
+
+	is_shown = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = global_var:restor_pretender
+		has_variable = restor_charge
+		var:restor_charge = flag:shelter
+	}
+
+	is_valid_showing_failures_only = {
+		is_imprisoned = no
+		is_landed = yes
+		global_var:restor_pretender = {
+			is_imprisoned = no
+			NOT = { is_courtier_of = root }
+		}
+	}
+
+	cost = {
+		gold = 50
+	}
+
+	effect = {
+		restor_charge_take_in_heir_effect = yes
+		hidden_effect = { restor_charge_check_effect = yes }
+	}
+
+	ai_potential = {
+		has_trait = restor_member
+	}
+
+	ai_will_do = {
+		base = 50
+	}
+}

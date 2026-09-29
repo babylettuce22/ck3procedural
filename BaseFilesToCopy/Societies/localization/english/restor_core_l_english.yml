@@ -1,0 +1,82 @@
+﻿l_english:
+
+ # ---- The trait ---------------------------------------------------------------------------------
+
+ trait_restor_member:0 "Sworn"
+ trait_restor_member_desc:0 "Sworn to $restor_society_name$, who mean to put House $restor_house_name$ back on the throne of $restor_crown_name$."
+ trait_restor_member_character_desc:0 "[ROOT.GetCharacter.GetFirstNameNoTooltip] is secretly sworn to $restor_society_name$, who mean to put House $restor_house_name$ back on the throne of $restor_crown_name$."
+ trait_restor_member_public_desc:0 "[ROOT.GetCharacter.GetFirstNameNoTooltip] belongs to $restor_society_name_public$, the order that restored House $restor_house_name$ to the throne of $restor_crown_name$."
+ trait_track_restor_rank:0 "Standing"
+ trait_track_restor_rank_desc:0 "How far the Sworn trust you. Charges kept, gold given, and recruits brought in all raise it."
+
+ # ---- Meters ------------------------------------------------------------------------------------
+
+ restor_favour_gain_tt:0 "Gain #P [restor_favour_delta|0]#! favour with $restor_society_name$"
+ restor_favour_spend_tt:0 "Spend #N [restor_favour_delta|0]#! favour with $restor_society_name$"
+ restor_favour_toast:0 "Favour: #bold [ROOT.Char.MakeScope.Var('restor_favour').GetValue|0]#!"
+ restor_exposure_gain_tt:0 "Your exposure rises by #N [restor_exposure_delta|0]#!"
+ restor_exposure_loss_tt:0 "Your exposure falls by #P [restor_exposure_delta|0]#!"
+ restor_exposure_toast:0 "Exposure: #bold [ROOT.Char.MakeScope.Var('restor_exposure').GetValue|0]#!"
+
+ restor_under_suspicion_modifier:0 "Under Suspicion"
+ restor_under_suspicion_modifier_desc:0 "People have started asking where this character goes and who they meet."
+ restor_highly_suspect_modifier:0 "Suspected Traitor"
+ restor_highly_suspect_modifier_desc:0 "Widely believed to be plotting against the crown's current master."
+ restor_restored_monarch_modifier:0 "Restored to the Throne"
+ restor_restored_monarch_modifier_desc:0 "Took back the crown the house had lost."
+ restor_faithful_modifier:0 "Faithful to the Crown"
+ restor_faithful_modifier_desc:0 "Kept the oath through the years in the dark, and is honoured for it now."
+ restor_order_member_modifier:0 "Order of the Restored Crown"
+ restor_order_member_modifier_desc:0 "A member of the order that restored the crown, and no longer ashamed to say so."
+ restor_crown_whole_modifier:0 "The Crown Made Whole"
+ restor_crown_whole_modifier_desc:0 "Every county of the old kingdom answers to its crown again."
+ restor_raised_the_standard_modifier:0 "Raised the Standard"
+ restor_raised_the_standard_modifier_desc:0 "Has called the Sworn to arms. Men come who would not come for anyone else."
+ restor_county_stirred:0 "Old Loyalties Stirred"
+ restor_county_stirred_desc:0 "People here have started saying the old king's name again."
+
+ restor_refused_the_oath_opinion:0 "Asked me to commit treason"
+ restor_brought_me_in_opinion:0 "Brought me into the Sworn"
+ restor_failed_charge_opinion:0 "Failed the Sworn"
+ restor_kept_charge_opinion:0 "Kept faith with the Sworn"
+ restor_crowned_me_opinion:0 "Put the crown back on my head"
+ restor_betrayed_the_cause_opinion:0 "Betrayed the Sworn"
+ restor_usurped_my_house_opinion:0 "Took my crown"
+ restor_sheltered_the_heir_opinion:0 "Sheltered me in exile"
+ restor_named_before_the_sworn_opinion:0 "Shamed me before the Sworn"
+ restor_raised_before_the_sworn_opinion:0 "Honoured me before the Sworn"
+
+ secret_restor_member:0 "Sworn to Restore the Crown"
+ secret_restor_member_tooltip_desc:0 "This character is secretly sworn to put House $restor_house_name$ back on the throne of $restor_crown_name$."
+ secret_restor_member_type_desc:0 "$secret_restor_member_tooltip_desc$"
+ secret_restor_member_desc:0 "[secret_owner.GetTitledFirstName] is secretly sworn to $restor_society_name$, and plots to put House $restor_house_name$ back on the throne of $restor_crown_name$."
+
+ # ---- Debug -------------------------------------------------------------------------------------
+
+ restor.0004.t:0 "$restor_society_name$"
+ restor.0004.desc:0 "Crown: [restor_crown.GetName]. Pretender: [restor_pretender.GetTitledFirstName]. Keeper: [restor_keeper.GetTitledFirstName]. The panel shows support and phase."
+
+ # ---- restor.0010 -------------------------------------------------------------------------------
+
+ restor.0010.t:0 "$restor_society_name$"
+ restor.0010.desc_member:0 "$restor_fall_sentence$\n\nYou are one of the few who never accepted that the line ended there. You are sworn to $restor_society_name$, and the Sworn mean to see [restor_pretender.GetTitledFirstName], the rightful heir, crowned in $restor_seat_name$.\n\n[restor_keeper.GetTitledFirstName] is the Keeper and hands out the society's work. For now that work is support in the old kingdom: lords won over, counties stirred, and gold set aside for the day the standard is raised."
+ restor.0010.desc_keeper:0 "$restor_fall_sentence$\n\nYou are the Keeper of $restor_society_name$. The Sworn meet when you call them, go where you send them, and keep their mouths shut because you have made sure they have reason to. Every one of them is waiting for the day [restor_pretender.GetTitledFirstName], the rightful heir, is crowned in $restor_seat_name$.\n\nThat day is a long way off. The work until then is support in the old kingdom: lords won over, counties stirred, and gold set aside for the rising."
+ restor.0010.desc_pretender:0 "$restor_fall_sentence$ House $restor_house_name$ is your house.\n\nBy right the crown is yours. A few people agree, and they have sworn themselves to $restor_society_name$ to prove it. [restor_keeper.GetTitledFirstName] leads them, and they want the same thing you do: you, crowned in $restor_seat_name$.\n\nThey cannot do it without land under you. Hold as much of the old kingdom as you can and let the Sworn build support. When it is high enough, you can raise the standard and take the crown back."
+ restor.0010.a:0 "I remember my oath."
+ restor.0010.a.tt:0 "The #high $restor_society_name$#! tab beside Intrigue shows the society: the heir, the enemy, how close the rising is, and what you can do next."
+
+ # ---- restor.0011 -------------------------------------------------------------------------------
+
+ restor.0011.t:0 "Old Loyalties"
+ restor.0011.desc:0 "Your spymaster has heard the same story from three different people this season. There is a society in the lands of old $restor_crown_name$, sworn to put House $restor_house_name$ back on its throne. They call themselves $restor_society_name$.\n\nThey say [restor_pretender.GetTitledFirstName] is the rightful heir. Nobody has been able to name a single member. What is clear is that everything they want, you hold."
+ restor.0011.a:0 "Let them talk. Talk is all they have."
+ restor.0011.b:0 "Have my spymaster listen for names."
+ restor.0011.b.tt:0 "Every one of the Sworn becomes a little easier to find."
+
+ # ---- restor.0012 -------------------------------------------------------------------------------
+
+ restor.0012.t:0 "The Old Crown"
+ restor.0012.desc:0 "Your house wore the crown of $restor_crown_name$ until $restor_fell_year$. Most people have forgotten. Some have not.\n\nThere is a society, $restor_society_name$, sworn to put House $restor_house_name$ back on the throne. They look to [restor_pretender.GetTitledFirstName] as the rightful heir. They will be looking at you, too."
+ restor.0012.a:0 "Let them come to me."
+ restor.0012.a.tt:0 "The Sworn may approach you. If you join, you gain their support, and the crown may pass to you if the heir dies."
+ restor.0012.b:0 "That was a long time ago."

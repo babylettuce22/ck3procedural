@@ -112,6 +112,10 @@ public sealed record WorldModel
     public required RouteNetwork Routes { get; init; }
     public required SilkRoadMap SilkRoad { get; init; }
     public required Dictionary<int, string> WaterNames { get; init; }
+
+    /// <summary>The named places shaped by the land, for the modifiers, regions and flat-map
+    /// lettering. See MapGen/Landmarks.cs.</summary>
+    public IReadOnlyList<Landmark> Landmarks { get; init; } = [];
 }
 
 public static partial class ContentWriter
@@ -520,6 +524,13 @@ public static partial class ContentWriter
             new Rng(cfg.Seed ^ 0x5EAE), terra.MajorRiversList, azgaar));
         Core.Showcase.Publish(() => ShowcaseItems.Waters(waterNames, new(provinces, order)));
 
+        // After the water, because a drowned crater renames the sea inside its rim after itself;
+        // its own stream, so naming a landmark moves no other name. See MapGen/Landmarks.cs.
+        var landmarks = MapGen.Landmarks.Build(cfg, provinces, order, baronyCount, riverCount,
+            empires, cultures, waterNames, new Rng(cfg.Seed ^ 0x1A4D));
+        foreach (var landmark in landmarks)
+            Console.WriteLine($"  landmark: {landmark.Name} ({landmark.Kind}, {landmark.Baronies.Length} baronies)");
+
         // History run on in the History workspace replaces the realms the formation grew — last,
         // after everything above has been decided from the generated ones. Faiths.Build reads the
         // governments, and a religion's tribal share gates draws that every later faith's names and
@@ -574,6 +585,7 @@ public static partial class ContentWriter
             Routes = routes,
             SilkRoad = silkRoad,
             WaterNames = waterNames,
+            Landmarks = landmarks,
         };
     }
 

@@ -1,0 +1,63 @@
+﻿l_english:
+
+ # ---- Decisions ---------------------------------------------------------------------------------
+
+ restor_raise_the_standard_decision:0 "Raise the Standard of $restor_crown_name$"
+ restor_raise_the_standard_decision_desc:0 "The Sworn have spent years preparing for this. Declare yourself the rightful ruler of $restor_crown_name$, press the claims the old charters give you, and call every sworn lord to arms."
+ restor_raise_the_standard_decision_tooltip:0 "Claim the lands of $restor_crown_name$ and call the Sworn to war."
+ restor_raise_the_standard_decision_confirm:0 "Raise the standard"
+ restor_raise_the_standard_support_tt:0 "Support for House $restor_house_name$ in $restor_crown_name$ is at least #high 40#!"
+ restor_raise_the_standard_crown_claim_tt:0 "Gain a #high pressed claim#! on the crown of $restor_crown_name$"
+ restor_raise_the_standard_duchy_claims_tt:0 "Gain a #high pressed claim#! on every duchy of $restor_crown_name$ held outside your realm"
+ restor_raise_the_standard_call_tt:0 "Every sworn lord is asked for men or gold. Those who send an army become your #high allies#!."
+
+ restor_restore_the_crown_decision:0 "Restore the Crown of $restor_crown_name$"
+ restor_restore_the_crown_decision_desc:0 "$restor_crown_name$ has no ruler. You hold enough of it now, and the Sworn stand behind you. Put on the crown your house lost."
+ restor_restore_the_crown_decision_tooltip:0 "Become ruler of $restor_crown_name$ with the backing of $restor_society_name$."
+ restor_restore_the_crown_decision_confirm:0 "Take back the crown"
+ restor_restore_the_crown_liege_tt:0 "You answer to no one, to an emperor, or to one of the Sworn (who will release you)"
+ restor_restore_the_crown_land_tt:0 "Your realm holds at least #high 25%#! of the counties of $restor_crown_name$ (now #high [SCOPE.ScriptValue('restor_pretender_share_value')|0]%#!)"
+ restor_restore_the_crown_support_tt:0 "Support for House $restor_house_name$ is at least #high 40#!"
+ restor_restore_the_crown_effect_tt:0 "You become ruler of #high $restor_crown_name$#!, and $restor_society_name$ come out of hiding"
+
+ restor_give_to_the_cause_decision:0 "Give to the Cause"
+ restor_give_to_the_cause_decision_desc:0 "A rising needs gold long before it needs soldiers. Send some to the heir of House $restor_house_name$, quietly."
+ restor_give_to_the_cause_decision_tooltip:0 "Send 100 gold to the heir of House $restor_house_name$."
+ restor_give_to_the_cause_decision_confirm:0 "Send the gold"
+
+ restor_reward_the_faithful_decision:0 "Reward the Faithful"
+ restor_reward_the_faithful_decision_desc:0 "The people who kept faith with your house through the years in the dark are still at your court and in your realm. Honour them where everyone can see it."
+ restor_reward_the_faithful_decision_tooltip:0 "Honour every member of $restor_society_name_public$."
+ restor_reward_the_faithful_decision_confirm:0 "Honour them"
+ restor_reward_the_faithful_effect_tt:0 "Every member of the order thinks better of you, gains #P 25#! favour and rises in standing"
+
+ # ---- restor.0601-0604 --------------------------------------------------------------------------
+
+ restor.0601.t:0 "The Old Name"
+ restor.0601.desc:0 "Word is coming back from the old lands of $restor_crown_name$. In market squares and alehouses, people have started talking about House $restor_house_name$ again, and not always quietly.\n\nIt is not an army. It is a start. A year ago nobody outside the Sworn would have said [restor_pretender.GetFirstNameNoTooltip]'s name out loud."
+ restor.0601.a:0 "Good. Keep it quiet a while longer."
+ restor.0601.a.tt:0 "Support stands at #high 25#!. At #high 40#!, [restor_pretender.GetFirstNameNoTooltip] can raise the standard."
+
+ restor.0602.t:0 "Ready to Rise"
+ restor.0602.desc:0 "The Keeper's letters have grown shorter and more frequent. There are enough sworn lords now, enough stirred villages and enough gold that [restor_pretender.GetTitledFirstName] could raise the standard of $restor_crown_name$ tomorrow and not stand alone.\n\nWhether [restor_pretender.GetSheHe] does is [restor_pretender.GetHerHis] decision. When the call comes, you will be asked for men or gold."
+ restor.0602.desc_pretender:0 "[restor_keeper.GetTitledFirstName] has sent you a list. It is long: sworn lords, villages where your family's name is spoken again, and a sum of gold that has been put aside a little at a time for years.\n\nThe Keeper's letter ends with one sentence. The Sworn are ready when you are."
+ restor.0602.a:0 "Then let them get ready to march."
+ restor.0602.a.tt:0 "You can now #high Raise the Standard of $restor_crown_name$#! from the decisions panel."
+ restor.0602.b:0 "When [restor_pretender.GetSheHe] calls, I will answer."
+
+ restor.0603.t:0 "The Kingdom Waits"
+ restor.0603.desc:0 "Across the old lands of $restor_crown_name$ the question is no longer whether House $restor_house_name$ will come back, but when.\n\nPriests who once prayed for [restor_usurper.GetTitledFirstName] have started leaving out the name. Village headmen hide the old banners in their roofs where the tax collectors will not find them. The Sworn have never been this strong."
+ restor.0603.a:0 "Soon."
+
+ restor.0604.t:0 "A Crown on the Wrong Head"
+ restor.0604.desc:0 "[restor_usurper.GetTitledFirstName] has had [restor_usurper.GetSheHe] crowned ruler of $restor_crown_name$.\n\nThe crown the Sworn have kept faith with for all these years sits on a stranger's head. Nobody needs to explain what that means. The heir of House $restor_house_name$ will not be crowned by creating the kingdom now. The kingdom will have to be taken."
+ restor.0604.a:0 "Then we take it from [restor_usurper.GetHerHim]."
+ restor.0604.a.tt:0 "When the standard is raised, [restor_pretender.GetFirstNameNoTooltip] will claim the crown itself."
+
+ # ---- restor.0610 -------------------------------------------------------------------------------
+
+ restor.0610.t:0 "The Standard Is Raised"
+ restor.0610.desc:0 "It has happened. [restor_pretender.GetTitledFirstName] has claimed the throne of $restor_crown_name$ openly and called on everyone who ever swore the oath.\n\nA rider brings you the message in person, and waits for your answer. Every sworn lord is being asked for the same thing: an army, or gold, or at the very least a reason."
+ restor.0610.a:0 "My army marches with [restor_pretender.GetHerHim]."
+ restor.0610.b:0 "Send gold. It is safer than soldiers."
+ restor.0610.c:0 "Not yet. Not openly."

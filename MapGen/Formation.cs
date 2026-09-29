@@ -66,6 +66,15 @@ public enum FormationKind
     /// greatest house, 0 one of the greatest lost its last realm. The History workspace's only.
     /// </summary>
     Standing,
+
+    /// <summary>
+    /// A county took its lords' culture: <see cref="FormationEvent.Tension"/> 0, the county is the
+    /// subject; 1, it turned most of its duchy, and the duchy's capital is. The History workspace's only.
+    /// </summary>
+    Assimilated,
+
+    /// <summary>A county took its lords' faith, graded as <see cref="Assimilated"/>. The History workspace's only.</summary>
+    Converted,
 }
 
 /// <summary>
@@ -155,8 +164,23 @@ public enum RealmRules
     /// </summary>
     Standing = 2048,
 
+    /// <summary>
+    /// A county held long enough by lords of another people slowly takes their culture — fastest
+    /// where its neighbours already have, never across a race, and never so far that a people loses
+    /// half its land or one grows to cover the world. Feeds back: a realm of one people holds
+    /// together better. Only the History workspace; see <c>HistorySim.PeoplesYear</c>.
+    /// </summary>
+    Assimilation = 4096,
+
+    /// <summary>
+    /// A county held by lords of another faith slowly takes it, as <see cref="Assimilation"/> does
+    /// a culture: a little faster, and slowest where the county is holy to the faith it has. Only
+    /// the History workspace; see <c>HistorySim.PeoplesYear</c>.
+    /// </summary>
+    Conversion = 8192,
+
     All = Conquest | Homage | Secession | Collapse | Succession | DeJureDrift | Colonisation | Ruination | Wars | Independence
-          | Feuds | Standing,
+          | Feuds | Standing | Assimilation | Conversion,
 }
 
 /// <summary>One thing the simulation did, dated, with both parties named.</summary>

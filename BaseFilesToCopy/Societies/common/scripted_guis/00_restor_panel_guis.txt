@@ -1,0 +1,252 @@
+﻿# The society panel: everything the window asks the script layer.
+#
+# A .gui cannot run a trigger, compare numbers or read a global variable -- GetGlobalVariable
+# type-checks, passes ck3-tiger and resolves to nothing in game (the prototype found this). So:
+#
+#   questions  are scripted_guis asked with IsShown (one per question, one per rung);
+#   numbers    and people are COPIED onto the viewing player as character variables by
+#              restor_panel_gather when the panel opens, and read with MakeScope.Var(...).
+#
+# society_panel_toggle and society_panel_window keep the prototype's names because
+# Emit/GuiWriter.cs patches the HUD tab to call them by name.
+
+# ---- Open state ------------------------------------------------------------------------------
+
+society_panel_window = {
+	scope = character
+	is_shown = { has_variable = society_panel_open }
+	effect = { remove_variable = society_panel_open }
+}
+
+# The tab. Shown only to a member, so a non-member has no tab at all -- the society's existence is
+# not advertised to people outside it.
+society_panel_toggle = {
+	scope = character
+	is_shown = {
+		restor_active_trigger = yes
+		has_trait = restor_member
+	}
+	effect = {
+		if = {
+			limit = { has_variable = society_panel_open }
+			remove_variable = society_panel_open
+		}
+		else = {
+			set_variable = { name = society_panel_open value = yes }
+		}
+	}
+}
+
+# ---- Gather: copy what the window shows onto the viewer ----------------------------------------
+
+restor_panel_gather = {
+	scope = character
+	is_shown = { restor_active_trigger = yes }
+	effect = {
+		# The live value, read without recomputing the global: opening a window must not be what
+		# crosses a milestone and sends every member an event.
+		set_variable = { name = restor_panel_support value = restor_support_value }
+		set_variable = { name = restor_panel_share value = restor_pretender_share_value }
+		set_variable = { name = restor_panel_war_chest value = global_var:restor_war_chest }
+
+		# People. Removed first, so a slot that has emptied since the last look shows as empty.
+		remove_variable = restor_panel_pretender
+		remove_variable = restor_panel_keeper
+		remove_variable = restor_panel_usurper
+		remove_variable = restor_panel_king
+		if = {
+			limit = { exists = global_var:restor_pretender }
+			set_variable = { name = restor_panel_pretender value = global_var:restor_pretender }
+		}
+		if = {
+			limit = { exists = global_var:restor_keeper }
+			set_variable = { name = restor_panel_keeper value = global_var:restor_keeper }
+		}
+		if = {
+			limit = { exists = global_var:restor_usurper }
+			set_variable = { name = restor_panel_usurper value = global_var:restor_usurper }
+		}
+		if = {
+			limit = {
+				restor_restored_trigger = yes
+				exists = global_var:restor_crown.holder
+			}
+			set_variable = { name = restor_panel_king value = global_var:restor_crown.holder }
+		}
+
+		# The roster. What a member knows depends on how far in they are: a Captain or above -- and
+		# the Keeper -- knows the whole roll; below that you know the people around you and the two
+		# names everyone knows, the heir and the Keeper. In the restored realm the order is public
+		# and everyone sees everyone.
+		clear_variable_list = restor_panel_roster
+		save_scope_as = restor_viewer
+		every_in_global_list = {
+			variable = restor_roster
+			limit = {
+				is_alive = yes
+				OR = {
+					restor_restored_trigger = yes
+					scope:restor_viewer = { restor_rank_at_least_trigger = { RANK = 50 } }
+					scope:restor_viewer = { restor_is_keeper_trigger = yes }
+					this = scope:restor_viewer
+					restor_is_pretender_trigger = yes
+					restor_is_keeper_trigger = yes
+					is_courtier_of = scope:restor_viewer
+					scope:restor_viewer = { is_courtier_of = prev }
+					is_vassal_of = scope:restor_viewer
+					scope:restor_viewer = { is_vassal_of = prev }
+					is_close_or_extended_family_of = scope:restor_viewer
+				}
+			}
+			save_scope_as = restor_rostered
+			scope:restor_viewer = {
+				add_to_variable_list = {
+					name = restor_panel_roster
+					target = scope:restor_rostered
+				}
+			}
+		}
+	}
+}
+
+# ---- Phase ------------------------------------------------------------------------------------
+
+restor_panel_underground = {
+	scope = character
+	is_shown = { restor_underground_trigger = yes }
+}
+
+restor_panel_restored = {
+	scope = character
+	is_shown = { restor_restored_trigger = yes }
+}
+
+# ---- The people slots ---------------------------------------------------------------------------
+
+restor_panel_has_pretender = {
+	scope = character
+	is_shown = { has_variable = restor_panel_pretender }
+}
+
+restor_panel_has_keeper = {
+	scope = character
+	is_shown = { has_variable = restor_panel_keeper }
+}
+
+restor_panel_has_usurper = {
+	scope = character
+	is_shown = {
+		restor_underground_trigger = yes
+		has_variable = restor_panel_usurper
+	}
+}
+
+restor_panel_has_king = {
+	scope = character
+	is_shown = { has_variable = restor_panel_king }
+}
+
+# ---- Rungs, asked of ANY character (the viewer, or a roster row) ------------------------------
+
+restor_panel_rank_0 = {
+	scope = character
+	is_shown = {
+		has_trait = restor_member
+		NOT = { restor_rank_at_least_trigger = { RANK = 25 } }
+	}
+}
+
+restor_panel_rank_1 = {
+	scope = character
+	is_shown = {
+		restor_rank_at_least_trigger = { RANK = 25 }
+		NOT = { restor_rank_at_least_trigger = { RANK = 50 } }
+	}
+}
+
+restor_panel_rank_2 = {
+	scope = character
+	is_shown = {
+		restor_rank_at_least_trigger = { RANK = 50 }
+		NOT = { restor_rank_at_least_trigger = { RANK = 75 } }
+	}
+}
+
+restor_panel_rank_3 = {
+	scope = character
+	is_shown = { restor_rank_at_least_trigger = { RANK = 75 } }
+}
+
+restor_panel_is_pretender = {
+	scope = character
+	is_shown = { restor_is_pretender_trigger = yes }
+}
+
+restor_panel_is_keeper = {
+	scope = character
+	is_shown = { restor_is_keeper_trigger = yes }
+}
+
+restor_panel_suspect = {
+	scope = character
+	is_shown = {
+		restor_underground_trigger = yes
+		has_character_modifier = restor_under_suspicion_modifier
+	}
+}
+
+restor_panel_very_suspect = {
+	scope = character
+	is_shown = {
+		restor_underground_trigger = yes
+		has_character_modifier = restor_highly_suspect_modifier
+	}
+}
+
+# ---- What the viewer can do next ----------------------------------------------------------------
+
+restor_panel_can_give = {
+	scope = character
+	is_shown = {
+		restor_underground_trigger = yes
+		NOT = { restor_is_pretender_trigger = yes }
+		gold >= 100
+		NOT = { has_character_flag = restor_gave_recently }
+	}
+}
+
+restor_panel_can_gather = {
+	scope = character
+	is_shown = {
+		restor_underground_trigger = yes
+		OR = {
+			restor_rank_at_least_trigger = { RANK = 50 }
+			restor_is_keeper_trigger = yes
+		}
+	}
+}
+
+restor_panel_can_raise = {
+	scope = character
+	is_shown = {
+		restor_underground_trigger = yes
+		restor_is_pretender_trigger = yes
+		is_landed = yes
+		NOT = { exists = global_var:restor_standard_raised }
+		global_var:restor_support >= restor_rising_support_value
+	}
+}
+
+restor_panel_can_crown = {
+	scope = character
+	is_shown = {
+		restor_pretender_can_be_crowned_trigger = yes
+		restor_pretender_share_value >= restor_crowning_share_value
+		global_var:restor_support >= restor_rising_support_value
+	}
+}
+
+restor_panel_viewer_is_pretender = {
+	scope = character
+	is_shown = { restor_is_pretender_trigger = yes }
+}

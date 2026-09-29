@@ -313,6 +313,17 @@ public sealed class MapConfig : CustomTypeDescriptor
     public int Seed { get; set; } = 1;
 
     /// <summary>
+    /// The set-piece the heightmap was built around, as <c>map-type@seed</c> — "crater@115886" —
+    /// or empty for none. Written by the Quick page when it draws one (see
+    /// AppGUI.QuickFeatures), and read to find the set-piece again after the map is made, so it
+    /// can be named, lettered on the flat map and given a region (see <see cref="MapGen.Landmarks"/>).
+    /// Hidden: it describes the heightmap rather than choosing anything, and is only right for the
+    /// Forge project the Quick page adopted with it.
+    /// </summary>
+    [Browsable(false)]
+    public string SetPiece { get; set; } = "";
+
+    /// <summary>
     /// An Azgaar "Full" JSON export to borrow from, or empty for none.
     ///
     /// Adjunct, never required. Empty is the normal setting and the generator behaves exactly as it
@@ -857,19 +868,28 @@ public sealed class MapConfig : CustomTypeDescriptor
     public bool EnableMagic { get; set; } = true;
 
     /// <summary>
-    /// Ships the hand-written society prototype — see <see cref="Emit.StaticFileWriter.Societies"/>.
-    ///
-    /// Off by default and hidden, because it is a prototype rather than a feature: one society
-    /// with a placeholder name, joined through an event that has to be fired from the console.
-    /// Nothing in the set is generated and nothing generated depends on it, so switching it on
-    /// changes no other part of a map.
-    /// </summary> 
+    /// Ships the society system — see <see cref="Emit.StaticFileWriter.Societies"/> — and generates
+    /// this world's Restorationist society (<see cref="MapGen.Restoration"/>). Off by default and
+    /// hidden while it is in development. Switching it on writes only files of its own; every other
+    /// file in the mod is byte-identical either way.
+    /// </summary>
     /// HIDING FOR THIS BUILD
     [HideInGenerator]
     [Category("02 World State")]
-    [DisplayName("Societies (prototype)")]
-    [Description("Ship the hand-written society prototype: one membership trait with a rank ladder, one rite only members can see, hold or be invited to, and the approach event that makes the first member. Nothing about it is generated yet — the society has a placeholder name and is joined by firing 'event society.0001' from the console. Off by default. See BaseFilesToCopy/Societies/README.txt.")]
-    public bool EnableSocieties { get; set; } = false;
+    [DisplayName("Societies")]
+    [Description("Generate a secret society for this world: the Restorationists, sworn to put a fallen kingdom back in the hands of the house that lost it. The crown, the house, the pretender and the first members are all read off the world's history. See BaseFilesToCopy/Societies/README.txt.")]
+    public bool EnableSocieties { get; set; } = true;
+
+    /// <summary>
+    /// Ships the hand-written prototype the society system grew out of — see
+    /// <see cref="Emit.StaticFileWriter.SocietyPrototype"/>. Ignored when <see cref="EnableSocieties"/>
+    /// is on: the two define the same panel hooks. CLI only (<c>--society-prototype</c>).
+    /// </summary>
+    [HideInGenerator]
+    [Category("02 World State")]
+    [DisplayName("Society prototype")]
+    [Description("Ship the hand-written society prototype instead of the generated society. For reference only. See BaseFilesToCopy/SocietyPrototype/README.txt.")]
+    public bool EnableSocietyPrototype { get; set; } = false;
 
     // =========================================================================
     // 03 Provinces
@@ -1331,6 +1351,32 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double ImpassableCeilingHeight { get; set; } = 400;
 
     /// <summary>
+    /// How steep ground must be for an auto-cut wall to run on down it, in elevation units per
+    /// world unit (sea level 36, heightmap maximum 520), measured over about a holding's footprint.
+    /// The default, 10, is the steepest ground under any of vanilla's 10,600 holdings (1267 in
+    /// 16-bit heightmap units per world unit). Outside <see cref="ImpassableShareOfLand"/>, and
+    /// only ground joined to a wall: a cliff with no wall above it stays passable. Only read with
+    /// <see cref="ImpassableAutoCut"/> on.
+    ///
+    /// A wall's foot is measured against its local floor, and beside the sea the floor is the sea,
+    /// so the lower half of a sea cliff stayed passable however sheer it was. On a 4096 inland-sea
+    /// world (seed 623950) three baronies stood on it, their holdings on ground 2.1–3.3x as steep
+    /// as vanilla's steepest, one of them a mountain pass cut straight down the cliff. At 10 the
+    /// walls there took 0.9% more land, and the steepest holding went from 4176 to 1292 in 16-bit
+    /// units per world unit against vanilla's 1267. Measured on the shipped maps, the same line
+    /// would take about 0.06% of land on an 8192 inland-sea world and none on an 8192 continents
+    /// world. It can join two walls that stood a cliff apart, which then share
+    /// <see cref="MountainPasses"/>' allowance as one wall. Not scaled by
+    /// <see cref="ReliefScale"/>: it is vanilla's steepness in world units, which is what that
+    /// scaling makes a small map match. 0 turns it off.
+    /// Recommended: 10.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("Lets an impassable wall run on down any slope steeper than this, in elevation units per world unit, so sea cliffs below a mountain wall are not left as passable ledges with holdings on them. 10 is the steepest ground under any vanilla holding. Only slopes joined to a wall are taken. 0 turns it off.")]
+    public double ImpassableCliffSlope { get; set; } = 10;
+
+    /// <summary>
     /// The smallest auto-cut wall kept, in baronies. Only read with <see cref="ImpassableAutoCut"/>
     /// on. Measured after <see cref="ImpassableCrestFollow"/> has had its chance to extend a wall
     /// along its ridge.
@@ -1380,10 +1426,11 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double ImpassableCrestReachBaronies { get; set; } = 3;
 
     /// <summary>
-    /// Cuts a pass through an auto-cut wall where it is thin and the way round is long: at most one
-    /// per wall, through its thinnest, lowest neck, as a barony of its own named for the pass and
-    /// holding a fort and a toll. See <see cref="MapGen.MountainPasses"/>. Only read with
-    /// <see cref="ImpassableAutoCut"/> on.
+    /// Cuts a pass through an auto-cut wall where it is thin and the way round is long, through its
+    /// lowest such neck, as a barony of its own named for the pass and holding a fort and a toll. A
+    /// long wall may take another (one per 15 baronies it covers, three at most), but only where
+    /// the passes already cut leave the way round long. See <see cref="MapGen.MountainPasses"/>.
+    /// Only read with <see cref="ImpassableAutoCut"/> on.
     ///
     /// Vanilla's ranges are broken into chunks with passable mountain provinces between them; the
     /// cut draws a range as one piece, so a long range is a wall its whole length. Surveyed on a
@@ -1394,7 +1441,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// Recommended: on.
     /// </summary>
     [Category("03 Provinces")]
-    [Description("Cut one narrow pass through an impassable wall where the wall is thin and the way round is long, at most one per wall. The pass is a barony of its own, named for it, with a fort and a toll.")]
+    [Description("Cut a narrow pass through an impassable wall where the wall is thin and the way round is long — one per wall, more on a long one where the first leaves the way round long. The pass is a barony of its own, named for it, with a fort and a toll.")]
     public bool MountainPasses { get; set; } = true;
 
     /// <summary>
@@ -1410,14 +1457,16 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// <summary>
     /// How far round a wall the land route between a pass's two ends must be before the pass is
     /// cut, in barony widths — and at least four times the wall's thickness there. Lower gives more
-    /// passes, including through walls a short walk already goes round. Only read with
-    /// <see cref="MountainPasses"/> on.
-    /// Recommended: 8.
+    /// passes, including through walls a short walk already goes round. On a 4096 inland-sea world,
+    /// whose walls cover 2 to 30 baronies, 8 would cut 3 passes, 5 cut 4 and 3.5 cut 6: a thin
+    /// strip on a small map is often only 4–7 baronies' walk round.
+    /// Only read with <see cref="MountainPasses"/> on.
+    /// Recommended: 5.
     /// </summary>
     [AdvancedSetting]
     [Category("03 Provinces")]
     [Description("How long the way round a wall must be, in barony widths, before a pass is cut through it. Lower gives more passes.")]
-    public double MountainPassMinDetour { get; set; } = 8;
+    public double MountainPassMinDetour { get; set; } = 5;
 
     /// <summary>
     /// Makes a land province with more than half its ground above the mountain line impassable

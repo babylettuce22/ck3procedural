@@ -71,6 +71,9 @@ public static class PortraitWriter
         Directory.CreateDirectory(bmDestDir);
         Directory.CreateDirectory(dnaDestDir);
 
+        // Race head features ran earlier in the same write; the horn gene is padded in only if it shipped.
+        bool hornGene = RaceHeadWriter.HornGeneShipped(modDir);
+
         var men = LoadCategorizedTemplates(sourceDir, MaleTypeRegex);
         if (men.AllTemplates.Count == 0)
         {
@@ -139,7 +142,7 @@ public static class PortraitWriter
                 // Repaint the borrowed DNA in the character's own ethnicity before anything is
                 // written, so the bookmark screen and the in-game portrait agree and both match the
                 // realm.
-                body = ApplyEthnicity(body, ethnicities.GenesFor(req.Culture, rng), rng);
+                body = ApplyEthnicity(body, ethnicities.GenesFor(req.Culture, rng), rng, hornGene);
 
                 // After the ethnicity, not before: the ethnicity is what a character of this culture
                 // looks like, and albinism is what overrides it. Painting it first would have the
@@ -199,7 +202,7 @@ public static class PortraitWriter
     /// </summary>
     private static string ApplyEthnicity(string body,
         (Dictionary<string, List<ColorPaletteRange>> ColorGenes, Dictionary<string, List<GeneMorphEntry>> MorphGenes) eth,
-        Rng rng)
+        Rng rng, bool hornGene)
     {
         var genes = GenesRegex.Match(body);
         if (!genes.Success) return body;
@@ -241,6 +244,7 @@ public static class PortraitWriter
         foreach (var (key, entries) in eth.MorphGenes)
         {
             if (seen.Contains(key) || entries.Count == 0) continue;
+            if (key == Horns.Gene && !hornGene) continue;          // unregistered this run
             seen.Add(key);
             var e = PickWeighted(entries, x => x.Weight, rng);
             int v = Byte255(rng.Float(e.Min, e.Max));
@@ -262,6 +266,14 @@ public static class PortraitWriter
         // And the tusk gene, which only orc ethnicities name.
         if (!seen.Contains(OrcTusks.Gene))
             added.Append($"\n{indent}{OrcTusks.Gene}={{ \"{OrcTusks.NoneTemplate}\" 0 \"{OrcTusks.NoneTemplate}\" 0 }}");
+
+        // The horns' skin mound (static in Core, always registered)...
+        if (!seen.Contains(Horns.BossGene))
+            added.Append($"\n{indent}{Horns.BossGene}={{ \"{Horns.BossNoneTemplate}\" 0 \"{Horns.BossNoneTemplate}\" 0 }}");
+
+        // ...and the horn accessory gene, registered only when this run shipped the horn models.
+        if (hornGene && !seen.Contains(Horns.Gene))
+            added.Append($"\n{indent}{Horns.Gene}={{ \"{Horns.NoneTemplate}\" 0 \"{Horns.NoneTemplate}\" 0 }}");
 
         return string.Concat(
             body.AsSpan(0, content.Index),

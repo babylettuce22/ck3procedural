@@ -166,6 +166,11 @@ gen_assign_phenotype_from_genes_effect = {
 		add_trait = phenotype_dusk_adapted
 		add_character_flag = gen_phenotype_from_gene
 	}
+	else_if = {
+		limit = { gen_is_hornkin_ethnicity_trigger = yes }
+		add_trait = phenotype_horned
+		add_character_flag = gen_phenotype_from_gene
+	}
 }
 
 # Repairs a character the CULTURE called human whose own genome says otherwise.
@@ -191,7 +196,7 @@ gen_reconcile_phenotype_with_genes_effect = {
 	if = {
 		limit = { gen_phenotype_contradicts_genes_trigger = yes }
 
-		# Removed first: the seven traits list each other as `opposites`, so add_trait would be
+		# Removed first: the race traits list each other as `opposites`, so add_trait would be
 		# refused while phenotype_human is still on.
 		remove_trait = phenotype_human
 		gen_assign_phenotype_from_genes_effect = yes
@@ -234,6 +239,10 @@ gen_copy_phenotype_effect = {
 		add_trait = phenotype_dusk_adapted
 	}
 	else_if = {
+		limit = { scope:gen_phenotype_source = { has_trait = phenotype_horned } }
+		add_trait = phenotype_horned
+	}
+	else_if = {
 		# The human race spreads through the pulse like any other: a courtier invented for a human
 		# court takes phenotype_human from the culture head and is settled permanently instead of
 		# being re-examined every year. Deliberately NOT copied: the gen_phenotype_human FLAG. The
@@ -247,7 +256,7 @@ gen_copy_phenotype_effect = {
 
 # Strips a character back to one race.
 #
-# Should never fire: all eight traits list each other as `opposites`, and the mixed-line flag is
+# Should never fire: all nine traits list each other as `opposites`, and the mixed-line flag is
 # only set by script. The ruler designer and the console can still produce a doubled character, and
 # two races means two sets of forced genes fighting over one portrait, so the yearly pulse checks.
 #
@@ -270,6 +279,7 @@ gen_sanitize_phenotype_effect = {
 			remove_trait = phenotype_towering
 			remove_trait = phenotype_diminutive
 			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_horned
 			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
@@ -280,6 +290,7 @@ gen_sanitize_phenotype_effect = {
 			remove_trait = phenotype_towering
 			remove_trait = phenotype_diminutive
 			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_horned
 			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
@@ -289,6 +300,7 @@ gen_sanitize_phenotype_effect = {
 			remove_trait = phenotype_towering
 			remove_trait = phenotype_diminutive
 			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_horned
 			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
@@ -297,6 +309,7 @@ gen_sanitize_phenotype_effect = {
 			remove_trait = phenotype_towering
 			remove_trait = phenotype_diminutive
 			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_horned
 			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
@@ -304,17 +317,25 @@ gen_sanitize_phenotype_effect = {
 			limit = { has_trait = phenotype_towering }
 			remove_trait = phenotype_diminutive
 			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_horned
 			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
 		else_if = {
 			limit = { has_trait = phenotype_diminutive }
 			remove_trait = phenotype_dusk_adapted
+			remove_trait = phenotype_horned
 			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}
 		else_if = {
 			limit = { has_trait = phenotype_dusk_adapted }
+			remove_trait = phenotype_horned
+			remove_trait = phenotype_human
+			remove_character_flag = gen_phenotype_human
+		}
+		else_if = {
+			limit = { has_trait = phenotype_horned }
 			remove_trait = phenotype_human
 			remove_character_flag = gen_phenotype_human
 		}

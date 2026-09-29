@@ -1,0 +1,340 @@
+﻿# The exposure pack's shared effects (restor.0300-0399). See README.txt, THE METERS.
+#
+# The core's exposure effects speak to the member ("Your exposure rises"). When the USURPER's choice
+# moves a member's exposure, the usurper's tooltip needs to name whose it is, so these wrap the core
+# effect: a saved value and a named scope for ONE tooltip key, the change itself hidden. The member
+# still gets the core's own toast.
+
+# Run by whoever is acting on a member. $WHO$ is the member.
+restor_their_exposure_gain_effect = {
+	$WHO$ = { save_scope_as = restor_exposure_target }
+	save_scope_value_as = {
+		name = restor_their_delta
+		value = $VALUE$
+	}
+	custom_tooltip = restor_their_exposure_gain_tt
+	hidden_effect = {
+		scope:restor_exposure_target = { restor_exposure_gain_effect = { VALUE = $VALUE$ } }
+	}
+}
+
+restor_their_exposure_loss_effect = {
+	$WHO$ = { save_scope_as = restor_exposure_target }
+	save_scope_value_as = {
+		name = restor_their_delta
+		value = $VALUE$
+	}
+	custom_tooltip = restor_their_exposure_loss_tt
+	hidden_effect = {
+		scope:restor_exposure_target = { restor_exposure_loss_effect = { VALUE = $VALUE$ } }
+	}
+}
+
+# THIS names other members to the usurper: the three most careless, who are the ones anybody could
+# name. Each gains 10 exposure and, if a player, is told who named them.
+restor_name_others_effect = {
+	save_scope_as = restor_informant
+	custom_tooltip = restor_name_others_tt
+	hidden_effect = {
+		ordered_in_global_list = {
+			variable = restor_roster
+			limit = {
+				is_alive = yes
+				has_trait = restor_member
+				NOT = { this = scope:restor_informant }
+			}
+			order_by = {
+				value = 0
+				if = {
+					limit = { has_variable = restor_exposure }
+					add = var:restor_exposure
+				}
+			}
+			max = 3
+			check_range_bounds = no
+			restor_exposure_gain_effect = { VALUE = 10 }
+			if = {
+				limit = { is_ai = no }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor_named_by_informant_toast
+					left_icon = scope:restor_informant
+				}
+			}
+		}
+	}
+}
+
+# ROOT (the usurper) questions $SUSPECT$ face to face: intrigue against intrigue. Caught lying gives
+# a reason to imprison and a hook; a good liar walks out less suspected than they walked in.
+restor_question_suspect_effect = {
+	$SUSPECT$ = { save_scope_as = restor_questioned }
+	duel = {
+		skill = intrigue
+		target = scope:restor_questioned
+		50 = {
+			desc = restor_question_caught_toast
+			compare_modifier = {
+				value = scope:duel_value
+				multiplier = 3.5
+				min = -45
+			}
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = restor_question_caught_toast
+				left_icon = scope:restor_questioned
+				add_opinion = {
+					target = scope:restor_questioned
+					modifier = treachery_opinion
+				}
+				if = {
+					limit = {
+						can_add_hook = {
+							target = scope:restor_questioned
+							type = suspicious_activity_hook
+						}
+					}
+					add_hook = {
+						type = suspicious_activity_hook
+						target = scope:restor_questioned
+					}
+				}
+			}
+			restor_their_exposure_gain_effect = { WHO = scope:restor_questioned VALUE = 5 }
+			scope:restor_questioned = {
+				if = {
+					limit = { is_ai = no }
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = restor_questioned_badly_toast
+						left_icon = root
+					}
+				}
+			}
+		}
+		50 = {
+			desc = restor_question_cleared_toast
+			compare_modifier = {
+				value = scope:duel_value
+				multiplier = -3.5
+				min = -45
+			}
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = restor_question_cleared_toast
+				left_icon = scope:restor_questioned
+			}
+			restor_their_exposure_loss_effect = { WHO = scope:restor_questioned VALUE = 5 }
+			scope:restor_questioned = {
+				if = {
+					limit = { is_ai = no }
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = restor_questioned_well_toast
+						left_icon = root
+					}
+				}
+			}
+		}
+	}
+}
+
+# ROOT (the usurper) takes $WHO$ into custody. In ROOT's own court, certain. A lord in ROOT's realm
+# has men of their own: a roll, reported either way.
+restor_arrest_member_effect = {
+	$WHO$ = { save_scope_as = restor_arrested }
+	if = {
+		limit = {
+			scope:restor_arrested = {
+				OR = {
+					is_courtier_of = root
+					is_foreign_court_guest_of = root
+					is_pool_guest_of = root
+				}
+			}
+		}
+		rightfully_imprison_character_effect = {
+			TARGET = scope:restor_arrested
+			IMPRISONER = root
+		}
+	}
+	else = {
+		random_list = {
+			60 = {
+				desc = restor_arrest_success_toast
+				modifier = { add = 15 intrigue >= 14 }
+				modifier = { add = 15 dread >= 40 }
+				modifier = { add = -20 scope:restor_arrested = { is_landed = yes } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor_arrest_success_toast
+					left_icon = scope:restor_arrested
+					rightfully_imprison_character_effect = {
+						TARGET = scope:restor_arrested
+						IMPRISONER = root
+					}
+				}
+			}
+			40 = {
+				desc = restor_arrest_failure_toast
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor_arrest_failure_toast
+					left_icon = scope:restor_arrested
+					add_prestige = minor_prestige_loss
+					scope:restor_arrested = {
+						add_opinion = {
+							target = root
+							modifier = attempted_arrest_opinion
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# ROOT (the usurper) turns the hunt on its own realm: every member inside it gains 10 exposure and
+# is warned, and the most exposed is named to ROOT. Used by restor_root_out_the_sworn_decision.
+restor_root_out_effect = {
+	save_scope_as = restor_hunter
+	add_character_flag = {
+		flag = restor_rooting_out
+		days = 30
+	}
+	every_in_global_list = {
+		variable = restor_roster
+		limit = {
+			is_alive = yes
+			has_trait = restor_member
+			NOT = { this = scope:restor_hunter }
+			OR = {
+				any_liege_or_above = { this = scope:restor_hunter }
+				is_foreign_court_guest_of = scope:restor_hunter
+				is_pool_guest_of = scope:restor_hunter
+			}
+		}
+		restor_exposure_gain_effect = { VALUE = 10 }
+		trigger_event = { id = restor.0312 days = 1 }
+	}
+	if = {
+		limit = {
+			any_in_global_list = {
+				variable = restor_roster
+				is_alive = yes
+				has_trait = restor_member
+				NOT = { this = scope:restor_hunter }
+				OR = {
+					any_liege_or_above = { this = scope:restor_hunter }
+					is_foreign_court_guest_of = scope:restor_hunter
+					is_pool_guest_of = scope:restor_hunter
+				}
+			}
+		}
+		ordered_in_global_list = {
+			variable = restor_roster
+			limit = {
+				is_alive = yes
+				has_trait = restor_member
+				NOT = { this = scope:restor_hunter }
+				OR = {
+					any_liege_or_above = { this = scope:restor_hunter }
+					is_foreign_court_guest_of = scope:restor_hunter
+					is_pool_guest_of = scope:restor_hunter
+				}
+			}
+			order_by = {
+				value = 0
+				if = {
+					limit = { has_variable = restor_exposure }
+					add = var:restor_exposure
+				}
+			}
+			save_scope_as = restor_named
+		}
+		trigger_event = { id = restor.0310 days = 5 }
+	}
+	else = {
+		send_interface_toast = {
+			type = event_toast_effect_neutral
+			title = restor_root_out_nobody_toast
+			left_icon = root
+		}
+	}
+}
+
+# Picks the member an usurper-side event is about: somebody sworn inside ROOT's realm, the careless
+# first. Saves scope:restor_mark; sets nothing when there is nobody.
+restor_pick_mark_in_realm_effect = {
+	save_scope_as = restor_hunter
+	random_in_global_list = {
+		variable = restor_roster
+		limit = {
+			is_alive = yes
+			is_adult = yes
+			has_trait = restor_member
+			NOT = { this = scope:restor_hunter }
+			OR = {
+				any_liege_or_above = { this = scope:restor_hunter }
+				is_foreign_court_guest_of = scope:restor_hunter
+				is_pool_guest_of = scope:restor_hunter
+			}
+		}
+		weight = {
+			base = 5
+			modifier = {
+				add = 10
+				has_variable = restor_exposure
+				var:restor_exposure >= 10
+			}
+			modifier = {
+				add = 10
+				has_variable = restor_exposure
+				var:restor_exposure >= 20
+			}
+		}
+		save_scope_as = restor_mark
+	}
+}
+
+# The same, from anywhere: the informer sells names from outside the realm too.
+restor_pick_mark_anywhere_effect = {
+	save_scope_as = restor_hunter
+	random_in_global_list = {
+		variable = restor_roster
+		limit = {
+			is_alive = yes
+			is_adult = yes
+			has_trait = restor_member
+			NOT = { this = scope:restor_hunter }
+		}
+		weight = {
+			base = 5
+			modifier = {
+				add = 15
+				OR = {
+					any_liege_or_above = { this = scope:restor_hunter }
+					is_foreign_court_guest_of = scope:restor_hunter
+					is_pool_guest_of = scope:restor_hunter
+				}
+			}
+			modifier = {
+				add = 10
+				has_variable = restor_exposure
+				var:restor_exposure >= 10
+			}
+		}
+		save_scope_as = restor_mark
+	}
+}
+
+# The usurper learns $WHO$'s secret, if it exists yet: then the vanilla Expose and Blackmail
+# interactions on the character work for them. Tooltipped by the caller.
+restor_reveal_secret_to_root_effect = {
+	$WHO$ = {
+		every_secret = {
+			limit = { secret_type = secret_restor_member }
+			reveal_to = root
+		}
+	}
+}

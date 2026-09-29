@@ -1,0 +1,205 @@
+﻿# The Restorationists: support milestones and the rising. restor.0600-0699.
+#
+#   0601-0603   support crosses 25 / 50 / 75 (to every member)
+#   0604        somebody not of the house creates the crown (to every member)
+#   0610        the pretender raises the standard; each sworn lord answers
+
+namespace = restor
+
+# =====================================================================================
+#  Milestones
+# =====================================================================================
+
+restor.0601 = {
+	type = character_event
+	title = restor.0601.t
+	desc = restor.0601.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+	}
+	trigger = { restor_underground_trigger = yes }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0601.a
+		custom_tooltip = restor.0601.a.tt
+	}
+}
+
+restor.0602 = {
+	type = character_event
+	title = restor.0602.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { restor_is_pretender_trigger = yes }
+				desc = restor.0602.desc_pretender
+			}
+			desc = restor.0602.desc
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+		}
+		character = scope:restor_pretender
+	}
+	trigger = { restor_underground_trigger = yes }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0602.a
+		trigger = { restor_is_pretender_trigger = yes }
+		custom_tooltip = restor.0602.a.tt
+	}
+	option = {
+		name = restor.0602.b
+		trigger = { NOT = { restor_is_pretender_trigger = yes } }
+	}
+}
+
+restor.0603 = {
+	type = character_event
+	title = restor.0603.t
+	desc = restor.0603.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+	}
+	trigger = { restor_underground_trigger = yes }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0603.a
+	}
+}
+
+restor.0604 = {
+	type = character_event
+	title = restor.0604.t
+	desc = restor.0604.desc
+	theme = war
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_usurper }
+		character = scope:restor_usurper
+		animation = personality_bold
+	}
+	trigger = { restor_underground_trigger = yes }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0604.a
+		custom_tooltip = restor.0604.a.tt
+	}
+}
+
+# =====================================================================================
+#  restor.0610 -- the standard is raised
+# =====================================================================================
+#
+# Sent to every member but the pretender. The three answers are the three things a sworn lord can
+# actually give: an army, gold, or nothing yet. An army is an alliance -- vanilla's own call-to-arms
+# then does the fighting -- and only a landed, independent lord can make one.
+
+restor.0610 = {
+	type = character_event
+	title = restor.0610.t
+	desc = restor.0610.desc
+	theme = war
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+		animation = war_attacker
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		NOT = { restor_is_pretender_trigger = yes }
+		exists = global_var:restor_pretender
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	# March with them.
+	option = {
+		name = restor.0610.a
+		trigger = {
+			is_landed = yes
+			is_independent_ruler = yes
+			exists = scope:restor_pretender
+			scope:restor_pretender = {
+				is_landed = yes
+				NOT = { is_allied_to = root }
+			}
+		}
+		create_alliance = {
+			target = scope:restor_pretender
+			allied_through_owner = root
+			allied_through_target = scope:restor_pretender
+		}
+		restor_favour_gain_effect = { VALUE = 40 }
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 10
+		}
+		restor_exposure_gain_effect = { VALUE = 10 }
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = 20 has_trait = honest }
+			modifier = { add = -30 has_trait = craven }
+		}
+	}
+
+	# Gold, quietly.
+	option = {
+		name = restor.0610.b
+		trigger = { gold >= 100 }
+		remove_short_term_gold = 100
+		scope:restor_pretender = { add_gold = 100 }
+		change_global_variable = { name = restor_war_chest add = 100 }
+		restor_favour_gain_effect = { VALUE = 20 }
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = generous }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Not yet.
+	option = {
+		name = restor.0610.c
+		restor_favour_spend_effect = { VALUE = 20 }
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = restor_failed_charge_opinion
+			}
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = craven }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+}

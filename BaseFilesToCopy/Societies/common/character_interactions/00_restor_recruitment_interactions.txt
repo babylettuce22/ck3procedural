@@ -1,0 +1,239 @@
+﻿# Recruitment's two interactions: Sound Out, then Offer the Oath. See
+# common/scripted_effects/00_restor_recruitment_effects.txt for the whole exchange.
+#
+# Both are auto_accept: the interaction is the ASKING, and the asking always happens. The answer is
+# taken inside the exchange -- by the player being asked, in an event, or by the one set of odds in
+# the roll effects -- so there is no ai_accept here to drift away from those odds.
+#
+# Secrecy: is_shown demands the trait on the actor, so a non-member never sees either of these.
+#
+# The AI uses them too, sparingly: only Trusted and above, only while the roll has room
+# (restor_recruit_roster_open_trigger), and on the same three-year clock (restor_recruited_lately)
+# as the yearly approach in 00_restor_recruitment_on_actions.txt, so the two routes do not add up.
+
+restor_sound_out_interaction = {
+	category = interaction_category_friendly
+	icon = icon_scheme_sway
+	interface_priority = 40
+	common_interaction = no
+
+	desc = restor_sound_out_interaction_desc
+
+	use_diplomatic_range = yes
+	auto_accept = yes
+
+	cooldown = { months = 6 }
+	cooldown_against_recipient = { years = 3 }
+
+	is_shown = {
+		restor_underground_trigger = yes
+		scope:actor = { has_trait = restor_member }
+		scope:recipient != scope:actor
+		scope:recipient = {
+			is_adult = yes
+			NOT = { has_trait = restor_member }
+			NOT = { restor_is_usurper_trigger = yes }
+		}
+	}
+
+	is_available = {
+		has_trait = restor_member
+		is_adult = yes
+		is_imprisoned = no
+	}
+
+	is_valid_showing_failures_only = {
+		scope:actor = { is_imprisoned = no }
+		scope:recipient = { is_imprisoned = no }
+		custom_tooltip = {
+			text = restor_recruit_refused_recently_tt
+			scope:recipient = { NOT = { has_character_flag = restor_refused_recently } }
+		}
+		custom_tooltip = {
+			text = restor_sound_out_already_sympathetic_tt
+			scope:recipient = { NOT = { has_character_flag = restor_sounded_sympathetic } }
+		}
+	}
+
+	on_accept = {
+		custom_tooltip = restor_sound_out_interaction_tt
+		scope:actor = { save_scope_as = restor_recruiter }
+		scope:recipient = { save_scope_as = restor_recruit }
+		hidden_effect = {
+			if = {
+				limit = { scope:actor = { is_ai = yes } }
+				scope:actor = {
+					add_character_flag = {
+						flag = restor_recruited_lately
+						years = 3
+					}
+				}
+			}
+			restor_sound_out_start_effect = yes
+		}
+	}
+
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		ai_recipients = peer_vassals
+		ai_recipients = vassals
+		ai_recipients = liege
+		max = 15
+	}
+	ai_target_quick_trigger = {
+		adult = yes
+	}
+	ai_frequency = 36
+
+	ai_will_do = {
+		base = 0
+		modifier = {
+			add = 25
+			scope:recipient = { restor_holds_crown_land_trigger = yes }
+		}
+		modifier = {
+			add = 35
+			scope:recipient = { restor_of_the_blood_trigger = yes }
+		}
+		modifier = {
+			add = 15
+			exists = global_var:restor_seat
+			scope:recipient = { culture = global_var:restor_seat.culture }
+		}
+		modifier = {
+			add = 10
+			exists = global_var:restor_usurper
+			scope:recipient = { opinion = { target = global_var:restor_usurper value <= -20 } }
+		}
+		modifier = {
+			factor = 0
+			scope:recipient = { is_landed = no }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = {
+				OR = {
+					has_character_flag = restor_recruited_lately
+					NOT = { restor_rank_at_least_trigger = { RANK = 25 } }
+				}
+			}
+		}
+		modifier = {
+			factor = 0
+			NOT = { restor_recruit_roster_open_trigger = yes }
+		}
+		modifier = {
+			factor = 0.5
+			scope:actor = {
+				has_variable = restor_exposure
+				var:restor_exposure >= 15
+			}
+		}
+	}
+}
+
+restor_offer_oath_interaction = {
+	category = interaction_category_friendly
+	icon = icon_scheme_claim_throne
+	interface_priority = 41
+	common_interaction = no
+
+	desc = restor_offer_oath_interaction_desc
+
+	use_diplomatic_range = yes
+	auto_accept = yes
+
+	cooldown = { years = 1 }
+	cooldown_against_recipient = { years = 5 }
+
+	is_shown = {
+		restor_underground_trigger = yes
+		scope:actor = { has_trait = restor_member }
+		scope:recipient != scope:actor
+		scope:recipient = {
+			is_adult = yes
+			NOT = { has_trait = restor_member }
+			NOT = { restor_is_usurper_trigger = yes }
+		}
+	}
+
+	is_available = {
+		has_trait = restor_member
+		is_adult = yes
+		is_imprisoned = no
+	}
+
+	is_valid_showing_failures_only = {
+		scope:actor = { is_imprisoned = no }
+		scope:recipient = { is_imprisoned = no }
+		custom_tooltip = {
+			text = restor_recruit_refused_recently_tt
+			scope:recipient = { NOT = { has_character_flag = restor_refused_recently } }
+		}
+		custom_tooltip = {
+			text = restor_offer_oath_needs_trust_tt
+			OR = {
+				scope:recipient = { has_character_flag = restor_sounded_sympathetic }
+				scope:actor = { restor_rank_at_least_trigger = { RANK = 25 } }
+			}
+		}
+	}
+
+	on_accept = {
+		if = {
+			limit = { scope:recipient = { has_character_flag = restor_sounded_sympathetic } }
+			custom_tooltip = restor_offer_oath_interaction_sympathetic_tt
+		}
+		else = {
+			custom_tooltip = restor_offer_oath_interaction_cold_tt
+		}
+		scope:actor = { save_scope_as = restor_recruiter }
+		scope:recipient = { save_scope_as = restor_recruit }
+		hidden_effect = {
+			if = {
+				limit = { scope:actor = { is_ai = yes } }
+				scope:actor = {
+					add_character_flag = {
+						flag = restor_recruited_lately
+						years = 3
+					}
+				}
+			}
+			restor_offer_oath_start_effect = yes
+		}
+	}
+
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		ai_recipients = peer_vassals
+		ai_recipients = vassals
+		ai_recipients = liege
+		max = 15
+	}
+	ai_target_quick_trigger = {
+		adult = yes
+	}
+	ai_frequency = 24
+
+	# The AI offers the oath only to people already known to be sympathetic: the two steps in order.
+	ai_will_do = {
+		base = 0
+		modifier = {
+			add = 60
+			scope:recipient = { has_character_flag = restor_sounded_sympathetic }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = {
+				OR = {
+					has_character_flag = restor_recruited_lately
+					NOT = { restor_rank_at_least_trigger = { RANK = 25 } }
+				}
+			}
+		}
+		modifier = {
+			factor = 0
+			NOT = { restor_recruit_roster_open_trigger = yes }
+		}
+	}
+}

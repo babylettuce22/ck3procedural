@@ -38,4 +38,10 @@ public sealed record SimSettings
 
     /// <summary>How often a neglected frontier county falls to ruin, times the usual. 0 is never.</summary>
     public double Ruination { get; init; } = 1.0;
+
+    /// <summary>How fast counties take their lords' culture, times the usual. 0 is never.</summary>
+    public double Assimilation { get; init; } = 1.0;
+
+    /// <summary>How fast counties take their lords' faith, times the usual. 0 is never.</summary>
+    public double Conversion { get; init; } = 1.0;
 }

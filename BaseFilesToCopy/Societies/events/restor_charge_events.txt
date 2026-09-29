@@ -1,0 +1,682 @@
+﻿# The Restorationists: charges. restor.0500-0599.
+#
+#   0501        the Keeper gives you a charge (accept / decline)
+#   0510-0514   a charge kept: win over, war chest, stir, shelter, recruit
+#   0520        a charge's three years ran out
+#   0530-0534   a chance to do the charge in hand, one per kind
+#
+# The state and every transition are in 00_restor_charge_effects.txt; these events only show them.
+# A charge is cleared before its ending event arrives, so the endings read the saved scopes
+# (scope:restor_charge_target, scope:restor_charge_county, scope:restor_charge_kind), not the
+# variables.
+
+namespace = restor
+
+# =====================================================================================
+#  restor.0501 -- a charge from the Keeper
+# =====================================================================================
+
+restor.0501 = {
+	type = character_event
+	title = restor.0501.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:restor_charge_kind ?= flag:win_over }
+				desc = restor.0501.desc_win_over
+			}
+			triggered_desc = {
+				trigger = { scope:restor_charge_kind ?= flag:war_chest }
+				desc = restor.0501.desc_war_chest
+			}
+			triggered_desc = {
+				trigger = { scope:restor_charge_kind ?= flag:stir }
+				desc = restor.0501.desc_stir
+			}
+			triggered_desc = {
+				trigger = { scope:restor_charge_kind ?= flag:shelter }
+				desc = restor.0501.desc_shelter
+			}
+			desc = restor.0501.desc_recruit
+		}
+	}
+	theme = secret
+	override_background = { reference = study }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_keeper }
+		character = scope:restor_keeper
+		animation = scheme
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_charge_target }
+		character = scope:restor_charge_target
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_variable = restor_charge
+		has_variable = restor_charge_given
+		exists = global_var:restor_keeper
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_charge_save_state_effect = yes
+	}
+
+	option = {
+		name = restor.0501.a
+		if = {
+			limit = { scope:restor_charge_kind ?= flag:win_over }
+			custom_tooltip = restor.0501.a.win_over_tt
+		}
+		else_if = {
+			limit = { scope:restor_charge_kind ?= flag:war_chest }
+			custom_tooltip = restor.0501.a.war_chest_tt
+		}
+		else_if = {
+			limit = { scope:restor_charge_kind ?= flag:stir }
+			custom_tooltip = restor.0501.a.stir_tt
+		}
+		else_if = {
+			limit = { scope:restor_charge_kind ?= flag:shelter }
+			custom_tooltip = restor.0501.a.shelter_tt
+		}
+		else = {
+			custom_tooltip = restor.0501.a.recruit_tt
+		}
+		ai_chance = { base = 100 }
+	}
+
+	option = {
+		name = restor.0501.b
+		restor_charge_penalty_effect = { FAVOUR = 10 }
+		custom_tooltip = restor.0501.b.tt
+		hidden_effect = {
+			if = {
+				limit = { has_variable = restor_charge }
+				restor_charge_clear_effect = yes
+			}
+		}
+		ai_chance = { base = 0 }
+	}
+}
+
+# =====================================================================================
+#  restor.0510-0514 -- a charge kept
+# =====================================================================================
+
+restor.0510 = {
+	type = character_event
+	title = restor.0510.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_charge_target
+					scope:restor_charge_target = { has_trait = restor_member }
+				}
+				desc = restor.0510.desc_sworn
+			}
+			triggered_desc = {
+				trigger = { exists = scope:restor_charge_target }
+				desc = restor.0510.desc
+			}
+			desc = restor.0510.desc_fallback
+		}
+	}
+	theme = diplomacy
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_keeper }
+		character = scope:restor_keeper
+		animation = admiration
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_charge_target }
+		character = scope:restor_charge_target
+	}
+	trigger = { restor_active_trigger = yes }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0510.a
+		restor_charge_reward_effect = { FAVOUR = 60 XP = 15 }
+	}
+}
+
+restor.0511 = {
+	type = character_event
+	title = restor.0511.t
+	desc = restor.0511.desc
+	theme = stewardship
+	left_portrait = {
+		character = root
+		animation = personality_content
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_keeper }
+		character = scope:restor_keeper
+		animation = admiration
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+	}
+	trigger = { restor_active_trigger = yes }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0511.a
+		restor_charge_reward_effect = { FAVOUR = 40 XP = 10 }
+	}
+}
+
+restor.0512 = {
+	type = character_event
+	title = restor.0512.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_charge_county }
+				desc = restor.0512.desc
+			}
+			desc = restor.0512.desc_fallback
+		}
+	}
+	theme = secret
+	override_background = { reference = market }
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_keeper }
+		character = scope:restor_keeper
+		animation = admiration
+	}
+	trigger = { restor_active_trigger = yes }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0512.a
+		restor_charge_reward_effect = { FAVOUR = 50 XP = 12 }
+	}
+}
+
+restor.0513 = {
+	type = character_event
+	title = restor.0513.t
+	desc = restor.0513.desc
+	theme = family
+	override_background = { reference = throne_room }
+	left_portrait = {
+		character = root
+		animation = personality_honorable
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+		animation = happiness
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_keeper }
+		character = scope:restor_keeper
+	}
+	trigger = { restor_active_trigger = yes }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0513.a
+		restor_charge_reward_effect = { FAVOUR = 60 XP = 15 }
+	}
+}
+
+restor.0514 = {
+	type = character_event
+	title = restor.0514.t
+	desc = restor.0514.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_keeper }
+		character = scope:restor_keeper
+		animation = admiration
+	}
+	trigger = { restor_active_trigger = yes }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0514.a
+		restor_charge_reward_effect = { FAVOUR = 50 XP = 12 }
+	}
+}
+
+# =====================================================================================
+#  restor.0520 -- the three years are up
+# =====================================================================================
+
+restor.0520 = {
+	type = character_event
+	title = restor.0520.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_charge_kind
+					scope:restor_charge_kind = flag:win_over
+					exists = scope:restor_charge_target
+				}
+				desc = restor.0520.desc_win_over
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_charge_kind
+					scope:restor_charge_kind = flag:stir
+					exists = scope:restor_charge_county
+				}
+				desc = restor.0520.desc_stir
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_charge_kind
+					scope:restor_charge_kind = flag:war_chest
+				}
+				desc = restor.0520.desc_war_chest
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_charge_kind
+					scope:restor_charge_kind = flag:shelter
+				}
+				desc = restor.0520.desc_shelter
+			}
+			desc = restor.0520.desc_recruit
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = shame
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_keeper }
+		character = scope:restor_keeper
+		animation = disappointed
+	}
+	trigger = { restor_active_trigger = yes }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0520.a
+		restor_charge_penalty_effect = { FAVOUR = 15 }
+		custom_tooltip = restor.0520.a.tt
+	}
+}
+
+# =====================================================================================
+#  restor.0530 -- win over: supper with the lord
+# =====================================================================================
+
+restor.0530 = {
+	type = character_event
+	title = restor.0530.t
+	desc = restor.0530.desc
+	theme = diplomacy
+	override_background = { reference = relaxing_room }
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		character = scope:restor_charge_target
+		animation = thinking
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = global_var:restor_pretender
+		has_variable = restor_charge
+		var:restor_charge = flag:win_over
+		exists = var:restor_charge_target
+		var:restor_charge_target = {
+			is_alive = yes
+			is_imprisoned = no
+			NOT = { has_trait = restor_member }
+		}
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_charge_save_state_effect = yes
+	}
+
+	# Say it out loud.
+	option = {
+		name = restor.0530.a
+		random_list = {
+			50 = {
+				modifier = { add = 15 diplomacy >= 12 }
+				modifier = { add = 15 diplomacy >= 16 }
+				modifier = {
+					add = 20
+					scope:restor_charge_target = {
+						opinion = {
+							target = root
+							value >= 30
+						}
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0530.a.success
+					left_icon = root
+					right_icon = scope:restor_charge_target
+					scope:restor_charge_target = {
+						add_opinion = {
+							target = scope:restor_pretender
+							modifier = friendliness_opinion
+							opinion = 25
+						}
+					}
+				}
+			}
+			50 = {
+				modifier = { add = 15 has_trait = impatient }
+				modifier = {
+					add = 20
+					scope:restor_charge_target = {
+						opinion = {
+							target = root
+							value < 0
+						}
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0530.a.failure
+					left_icon = root
+					right_icon = scope:restor_charge_target
+					restor_exposure_gain_effect = { VALUE = 8 }
+				}
+			}
+		}
+		hidden_effect = { restor_charge_check_effect = yes }
+		ai_chance = { base = 50 }
+	}
+
+	# A gift in the heir's name.
+	option = {
+		name = restor.0530.b
+		trigger = { gold >= 50 }
+		remove_short_term_gold = 50
+		scope:restor_charge_target = {
+			add_opinion = {
+				target = scope:restor_pretender
+				modifier = friendliness_opinion
+				opinion = 15
+			}
+		}
+		hidden_effect = { restor_charge_check_effect = yes }
+		ai_chance = { base = 30 }
+	}
+
+	option = {
+		name = restor.0530.c
+		ai_chance = { base = 20 }
+	}
+}
+
+# =====================================================================================
+#  restor.0531 -- stir: a priest in the county
+# =====================================================================================
+
+restor.0531 = {
+	type = character_event
+	title = restor.0531.t
+	desc = restor.0531.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_keeper }
+		character = scope:restor_keeper
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_variable = restor_charge
+		var:restor_charge = flag:stir
+		exists = var:restor_charge_target
+		var:restor_charge_target = {
+			NOT = { has_county_modifier = restor_county_stirred }
+		}
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_charge_save_state_effect = yes
+	}
+
+	option = {
+		name = restor.0531.a
+		trigger = { gold >= 40 }
+		remove_short_term_gold = 40
+		restor_charge_stir_county_effect = { COUNTY = scope:restor_charge_county }
+		restor_exposure_gain_effect = { VALUE = 5 }
+		hidden_effect = { restor_charge_check_effect = yes }
+		ai_chance = { base = 60 }
+	}
+
+	option = {
+		name = restor.0531.b
+		custom_tooltip = restor.0531.b.tt
+		ai_chance = { base = 40 }
+	}
+}
+
+# =====================================================================================
+#  restor.0532 -- war chest: a merchant who can carry gold
+# =====================================================================================
+
+restor.0532 = {
+	type = character_event
+	title = restor.0532.t
+	desc = restor.0532.desc
+	theme = stewardship
+	override_background = { reference = market }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = global_var:restor_pretender
+		NOT = { restor_is_pretender_trigger = yes }
+		has_variable = restor_charge
+		var:restor_charge = flag:war_chest
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_charge_save_state_effect = yes
+	}
+
+	# The full sum, and the merchant adds his own.
+	option = {
+		name = restor.0532.a
+		trigger = { gold >= 100 }
+		restor_charge_send_gold_effect = { GOLD = 100 }
+		scope:restor_pretender = { add_gold = 25 }
+		custom_tooltip = restor.0532.a.tt
+		hidden_effect = { restor_charge_check_effect = yes }
+		ai_chance = { base = 60 }
+	}
+
+	# Half now.
+	option = {
+		name = restor.0532.b
+		trigger = { gold >= 50 }
+		restor_charge_send_gold_effect = { GOLD = 50 }
+		hidden_effect = { restor_charge_check_effect = yes }
+		ai_chance = { base = 20 }
+	}
+
+	option = {
+		name = restor.0532.c
+		ai_chance = { base = 20 }
+	}
+}
+
+# =====================================================================================
+#  restor.0533 -- shelter: a letter from the heir
+# =====================================================================================
+
+restor.0533 = {
+	type = character_event
+	title = restor.0533.t
+	desc = restor.0533.desc
+	theme = family
+	override_background = { reference = study }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:restor_pretender
+		animation = worry
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_variable = restor_charge
+		var:restor_charge = flag:shelter
+		is_landed = yes
+		exists = global_var:restor_pretender
+		global_var:restor_pretender = {
+			is_imprisoned = no
+			NOT = { is_courtier_of = root }
+		}
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_charge_save_state_effect = yes
+	}
+
+	option = {
+		name = restor.0533.a
+		restor_charge_take_in_heir_effect = yes
+		hidden_effect = { restor_charge_check_effect = yes }
+		ai_chance = { base = 70 }
+	}
+
+	option = {
+		name = restor.0533.b
+		custom_tooltip = restor.0533.b.tt
+		ai_chance = { base = 30 }
+	}
+}
+
+# =====================================================================================
+#  restor.0534 -- recruit: a likely candidate
+# =====================================================================================
+
+restor.0534 = {
+	type = character_event
+	title = restor.0534.t
+	desc = restor.0534.desc
+	theme = intrigue
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:restor_charge_recruit
+		animation = thinking
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_variable = restor_charge
+		var:restor_charge = flag:recruit
+		OR = {
+			any_vassal = { restor_charge_recruit_candidate_trigger = yes }
+			any_courtier = {
+				is_adult = yes
+				restor_charge_recruit_candidate_trigger = yes
+			}
+		}
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_charge_pick_recruit_effect = yes
+	}
+
+	option = {
+		name = restor.0534.a
+		random_list = {
+			40 = {
+				modifier = {
+					add = 30
+					scope:restor_charge_recruit = {
+						opinion = {
+							target = root
+							value >= 30
+						}
+					}
+				}
+				modifier = {
+					add = 40
+					scope:restor_charge_recruit = { restor_of_the_blood_trigger = yes }
+				}
+				modifier = { add = 10 diplomacy >= 14 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0534.a.success
+					left_icon = root
+					right_icon = scope:restor_charge_recruit
+					scope:restor_charge_recruit = {
+						restor_swear_in_effect = { RANK = 0 }
+						add_opinion = {
+							target = root
+							modifier = restor_brought_me_in_opinion
+						}
+					}
+				}
+			}
+			60 = {
+				modifier = {
+					add = 30
+					scope:restor_charge_recruit = {
+						opinion = {
+							target = root
+							value < 0
+						}
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0534.a.failure
+					left_icon = root
+					right_icon = scope:restor_charge_recruit
+					scope:restor_charge_recruit = {
+						add_character_flag = {
+							flag = restor_refused_recently
+							years = 5
+						}
+					}
+					restor_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		hidden_effect = { restor_charge_check_effect = yes }
+		ai_chance = { base = 60 }
+	}
+
+	option = {
+		name = restor.0534.b
+		ai_chance = { base = 40 }
+	}
+}

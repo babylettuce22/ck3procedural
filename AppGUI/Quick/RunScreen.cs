@@ -1,3 +1,4 @@
+using System.Drawing.Drawing2D;
 using static Ck3MapGen.AppGUI.LaunchUi;
 
 namespace Ck3MapGen.AppGUI;
@@ -33,14 +34,21 @@ internal sealed class RunScreen : Panel
     /// <summary>The world is to be written as it stands in the history view now.</summary>
     public event Action? AcceptRequested;
 
-    /// <summary>The done view's "Continue its history": back to the history, from where it stopped.</summary>
+    /// <summary>
+    /// The done view's history button: "Simulate its history" the first time, then "Continue its
+    /// history", back to the history from where it stopped.
+    /// </summary>
     public event Action? ContinueHistoryRequested;
 
     private enum Mode { Idle, Running, History, Done }
     private Mode _mode;
     private bool _failed;
     private bool _gameFound = true;
+
+    /// <summary>The world has a history to run on; <see cref="_historyStarted"/> once it has been shown.</summary>
     private bool _historyOffered;
+    private bool _historyStarted;
+    private int _historyBegins;
 
     private readonly StepPanel _runPanel = new();
     private readonly StepPanel _historyPanel = new();
@@ -147,6 +155,8 @@ internal sealed class RunScreen : Panel
         {
             _tips.Dispose();
             _live.Dispose();
+            ClearMarks();
+            _pulseClock.Dispose();
         }
         base.Dispose(disposing);
     }
@@ -199,9 +209,10 @@ internal sealed class RunScreen : Panel
         MoveFeedTo(_runPanel);
 
         // A new world, a new history.
-        _historyOffered = false;
+        _historyOffered = _historyStarted = false;
         _historyMap.Image = null;
         _chronicle.Clear();
+        ClearMarks();
         UpdateChronicleCount();
 
         Show(_runPanel);
@@ -274,9 +285,13 @@ internal sealed class RunScreen : Panel
         _mode = Mode.Done;
         _failed = false;
         _doneTitle.Text = "Your world is ready";
+        bool ask = _historyOffered && !_historyStarted;
         _doneSubtitle.Text = $"“{modName}” was made in {Describe(took)}. "
                            + (history is null ? "" : history + " ")
-                           + "Launch the game, or open it in Complex to fine-tune anything.";
+                           + (ask
+                               ? $"Would you like to simulate its history first? It lives on from {_historyBegins} and the "
+                                 + "game begins in the year you stop it. Or launch it as it is, or open it in Complex to fine-tune anything."
+                               : "Launch the game, or open it in Complex to fine-tune anything.");
         _donePath.Text = modDir;
         var picture = fromHistory ? _historyMap.Image : _runMap.Image;
         _doneMap.Image = picture is { } img ? new Bitmap(img) : null;
@@ -284,6 +299,10 @@ internal sealed class RunScreen : Panel
         foreach (var b in (Control[])[_launch, _openFolder, _customize, _another]) b.Visible = true;
         foreach (var b in (Control[])[_retry, _details]) b.Visible = false;
         _continueHistory.Visible = _historyOffered;
+        _continueHistory.Text = ask ? "Simulate its history" : "Continue its history";
+        _tips.SetToolTip(_continueHistory, ask
+            ? "Watch the world live on from its start date — wars, divided realms, seized thrones — and begin the game in the year you choose."
+            : "Back to the history, from where you stopped it. The world is written again when you accept it.");
         _launch.Enabled = _gameFound;
         HandFeedToDone("Discovered in this world");
         Show(_donePanel);
@@ -392,6 +411,9 @@ internal sealed class RunScreen : Panel
         _pace.Click += (_, _) => PaceRequested?.Invoke();
         _accept.Click += (_, _) => AcceptRequested?.Invoke();
         _tips.SetToolTip(_accept, "Stop here: the game begins in this year, with the world as it stands.");
+        _historyMap.Overlay = DrawMarks;
+        _pulseClock.Tick += (_, _) => AgePulses();
+        _chronicle.HoverChanged += ShowHovered;
 
         _historyPanel.Arrange = panel =>
         {
@@ -438,6 +460,17 @@ internal sealed class RunScreen : Panel
     public bool InHistory => _mode == Mode.History;
 
     /// <summary>
+    /// The world has a history to run on from <paramref name="began"/>, not yet started: the done
+    /// view asks whether to simulate it. Called before <see cref="ShowDone"/>.
+    /// </summary>
+    public void OfferHistory(int began)
+    {
+        _historyOffered = true;
+        _historyStarted = false;
+        _historyBegins = began;
+    }
+
+    /// <summary>
     /// Shows the history view: the world living on from <paramref name="began"/>. The chronicle
     /// keeps what it had, so coming back from the done view carries straight on.
     /// </summary>
@@ -445,7 +478,7 @@ internal sealed class RunScreen : Panel
     {
         _live.Finish();
         _mode = Mode.History;
-        _historyOffered = true;
+        _historyOffered = _historyStarted = true;
         _historySubtitle.Text = $"The world lives on from {began}: wars are won and lost, realms divide, thrones change "
                                 + "hands. Stop whenever you like the world you see — the game begins in the year you accept.";
         _historyMap.Busy = null;
@@ -467,6 +500,103 @@ internal sealed class RunScreen : Panel
     {
         _chronicle.Add(lines);
         UpdateChronicleCount();
+
+        // Each line's place flares on the map as it arrives, in the colour of what happened there.
+        foreach (var line in lines)
+        {
+            if (line.Mark is not { } mark || PaintMark?.Invoke(mark) is not { } painted) continue;
+            _pulses.Add(new Pulse(painted.Mask, painted.Bounds, Environment.TickCount64));
+            while (_pulses.Count > MaxPulses)
+            {
+                _pulses[0].Mask.Dispose();
+                _pulses.RemoveAt(0);
+            }
+        }
+        if (_pulses.Count > 0 && !_pulseClock.Enabled) _pulseClock.Start();
+    }
+
+    // --- Marks: where the chronicle's news happened, lit up on the history map ---
+
+    /// <summary>
+    /// Paints a chronicle line's place as a picture to lay over the map, on the canvas the frames
+    /// are drawn from. Set by the host for the history it is running; without it nothing is marked.
+    /// </summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public Func<MapMark, (Bitmap Mask, Rectangle Bounds)?>? PaintMark { get; set; }
+
+    /// <summary>A place flaring up: its picture, where it lies on the canvas, and when it began.</summary>
+    private sealed record Pulse(Bitmap Mask, Rectangle Bounds, long Started);
+
+    /// <summary>How long a flare lasts, and how many burn at once — a busy year at the fast pace keeps the newest.</summary>
+    private const int PulseMs = 1800, MaxPulses = 12;
+
+    private readonly List<Pulse> _pulses = [];
+    private readonly System.Windows.Forms.Timer _pulseClock = new() { Interval = 33 };
+
+    /// <summary>The place of the chronicle line under the mouse, held lit while it is there.</summary>
+    private (Bitmap Mask, Rectangle Bounds)? _hovered;
+
+    /// <summary>How bright a flare is <paramref name="ms"/> into its life: up at once, then easing out.</summary>
+    private static float Brightness(long ms)
+    {
+        float t = ms / (float)PulseMs;
+        if (t >= 1) return 0;
+        return t < 0.08f ? t / 0.08f : MathF.Pow(1 - (t - 0.08f) / 0.92f, 1.6f);
+    }
+
+    private void AgePulses()
+    {
+        long now = Environment.TickCount64;
+        for (int i = _pulses.Count - 1; i >= 0; i--)
+        {
+            if (now - _pulses[i].Started < PulseMs) continue;
+            _pulses[i].Mask.Dispose();
+            _pulses.RemoveAt(i);
+        }
+        if (_pulses.Count == 0) _pulseClock.Stop();
+        _historyMap.Invalidate();
+    }
+
+    private void ShowHovered(ChronicleLine? line)
+    {
+        _hovered?.Mask.Dispose();
+        _hovered = line?.Mark is { } mark ? PaintMark?.Invoke(mark) : null;
+        _historyMap.Invalidate();
+    }
+
+    private void ClearMarks()
+    {
+        _pulseClock.Stop();
+        foreach (var pulse in _pulses) pulse.Mask.Dispose();
+        _pulses.Clear();
+        _hovered?.Mask.Dispose();
+        _hovered = null;
+    }
+
+    private void DrawMarks(Graphics g, RectangleF picture)
+    {
+        if (_historyMap.Image is not { } image || image.Width <= 0) return;
+        float scale = (float)picture.Width / image.Width;
+        var quality = (g.InterpolationMode, g.PixelOffsetMode);
+        g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+        g.PixelOffsetMode = PixelOffsetMode.Half;
+
+        long now = Environment.TickCount64;
+        foreach (var pulse in _pulses) Draw(pulse.Mask, pulse.Bounds, Brightness(now - pulse.Started));
+        if (_hovered is { } hovered) Draw(hovered.Mask, hovered.Bounds, 1f);
+
+        (g.InterpolationMode, g.PixelOffsetMode) = quality;
+
+        void Draw(Bitmap mask, Rectangle bounds, float alpha)
+        {
+            if (alpha <= 0.01f) return;
+            var dest = Rectangle.Round(new RectangleF(picture.X + bounds.X * scale, picture.Y + bounds.Y * scale,
+                bounds.Width * scale, bounds.Height * scale));
+            using var fade = new System.Drawing.Imaging.ImageAttributes();
+            fade.SetColorMatrix(new System.Drawing.Imaging.ColorMatrix { Matrix33 = alpha });
+            fade.SetWrapMode(WrapMode.TileFlipXY);
+            g.DrawImage(mask, dest, 0, 0, mask.Width, mask.Height, GraphicsUnit.Pixel, fade);
+        }
     }
 
     /// <summary>
@@ -500,7 +630,6 @@ internal sealed class RunScreen : Panel
         _donePanel.Controls.AddRange([_doneTitle, _doneSubtitle, _donePath, _doneMap, _launch, _openFolder, _continueHistory, _customize,
             _another, _retry, _details, _talliesTitle, _tallies]);
         _continueHistory.Click += (_, _) => ContinueHistoryRequested?.Invoke();
-        _tips.SetToolTip(_continueHistory, "Back to the history, from where you stopped it. The world is written again when you accept it.");
         _launch.Click += (_, _) => LaunchRequested?.Invoke();
         _openFolder.Click += (_, _) => OpenFolderRequested?.Invoke();
         _customize.Click += (_, _) => CustomizeRequested?.Invoke();
@@ -526,7 +655,8 @@ internal sealed class RunScreen : Panel
             PlaceFeed(panel, x + left + gap, y, feedW);
 
             List<Control> buttons = _failed ? [_retry, _details] : [_launch, _openFolder, _customize, _another];
-            if (!_failed && _historyOffered) buttons.Insert(2, _continueHistory);
+            // Beside Launch while it is still a question; after Open mod folder once it has been run.
+            if (!_failed && _historyOffered) buttons.Insert(_historyStarted ? 2 : 1, _continueHistory);
             foreach (var b in buttons) if (b is PillButton p) p.FitWidth();
 
             // Buttons flow into as many rows as the map's width needs.

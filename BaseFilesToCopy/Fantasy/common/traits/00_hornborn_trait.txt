@@ -1,0 +1,54 @@
+﻿# Hornborn — horns borne by someone who is not of the horned people.
+#
+# Three ways in, all of them the engine's or the birth hook's, never the culture pulse's:
+#   - A child of a horned parent who came out of another race (the birth roll gave them the other
+#     parent's race): gen_resolve_hornborn_effect in 00_phenotype_birth_effects.txt.
+#   - Spontaneously: `birth` and `random_creation` below, the vanilla genetic-trait route (albino's).
+#   - Resurfacing: `genetic = yes` lets the engine carry it silently through a line and bring it back
+#     generations later, which is what "horned blood" should do.
+#
+# A horned-race character never holds it — horns are ordinary among their own people — so the birth
+# hook and the yearly sanitizer strip it from anyone with phenotype_horned.
+#
+# The horns themselves are drawn by the gen_race_horns group of the generated 99_gen_race_morphs.txt:
+# from the character's DNA when they inherited a horned parent's horns, otherwise from the style flag
+# 00_horn_effects.txt gives them. gen_file_horns_decision files them down for five years.
+#
+# Modelled on vanilla's albino: a visible mark strangers distrust and the marked hold in common.
+#
+# MENACE OR ACCEPTANCE. Everything here but prowess is what the horns do while they SHOW: the
+# stares (general and attraction opinion), the fear (dread), and — outside this file — reluctant
+# marriages (AI_HORNS_SHOWING_MARRIAGE_PENALTY, Emit/InteractionWriter.cs). Filing them down
+# (gen_file_horns_decision) cancels all of it for five years through gen_filed_horns_modifier,
+# the menace included, so the choice is real: a ruler who governs by fear keeps them, one who needs
+# friends and good matches files. The penalties are sized to be worth fixing — general -10 is
+# vanilla's sadistic, felt by every vassal — and the modifier mirrors them exactly.
+hornborn = {
+	genetic = yes
+	physical = yes
+
+	birth = 0.1
+	random_creation = 0.1
+
+	attraction_opinion = -15
+	general_opinion = -10
+	same_opinion = 15
+	dread_baseline_add = 10
+	prowess = 1
+
+	shown_in_ruler_designer = yes
+	ruler_designer_cost = 0
+	icon = "hornborn.dds"
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					NOT = { exists = this }
+				}
+				desc = trait_hornborn_desc
+			}
+			desc = trait_hornborn_character_desc
+		}
+	}
+}

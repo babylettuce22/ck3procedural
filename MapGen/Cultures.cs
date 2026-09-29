@@ -672,6 +672,15 @@ public static class Cultures
             (["tradition_hidden_cities", "tradition_mystical_ancestors"],
              ["tradition_hidden_cities", "tradition_mystical_ancestors"]),
         ],
+        // Herders first — of the steppe, the high pastures or the horse — or, for a people settled
+        // in the tribal forests, hunters. Hill Dwellers and Forest Folk satisfy it if the ground
+        // already gave them, but are never handed out.
+        [RaceArchetype.Hornkin] =
+        [
+            (["tradition_pastoralists", "tradition_mountain_herding", "tradition_horse_breeder", "tradition_hunters",
+              "tradition_hill_dwellers", "tradition_forest_folk", "tradition_highland_warriors"],
+             ["tradition_pastoralists", "tradition_mountain_herding", "tradition_hunters"]),
+        ],
     };
 
     /// <summary>Most traditions <see cref="PickTraditions"/> ever gives; a race's promise swaps

@@ -7,7 +7,12 @@
 # vanilla does for its own teeth attributes.
 #
 # In Core beside gen_race_skin and gen_bs_elf_ears for the same reason: Emit/PortraitWriter.cs writes
-# it into every persistent DNA record on every map. Index 0 must stay the empty template.
+# it into every persistent DNA record on every map. Index 0 must stay the empty template, and indices
+# are only ever appended: a saved DNA names its template by index.
+#
+# Variants (MapGen/OrcTusks.cs Variants): lower is the standard tusk; stubby and great are inherited
+# alternatives, mixed per orc culture in its ethnicity; broken_left and broken_right are scars, drawn
+# from a character flag by the generated gen_race_tusks portrait group and never put in a DNA.
 
 morph_genes = {
 	gen_bs_orc_tusks = {
@@ -28,6 +33,50 @@ morph_genes = {
 			visible = no
 			male = {
 				setting = { attribute = "gen_bs_orc_tusks_lower"  value = { min = 0.0 max = 1.0 }  age = age_preset_child_features_wide_range }
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		gen_orc_tusks_stubby = {
+			index = 2
+			visible = no
+			male = {
+				setting = { attribute = "gen_bs_orc_tusks_stubby"  value = { min = 0.0 max = 1.0 }  age = age_preset_child_features_wide_range }
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		gen_orc_tusks_great = {
+			index = 3
+			visible = no
+			male = {
+				setting = { attribute = "gen_bs_orc_tusks_great"  value = { min = 0.0 max = 1.0 }  age = age_preset_child_features_wide_range }
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		gen_orc_tusks_broken_left = {
+			index = 4
+			visible = no
+			male = {
+				setting = { attribute = "gen_bs_orc_tusks_broken_left"  value = { min = 0.0 max = 1.0 }  age = age_preset_child_features_wide_range }
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		gen_orc_tusks_broken_right = {
+			index = 5
+			visible = no
+			male = {
+				setting = { attribute = "gen_bs_orc_tusks_broken_right"  value = { min = 0.0 max = 1.0 }  age = age_preset_child_features_wide_range }
 			}
 			female = male
 			boy = male

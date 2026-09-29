@@ -1,0 +1,42 @@
+﻿l_english:
+
+ # The HUD tab (key kept from the prototype; Emit/GuiWriter.cs names it).
+ SOCIETY_TAB_BUTTON:0 "#T $restor_society_name$#!"
+
+ RESTOR_PANEL_TITLE:0 "$restor_society_name$"
+ RESTOR_PANEL_AIM:0 "Sworn to put House $restor_house_name$ back on the throne of #high $restor_crown_name$#!, which has had no king of the house since $restor_fell_year$. The old seat is $restor_seat_name$."
+ RESTOR_PANEL_AIM_PUBLIC:0 "Now #high $restor_society_name_public$#!. House $restor_house_name$ wears the crown of $restor_crown_name$ again. The order's work is to make the kingdom whole and keep it."
+
+ RESTOR_PANEL_HEIR:0 "THE HEIR"
+ RESTOR_PANEL_KING:0 "THE KING"
+ RESTOR_PANEL_KEEPER:0 "THE KEEPER"
+ RESTOR_PANEL_USURPER:0 "THE USURPER"
+
+ RESTOR_PANEL_SUPPORT_LABEL:0 "SUPPORT"
+ RESTOR_PANEL_LAND_LABEL:0 "HEIR'S LAND"
+ RESTOR_PANEL_WAR_CHEST_LABEL:0 "GOLD GIVEN"
+ RESTOR_PANEL_SUPPORT_NEXT:0 "Support comes from the heir's land, sworn lords on the old kingdom's land, stirred counties and the number of the Sworn. At #high 40#! the heir can raise the standard. With #high 40#! support and #high 25%#! of the land in their own realm, the heir can take back the crown."
+
+ RESTOR_PANEL_STANDING_LABEL:0 "STANDING"
+ RESTOR_RANK_0:0 "Sworn"
+ RESTOR_RANK_1:0 "Trusted"
+ RESTOR_RANK_2:0 "Captain"
+ RESTOR_RANK_3:0 "Elder"
+ RESTOR_PANEL_FAVOUR_LABEL:0 "FAVOUR"
+ RESTOR_PANEL_EXPOSURE_LABEL:0 "EXPOSURE"
+
+ RESTOR_PANEL_NEXT_HEADER:0 "WHAT YOU CAN DO"
+ RESTOR_PANEL_CHARGE:0 "#weak Your charge:#! [GetPlayer.Custom('RestorCurrentCharge')]"
+ RESTOR_PANEL_ACTION_CROWN:0 "Restore the Crown (decision) — 40 support and 25% of the land"
+ RESTOR_PANEL_ACTION_RAISE:0 "Raise the Standard (decision) — 40 support, once each time the crown is lost"
+ RESTOR_PANEL_ACTION_GIVE:0 "Give to the Cause (decision) — 100 gold for favour"
+ RESTOR_PANEL_ACTION_GATHER:0 "Hold a Gathering (activity) — Captain or Keeper"
+ RESTOR_PANEL_ACTION_ERRAND:0 "Ride on an Errand to the old kingdom (activity)"
+ RESTOR_PANEL_POWERS_HINT:0 "Right-click a character for the society's powers: sounding out and swearing in new members, letters from the heir, forged charters and more. Higher standing unlocks more."
+
+ RESTOR_PANEL_ROSTER_HEADER:0 "THE SWORN YOU KNOW"
+ RESTOR_PANEL_ROSTER_EMPTY:0 "No one you know of. Captains and above know the whole roll."
+ RESTOR_ROSTER_HEIR:0 "Heir"
+ RESTOR_ROSTER_KEEPER:0 "Keeper"
+ RESTOR_ROSTER_SUSPECT:0 "suspected"
+ RESTOR_ROSTER_VERY_SUSPECT:0 "openly suspected"

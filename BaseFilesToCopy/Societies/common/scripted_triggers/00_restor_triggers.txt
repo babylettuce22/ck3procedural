@@ -1,0 +1,140 @@
+﻿# The questions every Restorationist file asks. See README.txt for the state they read.
+#
+# Every one of them is safe on a world with no society: a global variable that was never set makes
+# `exists` false and the comparisons below short-circuit behind it, so a trigger asked on such a
+# world is false rather than an "undefined global variable" error per evaluation.
+
+# The society exists in this world at all. Gate every new piece of content on this.
+restor_active_trigger = {
+	exists = global_var:restor_crown
+}
+
+restor_underground_trigger = {
+	restor_active_trigger = yes
+	global_var:restor_phase = 1
+}
+
+restor_restored_trigger = {
+	restor_active_trigger = yes
+	global_var:restor_phase = 2
+}
+
+# ---- Who someone is to the cause --------------------------------------------------------------
+
+restor_is_member_trigger = {
+	has_trait = restor_member
+}
+
+restor_is_pretender_trigger = {
+	exists = global_var:restor_pretender
+	this = global_var:restor_pretender
+}
+
+restor_is_keeper_trigger = {
+	exists = global_var:restor_keeper
+	this = global_var:restor_keeper
+}
+
+restor_is_usurper_trigger = {
+	exists = global_var:restor_usurper
+	this = global_var:restor_usurper
+}
+
+# Of the house the society is sworn to.
+restor_of_the_blood_trigger = {
+	restor_active_trigger = yes
+	exists = house
+	exists = global_var:restor_house
+	house = global_var:restor_house
+}
+
+# May take up a role (pretender, Keeper) someone else is leaving. Succession runs inside on_death,
+# where the dying character still passes is_alive -- vanilla marks them with
+# about_to_die_but_not_dead_yet_flag for exactly this -- and they are usually the eldest of the house,
+# so without this they were chosen to succeed themselves.
+restor_can_succeed_trigger = {
+	is_alive = yes
+	NOT = { has_character_flag = about_to_die_but_not_dead_yet_flag }
+	trigger_if = {
+		limit = { exists = scope:restor_old_pretender }
+		NOT = { this = scope:restor_old_pretender }
+	}
+}
+
+# Could be the society's enemy: alive, not of the house, not the pretender, not sworn, and holding
+# (at any depth of their realm) some of the crown's land -- or wearing the crown itself.
+restor_valid_usurper_trigger = {
+	is_alive = yes
+	NOT = { restor_of_the_blood_trigger = yes }
+	NOT = { restor_is_pretender_trigger = yes }
+	NOT = { has_trait = restor_member }
+	OR = {
+		has_title = global_var:restor_crown
+		any_realm_county = { restor_crown_county_trigger = yes }
+	}
+}
+
+# Rank gate. $RANK$ is trait XP: 25 Trusted, 50 Captain, 75 Elder.
+restor_rank_at_least_trigger = {
+	has_trait_xp = {
+		trait = restor_member
+		track = restor_rank
+		value >= $RANK$
+	}
+}
+
+# Holds at least one county of the crown's de jure land, at any tier of the realm.
+restor_holds_crown_land_trigger = {
+	restor_active_trigger = yes
+	any_held_county = {
+		restor_crown_county_trigger = yes
+	}
+}
+
+# Would a lord on the crown's land be a sensible person to approach? Not sworn, not the usurper,
+# adult, and not in prison. Used by recruitment and the win-over charge.
+restor_recruitable_trigger = {
+	is_adult = yes
+	is_imprisoned = no
+	NOT = { has_trait = restor_member }
+	NOT = { restor_is_usurper_trigger = yes }
+	NOT = { has_character_flag = restor_refused_recently }
+}
+
+# Is this county title part of the fallen crown?
+restor_crown_county_trigger = {
+	restor_active_trigger = yes
+	tier = tier_county
+	exists = global_var:restor_crown
+	kingdom ?= { this = global_var:restor_crown }
+}
+
+# Inside the pretender's realm, for a county title.
+restor_county_in_pretender_realm_trigger = {
+	exists = holder
+	exists = global_var:restor_pretender
+	holder = {
+		OR = {
+			this = global_var:restor_pretender
+			any_liege_or_above = { this = global_var:restor_pretender }
+		}
+	}
+}
+
+# The pretender can take the crown by the society's decision: landed, answering to no king, and
+# holding enough of the land. The share is the vanilla majority's lower sibling -- the society's
+# backing is what makes up the difference.
+restor_pretender_can_be_crowned_trigger = {
+	restor_underground_trigger = yes
+	restor_is_pretender_trigger = yes
+	is_landed = yes
+	is_adult = yes
+	is_imprisoned = no
+	NOT = { exists = global_var:restor_crown.holder }
+	OR = {
+		is_independent_ruler = yes
+		liege.primary_title = { tier > tier_kingdom }
+		# A sworn liege -- the host who gave the heir their first county -- lets them go.
+		liege = { has_trait = restor_member }
+	}
+}

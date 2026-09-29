@@ -1,0 +1,272 @@
+﻿# The Restorationists' charges: what the Keeper may ask of a member, and when it is done.
+# See README.txt, DIRECTION: CHARGES, and 00_restor_charge_effects.txt for the state these read.
+#
+# The state, on the member:
+#   var:restor_charge          flag:win_over / flag:war_chest / flag:stir / flag:shelter / flag:recruit
+#   var:restor_charge_target   the lord to win over or the heir to shelter (a character), or the county
+#                              to stir (a title). Unset for war_chest and recruit.
+#   var:restor_charge_given    timed, three years. Gone while restor_charge remains = expired.
+#   var:restor_charge_goal     war_chest only: the restor_given_to_cause total that completes it.
+#   restor_charge_old_recruits recruit only: a variable list of the sworn this member had already
+#                              brought in when the charge was given, so only a new recruit counts.
+#
+# ROOT MUST BE THE MEMBER wherever these are asked. Every caller is the member's own on_action,
+# event, or decision, so it is; the nested lists below need a fixed name for the member and `root` is
+# the only one a trigger can use.
+
+restor_charge_has_trigger = {
+	has_variable = restor_charge
+}
+
+# ---- Who is offered one ---------------------------------------------------------------------------
+
+restor_charge_can_be_offered_trigger = {
+	restor_underground_trigger = yes
+	has_trait = restor_member
+	is_adult = yes
+	is_imprisoned = no
+	NOT = { has_variable = restor_charge }
+	NOT = { restor_is_pretender_trigger = yes }
+	NOT = { restor_is_keeper_trigger = yes }
+	exists = global_var:restor_keeper
+	global_var:restor_keeper = { is_alive = yes }
+	exists = global_var:restor_pretender
+}
+
+# ---- Targets nobody else is already charged with --------------------------------------------------
+
+# THIS is a character. True when another member already has them as a win-over or shelter target.
+restor_charge_char_taken_trigger = {
+	any_in_global_list = {
+		variable = restor_roster
+		has_variable = restor_charge
+		OR = {
+			var:restor_charge = flag:win_over
+			var:restor_charge = flag:shelter
+		}
+		has_variable = restor_charge_target
+		var:restor_charge_target = prev
+	}
+}
+
+# THIS is a county title. True when another member is already charged with stirring it.
+restor_charge_county_taken_trigger = {
+	any_in_global_list = {
+		variable = restor_roster
+		has_variable = restor_charge
+		var:restor_charge = flag:stir
+		has_variable = restor_charge_target
+		var:restor_charge_target = prev
+	}
+}
+
+# ---- Which charges make sense right now ------------------------------------------------------------
+
+# THIS is a candidate lord. A landed AI lord of the crown's land who is not sworn, not the usurper,
+# not already fond of the pretender (or the charge would be done the day it was given), and not
+# someone else's charge.
+restor_charge_win_over_target_trigger = {
+	is_ai = yes
+	is_landed = yes
+	restor_recruitable_trigger = yes
+	NOT = { this = root }
+	NOT = { restor_is_pretender_trigger = yes }
+	exists = global_var:restor_pretender
+	opinion = {
+		target = global_var:restor_pretender
+		value < 30
+	}
+	NOT = { restor_charge_char_taken_trigger = yes }
+}
+
+restor_charge_win_over_possible_trigger = {
+	exists = global_var:restor_pretender
+	global_var:restor_crown = {
+		any_de_jure_county = {
+			exists = holder
+			holder = { restor_charge_win_over_target_trigger = yes }
+		}
+	}
+}
+
+# THIS is a county title of the crown that is not stirred and not already somebody's charge.
+restor_charge_stir_target_trigger = {
+	restor_crown_county_trigger = yes
+	NOT = { has_county_modifier = restor_county_stirred }
+	NOT = { restor_charge_county_taken_trigger = yes }
+}
+
+restor_charge_stir_possible_trigger = {
+	global_var:restor_crown = {
+		any_de_jure_county = { restor_charge_stir_target_trigger = yes }
+	}
+}
+
+# 100 gold now, or an income that will make it inside the three years.
+restor_charge_war_chest_possible_trigger = {
+	exists = global_var:restor_pretender
+	OR = {
+		gold >= 100
+		monthly_character_income >= 3
+	}
+}
+
+# The heir has no land and no safe court, and the member has a court to offer.
+restor_charge_shelter_possible_trigger = {
+	is_landed = yes
+	exists = global_var:restor_pretender
+	global_var:restor_pretender = {
+		is_alive = yes
+		is_ai = yes
+		is_landed = no
+		is_landless_adventurer = no
+		is_imprisoned = no
+		NOT = { is_courtier_of = root }
+		NOT = { employer ?= { has_trait = restor_member } }
+		NOT = { restor_charge_char_taken_trigger = yes }
+	}
+}
+
+# ---- Is it done? --------------------------------------------------------------------------------------
+
+# Somebody in the roster who calls this member their recruiter, and was not already on the list when
+# the charge was given. The recruitment pack's accept path gives the recruit restor_brought_me_in_opinion
+# towards whoever brought them in.
+restor_charge_recruit_done_trigger = {
+	any_in_global_list = {
+		variable = restor_roster
+		is_alive = yes
+		has_opinion_modifier = {
+			target = root
+			modifier = restor_brought_me_in_opinion
+		}
+		NOT = {
+			root = {
+				is_target_in_variable_list = {
+					name = restor_charge_old_recruits
+					target = prev
+				}
+			}
+		}
+	}
+}
+
+restor_charge_done_trigger = {
+	has_variable = restor_charge
+	OR = {
+		AND = {
+			var:restor_charge = flag:win_over
+			exists = var:restor_charge_target
+			exists = global_var:restor_pretender
+			var:restor_charge_target = {
+				OR = {
+					has_trait = restor_member
+					opinion = {
+						target = global_var:restor_pretender
+						value >= 30
+					}
+				}
+			}
+		}
+		AND = {
+			var:restor_charge = flag:war_chest
+			has_variable = restor_given_to_cause
+			has_variable = restor_charge_goal
+			var:restor_given_to_cause >= var:restor_charge_goal
+		}
+		AND = {
+			var:restor_charge = flag:stir
+			exists = var:restor_charge_target
+			var:restor_charge_target = { has_county_modifier = restor_county_stirred }
+		}
+		AND = {
+			var:restor_charge = flag:shelter
+			exists = global_var:restor_pretender
+			global_var:restor_pretender = { is_courtier_of = root }
+		}
+		AND = {
+			var:restor_charge = flag:recruit
+			restor_charge_recruit_done_trigger = yes
+		}
+	}
+}
+
+# ---- Can it still be done? -------------------------------------------------------------------------
+#
+# A charge the world has made impossible is withdrawn, not failed: the member is not blamed for a
+# target who died or an heir who found land of their own.
+
+restor_charge_invalid_trigger = {
+	has_variable = restor_charge
+	OR = {
+		NOT = { restor_underground_trigger = yes }
+		NOT = { exists = global_var:restor_pretender }
+		AND = {
+			var:restor_charge = flag:win_over
+			OR = {
+				NOT = { exists = var:restor_charge_target }
+				var:restor_charge_target = {
+					OR = {
+						is_alive = no
+						restor_is_usurper_trigger = yes
+						restor_is_pretender_trigger = yes
+					}
+				}
+			}
+		}
+		AND = {
+			var:restor_charge = flag:stir
+			NOT = { exists = var:restor_charge_target }
+		}
+		AND = {
+			var:restor_charge = flag:shelter
+			OR = {
+				is_landed = no
+				NOT = { exists = var:restor_charge_target }
+				NOT = { var:restor_charge_target = global_var:restor_pretender }
+				global_var:restor_pretender = {
+					NOT = { is_courtier_of = root }
+					OR = {
+						is_landed = yes
+						is_landless_adventurer = yes
+						is_ai = no
+						employer ?= { has_trait = restor_member }
+					}
+				}
+			}
+		}
+	}
+}
+
+# ---- The fallback decisions' gates ---------------------------------------------------------------------
+
+# The member holds the charge's county, a county beside it, or a county of the same duchy -- or is
+# standing in it.
+restor_charge_can_reach_county_trigger = {
+	has_variable = restor_charge
+	var:restor_charge = flag:stir
+	exists = var:restor_charge_target
+	OR = {
+		var:restor_charge_target = {
+			OR = {
+				holder ?= root
+				any_neighboring_county = { holder ?= root }
+				duchy ?= {
+					any_de_jure_county = { holder ?= root }
+				}
+			}
+		}
+		# restor_charge_target holds a county here; tiger types it by its first (character) set.
+		#tiger-ignore(key=scopes)
+		location.county ?= { this = root.var:restor_charge_target }
+	}
+}
+
+# A lord of the member's own court or realm who might be sounded out for the recruit charge.
+# THIS is the candidate.
+restor_charge_recruit_candidate_trigger = {
+	is_ai = yes
+	restor_recruitable_trigger = yes
+	NOT = { restor_is_pretender_trigger = yes }
+	NOT = { this = root }
+}

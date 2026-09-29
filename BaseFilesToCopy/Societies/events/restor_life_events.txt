@@ -1,0 +1,1917 @@
+﻿# The Restorationists: everyday life among the Sworn. restor.0200-0299.
+#
+# Fired by restor_life_pulse (common/on_action/00_restor_life_on_actions.txt), once a year at most
+# and usually not at all. These are what make being sworn feel like belonging to something: small
+# scenes that can only happen to someone sworn to THIS crown and THIS house.
+#
+#   Underground
+#   0201   the old king's coin turns up in your treasury
+#   0202   an old soldier of the house at your gate knows the Sworn's greeting
+#   0203   a letter from the heir, asking for help with the household
+#   0204   the anniversary of the fall; the Sworn keep it in secret
+#   0205   a singer sings of the house in your hall, with the usurper's knight at table     (random)
+#   0206   your heir asks where you go at night                                               (random)
+#   0207   two of the Sworn quarrel and the Keeper asks you to settle it                     (random)
+#   0208   a young courtier who wants in and cannot keep quiet                               (random)
+#   0209   the usurper's tax collector in a county of the crown -- AI too                    (random)
+#   0210   the tombs of the old kings at the old seat are to be cleared                      (random)
+#   0211   a member has died; the Sworn bury them quietly                                    (random)
+#   0212   a sworn lord stays the night and tells old stories                                (random)
+#   0213   the old royal banner for sale -- AI too                                           (random)
+#   0214   a night of doubt; stay, lie low, or walk away
+#
+#   Restored
+#   0250   the king: two of the old Sworn want the same reward
+#   0251   an agent of the deposed house tries to buy you                                    (random)
+#   0252   the old Sworn are named at a feast, and you are asked to speak                    (random)
+#   0253   a latecomer who never swore wants you to sponsor them
+#
+# Every option with a roll ends each branch in a toast. Each event's immediate sets a twelve-year
+# restor_life_seen_NNNN flag that its trigger reads, so a long life does not repeat itself.
+
+namespace = restor
+
+# =====================================================================================
+#  restor.0201 -- The Old King's Coin
+# =====================================================================================
+
+restor.0201 = {
+	type = character_event
+	title = restor.0201.t
+	desc = {
+		desc = restor.0201.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_pretender NOT = { scope:restor_pretender = root } }
+				desc = restor.0201.desc_heir
+			}
+			desc = restor.0201.desc_you
+		}
+	}
+	theme = stewardship
+	override_background = { reference = study }
+	left_portrait = {
+		character = root
+		animation = interested
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_life_steward }
+		character = scope:restor_life_steward
+		animation = steward
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		is_landed = yes
+		NOT = { has_character_flag = restor_life_seen_0201 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0201 years = 12 }
+		cp:councillor_steward ?= { save_scope_as = restor_life_steward }
+	}
+
+	# Carry it.
+	option = {
+		name = restor.0201.a
+		add_character_modifier = {
+			modifier = restor_life_kings_coin_modifier
+			years = 10
+		}
+		restor_exposure_gain_effect = { VALUE = 2 }
+	}
+
+	# Send it to the heir.
+	option = {
+		name = restor.0201.b
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+		}
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_served_the_house_opinion
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 10 }
+	}
+
+	# Melt it down.
+	option = {
+		name = restor.0201.c
+		add_gold = 5
+		stress_impact = {
+			zealous = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0202 -- The Old Soldier
+# =====================================================================================
+
+restor.0202 = {
+	type = character_event
+	title = restor.0202.t
+	desc = restor.0202.desc
+	theme = martial
+	override_background = { reference = courtyard }
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		character = scope:restor_life_veteran
+		animation = beg
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		is_landed = yes
+		exists = global_var:restor_seat
+		NOT = { has_character_flag = restor_life_seen_0202 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0202 years = 12 }
+		create_character = {
+			template = old_knight_teacher
+			culture = global_var:restor_seat.culture
+			faith = global_var:restor_seat.faith
+			gender_female_chance = root_soldier_female_chance
+			location = root.capital_province
+			save_scope_as = restor_life_veteran
+		}
+	}
+
+	# Take them in.
+	option = {
+		name = restor.0202.a
+		add_courtier = scope:restor_life_veteran
+		scope:restor_life_veteran = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_took_me_in_opinion
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 5 }
+		random_list = {
+			75 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0202.a.quiet
+					left_icon = scope:restor_life_veteran
+					custom_tooltip = restor.0202.a.quiet.tt
+				}
+			}
+			25 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0202.a.talks
+					left_icon = scope:restor_life_veteran
+					restor_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+	}
+
+	# Coin, and the road.
+	option = {
+		name = restor.0202.b
+		trigger = { gold >= minor_gold_value }
+		remove_short_term_gold = minor_gold_value
+	}
+
+	# Whip them out of the gate.
+	option = {
+		name = restor.0202.c
+		restor_exposure_loss_effect = { VALUE = 2 }
+		restor_favour_spend_effect = { VALUE = 5 }
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			just = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0203 -- A Letter from the Heir
+# =====================================================================================
+
+restor.0203 = {
+	type = character_event
+	title = restor.0203.t
+	desc = restor.0203.desc
+	theme = diplomacy
+	override_background = { reference = study }
+	left_portrait = {
+		character = root
+		animation = reading
+	}
+	right_portrait = {
+		character = scope:restor_pretender
+		animation = worry
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		exists = global_var:restor_pretender
+		NOT = { restor_is_pretender_trigger = yes }
+		global_var:restor_pretender = {
+			is_alive = yes
+			is_adult = yes
+		}
+		NOT = { has_character_flag = restor_life_seen_0203 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0203 years = 12 }
+	}
+
+	# Send the money.
+	option = {
+		name = restor.0203.a
+		trigger = { gold >= minor_gold_value }
+		pay_short_term_gold = {
+			target = scope:restor_pretender
+			gold = minor_gold_value
+		}
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_served_the_house_opinion
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 10 }
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+	}
+
+	# Write back with news, but no money.
+	option = {
+		name = restor.0203.b
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_wrote_to_me_opinion
+			}
+		}
+		restor_exposure_gain_effect = { VALUE = 1 }
+	}
+
+	# Burn it.
+	option = {
+		name = restor.0203.c
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_ignored_me_opinion
+			}
+		}
+		restor_exposure_loss_effect = { VALUE = 2 }
+	}
+}
+
+# =====================================================================================
+#  restor.0204 -- The Day the Crown Fell
+# =====================================================================================
+
+restor.0204 = {
+	type = character_event
+	title = restor.0204.t
+	desc = {
+		desc = restor.0204.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { restor_is_keeper_trigger = yes }
+				desc = restor.0204.desc_keeper
+			}
+			desc = restor.0204.desc_asked
+		}
+	}
+	theme = crown
+	override_background = { reference = feast }
+	left_portrait = {
+		character = root
+		animation = sadness
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_keeper
+			NOT = { scope:restor_keeper = root }
+		}
+		character = scope:restor_keeper
+		animation = personality_rational
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		exists = global_var:restor_keeper
+		NOT = { has_character_flag = restor_life_seen_0204 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0204 years = 12 }
+	}
+
+	# Host the Sworn.
+	option = {
+		name = restor.0204.a
+		restor_favour_gain_effect = { VALUE = 10 }
+		add_stress = minor_stress_loss
+		restor_exposure_gain_effect = { VALUE = 3 }
+	}
+
+	# Alone, one cup.
+	option = {
+		name = restor.0204.b
+		add_stress = minor_stress_loss
+	}
+
+	# Let it pass.
+	option = {
+		name = restor.0204.c
+		restor_exposure_loss_effect = { VALUE = 1 }
+		stress_impact = {
+			zealous = minor_stress_impact_gain
+			vengeful = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0205 -- The Song in the Hall
+# =====================================================================================
+
+restor.0205 = {
+	type = character_event
+	title = restor.0205.t
+	desc = restor.0205.desc
+	theme = party
+	override_background = { reference = feast }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:restor_usurper
+		animation = scheme
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		is_landed = yes
+		exists = global_var:restor_usurper
+		NOT = { restor_is_usurper_trigger = yes }
+		NOT = { has_character_flag = restor_life_seen_0205 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0205 years = 12 }
+	}
+
+	# Pay the singer; another.
+	option = {
+		name = restor.0205.a
+		trigger = { gold >= 5 }
+		remove_short_term_gold = 5
+		restor_favour_gain_effect = { VALUE = 10 }
+		restor_exposure_gain_effect = { VALUE = 4 }
+		stress_impact = {
+			craven = minor_stress_impact_gain
+		}
+	}
+
+	# Stop the song.
+	option = {
+		name = restor.0205.b
+		restor_exposure_loss_effect = { VALUE = 3 }
+		restor_favour_spend_effect = { VALUE = 5 }
+		stress_impact = {
+			zealous = minor_stress_impact_gain
+			compassionate = minor_stress_impact_gain
+		}
+	}
+
+	# Laugh it off.
+	option = {
+		name = restor.0205.c
+		random_list = {
+			60 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 15 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0205.c.passes
+					left_icon = root
+					custom_tooltip = restor.0205.c.passes.tt
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0205.c.remembers
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0206 -- Where You Go at Night
+# =====================================================================================
+
+restor.0206 = {
+	type = character_event
+	title = restor.0206.t
+	desc = restor.0206.desc
+	theme = family
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:restor_life_heir
+		animation = interested
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		exists = primary_heir
+		primary_heir = {
+			is_child_of = root
+			is_ai = yes
+			is_adult = yes
+			is_imprisoned = no
+			NOT = { has_trait = restor_member }
+			NOT = { restor_is_usurper_trigger = yes }
+		}
+		NOT = { has_character_flag = restor_life_seen_0206 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0206 years = 12 }
+		primary_heir = { save_scope_as = restor_life_heir }
+	}
+
+	# Tell them and swear them in.
+	option = {
+		name = restor.0206.a
+		scope:restor_life_heir = {
+			restor_swear_in_effect = { RANK = 0 }
+			add_opinion = {
+				target = root
+				modifier = restor_life_trusted_me_opinion
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 5 }
+		restor_exposure_gain_effect = { VALUE = 2 }
+		stress_impact = {
+			paranoid = minor_stress_impact_gain
+		}
+	}
+
+	# None of your business.
+	option = {
+		name = restor.0206.b
+		random_list = {
+			60 = {
+				modifier = { add = 20 scope:restor_life_heir = { has_trait = content } }
+				modifier = { add = -20 scope:restor_life_heir = { has_trait = ambitious } }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.0206.b.drops
+					left_icon = scope:restor_life_heir
+					custom_tooltip = restor.0206.b.drops.tt
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0206.b.follows
+					left_icon = scope:restor_life_heir
+					scope:restor_life_heir = {
+						add_opinion = {
+							target = root
+							modifier = restor_life_kept_me_out_opinion
+						}
+					}
+					restor_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+	}
+
+	# A lie.
+	option = {
+		name = restor.0206.c
+		scope:restor_life_heir = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_kept_me_out_opinion
+			}
+		}
+		stress_impact = {
+			honest = medium_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0207 -- A Quarrel Among the Sworn
+# =====================================================================================
+
+restor.0207 = {
+	type = character_event
+	title = restor.0207.t
+	desc = {
+		desc = restor.0207.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { restor_is_keeper_trigger = yes }
+				desc = restor.0207.desc_keeper
+			}
+			desc = restor.0207.desc_asked
+		}
+	}
+	theme = unfriendly
+	override_background = { reference = council_chamber }
+	left_portrait = {
+		character = scope:restor_life_quarrel_a
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:restor_life_quarrel_b
+		animation = disapproval
+	}
+	lower_left_portrait = {
+		trigger = {
+			exists = scope:restor_keeper
+			NOT = { scope:restor_keeper = root }
+		}
+		character = scope:restor_keeper
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		exists = global_var:restor_keeper
+		any_in_global_list = {
+			variable = restor_roster
+			count >= 2
+			is_alive = yes
+			is_adult = yes
+			is_ai = yes
+			NOT = { this = root }
+		}
+		NOT = { has_character_flag = restor_life_seen_0207 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0207 years = 12 }
+		random_in_global_list = {
+			variable = restor_roster
+			limit = {
+				is_alive = yes
+				is_adult = yes
+				is_ai = yes
+				NOT = { this = root }
+			}
+			save_scope_as = restor_life_quarrel_a
+		}
+		random_in_global_list = {
+			variable = restor_roster
+			limit = {
+				is_alive = yes
+				is_adult = yes
+				is_ai = yes
+				NOT = { this = root }
+				NOT = { this = scope:restor_life_quarrel_a }
+			}
+			save_scope_as = restor_life_quarrel_b
+		}
+	}
+
+	# A is right.
+	option = {
+		name = restor.0207.a
+		scope:restor_life_quarrel_a = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_took_my_side_opinion
+			}
+		}
+		scope:restor_life_quarrel_b = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_took_their_side_opinion
+			}
+		}
+		if = {
+			limit = {
+				scope:restor_life_quarrel_b = { can_set_relation_rival_trigger = { CHARACTER = root } }
+			}
+			random_list = {
+				70 = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = restor.0207.b_accepts
+						left_icon = scope:restor_life_quarrel_b
+						custom_tooltip = restor.0207.b_accepts.tt
+					}
+				}
+				30 = {
+					modifier = { add = 20 scope:restor_life_quarrel_b = { has_trait = vengeful } }
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = restor.0207.b_rival
+						left_icon = scope:restor_life_quarrel_b
+						scope:restor_life_quarrel_b = {
+							set_relation_rival = {
+								target = root
+								reason = restor_rival_quarrel_settled
+							}
+						}
+					}
+				}
+			}
+		}
+		else = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = restor.0207.b_accepts
+				left_icon = scope:restor_life_quarrel_b
+				custom_tooltip = restor.0207.b_accepts.tt
+			}
+		}
+	}
+
+	# B is right.
+	option = {
+		name = restor.0207.b
+		scope:restor_life_quarrel_b = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_took_my_side_opinion
+			}
+		}
+		scope:restor_life_quarrel_a = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_took_their_side_opinion
+			}
+		}
+		if = {
+			limit = {
+				scope:restor_life_quarrel_a = { can_set_relation_rival_trigger = { CHARACTER = root } }
+			}
+			random_list = {
+				70 = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = restor.0207.a_accepts
+						left_icon = scope:restor_life_quarrel_a
+						custom_tooltip = restor.0207.a_accepts.tt
+					}
+				}
+				30 = {
+					modifier = { add = 20 scope:restor_life_quarrel_a = { has_trait = vengeful } }
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = restor.0207.a_rival
+						left_icon = scope:restor_life_quarrel_a
+						scope:restor_life_quarrel_a = {
+							set_relation_rival = {
+								target = root
+								reason = restor_rival_quarrel_settled
+							}
+						}
+					}
+				}
+			}
+		}
+		else = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = restor.0207.a_accepts
+				left_icon = scope:restor_life_quarrel_a
+				custom_tooltip = restor.0207.a_accepts.tt
+			}
+		}
+	}
+
+	# Both of you, stop.
+	option = {
+		name = restor.0207.c
+		scope:restor_life_quarrel_a = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_scolded_me_opinion
+			}
+		}
+		scope:restor_life_quarrel_b = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_scolded_me_opinion
+			}
+		}
+		if = {
+			limit = {
+				exists = scope:restor_keeper
+				NOT = { scope:restor_keeper = root }
+			}
+			scope:restor_keeper = {
+				add_opinion = {
+					target = root
+					modifier = restor_life_kept_the_peace_opinion
+				}
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 5 }
+	}
+}
+
+# =====================================================================================
+#  restor.0208 -- The Eager Courtier
+# =====================================================================================
+
+restor.0208 = {
+	type = character_event
+	title = restor.0208.t
+	desc = restor.0208.desc
+	theme = intrigue
+	override_background = { reference = corridor_day }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:restor_life_eager
+		animation = personality_bold
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		is_landed = yes
+		any_courtier = {
+			is_ai = yes
+			age <= 30
+			restor_recruitable_trigger = yes
+		}
+		NOT = { has_character_flag = restor_life_seen_0208 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0208 years = 12 }
+		random_courtier = {
+			limit = {
+				is_ai = yes
+				age <= 30
+				restor_recruitable_trigger = yes
+			}
+			save_scope_as = restor_life_eager
+		}
+	}
+
+	# Swear them in.
+	option = {
+		name = restor.0208.a
+		scope:restor_life_eager = {
+			restor_swear_in_effect = { RANK = 0 }
+			add_opinion = {
+				target = root
+				modifier = restor_brought_me_in_opinion
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 5 }
+		restor_exposure_gain_effect = { VALUE = 3 }
+	}
+
+	# Wait, and be quiet.
+	option = {
+		name = restor.0208.b
+		random_list = {
+			65 = {
+				modifier = { add = 20 scope:restor_life_eager = { has_trait = patient } }
+				modifier = { add = 15 dread >= 30 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0208.b.quiet
+					left_icon = scope:restor_life_eager
+					custom_tooltip = restor.0208.b.quiet.tt
+				}
+			}
+			35 = {
+				modifier = { add = 20 scope:restor_life_eager = { has_trait = impatient } }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0208.b.talks
+					left_icon = scope:restor_life_eager
+					restor_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+	}
+
+	# Send them to the heir.
+	option = {
+		name = restor.0208.c
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+			scope:restor_pretender = {
+				is_alive = yes
+				is_landed = yes
+			}
+		}
+		scope:restor_pretender = { add_courtier = scope:restor_life_eager }
+		restor_exposure_loss_effect = { VALUE = 1 }
+		restor_favour_gain_effect = { VALUE = 5 }
+	}
+}
+
+# =====================================================================================
+#  restor.0209 -- The Tax Collector (AI too)
+# =====================================================================================
+
+restor.0209 = {
+	type = character_event
+	title = restor.0209.t
+	desc = restor.0209.desc
+	theme = realm
+	override_background = { reference = village }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:restor_usurper
+		animation = personality_greedy
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_landed = yes
+		gold >= minor_gold_value
+		exists = global_var:restor_usurper
+		NOT = { restor_is_usurper_trigger = yes }
+		global_var:restor_crown = {
+			any_de_jure_county = {
+				exists = holder
+				NOT = { has_county_modifier = restor_county_stirred }
+				holder = {
+					NOT = { this = root }
+					NOT = { has_trait = restor_member }
+					OR = {
+						this = global_var:restor_usurper
+						any_liege_or_above = { this = global_var:restor_usurper }
+					}
+				}
+			}
+		}
+		NOT = { has_character_flag = restor_life_seen_0209 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0209 years = 12 }
+		global_var:restor_crown = {
+			random_de_jure_county = {
+				limit = {
+					exists = holder
+					NOT = { has_county_modifier = restor_county_stirred }
+					holder = {
+						NOT = { this = root }
+						NOT = { has_trait = restor_member }
+						OR = {
+							this = global_var:restor_usurper
+							any_liege_or_above = { this = global_var:restor_usurper }
+						}
+					}
+				}
+				save_scope_as = restor_life_county
+			}
+		}
+	}
+
+	# Gold and a few hard men.
+	option = {
+		name = restor.0209.a
+		remove_short_term_gold = minor_gold_value
+		scope:restor_life_county = {
+			add_county_modifier = {
+				modifier = restor_county_stirred
+				years = 10
+			}
+		}
+		custom_tooltip = restor_life_stirred_support_tt
+		hidden_effect = { restor_support_refresh_effect = yes }
+		random_list = {
+			70 = {
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0209.a.untraced
+					left_icon = root
+					right_icon = scope:restor_life_county
+					custom_tooltip = restor.0209.a.untraced.tt
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0209.a.traced
+					left_icon = root
+					right_icon = scope:restor_life_county
+					restor_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = brave }
+			modifier = { add = 20 has_trait = vengeful }
+			modifier = { add = -30 has_trait = craven }
+		}
+	}
+
+	# Pay the tax for them.
+	option = {
+		name = restor.0209.b
+		trigger = { gold >= medium_gold_value }
+		remove_short_term_gold = medium_gold_value
+		scope:restor_life_county = {
+			add_county_modifier = {
+				modifier = restor_county_stirred
+				years = 5
+			}
+		}
+		custom_tooltip = restor_life_stirred_support_tt
+		hidden_effect = { restor_support_refresh_effect = yes }
+		restor_favour_gain_effect = { VALUE = 10 }
+		stress_impact = {
+			greedy = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = generous }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Not our fight yet.
+	option = {
+		name = restor.0209.c
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+			just = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = craven }
+			modifier = { add = 20 has_trait = greedy }
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0210 -- The Tombs at the Old Seat
+# =====================================================================================
+
+restor.0210 = {
+	type = character_event
+	title = restor.0210.t
+	desc = restor.0210.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = disbelief
+	}
+	right_portrait = {
+		character = scope:restor_life_seat_holder
+		animation = personality_callous
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		is_landed = yes
+		exists = global_var:restor_seat
+		exists = global_var:restor_seat.holder
+		global_var:restor_seat.holder = {
+			NOT = { this = root }
+			NOT = { has_trait = restor_member }
+			NOT = { restor_of_the_blood_trigger = yes }
+		}
+		NOT = { has_character_flag = restor_life_seen_0210 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0210 years = 12 }
+		global_var:restor_seat.holder = { save_scope_as = restor_life_seat_holder }
+		global_var:restor_seat = { save_scope_as = restor_life_seat }
+	}
+
+	# Pay the chapel's keepers.
+	option = {
+		name = restor.0210.a
+		trigger = { gold >= minor_gold_value }
+		remove_short_term_gold = minor_gold_value
+		scope:restor_life_seat = {
+			add_county_modifier = {
+				modifier = restor_county_stirred
+				years = 10
+			}
+		}
+		custom_tooltip = restor_life_stirred_support_tt
+		hidden_effect = { restor_support_refresh_effect = yes }
+		restor_favour_gain_effect = { VALUE = 10 }
+	}
+
+	# Bring the kings home.
+	option = {
+		name = restor.0210.b
+		trigger = { gold >= medium_gold_value }
+		remove_short_term_gold = medium_gold_value
+		random_list = {
+			75 = {
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0210.b.moved
+					left_icon = root
+					add_character_modifier = {
+						modifier = restor_life_kings_tombs_modifier
+						years = 20
+					}
+					restor_favour_gain_effect = { VALUE = 25 }
+					add_trait_xp = {
+						trait = restor_member
+						track = restor_rank
+						value = 5
+					}
+				}
+			}
+			25 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0210.b.caught
+					left_icon = root
+					right_icon = scope:restor_life_seat_holder
+					restor_exposure_gain_effect = { VALUE = 8 }
+					restor_favour_gain_effect = { VALUE = 10 }
+				}
+			}
+		}
+		stress_impact = {
+			craven = minor_stress_impact_gain
+		}
+	}
+
+	# The dead will keep.
+	option = {
+		name = restor.0210.c
+		stress_impact = {
+			zealous = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0211 -- A Burial in Secret
+# =====================================================================================
+
+restor.0211 = {
+	type = character_event
+	title = restor.0211.t
+	desc = restor.0211.desc
+	theme = death
+	override_background = { reference = estate }
+	left_portrait = {
+		character = root
+		animation = grief
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_life_mourner }
+		character = scope:restor_life_mourner
+		animation = sadness
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		exists = global_var:restor_life_fallen
+		NOT = { global_var:restor_life_fallen = root }
+		NOT = { has_character_flag = restor_life_mourned }
+		NOT = { has_character_flag = restor_life_seen_0211 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0211 years = 3 }
+		add_character_flag = { flag = restor_life_mourned days = 730 }
+		global_var:restor_life_fallen = {
+			save_scope_as = restor_life_dead
+			random_child = {
+				limit = {
+					is_alive = yes
+					NOT = { this = root }
+				}
+				save_scope_as = restor_life_mourner
+			}
+		}
+	}
+
+	# Go, and stand at the back.
+	option = {
+		name = restor.0211.a
+		add_stress = minor_stress_loss
+		restor_favour_gain_effect = { VALUE = 10 }
+		random_list = {
+			75 = {
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0211.a.unseen
+					left_icon = root
+					custom_tooltip = restor.0211.a.unseen.tt
+				}
+			}
+			25 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0211.a.seen
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+	}
+
+	# Gifts with no name on them.
+	option = {
+		name = restor.0211.b
+		trigger = {
+			exists = scope:restor_life_mourner
+			gold >= minor_gold_value
+		}
+		pay_short_term_gold = {
+			target = scope:restor_life_mourner
+			gold = minor_gold_value
+		}
+		scope:restor_life_mourner = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_honoured_our_dead_opinion
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 5 }
+	}
+
+	# Stay away.
+	option = {
+		name = restor.0211.c
+		restor_exposure_loss_effect = { VALUE = 1 }
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+			gregarious = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0212 -- A Night of Old Stories
+# =====================================================================================
+
+restor.0212 = {
+	type = character_event
+	title = restor.0212.t
+	desc = restor.0212.desc
+	theme = friendly
+	override_background = { reference = sitting_room }
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		character = scope:restor_life_guest
+		animation = storyteller
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		is_landed = yes
+		any_in_global_list = {
+			variable = restor_roster
+			is_alive = yes
+			is_adult = yes
+			is_ai = yes
+			is_imprisoned = no
+			can_set_relation_friend_trigger = { CHARACTER = root }
+		}
+		NOT = { has_character_flag = restor_life_seen_0212 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0212 years = 12 }
+		random_in_global_list = {
+			variable = restor_roster
+			limit = {
+				is_alive = yes
+				is_adult = yes
+				is_ai = yes
+				is_imprisoned = no
+				can_set_relation_friend_trigger = { CHARACTER = root }
+			}
+			save_scope_as = restor_life_guest
+		}
+	}
+
+	# Another cup.
+	option = {
+		name = restor.0212.a
+		add_stress = minor_stress_loss
+		random_list = {
+			50 = {
+				modifier = { add = 15 has_trait = gregarious }
+				modifier = { add = 15 scope:restor_life_guest = { has_trait = gregarious } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0212.a.friend
+					left_icon = scope:restor_life_guest
+					set_relation_friend = {
+						target = scope:restor_life_guest
+						reason = restor_friend_old_stories
+					}
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0212.a.company
+					left_icon = scope:restor_life_guest
+					scope:restor_life_guest = {
+						add_opinion = {
+							target = root
+							modifier = restor_life_good_company_opinion
+						}
+					}
+				}
+			}
+		}
+		stress_impact = {
+			shy = minor_stress_impact_gain
+		}
+	}
+
+	# To bed; we'll be seen.
+	option = {
+		name = restor.0212.b
+		scope:restor_life_guest = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_cold_welcome_opinion
+			}
+		}
+		restor_exposure_loss_effect = { VALUE = 1 }
+		stress_impact = {
+			gregarious = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0213 -- A Relic for Sale (AI too)
+# =====================================================================================
+
+restor.0213 = {
+	type = character_event
+	title = restor.0213.t
+	desc = restor.0213.desc
+	theme = dynasty
+	override_background = { reference = market }
+	left_portrait = {
+		character = root
+		animation = inspect_weapon
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+		}
+		character = scope:restor_pretender
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		gold >= medium_gold_value
+		NOT = { has_character_flag = restor_life_seen_0213 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0213 years = 12 }
+	}
+
+	# Buy it for myself.
+	option = {
+		name = restor.0213.a
+		remove_short_term_gold = medium_gold_value
+		random_list = {
+			80 = {
+				modifier = { add = 15 learning >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0213.a.genuine
+					left_icon = root
+					add_character_modifier = {
+						modifier = restor_life_old_banner_modifier
+						years = 20
+					}
+					restor_favour_gain_effect = { VALUE = 20 }
+					add_trait_xp = {
+						trait = restor_member
+						track = restor_rank
+						value = 5
+					}
+				}
+			}
+			20 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0213.a.fake
+					left_icon = root
+					custom_tooltip = restor.0213.a.fake.tt
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = zealous }
+			modifier = { add = 20 has_trait = arrogant }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Buy it for the heir.
+	option = {
+		name = restor.0213.b
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+		}
+		remove_short_term_gold = medium_gold_value
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_served_the_house_opinion
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 15 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = generous }
+			modifier = { add = 20 has_trait = humble }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Not from a stranger.
+	option = {
+		name = restor.0213.c
+		restor_exposure_loss_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = greedy }
+			modifier = { add = 30 has_trait = paranoid }
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0214 -- A Night of Doubt
+# =====================================================================================
+
+restor.0214 = {
+	type = character_event
+	title = restor.0214.t
+	desc = restor.0214.desc
+	theme = mental_health
+	override_background = { reference = bedchamber }
+	left_portrait = {
+		character = root
+		animation = stress
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		is_ai = no
+		exists = global_var:restor_pretender
+		exists = global_var:restor_keeper
+		NOT = { restor_is_pretender_trigger = yes }
+		NOT = { restor_is_keeper_trigger = yes }
+		NOT = { restor_of_the_blood_trigger = yes }
+		NOT = { has_character_flag = restor_life_seen_0214 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0214 years = 12 }
+	}
+
+	# I swore.
+	option = {
+		name = restor.0214.a
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 5
+		}
+		stress_impact = {
+			base = minor_stress_impact_gain
+			honest = minor_stress_impact_loss
+			zealous = minor_stress_impact_loss
+		}
+	}
+
+	# Head down for a while.
+	option = {
+		name = restor.0214.b
+		restor_exposure_loss_effect = { VALUE = 5 }
+		restor_favour_spend_effect = { VALUE = 10 }
+	}
+
+	# Done with it.
+	option = {
+		name = restor.0214.c
+		custom_tooltip = restor.0214.c.tt
+		scope:restor_keeper = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_walked_away_opinion
+			}
+		}
+		add_stress = medium_stress_loss
+		restor_leave_effect = yes
+		stress_impact = {
+			honest = medium_stress_impact_gain
+			zealous = medium_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0250 -- The Old Sworn Want Paying (the restored king)
+# =====================================================================================
+
+restor.0250 = {
+	type = character_event
+	title = restor.0250.t
+	desc = restor.0250.desc
+	theme = court
+	override_background = { reference = throne_room }
+	left_portrait = {
+		character = scope:restor_life_quarrel_a
+		animation = personality_bold
+	}
+	right_portrait = {
+		character = scope:restor_life_quarrel_b
+		animation = anger
+	}
+
+	trigger = {
+		restor_restored_trigger = yes
+		is_ai = no
+		exists = global_var:restor_crown.holder
+		this = global_var:restor_crown.holder
+		any_in_global_list = {
+			variable = restor_roster
+			count >= 2
+			is_alive = yes
+			is_adult = yes
+			is_ai = yes
+			NOT = { this = root }
+		}
+		NOT = { has_character_flag = restor_life_seen_0250 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0250 years = 12 }
+		random_in_global_list = {
+			variable = restor_roster
+			limit = {
+				is_alive = yes
+				is_adult = yes
+				is_ai = yes
+				NOT = { this = root }
+			}
+			save_scope_as = restor_life_quarrel_a
+		}
+		random_in_global_list = {
+			variable = restor_roster
+			limit = {
+				is_alive = yes
+				is_adult = yes
+				is_ai = yes
+				NOT = { this = root }
+				NOT = { this = scope:restor_life_quarrel_a }
+			}
+			save_scope_as = restor_life_quarrel_b
+		}
+	}
+
+	# Reward A.
+	option = {
+		name = restor.0250.a
+		trigger = { gold >= minor_gold_value }
+		pay_short_term_gold = {
+			target = scope:restor_life_quarrel_a
+			gold = minor_gold_value
+		}
+		scope:restor_life_quarrel_a = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_rewarded_me_opinion
+			}
+		}
+		scope:restor_life_quarrel_b = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_passed_me_over_opinion
+			}
+		}
+	}
+
+	# Reward B.
+	option = {
+		name = restor.0250.b
+		trigger = { gold >= minor_gold_value }
+		pay_short_term_gold = {
+			target = scope:restor_life_quarrel_b
+			gold = minor_gold_value
+		}
+		scope:restor_life_quarrel_b = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_rewarded_me_opinion
+			}
+		}
+		scope:restor_life_quarrel_a = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_passed_me_over_opinion
+			}
+		}
+	}
+
+	# Both, from my own purse.
+	option = {
+		name = restor.0250.c
+		trigger = { gold >= medium_gold_value }
+		pay_short_term_gold = {
+			target = scope:restor_life_quarrel_a
+			gold = minor_gold_value
+		}
+		pay_short_term_gold = {
+			target = scope:restor_life_quarrel_b
+			gold = minor_gold_value
+		}
+		scope:restor_life_quarrel_a = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_kept_the_peace_opinion
+			}
+		}
+		scope:restor_life_quarrel_b = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_kept_the_peace_opinion
+			}
+		}
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+	}
+
+	# Neither.
+	option = {
+		name = restor.0250.d
+		scope:restor_life_quarrel_a = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_passed_me_over_opinion
+			}
+		}
+		scope:restor_life_quarrel_b = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_passed_me_over_opinion
+			}
+		}
+		add_prestige = minor_prestige_gain
+	}
+}
+
+# =====================================================================================
+#  restor.0251 -- The Deposed House's Agent
+# =====================================================================================
+
+restor.0251 = {
+	type = character_event
+	title = restor.0251.t
+	desc = restor.0251.desc
+	theme = intrigue
+	override_background = { reference = alley_night }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:restor_life_king
+		animation = personality_rational
+	}
+
+	trigger = {
+		restor_restored_trigger = yes
+		is_ai = no
+		exists = global_var:restor_crown.holder
+		NOT = { this = global_var:restor_crown.holder }
+		NOT = { has_character_flag = restor_life_seen_0251 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0251 years = 12 }
+		global_var:restor_crown.holder = { save_scope_as = restor_life_king }
+	}
+
+	# Take the letter to the king.
+	option = {
+		name = restor.0251.a
+		scope:restor_life_king = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_reported_the_agent_opinion
+			}
+		}
+		add_prestige = minor_prestige_gain
+	}
+
+	# Take the gold, send nothing useful.
+	option = {
+		name = restor.0251.b
+		add_gold = medium_gold_value
+		random_list = {
+			80 = {
+				modifier = { add = 10 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0251.b.unnoticed
+					left_icon = root
+					custom_tooltip = restor.0251.b.unnoticed.tt
+				}
+			}
+			20 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0251.b.found
+					left_icon = root
+					right_icon = scope:restor_life_king
+					scope:restor_life_king = {
+						add_opinion = {
+							target = root
+							modifier = restor_life_took_their_gold_opinion
+						}
+					}
+				}
+			}
+		}
+		stress_impact = {
+			honest = medium_stress_impact_gain
+		}
+	}
+
+	# Send the messenger away.
+	option = {
+		name = restor.0251.c
+	}
+}
+
+# =====================================================================================
+#  restor.0252 -- Named in the Hall
+# =====================================================================================
+
+restor.0252 = {
+	type = character_event
+	title = restor.0252.t
+	desc = restor.0252.desc
+	theme = crown
+	override_background = { reference = feast }
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		character = scope:restor_life_king
+		animation = toast_goblet
+	}
+
+	trigger = {
+		restor_restored_trigger = yes
+		is_ai = no
+		exists = global_var:restor_crown.holder
+		NOT = { this = global_var:restor_crown.holder }
+		NOT = { has_character_flag = restor_life_seen_0252 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0252 years = 12 }
+		global_var:restor_crown.holder = { save_scope_as = restor_life_king }
+	}
+
+	# The dead.
+	option = {
+		name = restor.0252.a
+		scope:restor_life_king = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_honoured_our_dead_opinion
+			}
+		}
+		add_prestige = minor_prestige_gain
+		add_stress = minor_stress_loss
+	}
+
+	# Myself.
+	option = {
+		name = restor.0252.b
+		add_prestige = medium_prestige_gain
+		random_list = {
+			50 = {
+				modifier = { add = 20 diplomacy >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0252.b.cheers
+					left_icon = root
+					custom_tooltip = restor.0252.b.cheers.tt
+				}
+			}
+			50 = {
+				modifier = { add = 20 has_trait = arrogant }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0252.b.mutter
+					left_icon = root
+					every_in_global_list = {
+						variable = restor_roster
+						limit = {
+							is_alive = yes
+							NOT = { this = root }
+						}
+						add_opinion = {
+							target = root
+							modifier = restor_life_boasted_opinion
+						}
+					}
+				}
+			}
+		}
+		stress_impact = {
+			humble = medium_stress_impact_gain
+		}
+	}
+
+	# Raise a cup and sit down.
+	option = {
+		name = restor.0252.c
+		stress_impact = {
+			shy = minor_stress_impact_loss
+			arrogant = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0253 -- The Latecomer
+# =====================================================================================
+
+restor.0253 = {
+	type = character_event
+	title = restor.0253.t
+	desc = restor.0253.desc
+	theme = diplomacy
+	override_background = { reference = courtyard }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:restor_life_latecomer
+		animation = obsequious_bow
+	}
+
+	trigger = {
+		restor_restored_trigger = yes
+		is_ai = no
+		is_landed = yes
+		OR = {
+			any_vassal = {
+				is_ai = yes
+				restor_recruitable_trigger = yes
+			}
+			any_courtier = {
+				is_ai = yes
+				restor_recruitable_trigger = yes
+			}
+		}
+		NOT = { has_character_flag = restor_life_seen_0253 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_life_seen_0253 years = 12 }
+		if = {
+			limit = {
+				any_vassal = {
+					is_ai = yes
+					restor_recruitable_trigger = yes
+				}
+			}
+			random_vassal = {
+				limit = {
+					is_ai = yes
+					restor_recruitable_trigger = yes
+				}
+				save_scope_as = restor_life_latecomer
+			}
+		}
+		else = {
+			random_courtier = {
+				limit = {
+					is_ai = yes
+					restor_recruitable_trigger = yes
+				}
+				save_scope_as = restor_life_latecomer
+			}
+		}
+	}
+
+	# Sponsor them.
+	option = {
+		name = restor.0253.a
+		scope:restor_life_latecomer = {
+			restor_swear_in_effect = { RANK = 0 }
+			add_opinion = {
+				target = root
+				modifier = restor_brought_me_in_opinion
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 5 }
+	}
+
+	# Where were you?
+	option = {
+		name = restor.0253.b
+		scope:restor_life_latecomer = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_turned_me_away_opinion
+			}
+		}
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 3
+		}
+		restor_favour_gain_effect = { VALUE = 5 }
+	}
+}

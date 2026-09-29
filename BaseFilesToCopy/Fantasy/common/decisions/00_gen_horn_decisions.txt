@@ -1,0 +1,64 @@
+﻿# Filing the horns down. Open to anyone with horns — the horned people and the Hornborn alike — and
+# repeatable: the horns grow back after five years (see gen_file_horns_effect in 00_horn_effects.txt
+# for what it costs each, and why it is shameful among the horned people and a way of passing for
+# the Hornborn).
+
+gen_file_horns_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
+	}
+
+	desc = gen_file_horns_decision_desc
+	selection_tooltip = gen_file_horns_decision_tooltip
+	confirm_text = gen_file_horns_decision_confirm
+
+	is_shown = {
+		gen_has_horns_trigger = yes
+		is_adult = yes
+	}
+
+	is_valid = {
+		custom_description = {
+			text = gen_file_horns_still_growing
+			NOT = { has_character_flag = gen_horns_filed }
+		}
+	}
+
+	effect = {
+		gen_file_horns_effect = yes
+	}
+
+	# Menace or acceptance (see 00_hornborn_trait.txt). The AI files when it needs friends or a
+	# match — unmarried, or an ambitious or sociable temperament — and never when it rules by fear
+	# or pride. The horned people do not file: among their own it is only shame.
+	ai_check_interval = 36
+	ai_potential = {
+		gen_hornborn_horns_showing_trigger = yes
+		NOT = { has_trait = arrogant }
+		NOT = { has_trait = sadistic }
+		NOT = { has_trait = wrathful }
+	}
+	ai_will_do = {
+		base = 10
+		modifier = {
+			add = 40
+			is_married = no
+		}
+		modifier = {
+			add = 15
+			OR = {
+				has_trait = ambitious
+				has_trait = gregarious
+				has_trait = shy
+				has_trait = craven
+			}
+		}
+		modifier = {
+			add = -30
+			OR = {
+				has_trait = brave
+				has_trait = zealous
+			}
+		}
+	}
+}

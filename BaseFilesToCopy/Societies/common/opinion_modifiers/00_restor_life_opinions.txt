@@ -1,0 +1,121 @@
+﻿# What the Restorationists' everyday life leaves between people. restor.0200-0299.
+
+restor_life_served_the_house_opinion = {
+	opinion = 15
+	years = 5
+	decaying = yes
+}
+
+restor_life_wrote_to_me_opinion = {
+	opinion = 5
+	years = 3
+	decaying = yes
+}
+
+restor_life_ignored_me_opinion = {
+	opinion = -10
+	years = 3
+	decaying = yes
+}
+
+restor_life_took_my_side_opinion = {
+	opinion = 20
+	years = 5
+	decaying = yes
+}
+
+restor_life_took_their_side_opinion = {
+	opinion = -15
+	years = 5
+	decaying = yes
+}
+
+restor_life_scolded_me_opinion = {
+	opinion = -5
+	years = 2
+	decaying = yes
+}
+
+restor_life_kept_the_peace_opinion = {
+	opinion = 10
+	years = 3
+	decaying = yes
+}
+
+restor_life_trusted_me_opinion = {
+	opinion = 15
+	years = 10
+	decaying = yes
+}
+
+restor_life_kept_me_out_opinion = {
+	opinion = -10
+	years = 3
+	decaying = yes
+}
+
+restor_life_took_me_in_opinion = {
+	opinion = 25
+	years = 10
+	decaying = yes
+}
+
+restor_life_honoured_our_dead_opinion = {
+	opinion = 15
+	years = 10
+	decaying = yes
+}
+
+restor_life_good_company_opinion = {
+	opinion = 15
+	years = 5
+	decaying = yes
+}
+
+restor_life_cold_welcome_opinion = {
+	opinion = -5
+	years = 2
+	decaying = yes
+}
+
+restor_life_walked_away_opinion = {
+	opinion = -20
+	years = 10
+	decaying = yes
+}
+
+restor_life_rewarded_me_opinion = {
+	opinion = 20
+	years = 10
+	decaying = yes
+}
+
+restor_life_passed_me_over_opinion = {
+	opinion = -15
+	years = 5
+	decaying = yes
+}
+
+restor_life_reported_the_agent_opinion = {
+	opinion = 20
+	years = 10
+	decaying = yes
+}
+
+restor_life_took_their_gold_opinion = {
+	opinion = -30
+	years = 10
+	decaying = yes
+}
+
+restor_life_boasted_opinion = {
+	opinion = -5
+	years = 3
+	decaying = yes
+}
+
+restor_life_turned_me_away_opinion = {
+	opinion = -15
+	years = 5
+	decaying = yes
+}

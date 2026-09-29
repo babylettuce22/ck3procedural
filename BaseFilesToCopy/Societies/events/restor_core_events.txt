@@ -1,0 +1,203 @@
+﻿# The Restorationists: introductions and debug. restor.0001-0099.
+#
+# The introductions are the most important events in the set, because they are where the player
+# learns what the society wants and what they can do about it. Each one names the crown, the house,
+# the pretender and the next step. If a player finishes reading one and does not know what to do
+# next, the introduction has failed, however well it reads.
+
+namespace = restor
+
+# =====================================================================================
+#  Debug -- fired from the console
+# =====================================================================================
+
+# Swear yourself in at Captain, with favour to spend.
+restor.0001 = {
+	type = character_event
+	hidden = yes
+	trigger = { restor_active_trigger = yes }
+	immediate = {
+		restor_swear_in_effect = { RANK = 50 }
+		restor_favour_gain_effect = { VALUE = 100 }
+	}
+}
+
+# +50 to the pretender's realm is not something a debug event can fake, so this stirs the crown's
+# counties instead -- which the meter reads -- until the meter has moved by about fifty.
+restor.0002 = {
+	type = character_event
+	hidden = yes
+	trigger = { restor_active_trigger = yes }
+	immediate = {
+		global_var:restor_crown = {
+			every_de_jure_county = {
+				add_county_modifier = {
+					modifier = restor_county_stirred
+					years = 10
+				}
+			}
+		}
+		restor_recompute_support_effect = yes
+	}
+}
+
+# Make yourself the pretender (and of the house), to test the rising and the crowning.
+restor.0003 = {
+	type = character_event
+	hidden = yes
+	trigger = { restor_active_trigger = yes }
+	immediate = {
+		if = {
+			limit = { exists = house }
+			set_global_variable = {
+				name = restor_house
+				value = house
+			}
+		}
+		restor_make_pretender_effect = yes
+		restor_recompute_usurper_effect = yes
+		restor_recompute_support_effect = yes
+	}
+}
+
+# The state, as a message.
+restor.0004 = {
+	type = character_event
+	hidden = yes
+	trigger = { restor_active_trigger = yes }
+	immediate = {
+		restor_save_scopes_effect = yes
+		send_interface_message = {
+			type = event_generic_neutral
+			title = restor.0004.t
+			desc = restor.0004.desc
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0010 -- a sworn player's introduction
+# =====================================================================================
+
+restor.0010 = {
+	type = character_event
+	title = restor.0010.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { restor_is_pretender_trigger = yes }
+				desc = restor.0010.desc_pretender
+			}
+			triggered_desc = {
+				trigger = { restor_is_keeper_trigger = yes }
+				desc = restor.0010.desc_keeper
+			}
+			desc = restor.0010.desc_member
+		}
+	}
+	theme = secret
+	override_background = { reference = throne_room }
+
+	left_portrait = {
+		character = root
+		animation = personality_honorable
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+		}
+		character = scope:restor_pretender
+		animation = personality_rational
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_usurper }
+		character = scope:restor_usurper
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	option = {
+		name = restor.0010.a
+		custom_tooltip = restor.0010.a.tt
+	}
+}
+
+# =====================================================================================
+#  restor.0011 -- the usurper's introduction
+# =====================================================================================
+
+restor.0011 = {
+	type = character_event
+	title = restor.0011.t
+	desc = restor.0011.desc
+	theme = intrigue
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+		animation = scheme
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	option = {
+		name = restor.0011.a
+		ai_chance = { base = 50 }
+	}
+
+	# Listening costs the sworn: every one of them is a little easier to find.
+	option = {
+		name = restor.0011.b
+		custom_tooltip = restor.0011.b.tt
+		hidden_effect = {
+			add_character_flag = restor_usurper_watching
+			every_in_global_list = {
+				variable = restor_roster
+				limit = { is_alive = yes }
+				restor_exposure_gain_effect = { VALUE = 3 }
+			}
+		}
+		ai_chance = { base = 50 }
+	}
+}
+
+# =====================================================================================
+#  restor.0012 -- of the blood, not sworn
+# =====================================================================================
+
+restor.0012 = {
+	type = character_event
+	title = restor.0012.t
+	desc = restor.0012.desc
+	theme = family
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	option = {
+		name = restor.0012.a
+		custom_tooltip = restor.0012.a.tt
+	}
+	option = {
+		name = restor.0012.b
+	}
+}

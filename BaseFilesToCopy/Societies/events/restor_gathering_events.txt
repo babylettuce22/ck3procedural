@@ -1,0 +1,1478 @@
+﻿# The Restorationists: the Gathering and the Errand. restor.0900-0999.
+#
+# THE GATHERING (common/activities/activity_types/00_restor_gathering_activity.txt)
+#   0901   host, day 1       The Sworn Gather: what the Gathering is for
+#   0902   host              Plan the Rising: which counties to stir
+#   0903   host              An Empty Seat: judge a member who was asked and stayed away
+#   0904   host, day 7       Raise One of the Sworn: someone's standing, or your own
+#   0905   each guest        Arrival: who is in the hall, and who is not
+#   0906   each guest        what the host decided
+#   0907   the absentee      named before the Sworn, or forgiven
+#   0908   host, half the time   Talk in Town: someone outside noticed the riders
+#
+# THE ERRAND (common/activities/activity_types/00_restor_errand_activity.txt)
+#   0910   host, day 1       Setting Out
+#   0911   each guest        Riding with the host
+#   0912   host, day 10      On the Road: careful or hasty
+#   0913   host, day 18      The Witness: one of the usurper's people sees too much
+#   0914   host, day 26      Home: the ONLY event of the Errand that pays
+#   0915   host              An Old Soldier: swear the veteran in, or wait
+#
+# scope:activity and scope:host ride along from the activity's phase block. Every read of
+# scope:activity is guarded (`?=`, or `exists`), so any of these can be fired from the DebugPanel
+# outside an activity: each then degrades to the host alone instead of throwing "Undefined event
+# target" once per render.
+
+namespace = restor
+
+# =====================================================================================
+#  THE GATHERING
+# =====================================================================================
+
+# ---- restor.0901 -- The Sworn Gather ---------------------------------------------------------
+#
+# The host chooses the purpose after seeing who came, because who came decides what the Gathering
+# can do: Plan the Rising needs crown land in or next to the hall, Judge the Absent needs somebody
+# absent.
+restor.0901 = {
+	type = character_event
+	title = restor.0901.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:restor_gathering_count > 0 }
+				desc = restor.0901.desc
+			}
+			desc = restor.0901.desc_alone
+		}
+		triggered_desc = {
+			trigger = { exists = scope:restor_absentee }
+			desc = restor.0901.desc_absent
+		}
+		desc = restor.0901.desc_end
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_absentee }
+		character = scope:restor_absentee
+		animation = worry
+	}
+	trigger = { restor_active_trigger = yes }
+
+	immediate = {
+		restor_save_scopes_effect = yes
+
+		save_scope_value_as = {
+			name = restor_gathering_count
+			value = {
+				value = 0
+				if = {
+					limit = { exists = scope:activity }
+					scope:activity = {
+						every_attending_character = {
+							limit = { NOT = { this = root } }
+							add = 1
+						}
+					}
+				}
+			}
+		}
+
+		# Who is here.
+		if = {
+			limit = { exists = scope:activity }
+			scope:activity = {
+				every_attending_character = { add_to_list = restor_present }
+			}
+		}
+
+		# Who was asked and is not. The activity's own record first (see on_start in the
+		# activity file); failing that, a sworn member of the host's court or realm.
+		if = {
+			limit = {
+				exists = scope:activity
+				scope:activity = { has_variable_list = restor_gathering_invited }
+			}
+			scope:activity = {
+				random_in_list = {
+					variable = restor_gathering_invited
+					limit = {
+						is_alive = yes
+						has_trait = restor_member
+						NOT = { this = root }
+						NOT = { is_in_list = restor_present }
+					}
+					save_scope_as = restor_absentee
+				}
+			}
+		}
+		if = {
+			limit = { NOT = { exists = scope:restor_absentee } }
+			random_courtier = {
+				limit = {
+					is_adult = yes
+					has_trait = restor_member
+					NOT = { is_in_list = restor_present }
+				}
+				save_scope_as = restor_absentee
+			}
+		}
+		if = {
+			limit = { NOT = { exists = scope:restor_absentee } }
+			random_vassal_or_below = {
+				limit = {
+					is_adult = yes
+					has_trait = restor_member
+					NOT = { is_in_list = restor_present }
+				}
+				save_scope_as = restor_absentee
+			}
+		}
+
+		# Whether Plan the Rising has anywhere to reach.
+		restor_gathering_rising_lists_effect = yes
+		restor_gathering_rising_counts_effect = yes
+	}
+
+	# Renew the oath.
+	option = {
+		name = restor.0901.a
+		restor_gathering_reward_hall_effect = { XP = 5 FAVOUR = 15 }
+		hidden_effect = {
+			restor_gathering_tell_guests_effect = { PURPOSE = oath }
+			trigger_event = { id = restor.0904 days = 6 }
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = gregarious }
+			modifier = { add = 20 has_trait = honest }
+		}
+	}
+
+	# Plan the rising.
+	option = {
+		name = restor.0901.b
+		trigger = {
+			OR = {
+				scope:restor_rising_own_count > 0
+				scope:restor_rising_near_count > 0
+			}
+		}
+		custom_tooltip = restor.0901.b.tt
+		hidden_effect = {
+			trigger_event = { id = restor.0902 days = 2 }
+			trigger_event = { id = restor.0904 days = 6 }
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = ambitious }
+			modifier = { add = 20 restor_is_pretender_trigger = yes }
+			modifier = { add = -20 has_trait = craven }
+		}
+	}
+
+	# Judge the absent.
+	option = {
+		name = restor.0901.c
+		trigger = { exists = scope:restor_absentee }
+		custom_tooltip = restor.0901.c.tt
+		hidden_effect = {
+			trigger_event = { id = restor.0903 days = 2 }
+			trigger_event = { id = restor.0904 days = 6 }
+		}
+		ai_chance = {
+			base = 15
+			modifier = { add = 25 has_trait = vengeful }
+			modifier = { add = 15 has_trait = arbitrary }
+			modifier = { add = -10 has_trait = forgiving }
+		}
+	}
+}
+
+# ---- restor.0902 -- Plan the Rising -----------------------------------------------------------
+#
+# One county per landed lord in the hall (one at least, five at most), chosen from the crown's
+# counties that are not yet stirred. Their own land is the safe choice and costs them their
+# subjects' goodwill (the modifier lowers county opinion of whoever holds it); their neighbours'
+# land costs someone else that goodwill, and the host a good deal more exposure.
+restor.0902 = {
+	type = character_event
+	title = restor.0902.t
+	desc = restor.0902.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+	}
+	trigger = { restor_active_trigger = yes }
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_gathering_rising_lists_effect = yes
+		restor_gathering_rising_counts_effect = yes
+	}
+
+	# Our own land.
+	option = {
+		name = restor.0902.a
+		trigger = { scope:restor_rising_own_count > 0 }
+		custom_tooltip = restor.0902.a.tt
+		restor_exposure_gain_effect = { VALUE = 2 }
+		hidden_effect = {
+			restor_gathering_rising_lists_effect = yes
+			restor_gathering_stir_list_effect = { LIST = restor_rising_own }
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = restor.0902.toast
+				left_icon = root
+				custom_tooltip = restor.0902.toast.tt
+			}
+			restor_gathering_tell_guests_effect = { PURPOSE = rising }
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 20 has_trait = craven }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Our neighbours' land.
+	option = {
+		name = restor.0902.b
+		trigger = { scope:restor_rising_near_count > 0 }
+		custom_tooltip = restor.0902.b.tt
+		restor_exposure_gain_effect = { VALUE = 5 }
+		hidden_effect = {
+			restor_gathering_rising_lists_effect = yes
+			restor_gathering_stir_list_effect = { LIST = restor_rising_near }
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = restor.0902.toast
+				left_icon = root
+				custom_tooltip = restor.0902.toast.tt
+			}
+			restor_gathering_tell_guests_effect = { PURPOSE = rising }
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 25 has_trait = brave }
+			modifier = { add = 15 has_trait = ambitious }
+		}
+	}
+
+	# Not yet.
+	option = {
+		name = restor.0902.c
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 2
+		}
+		hidden_effect = {
+			restor_gathering_tell_guests_effect = { PURPOSE = quiet }
+		}
+		ai_chance = {
+			base = 10
+			modifier = { add = 30 has_trait = craven }
+		}
+	}
+}
+
+# ---- restor.0903 -- An Empty Seat --------------------------------------------------------------
+#
+# scope:restor_absentee comes from restor.0901. Judging costs the absent member standing and makes
+# an enemy of them; the host thinks the worse of them too. Letting it go costs nothing and earns
+# some gratitude. Either way the absentee is told (restor.0907).
+restor.0903 = {
+	type = character_event
+	title = restor.0903.title
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_absentee }
+				desc = restor.0903.desc
+			}
+			desc = restor.0903.desc_none
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = disapproval
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_absentee }
+		character = scope:restor_absentee
+		animation = shame
+	}
+	trigger = { restor_active_trigger = yes }
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	# Name them.
+	option = {
+		name = restor.0903.a
+		trigger = { exists = scope:restor_absentee }
+		scope:restor_absentee = {
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = -15
+			}
+			add_opinion = {
+				target = root
+				modifier = restor_named_before_the_sworn_opinion
+			}
+		}
+		add_opinion = {
+			target = scope:restor_absentee
+			modifier = restor_failed_charge_opinion
+		}
+		if = {
+			limit = { exists = scope:activity }
+			scope:activity = {
+				every_attending_character = {
+					limit = {
+						NOT = { this = root }
+						has_trait = restor_member
+					}
+					add_trait_xp = {
+						trait = restor_member
+						track = restor_rank
+						value = 3
+					}
+				}
+			}
+		}
+		hidden_effect = {
+			save_scope_value_as = { name = restor_judged_harshly value = yes }
+			scope:restor_absentee = { trigger_event = { id = restor.0907 days = 5 } }
+			restor_gathering_tell_guests_effect = { PURPOSE = judged }
+		}
+		stress_impact = {
+			forgiving = medium_stress_impact_gain
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = vengeful }
+			modifier = { add = 15 has_trait = arbitrary }
+			modifier = { add = -40 has_trait = forgiving }
+		}
+	}
+
+	# Let it go.
+	option = {
+		name = restor.0903.b
+		trigger = { exists = scope:restor_absentee }
+		scope:restor_absentee = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 10
+			}
+		}
+		hidden_effect = {
+			scope:restor_absentee = { trigger_event = { id = restor.0907 days = 5 } }
+			restor_gathering_tell_guests_effect = { PURPOSE = forgiven }
+		}
+		stress_impact = {
+			vengeful = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 40 has_trait = forgiving }
+			modifier = { add = 20 has_trait = compassionate }
+		}
+	}
+
+	# Nobody to judge (fired outside a Gathering, or the absentee has since died). `fallback`, so
+	# the event can never render with no option to close it.
+	option = {
+		name = restor.0903.c
+		fallback = yes
+		restor_gathering_reward_hall_effect = { XP = 3 FAVOUR = 5 }
+	}
+}
+
+# ---- restor.0904 -- Raise One of the Sworn ------------------------------------------------------
+restor.0904 = {
+	type = character_event
+	title = restor.0904.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_candidate }
+				desc = restor.0904.desc
+			}
+			desc = restor.0904.desc_alone
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_candidate }
+		character = scope:restor_candidate
+		animation = happiness
+	}
+	trigger = { restor_active_trigger = yes }
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		if = {
+			limit = { exists = scope:activity }
+			scope:activity = {
+				random_attending_character = {
+					limit = {
+						NOT = { this = root }
+						has_trait = restor_member
+						NOT = { restor_rank_at_least_trigger = { RANK = 75 } }
+					}
+					save_scope_as = restor_candidate
+				}
+			}
+		}
+	}
+
+	# Raise them.
+	option = {
+		name = restor.0904.a
+		trigger = { exists = scope:restor_candidate }
+		scope:restor_candidate = {
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = 15
+			}
+			add_opinion = {
+				target = root
+				modifier = restor_raised_before_the_sworn_opinion
+			}
+			hidden_effect = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0904.a.toast
+					left_icon = root
+					right_icon = scope:restor_candidate
+				}
+			}
+		}
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 3
+		}
+		ai_chance = {
+			base = 55
+			modifier = { add = 30 has_trait = generous }
+			modifier = { add = 20 has_trait = humble }
+			modifier = { add = -30 has_trait = ambitious }
+		}
+	}
+
+	# Raise yourself.
+	option = {
+		name = restor.0904.b
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 15
+		}
+		if = {
+			limit = { exists = scope:activity }
+			scope:activity = {
+				every_attending_character = {
+					limit = { NOT = { this = root } }
+					add_opinion = {
+						target = root
+						modifier = disappointed_opinion
+						opinion = -10
+					}
+				}
+			}
+		}
+		stress_impact = {
+			humble = medium_stress_impact_gain
+			generous = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 40 has_trait = ambitious }
+			modifier = { add = 25 has_trait = arrogant }
+			modifier = { add = -40 has_trait = humble }
+		}
+	}
+
+	# Nobody.
+	option = {
+		name = restor.0904.c
+		ai_chance = {
+			base = 5
+		}
+	}
+}
+
+# ---- restor.0905 -- Arrival (each guest) -------------------------------------------------------
+restor.0905 = {
+	type = character_event
+	title = restor.0905.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:host }
+				desc = restor.0905.desc
+			}
+			desc = restor.0905.desc_nohost
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_pretender
+					exists = scope:activity
+					scope:activity = {
+						any_attending_character = { this = scope:restor_pretender }
+					}
+				}
+				desc = restor.0905.desc_pretender_here
+			}
+			triggered_desc = {
+				trigger = { exists = scope:restor_pretender }
+				desc = restor.0905.desc_pretender_away
+			}
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_keeper
+					exists = scope:host
+					NOT = { scope:restor_keeper = scope:host }
+					exists = scope:activity
+					scope:activity = {
+						any_attending_character = { this = scope:restor_keeper }
+					}
+				}
+				desc = restor.0905.desc_keeper_here
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_keeper
+					exists = scope:host
+					NOT = { scope:restor_keeper = scope:host }
+				}
+				desc = restor.0905.desc_keeper_away
+			}
+		}
+		desc = restor.0905.desc_end
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:host }
+		character = scope:host
+		animation = personality_rational
+	}
+	trigger = { restor_active_trigger = yes }
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		save_scope_value_as = {
+			name = restor_gathering_count
+			value = {
+				value = 0
+				if = {
+					limit = { exists = scope:activity }
+					scope:activity = {
+						every_attending_character = {
+							limit = { NOT = { this = root } }
+							add = 1
+						}
+					}
+				}
+			}
+		}
+	}
+
+	# Speak up.
+	option = {
+		name = restor.0905.a
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 3
+		}
+		restor_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = ambitious }
+			modifier = { add = 20 has_trait = gregarious }
+		}
+	}
+
+	# Keep quiet.
+	option = {
+		name = restor.0905.b
+		restor_exposure_loss_effect = { VALUE = 1 }
+		stress_impact = {
+			shy = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 40 has_trait = paranoid }
+			modifier = { add = 25 has_trait = shy }
+		}
+	}
+}
+
+# ---- restor.0906 -- What the Gathering decided (each guest) ---------------------------------------
+restor.0906 = {
+	type = character_event
+	title = restor.0906.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:activity.var:restor_gathering_purpose ?= flag:oath }
+				desc = restor.0906.desc_oath
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity.var:restor_gathering_purpose ?= flag:rising
+					exists = scope:restor_stirred_now
+				}
+				desc = restor.0906.desc_rising
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity.var:restor_gathering_purpose ?= flag:judged
+					exists = scope:restor_absentee
+				}
+				desc = restor.0906.desc_judged
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity.var:restor_gathering_purpose ?= flag:forgiven
+					exists = scope:restor_absentee
+				}
+				desc = restor.0906.desc_forgiven
+			}
+			desc = restor.0906.desc_quiet
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = { exists = scope:host }
+		character = scope:host
+		animation = personality_bold
+	}
+	trigger = {
+		restor_active_trigger = yes
+		exists = scope:host
+		exists = scope:activity
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+	option = {
+		name = restor.0906.a
+	}
+}
+
+# ---- restor.0907 -- Named Before the Sworn (the absentee) -----------------------------------------
+restor.0907 = {
+	type = character_event
+	title = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_judged_harshly }
+				desc = restor.0907.t
+			}
+			desc = restor.0907.t_forgiven
+		}
+	}
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_judged_harshly }
+				desc = restor.0907.desc
+			}
+			desc = restor.0907.desc_forgiven
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = shame
+	}
+	right_portrait = {
+		trigger = { exists = scope:host }
+		character = scope:host
+		animation = disapproval
+	}
+	trigger = {
+		restor_active_trigger = yes
+		has_trait = restor_member
+		exists = scope:host
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	# Apologise.
+	option = {
+		name = restor.0907.a
+		trigger = {
+			exists = scope:restor_judged_harshly
+			exists = scope:host
+		}
+		restor_favour_spend_effect = { VALUE = 10 }
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 5
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = humble }
+			modifier = { add = -30 has_trait = arrogant }
+		}
+	}
+
+	# Let them think what they like.
+	option = {
+		name = restor.0907.b
+		trigger = { exists = scope:restor_judged_harshly }
+		stress_impact = {
+			humble = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = arrogant }
+			modifier = { add = 20 has_trait = stubborn }
+		}
+	}
+
+	# Forgiven.
+	option = {
+		name = restor.0907.c
+		trigger = { NOT = { exists = scope:restor_judged_harshly } }
+	}
+}
+
+# ---- restor.0908 -- Talk in Town (host, half the time) -----------------------------------------
+#
+# Twelve riders arriving at one hall in one week is noticed. The host decides what the town is
+# told; the story may or may not hold, and either way the host is told which.
+restor.0908 = {
+	type = character_event
+	title = restor.0908.t
+	desc = {
+		desc = restor.0908.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_usurper }
+				desc = restor.0908.desc_usurper
+			}
+			desc = restor.0908.desc_nousurper
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	trigger = { restor_underground_trigger = yes }
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	# Tell them it is a hunt.
+	option = {
+		name = restor.0908.a
+		random_list = {
+			60 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 15 intrigue >= 16 }
+				modifier = { add = 10 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0908.a.success
+					left_icon = root
+					custom_tooltip = restor.0908.a.success.tt
+				}
+			}
+			40 = {
+				modifier = { add = 15 has_trait = honest }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0908.a.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = deceitful }
+			modifier = { add = -30 has_trait = honest }
+		}
+	}
+
+	# Pay them to talk about something else.
+	option = {
+		name = restor.0908.b
+		trigger = { gold >= 25 }
+		remove_short_term_gold = 25
+		custom_tooltip = restor.0908.b.tt
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = paranoid }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Let them talk.
+	option = {
+		name = restor.0908.c
+		restor_exposure_gain_effect = { VALUE = 2 }
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = brave }
+		}
+	}
+}
+
+# =====================================================================================
+#  THE ERRAND
+# =====================================================================================
+#
+# The purpose is the planner's option (restor_errand_purpose). Every event reads it in the order
+# soldiers -> coin -> stir, with stir as the bare fallback, so a missing option can never produce
+# an empty desc. The beats set character flags; only restor.0914 reads them and pays.
+#
+#   restor_errand_careful / restor_errand_hasty   set at 0912
+#   restor_errand_clean / restor_errand_abandoned set at 0913
+#   var:restor_errand_witness                     the witness, set at 0913 when there is one
+#
+# All are cleared at the top of 0914 after being copied into saved scope values, so a later Errand
+# (or one started from the console while testing) can never be paid by an earlier one's flags.
+
+# ---- restor.0910 -- Setting Out ------------------------------------------------------------------
+restor.0910 = {
+	type = character_event
+	title = restor.0910.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = restor_errand_purpose option = restor_errand_soldiers }
+					}
+				}
+				desc = restor.0910.desc_soldiers
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = restor_errand_purpose option = restor_errand_coin }
+					}
+				}
+				desc = restor.0910.desc_coin
+			}
+			desc = restor.0910.desc_stir
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	trigger = { restor_active_trigger = yes }
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_save_county_effect = yes
+		# Nothing from an earlier Errand survives into this one.
+		remove_character_flag = restor_errand_careful
+		remove_character_flag = restor_errand_hasty
+		remove_character_flag = restor_errand_clean
+		remove_character_flag = restor_errand_abandoned
+		remove_variable = restor_errand_witness
+	}
+	option = {
+		name = restor.0910.a
+		custom_tooltip = restor.0910.a.tt
+	}
+}
+
+# ---- restor.0911 -- Riding with the host (each guest) ---------------------------------------------
+restor.0911 = {
+	type = character_event
+	title = restor.0911.t
+	desc = restor.0911.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:host }
+		character = scope:host
+		animation = personality_bold
+	}
+	trigger = {
+		restor_active_trigger = yes
+		exists = scope:host
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_save_county_effect = yes
+	}
+	option = {
+		name = restor.0911.a
+		custom_tooltip = restor.0911.a.tt
+	}
+}
+
+# ---- restor.0912 -- On the Road -------------------------------------------------------------------
+restor.0912 = {
+	type = character_event
+	title = restor.0912.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = restor_errand_purpose option = restor_errand_soldiers }
+					}
+				}
+				desc = restor.0912.desc_soldiers
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = restor_errand_purpose option = restor_errand_coin }
+					}
+				}
+				desc = restor.0912.desc_coin
+			}
+			desc = restor.0912.desc_stir
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	trigger = { restor_active_trigger = yes }
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_save_county_effect = yes
+	}
+
+	# Carefully.
+	option = {
+		name = restor.0912.a
+		add_character_flag = {
+			flag = restor_errand_careful
+			months = 6
+		}
+		custom_tooltip = restor.0912.a.tt
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = patient }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Quickly.
+	option = {
+		name = restor.0912.b
+		add_character_flag = {
+			flag = restor_errand_hasty
+			months = 6
+		}
+		custom_tooltip = restor.0912.b.tt
+		stress_impact = {
+			patient = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 40 has_trait = impatient }
+			modifier = { add = 20 has_trait = brave }
+		}
+	}
+}
+
+# ---- restor.0913 -- The Witness -------------------------------------------------------------------
+#
+# The part nobody plans. Someone who serves the county's lord -- the usurper's people, or people
+# who answer to them -- sees more than they should. A careful member can deal with it quietly; a
+# hasty one can only pay, press on, or turn back. The witness is remembered on the host
+# (var:restor_errand_witness) so restor.0914 can decide whether they talk.
+restor.0913 = {
+	type = character_event
+	title = restor.0913.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_witness }
+				desc = restor.0913.desc_named
+			}
+			triggered_desc = {
+				trigger = { exists = scope:restor_usurper }
+				desc = restor.0913.desc_usurper
+			}
+			desc = restor.0913.desc_unnamed
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_character_flag = restor_errand_careful }
+				desc = restor.0913.desc_careful
+			}
+			desc = restor.0913.desc_hasty
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_witness }
+		character = scope:restor_witness
+		animation = disbelief
+	}
+	trigger = { restor_active_trigger = yes }
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_save_county_effect = yes
+		if = {
+			limit = {
+				exists = scope:restor_errand_county
+				exists = scope:restor_errand_county.holder
+				scope:restor_errand_county.holder = {
+					NOT = { this = root }
+					NOT = { has_trait = restor_member }
+				}
+			}
+			scope:restor_errand_county.holder = {
+				random_courtier = {
+					limit = {
+						is_adult = yes
+						NOT = { has_trait = restor_member }
+						NOT = { this = root }
+					}
+					save_scope_as = restor_witness
+				}
+			}
+		}
+		if = {
+			limit = { exists = scope:restor_witness }
+			set_variable = {
+				name = restor_errand_witness
+				value = scope:restor_witness
+				months = 6
+			}
+		}
+	}
+
+	# Deal with it quietly (careful only).
+	option = {
+		name = restor.0913.a
+		trigger = { has_character_flag = restor_errand_careful }
+		add_character_flag = {
+			flag = restor_errand_clean
+			months = 6
+		}
+		custom_tooltip = restor.0913.clean.tt
+		ai_chance = {
+			base = 80
+		}
+	}
+
+	# Pay them.
+	option = {
+		name = {
+			trigger = { exists = scope:restor_witness }
+			text = restor.0913.b
+		}
+		name = {
+			trigger = { NOT = { exists = scope:restor_witness } }
+			text = restor.0913.b_unnamed
+		}
+		trigger = { gold >= 30 }
+		if = {
+			limit = { exists = scope:restor_witness }
+			pay_short_term_gold = {
+				target = scope:restor_witness
+				gold = 30
+			}
+		}
+		else = {
+			remove_short_term_gold = 30
+		}
+		add_character_flag = {
+			flag = restor_errand_clean
+			months = 6
+		}
+		custom_tooltip = restor.0913.clean.tt
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = generous }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Press on (hasty only).
+	option = {
+		name = restor.0913.c
+		trigger = { NOT = { has_character_flag = restor_errand_careful } }
+		custom_tooltip = restor.0913.c.tt
+		stress_impact = {
+			paranoid = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = brave }
+		}
+	}
+
+	# Turn back.
+	option = {
+		name = restor.0913.d
+		add_character_flag = {
+			flag = restor_errand_abandoned
+			months = 6
+		}
+		custom_tooltip = restor.0913.d.tt
+		ai_chance = {
+			base = 5
+			modifier = { add = 40 has_trait = craven }
+		}
+	}
+}
+
+# ---- restor.0914 -- Home ------------------------------------------------------------------------
+#
+# The only event of the Errand that pays. Exposure:
+#
+#   the purpose       Stir 4, Soldiers 3, Coin 2   (stirring a county is the loudest thing)
+#   haste             +2
+#   the witness       left unhandled: +3, and even odds that they talk (+3 more, and they learn
+#                     the secret if the member has one)
+#   turned back       1 in all, and nothing paid
+#
+# Haste buys a bigger result: a second county stirred, more coin, a second soldier.
+restor.0914 = {
+	type = character_event
+	title = restor.0914.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_abandoned }
+				desc = restor.0914.desc_abandoned
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = restor_errand_purpose option = restor_errand_soldiers }
+					}
+				}
+				desc = restor.0914.desc_soldiers
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = restor_errand_purpose option = restor_errand_coin }
+					}
+				}
+				desc = restor.0914.desc_coin
+			}
+			desc = restor.0914.desc_stir
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_abandoned }
+				desc = restor.0914.desc_blank
+			}
+			triggered_desc = {
+				trigger = { exists = scope:restor_clean }
+				desc = restor.0914.desc_clean
+			}
+			desc = restor.0914.desc_messy
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_witness
+			NOT = { exists = scope:restor_clean }
+			NOT = { exists = scope:restor_abandoned }
+		}
+		character = scope:restor_witness
+		animation = scheme
+	}
+	trigger = { restor_active_trigger = yes }
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_save_county_effect = yes
+
+		# Snapshot, then clear. The options read the saved values, never the flags.
+		if = {
+			limit = { has_character_flag = restor_errand_abandoned }
+			save_scope_value_as = { name = restor_abandoned value = yes }
+		}
+		if = {
+			limit = { has_character_flag = restor_errand_clean }
+			save_scope_value_as = { name = restor_clean value = yes }
+		}
+		if = {
+			limit = { has_character_flag = restor_errand_hasty }
+			save_scope_value_as = { name = restor_hasty value = yes }
+		}
+		if = {
+			limit = {
+				exists = var:restor_errand_witness
+				var:restor_errand_witness = { is_alive = yes }
+			}
+			var:restor_errand_witness = { save_scope_as = restor_witness }
+		}
+		remove_character_flag = restor_errand_careful
+		remove_character_flag = restor_errand_hasty
+		remove_character_flag = restor_errand_clean
+		remove_character_flag = restor_errand_abandoned
+		remove_variable = restor_errand_witness
+	}
+
+	# ---- Turned back ----
+	option = {
+		name = restor.0914.a
+		trigger = { exists = scope:restor_abandoned }
+		custom_tooltip = restor.0914.a.tt
+		restor_exposure_gain_effect = { VALUE = 1 }
+	}
+
+	# ---- Stirred the county ----
+	option = {
+		name = restor.0914.b
+		trigger = {
+			NOT = { exists = scope:restor_abandoned }
+			NOR = {
+				scope:activity ?= {
+					has_activity_option = { category = restor_errand_purpose option = restor_errand_soldiers }
+				}
+				scope:activity ?= {
+					has_activity_option = { category = restor_errand_purpose option = restor_errand_coin }
+				}
+			}
+		}
+		if = {
+			limit = { exists = scope:restor_errand_county }
+			scope:restor_errand_county = {
+				add_county_modifier = {
+					modifier = restor_county_stirred
+					years = 10
+				}
+			}
+			if = {
+				limit = { exists = scope:restor_hasty }
+				custom_tooltip = restor.0914.b.hasty_tt
+				hidden_effect = {
+					scope:restor_errand_county = {
+						random_neighboring_county = {
+							limit = {
+								restor_crown_county_trigger = yes
+								NOT = { has_county_modifier = restor_county_stirred }
+							}
+							add_county_modifier = {
+								modifier = restor_county_stirred
+								years = 10
+							}
+						}
+					}
+				}
+			}
+		}
+		custom_tooltip = restor.0914.support_tt
+		hidden_effect = { restor_support_refresh_effect = yes }
+		restor_favour_gain_effect = { VALUE = 20 }
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 8
+		}
+		restor_exposure_gain_effect = { VALUE = 4 }
+		restor_errand_consequences_effect = yes
+	}
+
+	# ---- Raised coin ----
+	option = {
+		name = restor.0914.c
+		trigger = {
+			NOT = { exists = scope:restor_abandoned }
+			scope:activity ?= {
+				has_activity_option = { category = restor_errand_purpose option = restor_errand_coin }
+			}
+		}
+		if = {
+			limit = { exists = scope:restor_pretender }
+			if = {
+				limit = { exists = scope:restor_hasty }
+				scope:restor_pretender = { add_gold = 100 }
+				change_global_variable = { name = restor_war_chest add = 100 }
+			}
+			else = {
+				scope:restor_pretender = { add_gold = 60 }
+				change_global_variable = { name = restor_war_chest add = 60 }
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 25 }
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 8
+		}
+		restor_exposure_gain_effect = { VALUE = 2 }
+		restor_errand_consequences_effect = yes
+	}
+
+	# ---- Found soldiers ----
+	option = {
+		name = restor.0914.d
+		trigger = {
+			NOT = { exists = scope:restor_abandoned }
+			scope:activity ?= {
+				has_activity_option = { category = restor_errand_purpose option = restor_errand_soldiers }
+			}
+		}
+		if = {
+			limit = { exists = scope:restor_errand_county }
+			custom_tooltip = restor.0914.d.tt
+			if = {
+				limit = { exists = scope:restor_hasty }
+				custom_tooltip = restor.0914.d.hasty_tt
+			}
+			hidden_effect = {
+				restor_errand_find_soldier_effect = yes
+				if = {
+					limit = { exists = scope:restor_hasty }
+					scope:restor_old_soldier = { save_scope_as = restor_second_soldier }
+					restor_errand_find_soldier_effect = yes
+				}
+				trigger_event = { id = restor.0915 days = 2 }
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 15 }
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 8
+		}
+		restor_exposure_gain_effect = { VALUE = 3 }
+		restor_errand_consequences_effect = yes
+	}
+}
+
+# ---- restor.0915 -- An Old Soldier ----------------------------------------------------------------
+#
+# scope:restor_old_soldier (and scope:restor_second_soldier after a hasty Errand) from restor.0914.
+# They are already at court as knights; the question is whether to tell them what they were
+# really recruited for.
+restor.0915 = {
+	type = character_event
+	title = restor.0915.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_second_soldier }
+				desc = restor.0915.desc_two
+			}
+			desc = restor.0915.desc
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_old_soldier }
+		character = scope:restor_old_soldier
+		animation = personality_bold
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_second_soldier }
+		character = scope:restor_second_soldier
+	}
+	trigger = {
+		restor_active_trigger = yes
+		exists = scope:restor_old_soldier
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	# Swear them in.
+	option = {
+		name = {
+			trigger = { NOT = { exists = scope:restor_second_soldier } }
+			text = restor.0915.a
+		}
+		name = {
+			trigger = { exists = scope:restor_second_soldier }
+			text = restor.0915.a_two
+		}
+		scope:restor_old_soldier = {
+			restor_swear_in_effect = { RANK = 0 }
+		}
+		if = {
+			limit = { exists = scope:restor_second_soldier }
+			scope:restor_second_soldier = {
+				restor_swear_in_effect = { RANK = 0 }
+			}
+		}
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 2
+		}
+		restor_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 80
+		}
+	}
+
+	# Not yet.
+	option = {
+		name = restor.0915.b
+		custom_tooltip = restor.0915.b.tt
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = paranoid }
+		}
+	}
+}

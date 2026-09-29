@@ -1,0 +1,89 @@
+﻿# Recruitment's yearly hooks. Redeclaring a vanilla on_action appends to it (see the core file).
+#
+#   restor_recruit_yearly         underground. An AI member of Trusted standing or above, while the
+#                                 roll has room, sometimes approaches someone (35% a year, then three
+#                                 years' wait). A player member is sometimes pointed at a likely lord
+#                                 (restor.0105), so the interactions are found.
+#   restor_recruit_public_yearly  restored. The order is public; the king's lords are asked to join
+#                                 it openly (restor.0125 to a player, a quiet join for the AI).
+
+random_yearly_everyone_pulse = {
+	on_actions = { restor_recruit_yearly }
+}
+
+restor_recruit_yearly = {
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		is_alive = yes
+		is_adult = yes
+		is_imprisoned = no
+	}
+	effect = {
+		if = {
+			limit = {
+				is_ai = yes
+				NOT = { has_character_flag = restor_recruited_lately }
+				restor_rank_at_least_trigger = { RANK = 25 }
+				restor_recruit_roster_open_trigger = yes
+			}
+			random = {
+				chance = 35
+				restor_recruit_ai_approach_effect = yes
+			}
+		}
+		else_if = {
+			limit = {
+				is_ai = no
+				NOT = { has_character_flag = restor_suggested_recently }
+			}
+			random = {
+				chance = 30
+				save_scope_as = restor_recruiter
+				restor_recruit_gather_candidates_effect = yes
+				random_in_list = {
+					list = restor_candidates
+					weight = {
+						base = 1
+						modifier = { add = restor_recruit_candidate_value }
+					}
+					save_scope_as = restor_recruit
+					scope:restor_recruiter = {
+						add_character_flag = {
+							flag = restor_suggested_recently
+							years = 3
+						}
+						trigger_event = { id = restor.0105 days = { 1 30 } }
+					}
+				}
+			}
+		}
+	}
+}
+
+random_yearly_playable_pulse = {
+	on_actions = { restor_recruit_public_yearly }
+}
+
+restor_recruit_public_yearly = {
+	trigger = {
+		restor_restored_trigger = yes
+		restor_recruit_public_candidate_trigger = yes
+		restor_recruit_roster_open_trigger = yes
+	}
+	effect = {
+		if = {
+			limit = { is_ai = no }
+			random = {
+				chance = 30
+				trigger_event = { id = restor.0125 days = { 1 30 } }
+			}
+		}
+		else = {
+			random = {
+				chance = 4
+				restor_recruit_join_order_effect = yes
+			}
+		}
+	}
+}

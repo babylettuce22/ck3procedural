@@ -178,5 +178,24 @@ morph_genes = {
 			boy = male
 			girl = male
 		}
+
+		# Ash to crimson: the hornkin. Hue 0.93 sits in the gap between the deepkin's violet (0.72) and
+		# the dwarf's forge-flush (0.98). Desaturated and a little darkened at the low end — weathered,
+		# ashen herders on a low-fantasy map — and saturating toward a deep crimson at the top of the
+		# ramp, so the demon-blooded reading appears only where the map asked for the strange.
+		gen_skin_hornkin = {
+			index = 8
+			male = {
+				skin_hsv_shift_curve = {
+					curve = {
+						{ 0.0  { 0.93 -0.28 -0.06 } }
+						{ 1.0  { 0.93  0.22 -0.10 } }
+					}
+				}
+			}
+			female = male
+			boy = male
+			girl = male
+		}
 	}
 }

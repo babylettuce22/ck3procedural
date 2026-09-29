@@ -1,0 +1,233 @@
+﻿l_english:
+
+ # ---- Shared tooltips and toasts ---------------------------------------------------------------
+
+ restor_their_exposure_gain_tt:0 "[restor_exposure_target.GetTitledFirstName]'s exposure rises by #P [restor_their_delta|0]#!"
+ restor_their_exposure_loss_tt:0 "[restor_exposure_target.GetTitledFirstName]'s exposure falls by #N [restor_their_delta|0]#!"
+ restor_name_others_tt:0 "The three most careless of the Sworn are named: each gains #N 10#! exposure"
+ restor_named_by_informant_toast:0 "[restor_informant.GetFirstNameNoTooltip] Has Named You"
+ restor_secret_revealed_tt:0 "If [restor_exposure_target.GetFirstNameNoTooltip] is already under suspicion, you learn [restor_exposure_target.GetHerHis] secret and can expose it or use it"
+
+ restor_question_caught_toast:0 "[restor_questioned.GetFirstNameNoTooltip] Is Caught Lying"
+ restor_question_cleared_toast:0 "[restor_questioned.GetFirstNameNoTooltip] Answers Every Question"
+ restor_questioned_badly_toast:0 "Your Answers Did Not Convince [restor_usurper.GetFirstNameNoTooltip]"
+ restor_questioned_well_toast:0 "[restor_usurper.GetFirstNameNoTooltip] Believed You"
+
+ restor_arrest_success_toast:0 "[restor_arrested.GetFirstNameNoTooltip] Is Arrested"
+ restor_arrest_failure_toast:0 "[restor_arrested.GetFirstNameNoTooltip] Escapes Arrest"
+
+ restor_root_out_nobody_toast:0 "The Search Finds No One"
+ restor_confessed_to_you_toast:0 "[restor_exposed_member.GetFirstNameNoTooltip] Confesses and Names Names"
+
+ # ---- The decision ------------------------------------------------------------------------------
+
+ restor_root_out_the_sworn_decision:0 "Root Out the Sworn"
+ restor_root_out_the_sworn_decision_desc:0 "Somewhere in your realm are people sworn to put House $restor_house_name$ back on the throne of $restor_crown_name$. Pay informers, open letters, search houses, and make them afraid. The ones who have been careless will be found first."
+ restor_root_out_the_sworn_decision_tooltip:0 "Search your realm for members of $restor_society_name$."
+ restor_root_out_the_sworn_decision_confirm:0 "Start the search"
+ restor_root_out_the_sworn_effect_tt:0 "Every member of $restor_society_name$ in your realm gains #P 10#! exposure\nThe most exposed of them is #high named to you#!, and you choose what to do about them\nIf nobody sworn is in your realm, the search finds nothing"
+
+ # ---- restor.0300 -------------------------------------------------------------------------------
+
+ restor.0300.t:0 "People Are Asking Questions"
+ restor.0300.desc:0 "Your steward says a stranger was in the kitchens last week, asking where you ride to when you go out without an escort. Two days later a merchant asked the same thing at the gate.\n\nSomebody has started to wonder about you, and [restor_usurper.GetTitledFirstName]'s people pay well for that kind of wondering. For now there is only talk. But talk is how secrets get found. If a spymaster goes looking, there is now something to find."
+ restor.0300.desc_nousurper:0 "Your steward says a stranger was in the kitchens last week, asking where you ride to when you go out without an escort. Two days later a merchant asked the same thing at the gate.\n\nSomebody has started to wonder about you. For now there is only talk. But talk is how secrets get found. If a spymaster goes looking, there is now something to find."
+ restor.0300.a:0 "I'll keep my head down."
+ restor.0300.a.tt:0 "Exposure falls a little every year on its own, faster if you are #high patient#!, #high deceitful#! or #high paranoid#!, or good at #high intrigue#!.\nAt #N 25#! you are highly suspect, and [restor_usurper.GetFirstNameNoTooltip] will be told your name."
+ restor.0300.a.tt_nousurper:0 "Exposure falls a little every year on its own, faster if you are #high patient#!, #high deceitful#! or #high paranoid#!, or good at #high intrigue#!.\nAt #N 25#! you are highly suspect, and whoever rules the old kingdom's land will be told your name."
+ restor.0300.b:0"Burn every letter the Keeper ever sent me."
+
+ # ---- restor.0302 -------------------------------------------------------------------------------
+
+ restor.0302.t:0 "A Suspected Traitor"
+ restor.0302.desc:0 "It is no longer just talk in the kitchens. People at your own table are careful what they say in front of you, and a friend has quietly warned you that your name has been written down.\n\nIt will reach [restor_usurper.GetTitledFirstName] within days. What [restor_usurper.GetSheHe] does about it is up to [restor_usurper.GetHerHim]: watch you, send for you, or wait for proof."
+ restor.0302.desc_nousurper:0 "It is no longer just talk in the kitchens. People at your own table are careful what they say in front of you, and a friend has quietly warned you that your name has been written down.\n\nNobody holds the crown of $restor_crown_name$ to act on it yet. Whoever does next will have your name waiting for them."
+ restor.0302.a:0 "No more letters. No more meetings."
+ restor.0302.a.tt:0 "Nothing changes now, but nothing new is added either. Exposure falls a little each year on its own."
+ restor.0302.b:0 "Pay the ones who talk the most to stop. (50 gold)"
+ restor.0302.c:0 "Tell the Keeper I'm out."
+ restor.0302.c.tt:0 "You #N leave $restor_society_name$#!. Your exposure, your favour and any secret about the oath go with it."
+
+ # ---- restor.0301 -------------------------------------------------------------------------------
+
+ restor.0301.t:0 "Everyone Knows"
+ restor.0301.desc_inside:0 "It is out. By the end of the week half the realm knows that you are sworn to $restor_society_name$ and plotting to put House $restor_house_name$ back on the throne of $restor_crown_name$.\n\nYou live under [restor_usurper.GetTitledFirstName]'s rule, and to [restor_usurper.GetHerHim] this is treason. [restor_usurper.GetSheHe|U] now has every right to throw you in prison, and [restor_usurper.GetSheHe] knows it.\n\nYou have days, not weeks, to decide what to do."
+ restor.0301.desc_outside:0 "It is out. By the end of the week everyone who matters knows that you are sworn to $restor_society_name$ and plotting to put House $restor_house_name$ back on the throne of $restor_crown_name$.\n\nYou do not live under [restor_usurper.GetTitledFirstName]'s rule, so [restor_usurper.GetSheHe] cannot lawfully arrest you. But [restor_usurper.GetSheHe] knows your name now, and so does everyone who would like to please [restor_usurper.GetHerHim]."
+ restor.0301.desc_nousurper:0 "It is out. By the end of the week everyone who matters knows that you are sworn to $restor_society_name$ and plotting to put House $restor_house_name$ back on the throne of $restor_crown_name$.\n\nNobody holds the old crown to punish you for it. But people will remember, and so will whoever takes it next."
+ restor.0301.a:0 "It's a lie, and I'll say so to anyone who asks."
+ restor.0301.a.success:0 "Half the Court Believes You"
+ restor.0301.a.failure:0 "Nobody Believes You"
+ restor.0301.b:0 "I'm leaving for [restor_refuge.GetTitledFirstName]'s court tonight."
+ restor.0301.b.tt:0 "You join the court of [restor_refuge.GetTitledFirstName], who is sworn too and lives outside the usurper's reach. Being sworn is no crime there."
+ restor.0301.c:0 "I'll go to [restor_usurper.GetTitledFirstName] and tell [restor_usurper.GetHerHim] everything."
+ restor.0301.c.tt:0 "You #N leave $restor_society_name$#! and are pardoned. The Keeper will not forget it."
+ restor.0301.d:0 "Yes, I am sworn. I'm not ashamed of it."
+ restor.0301.d.tt_inside:0 "Being sworn is a #N crime#! in [restor_usurper.GetTitledFirstName]'s realm: [restor_usurper.GetSheHe] may imprison you for it."
+
+ # ---- restor.0303 -------------------------------------------------------------------------------
+
+ restor.0303.t:0 "A Name"
+ restor.0303.desc_inside:0 "Your spymaster has been collecting rumours about $restor_society_name$ for a long time. This time the rumours have a name in them: [restor_suspect.GetTitledFirstName].\n\n[restor_suspect.GetSheHe|U] rides out without an escort, writes too many letters, and has twice been heard saying House $restor_house_name$ was robbed. There is no proof. [restor_suspect.GetSheHe|U] lives in your realm, so you could send for [restor_suspect.GetHerHim] tomorrow and ask."
+ restor.0303.desc_outside:0 "Your spymaster has been collecting rumours about $restor_society_name$ for a long time. This time the rumours have a name in them: [restor_suspect.GetTitledFirstName].\n\n[restor_suspect.GetSheHe|U] writes too many letters and has twice been heard saying House $restor_house_name$ was robbed. There is no proof, and [restor_suspect.GetSheHe] lives outside your realm, beyond your reach. But you can have [restor_suspect.GetHerHim] watched."
+ restor.0303.a:0 "Have [restor_suspect.GetHerHim] watched."
+ restor.0303.b:0 "Send for [restor_suspect.GetHerHim]. I'll ask the questions myself."
+ restor.0303.c:0 "It's gossip. Ignore it."
+
+ # ---- restor.0305 -------------------------------------------------------------------------------
+
+ restor.0305.t:0 "Proof"
+ restor.0305.desc:0 "Your spymaster lays a bundle of letters on your table. They are in [restor_found_member.GetTitledFirstName]'s hand, and they leave no doubt: [restor_found_member.GetSheHe] is sworn to $restor_society_name$ and works to put House $restor_house_name$ on the throne of $restor_crown_name$.\n\nNobody else knows yet. You can tell the world, keep this to yourself and use it, or offer [restor_found_member.GetHerHim] a way out in exchange for the names of the others."
+ restor.0305.a:0 "Show everyone what [restor_found_member.GetSheHe] is."
+ restor.0305.b:0 "Keep the letters. [restor_found_member.GetSheHe|U] will do as I say from now on."
+ restor.0305.b.nohook_tt:0 "You already hold something over [restor_found_member.GetFirstNameNoTooltip]. The letters go in the strongbox with it."
+ restor.0305.c:0 "Offer [restor_found_member.GetHerHim] a pardon, if [restor_found_member.GetSheHe] gives me the others."
+ restor.0305.c.tt:0 "[restor_found_member.GetFirstNameNoTooltip] decides. If [restor_found_member.GetSheHe] accepts, [restor_found_member.GetSheHe] leaves $restor_society_name$ and names the three most careless of the Sworn. If not, you have a reason to imprison [restor_found_member.GetHerHim]."
+ restor.0305.c.tt_named:0 "[restor_named.GetFirstNameNoTooltip] decides. If [restor_named.GetSheHe] accepts, [restor_named.GetSheHe] leaves $restor_society_name$ and names the three most careless of the Sworn. If not, you have a reason to imprison [restor_named.GetHerHim]."
+ restor.0305.d:0 "Say nothing. Watch [restor_found_member.GetHerHim] closer."
+
+ # ---- restor.0306 -------------------------------------------------------------------------------
+
+ restor.0306.t:0 "A Traitor Named"
+ restor.0306.desc_crowned:0 "The whole realm knows it now: [restor_exposed_member.GetTitledFirstName] is sworn to $restor_society_name$, who want House $restor_house_name$ back on the throne of $restor_crown_name$. The crown they mean is the one on your head.\n\n"
+ restor.0306.desc_uncrowned:0 "The whole realm knows it now: [restor_exposed_member.GetTitledFirstName] is sworn to $restor_society_name$, who want House $restor_house_name$ back on the throne of $restor_crown_name$. The old kingdom's land they mean to take back is land that answers to you, $restor_seat_name$ first of all.\n\n"
+ restor.0306.desc_prisoner:0 "[restor_exposed_member.GetSheHe|U] is already in your prison. Everyone is watching to see what you do with [restor_exposed_member.GetHerHim]."
+ restor.0306.desc_inside:0 "[restor_exposed_member.GetSheHe|U] lives in your realm, and plotting against you is treason. You can have [restor_exposed_member.GetHerHim] arrested. Everyone is watching to see what you do."
+ restor.0306.desc_outside:0 "[restor_exposed_member.GetSheHe|U] lives outside your realm, where you cannot arrest [restor_exposed_member.GetHerHim]. But you can still say what [restor_exposed_member.GetSheHe] is, and what happens to [restor_exposed_member.GetHerHim] if [restor_exposed_member.GetSheHe] ever comes within reach."
+ restor.0306.a:0 "Arrest [restor_exposed_member.GetHerHim]."
+ restor.0306.b:0 "Declare [restor_exposed_member.GetHerHim] a traitor and an outlaw."
+ restor.0306.b.tt:0 "You have lasting reason to #high imprison, banish, execute#! or #high revoke titles#! from [restor_exposed_member.GetFirstNameNoTooltip]."
+ restor.0306.c:0 "I pardon [restor_exposed_member.GetHerHim]. Let everyone see I can be merciful."
+ restor.0306.c.forswears:0 "[restor_exposed_member.GetFirstNameNoTooltip] Forswears the Oath"
+ restor.0306.c.forswears_tt:0 "[restor_exposed_member.GetFirstNameNoTooltip] leaves $restor_society_name$"
+ restor.0306.c.keeps:0 "[restor_exposed_member.GetFirstNameNoTooltip] Stays Sworn"
+ restor.0306.d:0 "Make an example of [restor_exposed_member.GetHerHim]."
+ restor.0306.d.tt:0 "Your men search the houses of everyone who knew [restor_exposed_member.GetFirstNameNoTooltip]: every other member of $restor_society_name$ in your realm gains #P 5#! exposure."
+
+ # ---- restor.0307 -------------------------------------------------------------------------------
+
+ restor.0307.t:0 "A Pardon for Names"
+ restor.0307.desc:0 "[restor_turner.GetTitledFirstName]'s messenger found you alone, which was not an accident. The message is short. [restor_turner.GetSheHe|U] knows what you are and can prove it.\n\nIf you give [restor_turner.GetHerHim] the names of the others in $restor_society_name$, you will be pardoned and nobody need ever know. If you refuse, [restor_turner.GetSheHe] will treat you as the traitor [restor_turner.GetSheHe] already knows you are."
+ restor.0307.a:0 "I'll give [restor_turner.GetHerHim] the names."
+ restor.0307.a.tt:0 "You #N leave $restor_society_name$#!, and your secret goes with you. The Keeper will find out who talked."
+ restor.0307.a.toast:0 "[restor_pardoned.GetFirstNameNoTooltip] Takes Your Pardon and Names Names"
+ restor.0307.b:0 "Tell [restor_turner.GetHerHim] I have nothing to say."
+ restor.0307.b.toast:0 "[restor_pardoned.GetFirstNameNoTooltip] Refuses Your Pardon"
+
+ # ---- restor.0310 -------------------------------------------------------------------------------
+
+ restor.0310.t:0 "The Search Turns Up a Name"
+ restor.0310.desc:0 "Your people have spent weeks turning your realm over: letters opened on the road, servants paid, houses searched at night. Most of the Sworn were careful. One was not.\n\n[restor_named.GetTitledFirstName] is the name that keeps coming back. The others have been frightened, which is worth something. [restor_named.GetSheHe|U] is the one you can actually do something about."
+ restor.0310.a:0 "Bring [restor_named.GetHerHim] in. I'll question [restor_named.GetHerHim] myself."
+ restor.0310.b:0 "Tell the whole realm what [restor_named.GetSheHe] is."
+ restor.0310.c:0 "Offer [restor_named.GetHerHim] a pardon for the other names."
+ restor.0310.d:0 "Leave [restor_named.GetHerHim] be. Watch where [restor_named.GetSheHe] goes."
+
+ # ---- restor.0312 -------------------------------------------------------------------------------
+
+ restor.0312.t:0 "The Search"
+ restor.0312.desc:0 "[restor_hunter.GetTitledFirstName] has set [restor_hunter.GetHerHis] people loose on the realm to look for $restor_society_name$. Letters are being opened on the road. A friend's house was searched two nights ago, and your own servants are being asked questions by strangers.\n\nNobody has come for you yet. You can stop everything and go quiet until it passes, but the Sworn will have to manage without you for a while."
+ restor.0312.a:0 "Go quiet. No letters, no meetings, until this is over."
+ restor.0312.b:0 "Carry on. They're guessing."
+
+ # ---- restor.0320 -------------------------------------------------------------------------------
+
+ restor.0320.t:0 "The Informer"
+ restor.0320.desc:0 "A man has been waiting in the yard since dawn. He will not give his name, but he says he knows people who meet in secret and talk about House $restor_house_name$, and that he will sell you a name for 50 gold.\n\nHe might be telling the truth. He might also be a drunk who heard a rumour and wants paying for it."
+ restor.0320.a:0 "Pay him."
+ restor.0320.a.success:0 "The Informer Names [restor_mark.GetFirstNameNoTooltip]"
+ restor.0320.a.failure:0 "The Informer Lied"
+ restor.0320.b:0 "Don't pay him. Have him followed."
+ restor.0320.b.success:0 "He Leads You to [restor_mark.GetFirstNameNoTooltip]"
+ restor.0320.b.failure:0 "The Informer Slips Away"
+ restor.0320.c:0 "Throw him out."
+
+ # ---- restor.0321 -------------------------------------------------------------------------------
+
+ restor.0321.t:0 "The Old Songs"
+ restor.0321.desc:0 "At a wedding feast in $restor_seat_name$, the old seat of the kings of $restor_crown_name$, the musicians played the songs of House $restor_house_name$. Nobody stopped them. By the end of the night the whole hall was singing, and someone had paid for the wine.\n\nIt was a feast, not a rising. But the people of $restor_seat_name$ have not forgotten who used to rule them."
+ restor.0321.a:0 "Fine the hall that let them sing."
+ restor.0321.a.tt:0 "The old loyalties in $restor_seat_name$ are put down, for now."
+ restor.0321.b:0 "Let them sing. They're only songs."
+ restor.0321.b.tt:0 "Support for House $restor_house_name$ grows."
+ restor.0321.c:0 "Find out who paid for the wine."
+ restor.0321.c.success:0 "[restor_mark.GetFirstNameNoTooltip] Paid for the Wine"
+ restor.0321.c.failure:0 "Nobody Will Say Who Paid"
+
+ # ---- restor.0322 -------------------------------------------------------------------------------
+
+ restor.0322.t:0 "The Priest's Silence"
+ restor.0322.desc:0 "In [restor_priest_county.GetNameNoTier], the priest has stopped naming you in the prayers for the ruler. He does not preach against you. He simply leaves a pause where your name should be, and everyone in the church knows whose name they are meant to think of instead.\n\nThe bishop says the man is stubborn, not stupid. Someone must have told him it was safe."
+ restor.0322.a:0 "Replace him with someone who knows my name."
+ restor.0322.a.tt:0 "The old loyalties in [restor_priest_county.GetNameNoTier] are put down, for now."
+ restor.0322.b:0 "Have him flogged in front of his church."
+ restor.0322.c:0 "Ask him who told him it was safe."
+ restor.0322.c.success:0 "The Priest Names [restor_mark.GetFirstNameNoTooltip]"
+ restor.0322.c.failure:0 "The Priest Names No One"
+ restor.0322.d:0 "Leave it. Punishing a priest makes a martyr."
+
+ # ---- restor.0323 -------------------------------------------------------------------------------
+
+ restor.0323.t:0 "Intercepted Letters"
+ restor.0323.desc:0 "Your men stopped a courier on the road and found letters sewn into his saddle. They carry [restor_mark.GetTitledFirstName]'s seal. They are written in a simple cipher your spymaster thinks can be broken.\n\nIf the letters go on as if nothing happened, whoever reads them will not know they were copied. If they are kept, [restor_mark.GetFirstNameNoTooltip] will know within a week that the courier never arrived."
+ restor.0323.a:0 "Copy them, reseal them, and send them on."
+ restor.0323.a.success:0 "The Letters Are Read"
+ restor.0323.a.failure:0 "The Broken Seal Is Noticed"
+ restor.0323.b:0 "Keep them. Let [restor_mark.GetHerHim] wonder."
+ restor.0323.c:0 "Burn them unread."
+
+ # ---- restor.0324 -------------------------------------------------------------------------------
+
+ restor.0324.t:0 "A Toast at Your Table"
+ restor.0324.desc:0 "The wine had gone round several times when [restor_mark.GetTitledFirstName] stood up and raised [restor_mark.GetHerHis] cup "to the true king." A few people laughed. A few people drank. Most looked at you.\n\n"
+ restor.0324.desc_crowned:0 "[restor_mark.GetSheHe|U] sat down again as if [restor_mark.GetSheHe] had said nothing unusual. You wear the crown of $restor_crown_name$, so maybe [restor_mark.GetSheHe] meant you. Maybe not."
+ restor.0324.desc_uncrowned:0 "[restor_mark.GetSheHe|U] sat down again as if [restor_mark.GetSheHe] had said nothing unusual. Nobody at your table wears a crown. Everyone in the hall knew which king [restor_mark.GetSheHe] meant."
+ restor.0324.a:0 "Ask [restor_mark.GetHerHim], in front of everyone, which king [restor_mark.GetSheHe] means."
+ restor.0324.a.success:0 "[restor_mark.GetFirstNameNoTooltip] Stumbles Over the Answer"
+ restor.0324.a.failure:0 "[restor_mark.GetFirstNameNoTooltip] Laughs It Off"
+ restor.0324.b:0 "Drink, and remember [restor_mark.GetHerHis] face."
+ restor.0324.c:0 "Have [restor_mark.GetHerHim] thrown out of my hall."
+
+ # ---- restor.0330 -------------------------------------------------------------------------------
+
+ restor.0330.t:0 "A Servant Asks Questions"
+ restor.0330.desc:0 "One of your household servants has been asking the others where you go at night and who the riders are who come to the back gate. Your steward caught him going through the ashes in your fireplace.\n\nHe may just be curious. He may also be selling what he hears."
+ restor.0330.a:0 "Dismiss him, with a month's wages to go quietly. (25 gold)"
+ restor.0330.b:0 "Pay him to forget what he's seen. (15 gold)"
+ restor.0330.b.success:0 "The Servant Keeps Quiet"
+ restor.0330.b.failure:0 "The Servant Took the Coin and Talked Anyway"
+ restor.0330.c:0 "He's harmless. Let him ask."
+
+ # ---- restor.0331 -------------------------------------------------------------------------------
+
+ restor.0331.t:0 "The Meeting Place Is Watched"
+ restor.0331.desc:0 "The Sworn are meeting at the usual place next week. This morning a friend sent word that two men have been drinking in the inn across the road for three days, and never seem to get drunk.\n\nFinding a new place means messages to everyone, and the Keeper will not thank you for the trouble. Not going means letting the others down."
+ restor.0331.a:0 "Find a new place, and tell everyone."
+ restor.0331.b:0 "Go anyway. I'll use the back door."
+ restor.0331.b.success:0 "The Meeting Goes Unnoticed"
+ restor.0331.b.failure:0 "You Were Seen Going In"
+ restor.0331.c:0 "Stay home, and send my apologies to the Keeper."
+
+ # ---- restor.0332 -------------------------------------------------------------------------------
+
+ restor.0332.t:0 "Your [restor_spouse.GetWifeHusband] Finds a Letter"
+ restor.0332.desc:0 "[restor_spouse.GetFirstNameNoTooltip] was waiting for you when you came to bed, holding a letter you should have burned. It is from the Keeper of $restor_society_name$. It is not hard to understand.\n\n"How long?" [restor_spouse.GetSheHe] asks. "And when were you going to tell me?""
+ restor.0332.a:0 "Tell [restor_spouse.GetHerHim] everything, and ask [restor_spouse.GetHerHim] to join us."
+ restor.0332.a.success:0 "[restor_spouse.GetFirstNameNoTooltip] Joins the Sworn"
+ restor.0332.a.success_tt:0 "[restor_spouse.GetFirstNameNoTooltip] swears the oath of $restor_society_name$"
+ restor.0332.a.failure:0 "[restor_spouse.GetFirstNameNoTooltip] Is Horrified"
+ restor.0332.b:0 "It's an old letter, from someone I stopped writing to."
+ restor.0332.b.success:0 "[restor_spouse.GetFirstNameNoTooltip] Believes You"
+ restor.0332.b.failure:0 "[restor_spouse.GetFirstNameNoTooltip] Knows You Are Lying"
+ restor.0332.c:0 "Burn it, and every other letter in the house."
+
+ # ---- restor.0333 -------------------------------------------------------------------------------
+
+ restor.0333.t:0 "The Moneylender"
+ restor.0333.desc:0 "The moneylender who carried gold for the Sworn has come to see you in person. He is polite about it. He has worked out whose gold it was and where it was going, and he thinks a man who knows that much ought to be paid for forgetting it. He suggests 60 gold.\n\nHe has no letters and no proof. But he knows people who would listen to him."
+ restor.0333.a:0 "Pay him. (60 gold)"
+ restor.0333.b:0 "Remind him what happens to men who talk too much."
+ restor.0333.b.success:0 "The Moneylender Takes the Hint"
+ restor.0333.b.failure:0 "The Moneylender Goes to Someone Else"
+ restor.0333.c:0 "He has no proof. Send him away."
+ restor.0333.c.success:0 "The Moneylender Was Bluffing"
+ restor.0333.c.failure:0 "The Moneylender Talks"

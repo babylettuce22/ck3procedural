@@ -25,7 +25,8 @@ public static class FlatmapWriter
     public static Flatmap WriteAll(
         string modDir, MapConfig cfg, ProvinceMap provinces,
         int[] order, int landCount, float[] elevation,
-        RouteNetwork? routes = null, WildernessMap? wilderness = null)
+        RouteNetwork? routes = null, WildernessMap? wilderness = null,
+        IReadOnlyList<Landmark>? landmarks = null, string? gameDir = null)
     {
         int w = cfg.ProvinceWidth;
         int h = cfg.ProvinceHeight;
@@ -147,7 +148,7 @@ public static class FlatmapWriter
         {
             string inked = FlatmapInk.Draw(pixels, w, h, landMask, provinces, order, routes, wilderness,
                 cfg.Seed, cfg.FlatmapRoads, cfg.FlatmapFlourishes, cfg.FlatmapFeather,
-                elevation, cfg.FlatmapHachures);
+                elevation, cfg.FlatmapHachures, landmarks, gameDir);
             Console.WriteLine($"  flatmap: {inked}");
         }
 

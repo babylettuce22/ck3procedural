@@ -1,0 +1,72 @@
+﻿# The Restorationists: everyday life among the Sworn. restor.0200-0299, events/restor_life_events.txt.
+#
+# restor_life_pulse is listed in restor_member_yearly (00_restor_on_actions.txt): once a year, at a
+# random point, for every living member. Most years nothing happens. A player should see one of these
+# every two or three years; an AI member only ever sees the two with a mechanical point (0209 stirs
+# a county, 0213 turns gold into favour), and less often.
+#
+# Each event sets a restor_life_seen_NNNN flag for twelve years, so a long life does not repeat.
+# Invalid events drop out of the draw; chance_of_no_event is taken before it.
+
+restor_life_pulse = {
+	trigger = {
+		restor_active_trigger = yes
+		is_adult = yes
+		is_imprisoned = no
+	}
+	random_events = {
+		chance_of_no_event = {
+			value = 60
+			if = {
+				limit = { is_ai = yes }
+				add = 25
+			}
+		}
+
+		# Underground
+		100 = restor.0201	# the old king's coin
+		100 = restor.0202	# the old soldier at the gate
+		100 = restor.0203	# a letter from the heir
+		100 = restor.0204	# the day the crown fell
+		100 = restor.0205	# the song in the hall
+		100 = restor.0206	# your heir asks where you go at night
+		100 = restor.0207	# a quarrel among the Sworn
+		100 = restor.0208	# the eager courtier
+		100 = restor.0209	# the tax collector (AI too)
+		100 = restor.0210	# the tombs at the old seat
+		300 = restor.0211	# a burial in secret (only for two years after a member dies)
+		100 = restor.0212	# a night of old stories
+		100 = restor.0213	# a relic for sale (AI too)
+		100 = restor.0214	# a night of doubt
+
+		# Restored
+		100 = restor.0250	# the king: a quarrel over rewards
+		100 = restor.0251	# the deposed house's agent
+		100 = restor.0252	# honoured in the hall
+		100 = restor.0253	# the latecomer who wants in
+	}
+}
+
+# ---- A member's death, remembered for the burial event (restor.0211) --------------------------
+#
+# Appends to vanilla's on_death; the core's own restor_on_death is a separate block and runs too.
+# The pretender's death has its own announcement (restor.0810), so it is not a quiet burial.
+
+on_death = {
+	on_actions = { restor_life_on_death }
+}
+
+restor_life_on_death = {
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		NOT = { restor_is_pretender_trigger = yes }
+	}
+	effect = {
+		set_global_variable = {
+			name = restor_life_fallen
+			value = root
+			days = 730
+		}
+	}
+}

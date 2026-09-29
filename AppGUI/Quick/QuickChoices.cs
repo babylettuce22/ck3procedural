@@ -159,6 +159,9 @@ public sealed class QuickChoices
         cfg.HillProvinceShare = hills;
         cfg.ImpassableShareOfLand = impassable;
 
+        // A set-piece map type records what it drew, so the generator can find it again to name it.
+        cfg.SetPiece = QuickCatalogue.FeatureOf(MapType) == QuickFeature.None ? "" : $"{MapType}@{Seed}";
+
         cfg.ContentSource = People == QuickPeople.RealCk3
             ? MapConfig.ContentSourceMode.VanillaWorld
             : MapConfig.ContentSourceMode.Procedural;
@@ -223,8 +226,11 @@ public sealed class QuickChoices
     }
 }
 
-/// <summary>One of the shipped map types: a Forge preset, with the words the page shows for it.</summary>
-public sealed record QuickMapType(string Key, string Title, string Blurb)
+/// <summary>
+/// One of the shipped map types: a Forge preset, with the words the page shows for it, and the
+/// set-piece drawn into it for each seed (see <see cref="QuickFeatures"/>).
+/// </summary>
+public sealed record QuickMapType(string Key, string Title, string Blurb, QuickFeature Feature = QuickFeature.None)
 {
     public string PresetPath => Path.Combine(QuickCatalogue.PresetDirectory, Key + ".json");
 
@@ -260,7 +266,17 @@ public static class QuickCatalogue
         new("inland-sea", "Inland Sea", "A ring of lands around one great central sea."),
         new("one-great-island", "One Great Island", "A single island realm with open ocean on every side."),
         new("archipelago", "Archipelago", "Islands and island chains without end. The sea is the road."),
+        new("crater", "The Crater", "A vast impact basin ringed by mountains, a world within the world.", QuickFeature.Crater),
+        new("crater-sea", "The Drowned Crater", "A great crater flooded into a round sea, its central peak an island.", QuickFeature.FloodedCrater),
+        new("scar", "The Scar", "A chain of craters across the land, where something broke apart as it fell.", QuickFeature.Scar),
+        new("rift", "The Rift", "A continent pulling apart: a sunken valley between escarpments, lakes along its floor, often the sea at one end.", QuickFeature.Rift),
+        new("spine", "The Spine", "One great range runs the length of the land, the sea close under it on one side.", QuickFeature.Spine),
+        new("wall", "The Wall", "A sheer mountain wall from coast to coast splits the land in two.", QuickFeature.Wall),
     ];
+
+    /// <summary>The set-piece a shipped map type is built around; None for any other key.</summary>
+    public static QuickFeature FeatureOf(string key)
+        => Curated.FirstOrDefault(t => t.Key.Equals(key, StringComparison.OrdinalIgnoreCase))?.Feature ?? QuickFeature.None;
 
     public static IReadOnlyList<QuickMapType> All()
     {

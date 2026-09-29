@@ -1,192 +1,157 @@
-﻿Societies -- the static prototype for the society system.
+Societies -- the Restorationists.
 
-WHAT THIS SET IS FOR
+One secret society per world, sworn to put a fallen crown back on the head of the house that lost
+it. The first fully built society, and the pattern later ones (a hidden faith, an inversion cult)
+are meant to follow: a LOYALTY that never changes, and AIMS that change with the state of the world.
+
+The hand-written prototype this grew out of is in ../SocietyPrototype and ships only with
+--society-prototype. It is the reference for the CK3 mechanisms it proved; nothing here depends on it.
+
+
+WHAT IS GENERATED AND WHAT IS NOT
+---------------------------------
+Generated per world (MapGen/Societies/Restoration.cs + Emit/Societies/RestorationWriter.cs):
+
+  the crown         a de jure kingdom that fell, of one of two kinds:
+                      BROKEN   nobody holds it at the start; the formation shows a realm that once
+                               held most of it. It must be re-made (restor_restore_the_crown_decision).
+                      USURPED  another house holds it at the start; the formation shows a different
+                               realm held it first. It must be taken (Raise the Standard claims it,
+                               vanilla's claim war does the rest).
+                    Broken is preferred, but on most worlds the crowns that really fell were taken
+                    whole, and the kingdoms nobody holds are the ones nobody ever united. A kingdom
+                    with no recorded fall is used only when no recorded one exists.
+  the fall          its year and manner (absorbed / collapsed / fragmented), from the formation's
+                    frames and event log. $restor_fall_sentence$ is the whole opening sentence,
+                    worded for the crown's kind -- start introductions with it.
+  the house         the fallen realm's rump, if it survived, else the house in the old seat, else
+                    a house written for the purpose -- two kings and a line of exiles down to a
+                    living pretender.
+  the pretender     the house's living claimant, landed or in exile. An exile starts sheltered at
+                    the court of a sworn ruler.
+  the sworn         4-8 rulers of the crown's land and people, one of them the Keeper.
+  the nouns         society name, crown, old seat, house, fall year -- all $key$ substitutions into
+                    the world's own localisation (gen_restor_l_english.yml).
+  the kings         history/titles gives the crown its last kings, so the title's former-holders
+                    panel shows a line that ends on the day the crown fell.
+
+Everything else is here, and reads the generated half ONLY through global variables set at game
+start. No static file names a generated key. If the world has no fallen crown, global_var:restor_crown
+is never set and every file in this set stays inert -- gate new content on restor_active_trigger.
+
+
+THE LOYALTY, AND THE PHASES
+---------------------------
+Loyalty: House global_var:restor_house, on the throne of global_var:restor_crown. Fixed, except that
+if the house dies out the society may take up another (restor.0811).
+
+  global_var:restor_phase = 1   UNDERGROUND. The crown is unheld or held by someone else.
+                                Aim: see the pretender crowned. Secret, hunted, exposure matters.
+  global_var:restor_phase = 2   RESTORED. A member of the house holds the crown.
+                                The society goes public as global "restor_society_name_public" --
+                                secrets dissolve, exposure stops. Aim: make the crown whole (every
+                                de jure county under the king) and keep it.
+
+  Triumph   on_title_gain: the crown gained by a member of the house (or by the pretender)
+            -> restor_triumph_effect -> phase 2, restor.0701 (king), restor.0702 (the sworn).
+  Fall      on_title_lost / on_title_destroyed while phase 2, to anyone not of the house
+            -> restor_fall_effect -> phase 1, restor.0801. The new holder is the usurper.
+
+Winning does not end the society; it changes what it is. Losing again sends it back underground.
+
+
+THE PEOPLE
+----------
+  Pretender   global_var:restor_pretender. The claimant. On death: restor_pretender_succession_effect
+              picks their primary heir if of the house, else the eldest living adult of the house,
+              else the line has ended (restor.0811 to the Keeper).
+  Keeper      global_var:restor_keeper. Runs the society; hands out charges. On death the highest-
+              ranked member takes it (restor.0820).
+  Usurper     global_var:restor_usurper, recomputed yearly: the crown's holder if it has one and is
+              not of the house, else the top liege of whoever holds the old seat. May be unset.
+  The sworn   trait restor_member, rank track restor_rank (XP 0-100):
+                0 Sworn    25 Trusted    50 Captain    75 Elder
+              Global list restor_roster holds every living member (maintained by the swear-in and
+              leave effects and by on_death -- never add_to_global_variable_list by hand).
+
+
+THE METERS
+----------
+  Favour      var:restor_favour on each member. Personal currency: earned by charges, the rite and
+              recruiting; spent on powers. restor_favour_gain_effect / restor_favour_spend_effect
+              ({ VALUE = n }) -- ALWAYS through these, they tooltip and toast.
+  Exposure    var:restor_exposure on each member. 15 = under suspicion (+secret), 25 = highly
+              suspect (the usurper is told). Decays yearly, faster for the patient and the deceitful.
+              restor_exposure_gain_effect / restor_exposure_loss_effect ({ VALUE = n }). Phase 2: no-op.
+  Support     global_var:restor_support, 0-100, recomputed yearly by restor_support_value:
+                40 x share of the crown's counties inside the pretender's realm
+                30 x share inside a sworn realm (held by a member or by anyone under one)
+                15 x share carrying the restor_county_stirred modifier
+                +1 per member, up to 15
+              Milestones (global_var:restor_support_level 0-3) at 25 / 40 / 75 fire restor.0601-0603
+              to every member; the starting value sets the level silently. 40
+              (restor_rising_support_value) unlocks Raise the Standard -- once per underground phase --
+              and is what the crown decision needs, with 25% of the land in the pretender's own realm
+              (restor_crowning_share_value). A pretender who is a sworn lord's vassal is released by
+              the crowning.
+
+
+DIRECTION: CHARGES
+------------------
+CK2's goal-driven societies gave every member a concrete mission from the leader. Here that is a
+CHARGE: every couple of years the Keeper gives each member without one a task aimed at the aim,
+with a named target on the map and three years to do it (restor.0501 offers, restor.0510-0514 pay).
+
+  win_over     a named lord on the crown's land: done when they are sworn, or their opinion of
+               the pretender reaches 30.
+  war_chest    give 100 gold to the cause (decision restor_give_to_the_cause_decision).
+  stir         a named county of the crown: done when it carries restor_county_stirred, which the
+               errand activity leaves where it goes.
+  shelter      a landless pretender: done when they are at your court.
+  recruit      swear anyone in.
+
+Completion pays favour, rank XP and support, and toasts. Expiry (the timed variable runs out)
+costs a little favour and the Keeper's opinion. The AI completes charges abstractly (35% a year).
+
+
+FILES AND NAMESPACES
 --------------------
-One society, hand-written, with nothing generated about it. It exists to answer a single
-question ahead of the generator: what does a "rite" actually look like in CK3, and can
-membership of a society gate one end to end -- who sees it, who may perform it, and who may
-be invited to it?
+Every key is restor_*. Event namespace restor, blocks by area -- keep to them:
 
-Everything here is deliberately named `society_*` rather than `gen_society_*`. Nothing in
-this folder is written by an emitter and nothing here should ever be: when the generator
-learns to write societies it will write its own keys (`gen_cult_member`, `gen_cult_rite_*`
-and so on) into the mod directly, and this set becomes the reference implementation those
-files are modelled on rather than a dependency of them.
+  restor.0001-0099  core: intros, debug                  events/restor_core_events.txt
+  restor.0100-0199  recruitment                          events/restor_recruitment_events.txt
+  restor.0200-0299  belonging (yearly pulse)             events/restor_life_events.txt
+  restor.0300-0399  exposure, the usurper's side         events/restor_exposure_events.txt
+  restor.0400-0499  powers and their outcomes            events/restor_power_events.txt
+  restor.0500-0599  charges                              events/restor_charge_events.txt
+  restor.0600-0699  support milestones, the rising       events/restor_rising_events.txt
+  restor.0700-0799  triumph, the restored realm          events/restor_crown_events.txt
+  restor.0800-0899  fall and succession                  events/restor_crown_events.txt
+  restor.0900-0999  the gathering (rite) and the errand  events/restor_gathering_events.txt
 
-WHAT IS IN IT
--------------
-  common/traits/00_society_traits.txt                              membership, and the ladder
-  common/activities/activity_types/00_society_rite_activity.txt    the rite
-  common/activities/activity_types/00_society_errand_activity.txt  the errand (CK2 missions)
-  events/society_errand_events.txt                                 the errand's four-beat chain
-  common/activities/activity_group_types/00_society_activity_groups.txt  its planner category
-  common/activities/intents/00_society_intents.txt                 why anyone attends
-  common/activities/guest_invite_rules/00_society_invite_rules.txt who the planner offers
-  common/character_interactions/00_society_interactions.txt        the recruiter's half
-  common/character_interactions/00_society_powers.txt              the powers (rank 1)
-  common/deathreasons/00_society_deaths.txt                        what a sacrifice reads as
-  common/schemes/scheme_types/00_society_abduct_scheme.txt          taking somebody
-  common/character_interaction_categories/01_society_interaction_category.txt  its menu header
-  common/secret_types/00_society_secrets.txt                       being findable
-  common/modifiers/00_society_modifiers.txt                        suspicion, and being known
-  common/opinion_modifiers/00_society_opinions.txt                 what refusing costs
-  common/scripted_guis/00_society_panel_guis.txt                   what the panel may ask
-  gui/gen_society_panel.gui                                        the panel
-  gui/scripted_widgets/gen_society_panel.txt                       what instantiates it
-  gfx/interface/skinned/hud_maintab/maintab_gen_society.dds        the tab icon
-  events/society_events.txt                                        the approach, and the rite
-  localization/english/society_l_english.yml                       every string the above needs
+Each events file has its own loc file of the same stem under localization/english/.
 
-THE PANEL
----------
-CK2's society screen showed four things at once: which society you were in, what rank you held,
-how much of its currency you had, and the FULL list of its powers with the ones above your rank
-greyed rather than hidden. The last is what made the ladder mean anything, so this panel draws
-all five rungs always and lights the one you hold.
 
-One door: the HUD tab under Intrigue. It sets `society_panel_open`, the tab lights from it, the
-window's X clears it, and Escape clears it through the X.
+VOICE
+-----
+Vanilla's plain, concrete voice (see the memory note on event prose tone; the worked example is
+../Wilderness/localization/english/wilderness_clearing_l_english.yml). Short literal titles. The
+description says what happened, who is asking and what the choice is, in the second person ("you"),
+naming people and places through scopes. Options are things a lord would say, first person ("I").
+Name the crown, house and society through the generated keys -- $restor_crown_name$,
+$restor_house_name$, $restor_society_name$, $restor_fell_year$, $restor_seat_name$ -- so every
+world's events read as its own. Never "the society" where the name fits.
 
-There was a second -- a "Take Stock of the Society" decision -- kept as a fallback for the window in
-which the tab did not exist. It is gone. A decisions-panel entry that opens the same window as a
-button four pixels away is a duplicate, not a fallback.
+Every option whose result is random ends in something the player reads -- a toast or a follow-up
+event -- including the branch where nothing happened. Every payload the tooltip cannot draw (a flag,
+a variable) gets a custom_tooltip.
 
-THE TAB IS THE ONE PIECE OF THIS FEATURE THAT IS NOT IN THIS FOLDER. It edits vanilla's
-gui/hud.gui, which only the generator can do -- Emit/GuiWriter.cs PatchHudTabs, gated on
-MapConfig.EnableSocieties. So a `--static-only --societies` run ships everything here and no tab,
-because that mode never reaches GuiWriter; use `--gui-only --societies` to add it, or a full run.
-Shipping the set without ever running GuiWriter now means a panel with no way to open it.
 
-Why the tab is not a game view: vanilla's tabs call `ToggleGameViewData('intrigue_window', ...)`,
-and those 43 view names are registered in the ENGINE. Nothing under common/ defines them and each
-has a C++ data context behind it, so a mod cannot add one, and a tab naming an unknown view
-resolves to nothing without logging. The society tab drives the society_panel_toggle scripted_gui
-instead. What that costs: the panel does not close when another view opens, and the engine does
-not remember its position. What it does not cost: placement, art, the lit state, or Escape --
-`close_window` is an ordinary widget attribute, not a privilege of engine views.
-
-Both meters are real and both now terminate. Dark Power is CK2's demon-worshipper currency: it
-arrives from the rite and from sacrifice, and abduction spends it. Visibility is CK2's exposure
-mechanic -- +5 when somebody accepts the oath, +15 when they refuse, on the theory that a person
-who said no is a person who knows and owes you nothing.
-
-Visibility does NOT feed a discovery chance, which an earlier note here promised and which would
-have been the wrong mechanic. See EXPOSURE below: it decides whether a secret exists for the
-Spymaster to find, and the finding is vanilla's.
-
-THE THREE GATES
----------------
-The activity is where the work is, and the reason it is worth reading is that CK3 puts the
-gating in three different places:
-
-  is_shown                        a non-member does not see the rite in the planner at all
-  can_start_showing_failures_only a member who cannot hold one now is told why
-  can_be_activity_guest           the engine's per-candidate veto on every proposed guest
-
-and a fourth thing that behaves like a gate but is not one -- `guest_invite_rules`, which
-BUILDS the offered list rather than filtering it, and therefore cannot be the only defence.
-
-WHAT HAPPENS AT A RITE
-----------------------
-  society.0100  The Convening   the host chooses what the fortnight is spent on
-  society.0101  The Room        every guest, once, on arrival
-  society.0110  The Reckoning   who was asked and did not come
-  society.0111  The Elevation   somebody is raised, or the host raises themselves
-
-0100's three answers -- discipline, patronage, restraint -- are the triad a generated society
-will inherit, with its targets and flavour read off its host faith rather than hardcoded. The
-purpose is chosen in an event rather than in the activity's own `options` block, which is where
-it eventually belongs: options are picked at planning time and show in the planner, so the host
-would commit before travelling. That is the better mechanic and deliberately not the first one.
-
-Restraint is not a null choice. A secret society's safest move is to disperse having done
-nothing, and when membership becomes a secret that is the branch nobody outside ever hears
-about -- the other two each leave somebody with a reason to talk.
-
-HOW TO TEST IT
---------------
-  0. In the console:  event society.9001
-     Swears the player and every adult courtier into the society at staggered Standing, and
-     toasts how many were sworn. A zero means the court is empty or all children, which is a
-     different fault from the guest list being broken. Everything below can be done without it,
-     one courtier at a time, which is why it exists.
-  0b. In the console: event society.9003
-     Grants 100 Dark Power, which is exactly the cost of one abduction. Nothing else in the set
-     grants any except the rite and the sacrifice, so without this, testing a power that SPENDS
-     meant arranging two or three killings first.
-  1. In the console:  event society.0001
-     Somebody in your court turns out to have been a member the whole time and makes the
-     offer. Accept, and you hold the Society Member trait with Standing at 10.
-  2. Inspect the courtier who approached you -- they are a member too, at 40, which puts them
-     on the second rung. That is two members, which is the minimum a rite needs.
-  3. "Hold the Rite" is now in your activity planner. It is NOT in the planner of any
-     character without the trait -- switch to one and confirm, because that is the property
-     the whole set exists to demonstrate.
-  4. Open the guest list. Two tabs -- "Sworn in Our Court" and "Sworn Elsewhere" -- both arriving
-     UNTICKED. Tick them and they fill with members and nobody else, however large your court is.
-     They were one rule under `defaults` at first, which pre-ticked it and made the guest list
-     look like something that filled itself in; see the note above guest_invite_rules for why
-     `defaults` is the wrong key for a rite.
-  5. Start it, then complete it. Every attendee gains 8 Standing; the host gains 20.
-  6. Open the panel from the tab under Intrigue.
-     It should name your rung, light that one row of the five, show both meters, mark the rite
-     Available or "Standing 50", and list every member it can see with their own rung beside them
-     -- each row's rung asked of THAT character, not of you.
-  7. Check the tab behaves: it is absent entirely for a non-member, lit while the panel is up,
-     unlit after closing with the X or with Escape, and it toggles rather than only opening.
-
-If the rite is greyed for want of Standing, press society.9002 twice. It is +25 a press, which
-walks the breakpoints one at a time so the modifiers arriving and the tooltip turning green are
-both visible; a single jump to the top would show neither.
-
-Use "Offer the Oath" on any other courtier to grow the membership -- it fires the same
-society.0001 at them with you as the recruiter, so there is one set of odds in the set rather
-than two that can drift apart. The interaction is auto_accept and the decision is taken inside
-the event by the person asked, so without something reporting back, the button appears to do
-nothing -- which is exactly how it was first reported. That report is now an event rather than a
-toast: society.0002 on acceptance, society.0003 on refusal.
-
-society.0003 is the one worth pressing twice. A refusal leaves somebody walking around knowing
-what they were asked, and it is the only place in the set where the player is asked what to do
-about that -- pay to make the memory convenient, recovering 10 of the 15 exposure, or let them
-carry it. Both options charge the opinion hit and the full +15 first, via
-society_oath_refused_effect, so the tooltips show the whole sum rather than half of it.
-
-EXPOSURE, AND WHAT VISIBILITY IS FOR
-------------------------------------
-Visibility used to be a number that went up and never did anything. It now terminates:
-
-  15   society_under_suspicion    -0.5 prestige, and a SECRET is created
-  25   society_highly_suspect     -1 prestige, -1 piety, and the liege is told
-  40   independent rulers stop denying it, once
-
-The secret is the point. CK2's danger was not a discovery roll -- it was the Court Chaplain
-running a JOB, hunting for people already carrying the mark. CK3 has that job: the Spymaster's
-task_find_secrets. So the meter does not roll against anything; it decides whether there is
-anything on the board for that job to find. Being found is entirely vanilla's, and society.0300
-to 0302 are what arrives afterwards.
-
-society.0301 is where the roster finally costs something. Everything else in this set makes
-membership an asset -- a guest list, an agent pool, a rank ladder. Here a member is offered
-another member as the price of their own skin, and the one who is sold is never told by whom.
-
-Decay below 15 removes the secret again, matching the modifiers. That is deliberate and departs
-from CK2, whose marks were permanent: we SHOW the number, so a panel reading Exposure 4 beside a
-findable secret is a panel the player stops trusting.
-
-WHAT IS DELIBERATELY MISSING
-----------------------------
-No secret type, so nothing about this is actually secret yet -- a non-member cannot be in the
-room, but nor can they discover who was. That is the next piece, and it is where CK3 gives
-the most for free: vanilla's `secret_witch` already has discovery, blackmail hooks and
-exposure, and a society membership secret is the same shape.
-
-No cost on the rite, and nothing that SPENDS either meter. Dark Power and Visibility both
-accumulate and neither is ever consumed, so they are honest counters rather than an economy.
-The rank gate exists now -- the rite needs Standing 50, which is the second breakpoint -- and
-society.9002 is the bootstrapping answer to it, since the rite is the only thing that grants
-Standing and you cannot hold one until you have some.
-
-No on_action. The approach fires by hand from the console today; eventually it rolls yearly
-against the traits the society recruits for, which is one small file and no change to
-anything here.
+HOW TO TEST
+-----------
+  Generate with --societies; the run log prints the crown, the fall, the pretender and the sworn.
+  In game (console):
+    event restor.0001    swear yourself in at Captain, with 100 favour
+    event restor.0002    +50 support (walks the milestones)
+    event restor.0003    make yourself the pretender
+    event restor.0004    print the society's state as a toast chain

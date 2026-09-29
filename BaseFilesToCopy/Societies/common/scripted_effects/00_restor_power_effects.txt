@@ -1,0 +1,116 @@
+﻿# The Restorationists' powers: outcomes reached from more than one place. restor.0400-0499.
+# See common/character_interactions/00_restor_powers.txt.
+#
+# Each is called either from an interaction's roll (an AI on the other end) or from the other side's
+# own event (a player on the other end decides instead of a dice roll). Keeping the outcome here
+# means the two routes cannot drift apart.
+
+# =====================================================================================
+#  Carry the Heir's Letter
+# =====================================================================================
+#
+# Scopes: restor_letter_bearer (the member who sent it), restor_letter_lord (who read it),
+# restor_pretender, and restor_usurper when there is one.
+
+# Warmly received: the lord thinks better of the heir, and the recruiters may approach them.
+restor_power_letter_warm_effect = {
+	scope:restor_letter_lord = {
+		add_opinion = {
+			target = scope:restor_pretender
+			modifier = respect_opinion
+			opinion = 20
+		}
+		hidden_effect = {
+			add_character_flag = {
+				flag = restor_sounded_sympathetic
+				years = 5
+			}
+		}
+	}
+	custom_tooltip = restor_power_letter_sympathetic_tt
+	scope:restor_letter_bearer = {
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 3
+		}
+		hidden_effect = {
+			trigger_event = { id = restor.0401 days = 3 }
+		}
+	}
+}
+
+# Politely ignored: a little goodwill and nothing else.
+restor_power_letter_ignored_effect = {
+	scope:restor_letter_lord = {
+		add_opinion = {
+			target = scope:restor_pretender
+			modifier = respect_opinion
+			opinion = 5
+		}
+	}
+	scope:restor_letter_bearer = {
+		hidden_effect = {
+			trigger_event = { id = restor.0402 days = 3 }
+		}
+	}
+}
+
+# Shown to the usurper.
+restor_power_letter_betrayed_effect = {
+	scope:restor_letter_bearer = {
+		restor_exposure_gain_effect = { VALUE = 10 }
+		hidden_effect = {
+			trigger_event = { id = restor.0403 days = 3 }
+		}
+	}
+	if = {
+		limit = { exists = scope:restor_usurper }
+		custom_tooltip = restor_power_letter_to_usurper_tt
+		hidden_effect = {
+			scope:restor_usurper = {
+				trigger_event = { id = restor.0405 days = 5 }
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  Silence a Witness
+# =====================================================================================
+#
+# Scopes: restor_silencer (the member), restor_witness (who knows a Sworn's secret).
+#
+# CK3 has no effect that makes a character forget a secret. What it has is disable_exposure_by,
+# which is what vanilla's blackmail uses: the witness still knows, but can never expose it. That is
+# the silence. Every Sworn whose secret they held also loses a little exposure, because one fewer
+# mouth is talking.
+
+restor_power_silence_success_effect = {
+	custom_tooltip = restor_power_silenced_tt
+	hidden_effect = {
+		scope:restor_witness = {
+			every_known_secret = {
+				limit = { secret_type = secret_restor_member }
+				disable_exposure_by = scope:restor_witness
+				secret_owner = {
+					restor_exposure_loss_effect = { VALUE = 5 }
+				}
+			}
+		}
+	}
+}
+
+# The witness refuses, and makes sure people hear why.
+restor_power_silence_failure_effect = {
+	scope:restor_witness = {
+		add_opinion = {
+			target = scope:restor_silencer
+			modifier = angry_opinion
+			opinion = -25
+		}
+	}
+	scope:restor_silencer = {
+		restor_exposure_gain_effect = { VALUE = 10 }
+	}
+}

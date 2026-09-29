@@ -1,0 +1,72 @@
+﻿# Membership of the Restorationist society, and the ladder inside it.
+#
+# One trait with a rank track, as the prototype established (see ../../SocietyPrototype): rank is a
+# position on a ladder, the rungs' modifiers stack, and `has_trait_xp` is the one number every gate
+# asks. The rung NAMES cannot come from the track -- CK3 renders track levels as bare numbers -- so
+# they live in the panel's loc, keyed by the thresholds below.
+#
+#     0 Sworn       25 Trusted       50 Captain       75 Elder
+#
+# The Keeper is not a rung. It is global_var:restor_keeper, one person, and it is the society's
+# leader rather than its most senior member -- the Keeper is usually an Elder but need not be.
+#
+# The description changes with the phase: underground the trait says what it hides; once the crown
+# is restored the order is public and the trait says so. Both read the generated society name.
+
+restor_member = {
+	category = fame
+
+	icon = "schemer.dds"
+
+	# Small: the rungs are where the power is.
+	diplomacy = 1
+
+	# Members recognise each other -- and in a society whose whole purpose is loyalty, more warmly
+	# than the prototype's.
+	same_opinion = 25
+
+	shown_in_ruler_designer = no
+	ruler_designer_cost = 10
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { NOT = { exists = this } }
+				desc = trait_restor_member_desc
+			}
+			triggered_desc = {
+				trigger = { restor_restored_trigger = yes }
+				desc = trait_restor_member_public_desc
+			}
+			desc = trait_restor_member_character_desc
+		}
+	}
+
+	ai_honor = medium_positive_ai_value
+	ai_boldness = low_positive_ai_value
+
+	tracks = {
+		restor_rank = {
+			25 = {
+				diplomacy = 1
+			}
+			50 = {
+				diplomacy = 1
+				intrigue = 1
+				martial = 1
+			}
+			75 = {
+				diplomacy = 1
+				intrigue = 1
+				martial = 1
+				monthly_prestige = 0.5
+			}
+			100 = {
+				diplomacy = 2
+				intrigue = 1
+				martial = 1
+				monthly_prestige = 1
+			}
+		}
+	}
+}

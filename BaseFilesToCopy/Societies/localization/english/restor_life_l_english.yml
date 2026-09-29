@@ -1,0 +1,222 @@
+﻿l_english:
+
+ # ---- Shared ------------------------------------------------------------------------------------
+
+ restor_life_stirred_support_tt:0 "Stirred counties of $restor_crown_name$ count toward #high support#! for House $restor_house_name$"
+ restor_friend_old_stories:0 "[CHARACTER.GetShortUIName|U] and [TARGET_CHARACTER.GetShortUIName] sat up all night telling the old stories of a fallen crown."
+ restor_rival_quarrel_settled:0 "[TARGET_CHARACTER.GetShortUIName|U] took the other side when [CHARACTER.GetShortUIName] quarrelled with another of the Sworn."
+
+ restor_life_kings_coin_modifier:0 "The Old King's Coin"
+ restor_life_kings_coin_modifier_desc:0 "Carries a silver coin struck for the last king of House $restor_house_name$, the way the Sworn know each other."
+ restor_life_kings_tombs_modifier:0 "Keeper of the Royal Tombs"
+ restor_life_kings_tombs_modifier_desc:0 "The kings of House $restor_house_name$ lie buried on this character's land, brought there in secret."
+ restor_life_old_banner_modifier:0 "The Old Banner"
+ restor_life_old_banner_modifier_desc:0 "Owns a banner carried before the last king of House $restor_house_name$ to rule $restor_crown_name$."
+
+ restor_life_served_the_house_opinion:0 "Served my house"
+ restor_life_wrote_to_me_opinion:0 "Answered my letter"
+ restor_life_ignored_me_opinion:0 "Ignored my letter"
+ restor_life_took_my_side_opinion:0 "Took my side"
+ restor_life_took_their_side_opinion:0 "Took the other side"
+ restor_life_scolded_me_opinion:0 "Scolded me"
+ restor_life_kept_the_peace_opinion:0 "Kept the peace among the Sworn"
+ restor_life_trusted_me_opinion:0 "Trusted me with the truth"
+ restor_life_kept_me_out_opinion:0 "Kept secrets from me"
+ restor_life_took_me_in_opinion:0 "Took me in"
+ restor_life_honoured_our_dead_opinion:0 "Honoured our dead"
+ restor_life_good_company_opinion:0 "Good company"
+ restor_life_cold_welcome_opinion:0 "Gave me a cold welcome"
+ restor_life_walked_away_opinion:0 "Walked away from the Sworn"
+ restor_life_rewarded_me_opinion:0 "Rewarded my loyalty"
+ restor_life_passed_me_over_opinion:0 "Passed me over"
+ restor_life_reported_the_agent_opinion:0 "Reported a traitor's letter"
+ restor_life_took_their_gold_opinion:0 "Took the enemy's gold"
+ restor_life_boasted_opinion:0 "Boasted before the Sworn"
+ restor_life_turned_me_away_opinion:0 "Turned me away from the order"
+
+ # ---- restor.0201 -------------------------------------------------------------------------------
+
+ restor.0201.t:0 "The Old King's Coin"
+ restor.0201.desc:0 "The coin in your treasury has been counted, and one piece set aside for you to see. It is old silver, worn nearly smooth, with the face of the last king of House $restor_house_name$ on one side and the arms of the house on the other. It was struck before $restor_fell_year$. Most like it were melted down long ago.\n\nAmong the Sworn, a coin like this, shown on the palm of the hand, is how two strangers know they took the same oath."
+ restor.0201.desc_heir:0 " [restor_pretender.GetTitledFirstName] has very little from [restor_pretender.GetHerHis] family's reign except the name."
+ restor.0201.desc_you:0 " It is your own family's face on it."
+ restor.0201.a:0 "I'll carry it. Let the Sworn know me by it."
+ restor.0201.b:0 "Send it to [restor_pretender.GetFirstNameNoTooltip]. It's [restor_pretender.GetHerHis] family's face."
+ restor.0201.c:0 "Melt it down with the rest."
+
+ # ---- restor.0202 -------------------------------------------------------------------------------
+
+ restor.0202.t:0 "The Old Soldier"
+ restor.0202.desc:0 "Your guards caught a beggar at the gate this morning who would not be sent away. [restor_life_veteran.GetSheHe|U] is old and badly scarred, and says [restor_life_veteran.GetSheHe] once served House $restor_house_name$ as a soldier.\n\nWhen the guards dragged [restor_life_veteran.GetHerHim] in to be thrown out, [restor_life_veteran.GetSheHe] saw you and made the Sworn's greeting, the one only the Sworn are supposed to know. [restor_life_veteran.GetSheHe|U] wants bread and a bed. [restor_life_veteran.GetSheHe|U] is also asking, in front of your guards, whether you are one of them."
+ restor.0202.a:0 "Bring [restor_life_veteran.GetHerHim] inside. There's a place for [restor_life_veteran.GetHerHim] here."
+ restor.0202.a.quiet:0 "The Old Soldier Keeps Quiet"
+ restor.0202.a.quiet.tt:0 "[restor_life_veteran.GetFirstNameNoTooltip] never says a word about the Sworn outside your walls"
+ restor.0202.a.talks:0 "The Old Soldier Talks"
+ restor.0202.b:0 "Give [restor_life_veteran.GetHerHim] some coin and send [restor_life_veteran.GetHerHim] on [restor_life_veteran.GetHerHis] way."
+ restor.0202.c:0 "Have [restor_life_veteran.GetHerHim] whipped for begging and put out."
+
+ # ---- restor.0203 -------------------------------------------------------------------------------
+
+ restor.0203.t:0 "A Letter from the Heir"
+ restor.0203.desc:0 "A letter has come for you in [restor_pretender.GetTitledFirstName]'s own hand, brought by a rider who would not give a name. [restor_pretender.GetSheHe|U] thanks you for keeping faith with House $restor_house_name$, and asks for news of the old lands of $restor_crown_name$: who holds what, and who still says the old name.\n\nAt the end, a smaller thing. [restor_pretender.GetHerHis|U] household is short of money this year, and [restor_pretender.GetSheHe] would not ask if there were anyone else to ask."
+ restor.0203.a:0 "Send what [restor_pretender.GetSheHe] needs, and a letter with it."
+ restor.0203.b:0 "Write back with the news. I have no money to spare."
+ restor.0203.c:0 "Burn it. Letters get read by the wrong people."
+
+ # ---- restor.0204 -------------------------------------------------------------------------------
+
+ restor.0204.t:0 "The Day the Crown Fell"
+ restor.0204.desc:0 "By the old reckoning, today is the day in $restor_fell_year$ that House $restor_house_name$ lost the crown of $restor_crown_name$. The Sworn keep it without saying so: a cup filled at the table and left untouched, and the last king's name said once, quietly."
+ restor.0204.desc_keeper:0 "\n\nAs Keeper, you are expected to keep it with the Sworn who live near you. A dinner at your table. Anyone watching would see only guests."
+ restor.0204.desc_asked:0 "\n\n[restor_keeper.GetTitledFirstName] has written to ask whether you will keep it this year with the Sworn who live near you. A dinner at your table. Anyone watching would see only guests."
+ restor.0204.a:0 "Invite them. We'll keep it properly."
+ restor.0204.b:0 "I'll keep it alone, with one cup."
+ restor.0204.c:0 "Let the day pass like any other."
+
+ # ---- restor.0205 -------------------------------------------------------------------------------
+
+ restor.0205.t:0 "The Song in the Hall"
+ restor.0205.desc:0 "A travelling singer was given a place by your fire tonight, and after the third cup struck up the old song about House $restor_house_name$ and the crown of $restor_crown_name$. The one that ends with the rightful king coming home.\n\nHalf your hall went quiet. One of your guests tonight is a knight in the service of [restor_usurper.GetTitledFirstName], and the knight is watching you to see what you do."
+ restor.0205.a:0 "Pay the singer, and ask for another."
+ restor.0205.b:0 "Stop that song. Throw the singer out."
+ restor.0205.c:0 "Laugh. It's an old tale, nothing more."
+ restor.0205.c.passes:0 "The Knight Lets It Pass"
+ restor.0205.c.passes.tt:0 "The knight laughs along with everyone else, and the song is forgotten by morning"
+ restor.0205.c.remembers:0 "The Knight Remembers"
+
+ # ---- restor.0206 -------------------------------------------------------------------------------
+
+ restor.0206.t:0 "Where You Go at Night"
+ restor.0206.desc:0 "[restor_life_heir.GetFirstNameNoTooltip] has noticed. The letters you burn after reading, the riders who come after dark, the nights you ride out and come back without saying where you have been. Tonight [restor_life_heir.GetSheHe] asked you straight out.\n\n[restor_life_heir.GetSheHe|U] is your heir, and one day [restor_life_heir.GetSheHe] will hold everything you hold. That could include your oath to House $restor_house_name$. Or you could keep [restor_life_heir.GetHerHim] out of it, and out of danger."
+ restor.0206.a:0 "Sit down. I'll tell you everything, and you can swear the oath too."
+ restor.0206.b:0 "It's none of your business."
+ restor.0206.b.drops:0 "[restor_life_heir.GetFirstNameNoTooltip] Lets It Go"
+ restor.0206.b.drops.tt:0 "[restor_life_heir.GetFirstNameNoTooltip] does not ask again"
+ restor.0206.b.follows:0 "[restor_life_heir.GetFirstNameNoTooltip] Follows You"
+ restor.0206.c:0 "I have a lover in the town. Don't tell anyone."
+
+ # ---- restor.0207 -------------------------------------------------------------------------------
+
+ restor.0207.t:0 "A Quarrel Among the Sworn"
+ restor.0207.desc:0 "[restor_life_quarrel_a.GetTitledFirstName] and [restor_life_quarrel_b.GetTitledFirstName] have fallen out. [restor_life_quarrel_a.GetFirstNameNoTooltip] says [restor_life_quarrel_b.GetFirstNameNoTooltip] promised horses and men for the day the standard is raised, and has quietly sold the horses. [restor_life_quarrel_b.GetFirstNameNoTooltip] says [restor_life_quarrel_a.GetFirstNameNoTooltip] talks too much in [restor_life_quarrel_a.GetHerHis] cups and will get them all hanged one day.\n\nThey are both a little right, and neither will speak to the other."
+ restor.0207.desc_keeper:0 "\n\nAs Keeper, it falls to you to settle it before it splits the Sworn. Whoever you side with will remember it. So will the other."
+ restor.0207.desc_asked:0 "\n\n[restor_keeper.GetTitledFirstName] has asked you to settle it before it splits the Sworn. Whoever you side with will remember it. So will the other."
+ restor.0207.a:0 "[restor_life_quarrel_a.GetFirstNameNoTooltip] is right."
+ restor.0207.b:0 "[restor_life_quarrel_b.GetFirstNameNoTooltip] is right."
+ restor.0207.c:0 "Both of you, stop it. We have enemies enough."
+ restor.0207.a_accepts:0 "[restor_life_quarrel_a.GetFirstNameNoTooltip] Accepts Your Judgement"
+ restor.0207.a_accepts.tt:0 "[restor_life_quarrel_a.GetFirstNameNoTooltip] is sore about it, but lets the matter drop"
+ restor.0207.a_rival:0 "[restor_life_quarrel_a.GetFirstNameNoTooltip] Will Not Forgive It"
+ restor.0207.b_accepts:0 "[restor_life_quarrel_b.GetFirstNameNoTooltip] Accepts Your Judgement"
+ restor.0207.b_accepts.tt:0 "[restor_life_quarrel_b.GetFirstNameNoTooltip] is sore about it, but lets the matter drop"
+ restor.0207.b_rival:0 "[restor_life_quarrel_b.GetFirstNameNoTooltip] Will Not Forgive It"
+
+ # ---- restor.0208 -------------------------------------------------------------------------------
+
+ restor.0208.t:0 "The Eager Courtier"
+ restor.0208.desc:0 "[restor_life_eager.GetTitledFirstName] has guessed what you are, or guessed close enough. [restor_life_eager.GetSheHe|U] wants to join the Sworn, and has told you so twice now, the second time in the hall where anyone could hear.\n\n[restor_life_eager.GetSheHe|U] is young and brave and loyal to House $restor_house_name$ with [restor_life_eager.GetHerHis] whole heart. [restor_life_eager.GetSheHe|U] also cannot keep [restor_life_eager.GetHerHis] voice down."
+ restor.0208.a:0 "Swear [restor_life_eager.GetHerHim] in, and teach [restor_life_eager.GetHerHim] to be quiet."
+ restor.0208.b:0 "Tell [restor_life_eager.GetHerHim] to wait, and to hold [restor_life_eager.GetHerHis] tongue."
+ restor.0208.b.quiet:0 "[restor_life_eager.GetFirstNameNoTooltip] Holds [restor_life_eager.GetHerHis] Tongue"
+ restor.0208.b.quiet.tt:0 "[restor_life_eager.GetFirstNameNoTooltip] says nothing more about it, to you or to anyone"
+ restor.0208.b.talks:0 "[restor_life_eager.GetFirstNameNoTooltip] Keeps Talking"
+ restor.0208.c:0 "Send [restor_life_eager.GetHerHim] to [restor_pretender.GetFirstNameNoTooltip]'s household, where zeal is useful."
+
+ # ---- restor.0209 -------------------------------------------------------------------------------
+
+ restor.0209.t:0 "The Tax Collector"
+ restor.0209.desc:0 "[restor_usurper.GetTitledFirstName]'s tax collectors are in [restor_life_county.GetNameNoTier] this autumn, and the harvest there was poor. The villagers still drink to House $restor_house_name$ when nobody is listening.\n\nThey have sent word through the Sworn. They cannot pay, and they will not pay without a fight if someone helps them. What they need is a little money and a few men who know how to use a spear."
+ restor.0209.a:0 "Send them gold and a few hard men, quietly."
+ restor.0209.a.untraced:0 "The Help Is Not Traced"
+ restor.0209.a.untraced.tt:0 "Nobody in [restor_life_county.GetNameNoTier] can say where the gold and the spearmen came from"
+ restor.0209.a.traced:0 "The Help Is Traced to You"
+ restor.0209.b:0 "Pay the tax for them, through a merchant."
+ restor.0209.c:0 "It isn't our fight. Not yet."
+
+ # ---- restor.0210 -------------------------------------------------------------------------------
+
+ restor.0210.t:0 "The Tombs at $restor_seat_name$"
+ restor.0210.desc:0 "The kings of House $restor_house_name$ are buried in $restor_seat_name$, under the floor of the old chapel. Word has come that [restor_life_seat_holder.GetTitledFirstName], who holds $restor_seat_name$ now, means to pull the chapel down and use the stone for something else. The bones of House $restor_house_name$ would go in a pit with the rubble.\n\nThe chapel's keepers would take money to leave the tombs sealed and say the building is unsafe. For more money and some nerve, the kings could be dug up at night and brought to your own lands."
+ restor.0210.a:0 "Pay the keepers. Let the kings lie where they are."
+ restor.0210.b:0 "Bring the kings home to my lands."
+ restor.0210.b.moved:0 "The Kings Are Brought Home"
+ restor.0210.b.caught:0 "The Diggers Are Caught"
+ restor.0210.c:0 "The dead will keep."
+
+ # ---- restor.0211 -------------------------------------------------------------------------------
+
+ restor.0211.t:0 "A Burial in Secret"
+ restor.0211.desc:0 "[restor_life_dead.GetTitledFirstName] is dead. [restor_life_dead.GetSheHe|U] was one of the Sworn, and kept the oath to House $restor_house_name$ to the end.\n\nThe family is burying [restor_life_dead.GetHerHim] quietly. A few of the Sworn mean to be there, standing at the back as if they were only neighbours. It is a risk. Some of them think it is the least they owe."
+ restor.0211.a:0 "I'll go, and stand at the back."
+ restor.0211.a.unseen:0 "No One Remarks on It"
+ restor.0211.a.unseen.tt:0 "You pay your respects and ride home, and nobody asks who you were"
+ restor.0211.a.seen:0 "You Were Seen at the Graveside"
+ restor.0211.b:0 "Send a gift to [restor_life_mourner.GetFirstNameNoTooltip], with no name on it."
+ restor.0211.c:0 "I'll stay away. It's safer."
+
+ # ---- restor.0212 -------------------------------------------------------------------------------
+
+ restor.0212.t:0 "A Night of Old Stories"
+ restor.0212.desc:0 "[restor_life_guest.GetTitledFirstName] was passing through your lands and stopped for the night. You know each other only as two of the Sworn: a nod at a gathering, a name at the bottom of a letter.\n\nTonight, with the servants gone to bed, [restor_life_guest.GetSheHe] started telling stories about House $restor_house_name$ and the years before $restor_fell_year$, the ones [restor_life_guest.GetHerHis] grandmother used to tell. It is late, and there is still wine in the jug."
+ restor.0212.a:0 "Pour another cup. Tell me more."
+ restor.0212.a.friend:0 "A Friend Among the Sworn"
+ restor.0212.a.company:0 "A Good Night's Company"
+ restor.0212.b:0 "We should both go to bed. Servants talk."
+
+ # ---- restor.0213 -------------------------------------------------------------------------------
+
+ restor.0213.t:0 "A Relic for Sale"
+ restor.0213.desc:0 "A merchant has come to your court with something wrapped in oilcloth, and will only unwrap it with the doors shut. It is a banner: faded, torn at one corner, with the arms of House $restor_house_name$ under the crown of $restor_crown_name$.\n\nThe merchant swears it was carried before the last king of the house, and that nobody else has seen it. The price is high, and the merchant knows exactly who would pay it."
+ restor.0213.a:0 "I'll buy it. It belongs with the Sworn."
+ restor.0213.a.genuine:0 "The Banner Is Genuine"
+ restor.0213.a.fake:0 "The Banner Is a Fake"
+ restor.0213.a.fake.tt:0 "The cloth is a few years old and the dye is wrong. The merchant is long gone, and so is your gold"
+ restor.0213.b:0 "Buy it, and send it to [restor_pretender.GetFirstNameNoTooltip]."
+ restor.0213.c:0 "I don't buy treason from strangers."
+
+ # ---- restor.0214 -------------------------------------------------------------------------------
+
+ restor.0214.t:0 "A Night of Doubt"
+ restor.0214.desc:0 "You cannot sleep. It has been a long time since House $restor_house_name$ lost the crown of $restor_crown_name$ in $restor_fell_year$, and tonight you find yourself counting what the oath has cost you: the gold sent away, the lies told to your own family, the fear every time a rider you do not know comes to the gate.\n\n[restor_pretender.GetTitledFirstName] is no closer to the crown than [restor_pretender.GetSheHe] was the day you swore. Nobody would stop you if you simply stopped answering [restor_keeper.GetFirstNameNoTooltip]'s letters."
+ restor.0214.a:0 "I swore an oath. That settles it."
+ restor.0214.b:0 "I'll keep my head down for a while."
+ restor.0214.c:0 "I've given enough. I'm done with the Sworn."
+ restor.0214.c.tt:0 "You are no longer sworn to $restor_society_name$. Your #high favour#! and #high exposure#! go with it."
+
+ # ---- restor.0250 -------------------------------------------------------------------------------
+
+ restor.0250.t:0 "The Old Sworn Want Paying"
+ restor.0250.desc:0 "[restor_life_quarrel_a.GetTitledFirstName] and [restor_life_quarrel_b.GetTitledFirstName] both kept faith with House $restor_house_name$ through the years in hiding, and both expected more for it than they have had so far. Now each wants the same thing: a reward for the old days, paid first and paid in front of the court.\n\nThey have stopped speaking to each other, and your courtiers are taking sides."
+ restor.0250.a:0 "[restor_life_quarrel_a.GetFirstNameNoTooltip] first. [restor_life_quarrel_a.GetSheHe|U] earned it."
+ restor.0250.b:0 "[restor_life_quarrel_b.GetFirstNameNoTooltip] first. [restor_life_quarrel_b.GetSheHe|U] earned it."
+ restor.0250.c:0 "Pay them both, from my own purse."
+ restor.0250.d:0 "Nobody was promised anything. The crown is reward enough."
+
+ # ---- restor.0251 -------------------------------------------------------------------------------
+
+ restor.0251.t:0 "A Letter Without a Name"
+ restor.0251.desc:0 "A stranger asked to see you alone today, and left a letter and a purse of gold. The letter has no name at the bottom. It asks for very little: news of [restor_life_king.GetTitledFirstName]'s court, who comes and goes, and what is said at council.\n\nIt comes from the people who held $restor_crown_name$ before House $restor_house_name$ took it back. They are still out there, and they have not forgotten."
+ restor.0251.a:0 "Take the letter to [restor_life_king.GetFirstNameNoTooltip]."
+ restor.0251.b:0 "Keep the gold. Send them nothing worth having."
+ restor.0251.b.unnoticed:0 "Nobody Notices"
+ restor.0251.b.unnoticed.tt:0 "You keep the gold, and the letters you send back are no use to anyone"
+ restor.0251.b.found:0 "[restor_life_king.GetFirstNameNoTooltip] Hears of It"
+ restor.0251.c:0 "Send the stranger away and burn the letter."
+
+ # ---- restor.0252 -------------------------------------------------------------------------------
+
+ restor.0252.t:0 "Named in the Hall"
+ restor.0252.desc:0 "[restor_life_king.GetTitledFirstName] held a feast for $restor_society_name_public$ tonight, and at the end of it asked every one of the old Sworn to stand and be named.\n\nWhen your name was called, the hall shouted for you to speak: about the years in hiding, and what they cost."
+ restor.0252.a:0 "Speak of the ones who did not live to see this."
+ restor.0252.b:0 "Tell them what I did."
+ restor.0252.b.cheers:0 "The Hall Cheers"
+ restor.0252.b.cheers.tt:0 "The whole hall bangs its cups on the tables for you"
+ restor.0252.b.mutter:0 "The Old Sworn Mutter"
+ restor.0252.c:0 "Raise a cup, say nothing, and sit down."
+
+ # ---- restor.0253 -------------------------------------------------------------------------------
+
+ restor.0253.t:0 "The Latecomer"
+ restor.0253.desc:0 "Now that $restor_society_name_public$ is honoured at court, everyone wants to have been part of it. [restor_life_latecomer.GetTitledFirstName] has asked you to put [restor_life_latecomer.GetHerHis] name forward.\n\n[restor_life_latecomer.GetSheHe|U] never swore anything while it was dangerous, and the old Sworn know it. But [restor_life_latecomer.GetSheHe] has asked you, and [restor_life_latecomer.GetSheHe] will remember your answer."
+ restor.0253.a:0 "I'll put your name forward."
+ restor.0253.b:0 "Where were you when it was dangerous?"

@@ -74,24 +74,32 @@ public static class BoneFrames
     /// garment moved between DLC folders. Returns empty rather than throwing: pauldrons are an
     /// enhancement, and a world that generates without them beats one that refuses to generate.
     /// </summary>
-    public static Dictionary<string, BoneFrame> Read(string gameDir)
+    /// <param name="female">
+    /// Read the FEMALE rig instead. Its bones turn the same way as the male's (local axes agree to within
+    /// 0.01) but sit elsewhere - shoulders at +-15.0 against +-17.9, the neck ~10 lower - so a piece
+    /// authored on the female body must be baked against these origins or it lands male-sized.
+    /// </param>
+    public static Dictionary<string, BoneFrame> Read(string gameDir, bool female = false)
     {
-        if (Cache.TryGetValue(gameDir, out var hit)) return hit;
+        string key = (female ? "f|" : "m|") + gameDir;
+        if (Cache.TryGetValue(key, out var hit)) return hit;
 
         var found = new Dictionary<string, BoneFrame>(StringComparer.Ordinal);
         string root = Path.Combine(gameDir, "gfx", "models", "portraits");
 
         if (!Directory.Exists(root))
         {
-            Cache[gameDir] = found;
+            Cache[key] = found;
             return found;
         }
 
-        // Male clothes first: they are skinned to the full body rig, and the male frame is the one
-        // pieces are authored against. Any of them will do, so the first that parses wins.
+        // Clothes of the requested sex: they are skinned to the full body rig. Any of them will do, so
+        // the first that parses wins.
+        string prefix = female ? "f_clothes" : "m_clothes";
+
         foreach (string path in Directory
             .EnumerateFiles(root, "*.mesh", SearchOption.AllDirectories)
-            .Where(p => Path.GetFileName(p).StartsWith("m_clothes", StringComparison.OrdinalIgnoreCase))
+            .Where(p => Path.GetFileName(p).StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             .OrderBy(p => p, StringComparer.Ordinal))
         {
             try
@@ -109,7 +117,7 @@ public static class BoneFrames
             found.Clear();
         }
 
-        Cache[gameDir] = found;
+        Cache[key] = found;
         return found;
     }
 

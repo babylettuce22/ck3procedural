@@ -319,6 +319,10 @@ gen_aging.0090 = {
 				desc = gen_aging.0090.race_gnome
 			}
 			triggered_desc = {
+				trigger = { has_trait = phenotype_horned }
+				desc = gen_aging.0090.race_hornkin
+			}
+			triggered_desc = {
 				trigger = {
 					has_trait = phenotype_human
 					has_character_flag = gen_phenotype_human

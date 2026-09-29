@@ -1,0 +1,868 @@
+﻿# The Restorationists: powers and their outcomes. restor.0400-0499.
+# The powers themselves are interactions: common/character_interactions/00_restor_powers.txt.
+#
+#   0401-0403   Carry the Heir's Letter: warmly received / ignored / shown to the usurper (to the sender)
+#   0404        the letter, to a player lord who answers it themselves
+#   0405        the letter, brought to the usurper
+#   0410-0412   Forge the Old Charters: flawless / doubted / caught (to the forger)
+#   0420-0421   Shelter the Heir: quietly / talked about (to the host)
+#   0430-0432   Grant the Heir a Seat: welcomed / quiet / noticed (to the granter)
+#   0440        Silence a Witness: gold, threats or an accident (to the member)
+#   0442-0443   the gold and the threat, to a player witness
+#   0450        Expel from the Oath: the expelled chooses
+#   0451-0452   the Keeper hears: gone quietly / gone to the usurper
+#   0453        the usurper hears the names
+#   0454        each Sworn who was named
+#
+# The outcome is decided where the power is used, so the interaction's tooltip shows the odds; these
+# events report it. Where the other side is a player, they choose instead of a dice roll.
+
+namespace = restor
+
+# =====================================================================================
+#  Carry the Heir's Letter
+# =====================================================================================
+
+restor.0401 = {
+	type = character_event
+	title = restor.0401.t
+	desc = restor.0401.desc
+	theme = diplomacy
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		character = scope:restor_letter_lord
+		animation = personality_rational
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0401.a
+		custom_tooltip = restor.0401.a.tt
+	}
+}
+
+restor.0402 = {
+	type = character_event
+	title = restor.0402.t
+	desc = restor.0402.desc
+	theme = diplomacy
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		character = scope:restor_letter_lord
+		animation = dismissal
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0402.a
+	}
+}
+
+restor.0403 = {
+	type = character_event
+	title = restor.0403.t
+	desc = restor.0403.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		character = scope:restor_letter_lord
+		animation = scheme
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_usurper }
+		character = scope:restor_usurper
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0403.a
+	}
+}
+
+# To a player lord. The three answers are the three results the roll gives an AI lord.
+restor.0404 = {
+	type = character_event
+	title = restor.0404.t
+	desc = restor.0404.desc
+	theme = diplomacy
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = global_var:restor_pretender
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	option = {
+		name = restor.0404.a
+		restor_power_letter_warm_effect = yes
+		ai_chance = { base = 40 }
+	}
+	option = {
+		name = restor.0404.b
+		restor_power_letter_ignored_effect = yes
+		ai_chance = { base = 40 }
+	}
+	option = {
+		name = restor.0404.c
+		trigger = { exists = scope:restor_usurper }
+		restor_power_letter_betrayed_effect = yes
+		scope:restor_usurper = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 15
+			}
+		}
+		ai_chance = { base = 20 }
+	}
+}
+
+# To the usurper, when a lord hands the letter over.
+restor.0405 = {
+	type = character_event
+	title = restor.0405.t
+	desc = restor.0405.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:restor_letter_lord
+		animation = personality_honorable
+	}
+	lower_right_portrait = {
+		character = scope:restor_letter_bearer
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	option = {
+		name = restor.0405.a
+		trigger = { gold >= minor_gold_value }
+		pay_short_term_gold = {
+			target = scope:restor_letter_lord
+			gold = minor_gold_value
+		}
+		scope:restor_letter_lord = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 15
+			}
+		}
+		ai_chance = { base = 50 }
+	}
+	option = {
+		name = restor.0405.b
+		add_opinion = {
+			target = scope:restor_letter_bearer
+			modifier = angry_opinion
+			opinion = -20
+		}
+		ai_chance = { base = 50 }
+	}
+}
+
+# =====================================================================================
+#  Forge the Old Charters
+# =====================================================================================
+
+restor.0410 = {
+	type = character_event
+	title = restor.0410.t
+	desc = restor.0410.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+		animation = happiness
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0410.a
+		custom_tooltip = restor.0410.a.tt
+	}
+}
+
+restor.0411 = {
+	type = character_event
+	title = restor.0411.t
+	desc = restor.0411.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:restor_forge_victim
+		animation = personality_rational
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0411.a
+		custom_tooltip = restor.0411.a.tt
+	}
+}
+
+restor.0412 = {
+	type = character_event
+	title = restor.0412.t
+	desc = restor.0412.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+	right_portrait = {
+		character = scope:restor_forge_victim
+		animation = anger
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0412.a
+	}
+}
+
+# =====================================================================================
+#  Shelter the Heir
+# =====================================================================================
+
+restor.0420 = {
+	type = character_event
+	title = restor.0420.t
+	desc = restor.0420.desc
+	theme = court
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+		animation = admiration
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0420.a
+	}
+}
+
+restor.0421 = {
+	type = character_event
+	title = restor.0421.t
+	desc = restor.0421.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_usurper }
+		character = scope:restor_usurper
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0421.a
+	}
+}
+
+# =====================================================================================
+#  Grant the Heir a Seat
+# =====================================================================================
+
+restor.0430 = {
+	type = character_event
+	title = restor.0430.t
+	desc = restor.0430.desc
+	theme = realm
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+		animation = personality_bold
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0430.a
+		custom_tooltip = restor.0430.a.tt
+	}
+}
+
+restor.0431 = {
+	type = character_event
+	title = restor.0431.t
+	desc = restor.0431.desc
+	theme = realm
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0431.a
+	}
+}
+
+restor.0432 = {
+	type = character_event
+	title = restor.0432.t
+	desc = restor.0432.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_usurper }
+		character = scope:restor_usurper
+		animation = scheme
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0432.a
+	}
+}
+
+# =====================================================================================
+#  Silence a Witness
+# =====================================================================================
+#
+# ROOT is the member. The favour is already spent: the choice is how, not whether.
+
+restor.0440 = {
+	type = character_event
+	title = restor.0440.t
+	desc = restor.0440.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:restor_witness
+		animation = worry
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	# Gold.
+	option = {
+		name = restor.0440.a
+		trigger = { gold >= medium_gold_value }
+		if = {
+			limit = { scope:restor_witness = { is_ai = no } }
+			custom_tooltip = restor.0440.a.player_tt
+			hidden_effect = {
+				scope:restor_witness = { trigger_event = { id = restor.0442 days = 2 } }
+			}
+		}
+		else = {
+			random_list = {
+				70 = {
+					modifier = {
+						add = 15
+						scope:restor_witness = { has_trait = greedy }
+					}
+					modifier = {
+						add = -25
+						scope:restor_witness = { has_trait = honest }
+					}
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = restor.0440.a.success
+						left_icon = root
+						right_icon = scope:restor_witness
+						pay_short_term_gold = {
+							target = scope:restor_witness
+							gold = medium_gold_value
+						}
+						restor_power_silence_success_effect = yes
+					}
+				}
+				30 = {
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = restor.0440.a.failure
+						left_icon = root
+						right_icon = scope:restor_witness
+						restor_power_silence_failure_effect = yes
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = generous }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Threats.
+	option = {
+		name = restor.0440.b
+		if = {
+			limit = { scope:restor_witness = { is_ai = no } }
+			custom_tooltip = restor.0440.b.player_tt
+			hidden_effect = {
+				scope:restor_witness = { trigger_event = { id = restor.0443 days = 2 } }
+			}
+		}
+		else = {
+			random_list = {
+				50 = {
+					modifier = {
+						add = 25
+						scope:restor_witness = {
+							has_dread_level_towards = {
+								target = root
+								level >= 1
+							}
+						}
+					}
+					modifier = {
+						add = 15
+						scope:restor_witness = { has_trait = craven }
+					}
+					modifier = {
+						add = -15
+						scope:restor_witness = { has_trait = brave }
+					}
+					modifier = {
+						add = 10
+						intrigue >= 14
+					}
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = restor.0440.b.success
+						left_icon = root
+						right_icon = scope:restor_witness
+						scope:restor_witness = {
+							add_opinion = {
+								target = root
+								modifier = threatened_opinion
+							}
+						}
+						restor_power_silence_success_effect = yes
+					}
+				}
+				50 = {
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = restor.0440.b.failure
+						left_icon = root
+						right_icon = scope:restor_witness
+						restor_power_silence_failure_effect = yes
+					}
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = wrathful }
+			modifier = { add = 20 dread >= 40 }
+		}
+	}
+
+	# An accident.
+	option = {
+		name = restor.0440.c
+		random_list = {
+			50 = {
+				modifier = {
+					add = 15
+					intrigue >= 14
+				}
+				modifier = {
+					add = -15
+					scope:restor_witness = { has_trait = paranoid }
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0440.c.success
+					left_icon = root
+					right_icon = scope:restor_witness
+					custom_tooltip = restor.0440.c.success.tt
+					scope:restor_witness = {
+						death = { death_reason = death_accident }
+					}
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.0440.c.survived
+					left_icon = root
+					right_icon = scope:restor_witness
+					restor_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+			20 = {
+				modifier = {
+					add = 10
+					scope:restor_witness = { has_trait = paranoid }
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0440.c.failure
+					left_icon = root
+					right_icon = scope:restor_witness
+					restor_exposure_gain_effect = { VALUE = 20 }
+					scope:restor_witness = {
+						add_opinion = {
+							target = root
+							modifier = angry_opinion
+							opinion = -40
+						}
+					}
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			honest = minor_stress_impact_gain
+			just = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = callous }
+			modifier = { add = 20 has_trait = sadistic }
+			modifier = { factor = 0 has_trait = compassionate }
+		}
+	}
+}
+
+# To a player witness: an offer of gold.
+restor.0442 = {
+	type = character_event
+	title = restor.0442.t
+	desc = restor.0442.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		character = scope:restor_silencer
+		animation = scheme
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	option = {
+		name = restor.0442.a
+		trigger = {
+			scope:restor_silencer = { gold >= medium_gold_value }
+		}
+		scope:restor_silencer = {
+			pay_short_term_gold = {
+				target = root
+				gold = medium_gold_value
+			}
+		}
+		restor_power_silence_success_effect = yes
+		hidden_effect = {
+			scope:restor_silencer = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0440.a.success
+					left_icon = scope:restor_silencer
+					right_icon = root
+				}
+			}
+		}
+		ai_chance = { base = 70 }
+	}
+	option = {
+		name = restor.0442.b
+		restor_power_silence_failure_effect = yes
+		hidden_effect = {
+			scope:restor_silencer = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0440.a.failure
+					left_icon = scope:restor_silencer
+					right_icon = root
+				}
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+}
+
+# To a player witness: a threat.
+restor.0443 = {
+	type = character_event
+	title = restor.0443.t
+	desc = restor.0443.desc
+	theme = dread
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+	right_portrait = {
+		character = scope:restor_silencer
+		animation = anger
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	option = {
+		name = restor.0443.a
+		add_opinion = {
+			target = scope:restor_silencer
+			modifier = threatened_opinion
+		}
+		restor_power_silence_success_effect = yes
+		hidden_effect = {
+			scope:restor_silencer = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0440.b.success
+					left_icon = scope:restor_silencer
+					right_icon = root
+				}
+			}
+		}
+		ai_chance = { base = 50 }
+	}
+	option = {
+		name = restor.0443.b
+		restor_power_silence_failure_effect = yes
+		hidden_effect = {
+			scope:restor_silencer = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0440.b.failure
+					left_icon = scope:restor_silencer
+					right_icon = root
+				}
+			}
+		}
+		stress_impact = {
+			craven = medium_stress_impact_gain
+		}
+		ai_chance = { base = 50 }
+	}
+}
+
+# =====================================================================================
+#  Expel from the Oath
+# =====================================================================================
+
+# ROOT is the expelled, already out.
+restor.0450 = {
+	type = character_event
+	title = restor.0450.t
+	desc = restor.0450.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = rage
+	}
+	right_portrait = {
+		character = scope:restor_expeller
+		animation = dismissal
+	}
+	trigger = { restor_underground_trigger = yes }
+	immediate = { restor_save_scopes_effect = yes }
+
+	# Quietly.
+	option = {
+		name = restor.0450.a
+		hidden_effect = {
+			scope:restor_expeller = { trigger_event = { id = restor.0451 days = 3 } }
+		}
+		ai_chance = {
+			base = 70
+			modifier = { add = 30 has_trait = honest }
+			modifier = { add = 20 has_trait = forgiving }
+			modifier = { add = 20 has_trait = craven }
+		}
+	}
+
+	# To the usurper, with every name they know.
+	option = {
+		name = restor.0450.b
+		trigger = {
+			exists = scope:restor_usurper
+			NOT = { this = scope:restor_usurper }
+		}
+		save_scope_as = restor_defector
+		custom_tooltip = restor.0450.b.tt
+		hidden_effect = {
+			every_in_global_list = {
+				variable = restor_roster
+				limit = {
+					is_alive = yes
+					restor_power_defector_knows_trigger = yes
+				}
+				restor_exposure_gain_effect = { VALUE = 10 }
+				if = {
+					limit = { NOT = { this = scope:restor_expeller } }
+					trigger_event = { id = restor.0454 days = 5 }
+				}
+			}
+			scope:restor_expeller = {
+				trigger_event = { id = restor.0452 days = 5 }
+			}
+			scope:restor_usurper = {
+				trigger_event = { id = restor.0453 days = 3 }
+			}
+		}
+		scope:restor_expeller = {
+			add_opinion = {
+				target = root
+				modifier = restor_betrayed_the_cause_opinion
+			}
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = vengeful }
+			modifier = { add = 20 has_trait = ambitious }
+			modifier = { add = 20 has_trait = greedy }
+			modifier = {
+				add = 20
+				opinion = {
+					target = scope:restor_expeller
+					value <= -30
+				}
+			}
+			modifier = { factor = 0 has_trait = honest }
+		}
+	}
+}
+
+restor.0451 = {
+	type = character_event
+	title = restor.0451.t
+	desc = restor.0451.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		character = scope:restor_expelled
+		animation = sadness
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0451.a
+	}
+}
+
+restor.0452 = {
+	type = character_event
+	title = restor.0452.t
+	desc = restor.0452.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = rage
+	}
+	right_portrait = {
+		character = scope:restor_expelled
+		animation = schadenfreude
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_usurper }
+		character = scope:restor_usurper
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0452.a
+		custom_tooltip = restor.0452.a.tt
+	}
+}
+
+# To the usurper: a former Sworn has come over.
+restor.0453 = {
+	type = character_event
+	title = restor.0453.t
+	desc = restor.0453.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = schadenfreude
+	}
+	right_portrait = {
+		character = scope:restor_expelled
+		animation = scheme
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	option = {
+		name = restor.0453.a
+		trigger = { gold >= minor_gold_value }
+		pay_short_term_gold = {
+			target = scope:restor_expelled
+			gold = minor_gold_value
+		}
+		scope:restor_expelled = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 20
+			}
+		}
+		ai_chance = { base = 60 }
+	}
+	option = {
+		name = restor.0453.b
+		add_prestige = minor_prestige_gain
+		ai_chance = { base = 40 }
+	}
+}
+
+# To each Sworn the defector named, other than the Keeper.
+restor.0454 = {
+	type = character_event
+	title = restor.0454.t
+	desc = restor.0454.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:restor_expelled
+		animation = scheme
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_usurper }
+		character = scope:restor_usurper
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0454.a
+		custom_tooltip = restor.0454.a.tt
+	}
+}

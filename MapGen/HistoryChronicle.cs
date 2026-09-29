@@ -45,6 +45,8 @@ public static class HistoryChronicle
             "won" or "freed" => 3,
             "brokeaway" => 2.5,
             "swore" or "divided" or "rivals" => 2,
+            // A duchy turning is news; one county, much less so.
+            "assimilated" or "converted" => r.Subject.StartsWith("c_") ? 0.75 : 1.5,
             "held" => 1.5,
             "chosen" or "settled" or "resettled" or "ruined" => 1,
             "drifted" => r.Into?.StartsWith("e_") == true ? 4 : 2.5,
@@ -83,20 +85,21 @@ public static class HistoryChronicle
     /// whose title this world lacks, or that would hang on wilderness, is left out.
     /// </summary>
     public static List<ChronicleEvent> Events(IEnumerable<AppliedHistory.Remembered> remembered, List<Title> empires,
-        CultureMap cultures, WildernessMap wilderness)
+        CultureMap cultures, WildernessMap wilderness, FaithMap? faiths = null)
     {
         var all = Titles.Flatten(Titles.Roots(empires)).ToList();
         var byKey = new Dictionary<string, Title>(StringComparer.Ordinal);
         foreach (var t in all) byKey.TryAdd(t.Key, t);
         var byIndex = all.Where(t => t.Tier == "c").GroupBy(t => t.Index).ToDictionary(g => g.Key, g => g.First());
         var cultureByKey = cultures.Cultures.GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.First());
+        var faithByKey = faiths?.Faiths.GroupBy(f => f.Key).ToDictionary(g => g.Key, g => g.First().Name) ?? [];
 
         var events = new List<ChronicleEvent>();
         foreach (var r in remembered)
         {
             if (!byKey.TryGetValue(r.Subject, out var subject)) continue;
             if (subject.Tier == "c" && wilderness.Contains(subject)) continue;
-            if (Text(r, subject, byKey, byIndex, cultureByKey, wilderness) is not { } text) continue;
+            if (Text(r, subject, byKey, byIndex, cultureByKey, wilderness, faithByKey) is not { } text) continue;
 
             events.Add(new ChronicleEvent
             {
@@ -105,7 +108,8 @@ public static class HistoryChronicle
                     "won" or "held" or "fell" => ChronicleKind.War,
                     "feud" or "rivals" => ChronicleKind.Feud,
                     "drifted" => ChronicleKind.Frontier,
-                    "settled" or "resettled" or "ruined" => ChronicleKind.Settlement,
+                    "settled" or "resettled" or "ruined" or "assimilated" => ChronicleKind.Settlement,
+                    "converted" => ChronicleKind.Faith,
                     _ => ChronicleKind.Seat,
                 },
                 Year = r.Year,
@@ -121,7 +125,8 @@ public static class HistoryChronicle
     }
 
     private static string? Text(AppliedHistory.Remembered r, Title subject, Dictionary<string, Title> byKey,
-        Dictionary<int, Title> byIndex, Dictionary<string, Culture> cultures, WildernessMap wilderness)
+        Dictionary<int, Title> byIndex, Dictionary<string, Culture> cultures, WildernessMap wilderness,
+        Dictionary<string, string> faiths)
     {
         string Lords(int seat) => byIndex.TryGetValue(seat, out var c) ? $"the lords of {c.Name}" : "a realm long gone";
         string Named(Title t) => t.Tier switch
@@ -152,6 +157,8 @@ public static class HistoryChronicle
             return taken.Length >= whole ? Named(subject) : $"{Counties(taken)} in {Named(subject)}";
         }
 
+        string PeopleOf(Title t) => t.Tier == "c" ? $"the people of {t.Name}" : $"most of {Named(t)}";
+
         string pronoun = r.Female ? "her" : "his";
         string? text = r.What switch
         {
@@ -168,6 +175,10 @@ public static class HistoryChronicle
             "settled" => $"{Settlers(r.ActorCulture, cultures)} from {Lords(r.Actor)} cleared {subject.Name} in {r.Year}.",
             "resettled" => $"{Settlers(r.ActorCulture, cultures)} from {Lords(r.Actor)} rebuilt the ruins of {subject.Name} in {r.Year}.",
             "ruined" when r.Counties is { Length: > 0 } lost => $"{Counties(lost)} was abandoned in {r.Year} and left to ruin.",
+            "assimilated" when r.Other is { } key && cultures.TryGetValue(key, out var people)
+                => $"By {r.Year} {PeopleOf(subject)} had taken up {people.Name} ways under {Lords(r.Actor)}.",
+            "converted" when r.Other is { } key && faiths.TryGetValue(key, out var faith)
+                => $"By {r.Year} {PeopleOf(subject)} had turned to {faith} under {Lords(r.Actor)}.",
             "swore" => $"In {r.Year} {Lords(r.Actor)} swore fealty to {Lords(r.Counterpart)}.",
             "freed" => $"In {r.Year} {Lords(r.Actor)} threw off the rule of {Lords(r.Counterpart)}.",
             "collapsed" => $"In {r.Year} the vassals of {Lords(r.Actor)} walked out, and the realm came apart.",

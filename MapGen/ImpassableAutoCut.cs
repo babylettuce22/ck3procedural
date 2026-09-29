@@ -40,14 +40,15 @@ public sealed record AutoCutDiagnostics(
 /// <see cref="MapConfig.ImpassableFootRelief"/> of the way from its local floor to its local peak.
 /// The core height cut is searched so the walls, flanks included, cover
 /// <see cref="MapConfig.ImpassableShareOfLand"/> of land area — or less, where the scored pass's
-/// floor says the map's mountains run out sooner.</item>
+/// floor says the map's mountains run out sooner. Where a flank is a cliff, the wall runs on down
+/// it, outside the share (<see cref="MapConfig.ImpassableCliffSlope"/>).</item>
 /// <item>Clean: close small gaps, open hairlines, fill enclosed holes smaller than a barony and
 /// ledges cut off against the water smaller than half a barony, and drop pieces smaller than half
 /// a barony.</item>
 /// <item>Crests: each wall may run on along its own ridge
 /// (<see cref="MapConfig.ImpassableCrestFollow"/>), then walls still smaller than
 /// <see cref="MapConfig.ImpassableMinWallBaronies"/> are dropped and the rest cleaned again.</item>
-/// <item>Passes: at most one corridor per wall, through a thin neck the land route goes a long way
+/// <item>Passes: a corridor per wall, more on a long one, through a thin neck the land route goes a long way
 /// round; see <see cref="MountainPasses"/>.</item>
 /// </list>
 /// A wall therefore ends where its range's slopes give out, at whatever height that is for that
@@ -235,6 +236,21 @@ public static class ImpassableAutoCut
             });
         }
 
+        // Cliffs, outside the share. The foot is measured against the local floor, and beside the
+        // sea the floor is the sea, so the lower half of a sea cliff stayed passable however sheer
+        // it was, and the partition put baronies on it: on a 4096 inland-sea world, three holdings
+        // stood on ground 2.1–3.3x as steep as the steepest under any vanilla holding, in small
+        // provinces squeezed between a wall and the water, one of them a pass cut down the cliff.
+        // So a wall runs on down its flank for as long as the flank stays that steep. See
+        // ExtendDownCliffs.
+        string cliffs = "";
+        if (cfg.ImpassableCliffSlope > 0)
+        {
+            long added = ExtendDownCliffs(raw, elevation, land, cfg.Limits.SeaLevelUpper,
+                (float)cfg.ImpassableCliffSlope, width, height);
+            if (added > 0) cliffs = $"; cliffs +{(double)added / landTotal:P1} of land";
+        }
+
         // 4. Clean. Closing bridges the pixel gaps a threshold leaves in a range; opening removes
         // hairline spurs that would cut slivers into the neighbouring provinces.
         var mask = Erode(Dilate(raw, width, height, close), width, height, close);
@@ -274,7 +290,7 @@ public static class ImpassableAutoCut
         string crests = "";
         if (masked > 0 && (cfg.ImpassableCrestFollow > 0 || minWall > 0.5))
         {
-            var (followed, added, dropped) = FollowCrests(mask, smooth, footAnywhere, land, width, height,
+            var (followed, added, dropped) = FollowCrests(mask, smooth, footAnywhere, flat, land, width, height,
                 radius, barony, cfg.Limits.SeaLevelUpper, cfg.ImpassableCrestFollow,
                 cfg.ImpassableCrestReachBaronies, minWall);
             mask = Erode(Dilate(followed, width, height, close), width, height, close);
@@ -323,7 +339,7 @@ public static class ImpassableAutoCut
             : $"share {share:P0}";
         Console.WriteLine($"  impassable auto-cut: {diagnostics.MaskShare:P1} of land in {pieces} wall piece(s) " +
                           $"({quota} + plateaus {diagnostics.PlateauShare:P1}; mountain ground above " +
-                          $"{gateLine:F0}, mountain line {mountainLine:F0}, steep line {steepLine:F2}/px; {cut}{crests})");
+                          $"{gateLine:F0}, mountain line {mountainLine:F0}, steep line {steepLine:F2}/px; {cut}{cliffs}{crests})");
         if (cfg.MountainPasses) MountainPasses.Report(passes);
         return (mask, diagnostics);
     }
@@ -489,9 +505,16 @@ public static class ImpassableAutoCut
     /// ranges into systems (at 200 on the inland-sea world, the largest connected mountain ground
     /// grew from 66 baronies to 149), and a lone spike on a low ridge would decide whether the
     /// whole ridge is walled. The reach bounds it for the same reason.
+    ///
+    /// A crest never crosses <paramref name="flat"/> ground, which the cores and the foot already
+    /// leave out: a ridge is not flat. Without that, a small wall's line fell below a smooth apron
+    /// beside it and the crest spread over the whole apron. On a drowned-crater world, a lone wall
+    /// peaking at 276 had a line of 228, and its crest flooded the crater's outer slope at 230–280.
+    /// Crests made up a fifth of the walls there and 77% of the walled flat low ground, and 62% of
+    /// what they added was ground the flat rule had exempted.
     /// </summary>
     private static (bool[] Mask, long Added, int Dropped) FollowCrests(bool[] mask, float[] smooth,
-        bool[]? footAnywhere, byte[] land, int width, int height, int radius, double barony, float sea,
+        bool[]? footAnywhere, bool[]? flat, byte[] land, int width, int height, int radius, double barony, float sea,
         double fraction, double reachBaronies, double minBaronies)
     {
         int n = width * height;
@@ -547,7 +570,7 @@ public static class ImpassableAutoCut
                     int nx = x + dx, ny = y + dy;
                     if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
                     int q = ny * width + nx;
-                    if (owner[q] != 0 || land[q] == 0 || smooth[q] < line) continue;
+                    if (owner[q] != 0 || land[q] == 0 || smooth[q] < line || (flat is not null && flat[q])) continue;
                     owner[q] = id;
                     steps[q] = steps[p] + 1;
                     queue.Add(q);
@@ -916,9 +939,10 @@ public static class ImpassableAutoCut
     /// 4σ with mirrored edges. With <paramref name="land"/> given, only land counts and the sea is
     /// taken as 0, so the coast sits low. With <paramref name="needed"/> given, only rows holding a
     /// needed pixel are finished, and only the rows those draw on are blurred across; everything
-    /// else is left 0.
+    /// else is left 0. Every sample is raised to at least <paramref name="floorAt"/> first.
     /// </summary>
-    private static float[] Gaussian(float[] elevation, byte[]? land, bool[]? needed, int width, int height, double sigma)
+    private static float[] Gaussian(float[] elevation, byte[]? land, bool[]? needed, int width, int height, double sigma,
+        float floorAt = float.NegativeInfinity)
     {
         int r = (int)(4 * sigma + 0.5);
         var weights = new double[2 * r + 1];
@@ -949,7 +973,7 @@ public static class ImpassableAutoCut
             for (int j = 0; j < width + 2 * r; j++)
             {
                 int k = row + Mirror(j - r, width);
-                padded[j] = land is null || land[k] != 0 ? elevation[k] : 0f;
+                padded[j] = MathF.Max(land is null || land[k] != 0 ? elevation[k] : 0f, floorAt);
             }
             int x = 0;
             for (; x + lanes <= width; x += lanes)
@@ -1055,6 +1079,75 @@ public static class ImpassableAutoCut
             }
         });
         return result;
+    }
+
+    /// <summary>
+    /// Adds to <paramref name="walls"/> every land pixel at least <paramref name="line"/> steep that
+    /// the walls reach through ground as steep, four-connected, and returns how many it added.
+    ///
+    /// Steepness is the gradient of the terrain blurred at σ 1.5 px, about the footprint of a
+    /// holding, which is the scale the line was measured at on vanilla; the single-pixel slope
+    /// would read every eroded gully as a cliff. Water is taken at sea level before the blur, so
+    /// the drop to the seabed does not make every coast a cliff. The line is per pixel, which is
+    /// per world unit, because CK3 takes the world's width from the province map.
+    ///
+    /// Only ground joined to a wall is taken. A cliff on its own — the rim of a passable plateau,
+    /// the side of a gorge — would wall as a thin ring, the shape the opening in the clean is there
+    /// to remove.
+    /// </summary>
+    private static long ExtendDownCliffs(bool[] walls, float[] elevation, byte[] land, float sea, float line,
+        int width, int height)
+    {
+        var blurred = Gaussian(elevation, null, null, width, height, 1.5, floorAt: sea);
+
+        // Central differences over two pixels, one-sided at the edges, as the vanilla measure took them.
+        var cliff = new bool[walls.Length];
+        Parallel.For(0, height, y =>
+        {
+            int up = y > 0 ? y - 1 : y, down = y < height - 1 ? y + 1 : y;
+            float dyScale = down - up == 2 ? 0.5f : 1f;
+            for (int x = 0; x < width; x++)
+            {
+                int i = y * width + x;
+                if (land[i] == 0 || walls[i]) continue;
+                int left = x > 0 ? x - 1 : x, right = x < width - 1 ? x + 1 : x;
+                float dxScale = right - left == 2 ? 0.5f : 1f;
+                float dx = (blurred[y * width + right] - blurred[y * width + left]) * dxScale;
+                float dy = (blurred[down * width + x] - blurred[up * width + x]) * dyScale;
+                cliff[i] = dx * dx + dy * dy >= line * line;
+            }
+        });
+
+        var stack = new Stack<int>();
+        long added = 0;
+        for (int i = 0; i < walls.Length; i++)
+        {
+            if (!walls[i]) continue;
+            int x = i % width;
+            Take(x > 0, i - 1);
+            Take(x + 1 < width, i + 1);
+            Take(i >= width, i - width);
+            Take(i + width < walls.Length, i + width);
+            while (stack.Count > 0)
+            {
+                int k = stack.Pop();
+                int kx = k % width;
+                Take(kx > 0, k - 1);
+                Take(kx + 1 < width, k + 1);
+                Take(k >= width, k - width);
+                Take(k + width < walls.Length, k + width);
+            }
+        }
+        return added;
+
+        void Take(bool inside, int k)
+        {
+            if (!inside || !cliff[k]) return;
+            cliff[k] = false;
+            walls[k] = true;
+            added++;
+            stack.Push(k);
+        }
     }
 
     /// <summary>

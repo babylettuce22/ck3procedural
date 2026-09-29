@@ -31,10 +31,15 @@ public static class EthnicityWriter
             }
         }
 
+        // The horn accessory gene exists only in runs that shipped the horn models (see
+        // RaceHeadWriter.HornGeneShipped, written before this); naming an unregistered gene is an error.
+        bool hornGene = RaceHeadWriter.HornGeneShipped(modDir);
+
         void MorphGenes(Dictionary<string, List<GeneMorphEntry>> genes)
         {
             foreach (var (geneKey, entries) in genes)
             {
+                if (geneKey == Horns.Gene && !hornGene) continue;
                 using (b.Block(geneKey))
                     foreach (var entry in entries)
                         b.Inline($"{entry.Weight}",

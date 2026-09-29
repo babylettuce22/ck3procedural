@@ -218,7 +218,7 @@ public static class HistoryWriter
     /// the same text but logged "Missing loc for name" once per character — 5,130 lines in one
     /// session, a large share of error.log's 100,000-entry cap.
     /// </summary>
-    private static Func<string, string> NameTokens(CultureMap cultures)
+    internal static Func<string, string> NameTokens(CultureMap cultures)
     {
         var keys = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var culture in cultures.Cultures)
@@ -1464,7 +1464,7 @@ public static class HistoryWriter
     /// phenotype_human and corrected at game start from their own genome by
     /// <c>gen_reconcile_phenotype_with_genes_effect</c> in BaseFilesToCopy/Fantasy.
     /// </summary>
-    private static string? GetPhenotypeTrait(Culture culture, EthnicityMap ethnicityMap, MapConfig cfg)
+    internal static string? GetPhenotypeTrait(Culture culture, EthnicityMap ethnicityMap, MapConfig cfg)
     {
         var ethnicity = ethnicityMap.For(culture);
 
@@ -1477,6 +1477,7 @@ public static class HistoryWriter
             RaceArchetype.Giantkin => "phenotype_towering",
             RaceArchetype.Gnome => "phenotype_diminutive",
             RaceArchetype.Deepkin => "phenotype_dusk_adapted",
+            RaceArchetype.Hornkin => "phenotype_horned",
             RaceArchetype.Human when cfg.EnableFantasyEthnicities
                 && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly => "phenotype_human",
             _ => null,

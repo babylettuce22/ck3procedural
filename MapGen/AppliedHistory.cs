@@ -131,6 +131,7 @@ public sealed class AppliedHistory
             {
                 Founded = r.Founded + delta,
                 RulerBorn = r.RulerBorn > 0 ? r.RulerBorn + delta : 0,
+                RulerCrowned = r.RulerCrowned > 0 ? r.RulerCrowned + delta : 0,
             })],
             RealmLineage = RealmLineage,
             SeatLineage = SeatLineage,
@@ -140,9 +141,13 @@ public sealed class AppliedHistory
             Settled = Settled,
             SettlerCultures = SettlerCultures,
             Fallen = Fallen,
+            Peoples = [.. Peoples.Select(p => p with { Year = p.Year + delta })],
             Wars = [.. Wars.Select(w => w with { Started = w.Started + delta })],
             Truces = [.. Truces.Select(t => t with { Until = t.Until + delta })],
             Claims = [.. Claims.Select(c => c with { Until = c.Until + delta })],
+            DriftClocks = [.. DriftClocks.Select(c => c with { Since = c.Since + delta })],
+            Refusals = [.. Refusals.Select(r => r with { Until = r.Until + delta })],
+            Holdings = Holdings.ToDictionary(kv => kv.Key, kv => kv.Value with { Since = kv.Value.Since + delta }),
             Feuds = Feuds?.Select(f => f with { Since = f.Since + delta, CauseYear = f.CauseYear != 0 ? f.CauseYear + delta : 0 }).ToList(),
             Standings = Standings,
             Chronicle = [.. Chronicle.Select(r => r with { Year = r.Year + delta })],
@@ -181,10 +186,12 @@ public sealed class AppliedHistory
     /// One realm, by county index. <see cref="Suzerain"/> is another realm's <see cref="Id"/>.
     /// <see cref="Ruler"/>, <see cref="RulerFemale"/> and <see cref="RulerBorn"/> are the person the
     /// History workspace had on its throne, written as the realm's ruler; absent in a file saved
-    /// before rulers were simulated, when the seat's ruler is drawn as any other.
+    /// before rulers were simulated, when the seat's ruler is drawn as any other. <see cref="RulerCrowned"/>
+    /// is the year that ruler's reign began, so a history run on from this one keeps it; 0 in a file
+    /// saved before it was kept.
     /// </summary>
     public sealed record Realm(int Id, int Capital, int? Suzerain, string Culture, int Founded, int Peak, int[] Counties,
-        string? Ruler = null, bool RulerFemale = false, int RulerBorn = 0, string? RulerParent = null);
+        string? Ruler = null, bool RulerFemale = false, int RulerBorn = 0, string? RulerParent = null, int RulerCrowned = 0);
 
     /// <summary>The realms as the simulation had them in one year, without their rulers.</summary>
     public sealed record Frame(int Year, List<Realm> Realms);
@@ -295,6 +302,38 @@ public sealed class AppliedHistory
     /// <see cref="HistorySim.Fallen"/>. Empty in a file saved before the frontier was simulated.
     /// </summary>
     public int[] Fallen { get; init; } = [];
+
+    /// <summary>
+    /// A county taking its lords' culture or faith, by county index and key: the culture and the
+    /// faith it took, either null where only the other changed. See <see cref="HistorySim.PeopleChanges"/>.
+    /// </summary>
+    public sealed record PeopleChange(int County, int Year, string? Culture, string? Faith);
+
+    /// <summary>
+    /// Every county's people and faith changed during the history — this one's and those it was
+    /// run on from — oldest first, against the generated world's with the frontier's settlers laid
+    /// over it. Empty in a file saved before peoples were simulated, or with nothing changed.
+    /// </summary>
+    public List<PeopleChange> Peoples { get; init; } = [];
+
+    /// <summary>Whether the history changed any county's people or faith.</summary>
+    public bool MovesPeoples => Peoples.Count > 0;
+
+    /// <summary>
+    /// <paramref name="cultures"/> with every county the history assimilated given the culture it
+    /// last took. The same dictionary when nothing was.
+    /// </summary>
+    private Dictionary<Title, Culture> AssimilatedCultures(Dictionary<Title, Culture> cultures,
+        Dictionary<int, Title> byIndex, Dictionary<string, Culture> cultureByKey)
+    {
+        if (!Peoples.Any(p => p.Culture is not null)) return cultures;
+        var result = new Dictionary<Title, Culture>(cultures);
+        foreach (var change in Peoples)
+            if (change.Culture is { } key && byIndex.TryGetValue(change.County, out var county)
+                && cultureByKey.TryGetValue(key, out var culture))
+                result[county] = culture;
+        return result;
+    }
 
     /// <summary>A war under way on the applied date, by realm id and county index. See <see cref="SimWar"/>.</summary>
     public sealed record War(int Attacker, int Defender, int Target, int[] Goal, int Started, double Score, string Name);
@@ -474,6 +513,36 @@ public sealed class AppliedHistory
             .Select(s => new Standing(s.Realm!.Id, Math.Round(s.Standing, 1)))
             .OrderBy(s => s.Realm)];
     }
+
+    /// <summary>
+    /// A title partway through drifting on the applied date, by key: the parent it is drifting
+    /// toward, how far along, and since when. See <see cref="HistorySim.DriftClocks"/>.
+    /// </summary>
+    public sealed record DriftClock(string Title, string Toward, double Progress, int Since);
+
+    /// <summary>
+    /// The titles partway through drifting, so a history run on from this one carries on rather than
+    /// starting every clock again. Empty in a file saved before it was kept.
+    /// </summary>
+    public List<DriftClock> DriftClocks { get; init; } = [];
+
+    /// <summary>A realm that broke free, by id: the bloc it will not swear to again, by its head's id, and until when.</summary>
+    public sealed record Refusal(int Realm, int FromRoot, int Until);
+
+    /// <summary>
+    /// The realms still refusing homage to the bloc they broke from on the applied date (see
+    /// <see cref="RealmRules.Independence"/>). Empty in a file saved before it was kept.
+    /// </summary>
+    public List<Refusal> Refusals { get; init; } = [];
+
+    /// <summary>
+    /// When each held county last changed hands, by county index, with the realm id that holds it —
+    /// what assimilation and conversion measure a county's rooting from. Empty in a file saved before
+    /// it was kept, when every holding counts as long held.
+    /// </summary>
+    public Dictionary<int, HeldSince> Holdings { get; init; } = [];
+
+    public sealed record HeldSince(int Realm, int Since);
 
     /// <summary>The truces running on the applied date. Records, not tuples: the file's serialiser skips tuple fields.</summary>
     public List<Truce> Truces { get; init; } = [];
@@ -672,17 +741,21 @@ public sealed class AppliedHistory
             Realms = [.. sim.Realms.OrderBy(p => p.Id).Select(p => sim.RulerOf(p) is { } r
                 ? new Realm(p.Id, p.Capital.Index, p.Suzerain?.Id, p.Culture.Key, p.Founded, p.Peak,
                     [.. p.Counties.Select(c => c.Index).Order()], r.Name, r.Female, r.Born,
-                    r.Parent is { } parent ? PersonKey(parent, sim.StartYear) : null)
+                    r.Parent is { } parent ? PersonKey(parent, sim.StartYear) : null, r.Crowned)
                 : new Realm(p.Id, p.Capital.Index, p.Suzerain?.Id, p.Culture.Key, p.Founded, p.Peak,
                     [.. p.Counties.Select(c => c.Index).Order()]))],
             RealmLineage = realmLineage,
             SeatLineage = seatLineage,
-            Reigns = PastReigns(sim),
+            Reigns = WithEarlierReigns(PastReigns(sim), sim, earlier),
             DeJure = sim.DeJureMap().ToDictionary(kv => kv.Key.Key, kv => kv.Value.Key),
             Wars = [.. sim.Wars.Select(w => new War(w.Attacker.Id, w.Defender.Id, w.Target.Index,
                 [.. w.Goal.Select(c => c.Index).Order()], w.Started, w.Score, w.Name))],
             Truces = [.. sim.Truces.Select(t => new Truce(t.A, t.B, t.Until))],
             Claims = [.. sim.Claims.Select(c => new Claim(c.County.Index, c.Claimant.Id, c.Until))],
+            // What is partway done on the day, for a history run on from this one to pick up.
+            DriftClocks = [.. sim.DriftClocks.Select(c => new DriftClock(c.Title.Key, c.Toward.Key, c.Progress, c.Since))],
+            Refusals = [.. sim.Refusals.Select(r => new Refusal(r.Key, r.Value.FromRoot, r.Value.Until)).OrderBy(r => r.Realm)],
+            Holdings = sim.HeldSince.ToDictionary(kv => kv.Key.Index, kv => new HeldSince(kv.Value.Realm, kv.Value.Since)),
             Feuds = FeudsOf(sim),
             Standings = StandingsOf(sim),
             Chronicle = Memory(now, earlier),
@@ -694,6 +767,10 @@ public sealed class AppliedHistory
             SettlerCultures = sim.Settled.Where(c => sim.SettlerCulture(c) is not null)
                 .ToDictionary(c => c.Index, c => sim.SettlerCulture(c)!.Key),
             Fallen = [.. sim.Fallen.Select(c => c.Index).Order()],
+            // The earlier history's changes, less the counties this one settled or lost to ruin —
+            // those were given their people by that — then this one's.
+            Peoples = [.. (earlier?.Peoples ?? []).Where(p => !sim.Resettled(p.County)),
+                       .. sim.PeopleChanges.Select(p => new PeopleChange(p.County.Index, p.Year, p.Culture?.Key, p.Faith?.Key))],
             Colours = colours?.ToDictionary(kv => kv.Key, kv => kv.Value.R << 16 | kv.Value.G << 8 | kv.Value.B) ?? [],
             // The earlier history's years, then this one's, so a chain of histories is one timeline.
             Timeline = [.. (earlier?.Timeline ?? []).Where(f => f.Year < sim.StartYear), .. sim.Frames],
@@ -753,6 +830,41 @@ public sealed class AppliedHistory
                 if (!Ancestors(ruler)) return reigns;
         }
         return reigns;
+    }
+
+    /// <summary>
+    /// This history's reigns with the title holders of the one it was run on from, for every realm
+    /// that still stands: a realm's title history then runs back through both, not only to where
+    /// the second history began. An earlier ruler this history already carried as an ancestor — a
+    /// character with no title, since the realm he reigned in was not one of this history's — gets
+    /// his realm back; any other goes in after this history's own, most recent first, up to
+    /// <see cref="MaxReignsPerRealm"/> title holders a realm and <see cref="MaxReigns"/> in all.
+    /// Realms gone by now keep none: they have no title to have held, as in <see cref="PastReigns"/>.
+    /// </summary>
+    private static List<Reign> WithEarlierReigns(List<Reign> reigns, HistorySim sim, AppliedHistory? earlier)
+    {
+        if (earlier is null || earlier.Reigns.Count == 0) return reigns;
+
+        var standing = sim.Realms.Select(p => p.Id).ToHashSet();
+        var carried = earlier.Reigns.Where(r => standing.Contains(r.RealmId)).ToList();
+        if (carried.Count == 0) return reigns;
+
+        var realmOf = carried.Where(r => r.Key is not null).GroupBy(r => r.Key!)
+                             .ToDictionary(g => g.Key, g => g.First().RealmId, StringComparer.Ordinal);
+        var result = reigns.Select(r => r.RealmId < 0 && r.Key is { } key && realmOf.TryGetValue(key, out int realm)
+            ? r with { RealmId = realm } : r).ToList();
+
+        var have = result.Where(r => r.Key is not null).Select(r => r.Key!).ToHashSet(StringComparer.Ordinal);
+        var holders = result.Where(r => r.RealmId >= 0).GroupBy(r => r.RealmId).ToDictionary(g => g.Key, g => g.Count());
+        foreach (var reign in carried.OrderByDescending(r => r.Died).ThenBy(r => r.RealmId))
+        {
+            if (result.Count >= MaxReigns) break;
+            if (reign.Key is { } key && have.Contains(key)) continue;
+            if (holders.GetValueOrDefault(reign.RealmId) >= MaxReignsPerRealm) continue;
+            result.Add(reign);
+            holders[reign.RealmId] = holders.GetValueOrDefault(reign.RealmId) + 1;
+        }
+        return result;
     }
 
     /// <summary>How many generations behind a ruler the tree is kept: about two centuries.</summary>
@@ -1160,7 +1272,10 @@ public sealed class AppliedHistory
             {
                 Adjacent = adjacent ?? rules.Adjacent,
                 Development = rules.Development,
-                CountyCulture = MovesWilds ? SettledCultures(rules.CountyCulture, owner) : rules.CountyCulture,
+                // As the history left them: settlers on settled land, and whatever the held land
+                // was assimilated to — which a history run on from this one goes on from.
+                CountyCulture = AssimilatedCultures(MovesWilds ? SettledCultures(rules.CountyCulture, owner) : rules.CountyCulture,
+                    byIndex, cultureByKey),
                 AvgKingdom = rules.AvgKingdom,
                 Reach = rules.Reach,
                 Aggression = rules.Aggression,

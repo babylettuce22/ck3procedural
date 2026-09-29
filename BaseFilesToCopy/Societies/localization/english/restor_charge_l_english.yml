@@ -1,0 +1,135 @@
+﻿l_english:
+
+ # ---- The panel line (RestorCurrentCharge) ------------------------------------------------------
+
+ restor_charge_line_win_over:0 "Win over [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetTitledFirstName] to House $restor_house_name$ [ROOT.Char.Custom('RestorChargeDeadline')]"
+ restor_charge_line_war_chest:0 "Give 100 gold to the cause [ROOT.Char.Custom('RestorChargeDeadline')]"
+ restor_charge_line_stir:0 "Stir the old loyalties in [ROOT.Char.MakeScope.Var('restor_charge_target').Title.GetNameNoTier] [ROOT.Char.Custom('RestorChargeDeadline')]"
+ restor_charge_line_shelter:0 "Bring [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetTitledFirstName] to your court [ROOT.Char.Custom('RestorChargeDeadline')]"
+ restor_charge_line_recruit:0 "Swear someone new into $restor_society_name$ [ROOT.Char.Custom('RestorChargeDeadline')]"
+ restor_charge_line_none:0 "No charge from the Keeper."
+ restor_charge_deadline:0 "#weak (by [GetCurrentDateWithDiff( GetVarTimeRemaining( ROOT.Char.MakeScope, 'restor_charge_given') )])#!"
+ restor_charge_overdue:0 "#N (overdue)#!"
+
+ # ---- Shared tooltips and toasts ------------------------------------------------------------------
+
+ restor_charge_withdrawn_toast:0 "The Keeper Withdraws Your Charge"
+ restor_charge_withdrawn_tt:0 "What the Keeper asked of you can no longer be done. Nobody holds it against you."
+ restor_charge_withdrawn_restored_tt:0 "The crown of $restor_crown_name$ is back with House $restor_house_name$. The old charges are set aside."
+ restor_charge_gold_counts_tt:0 "The gold counts toward your charge from the Keeper"
+
+ # ---- Decisions ---------------------------------------------------------------------------------
+
+ restor_stir_the_county_decision:0 "Stir the Old Loyalties"
+ restor_stir_the_county_decision_desc:0 "The Keeper has asked you to stir [ROOT.Char.MakeScope.Var('restor_charge_target').Title.GetNameNoTier]. Pay a few priests and headmen to say House $restor_house_name$'s name again, and to keep saying it."
+ restor_stir_the_county_decision_tooltip:0 "Stir [ROOT.Char.MakeScope.Var('restor_charge_target').Title.GetNameNoTier] for House $restor_house_name$."
+ restor_stir_the_county_decision_confirm:0 "Pay them"
+ restor_stir_the_county_reach_tt:0 "You hold [ROOT.Char.MakeScope.Var('restor_charge_target').Title.GetNameNoTier], a county next to it or a county of the same duchy, or you are there in person"
+ restor_stir_the_county_not_stirred_tt:0 "[ROOT.Char.MakeScope.Var('restor_charge_target').Title.GetNameNoTier] is not stirred already"
+
+ restor_speak_for_the_heir_decision:0 "Speak for the Heir"
+ restor_speak_for_the_heir_decision_desc:0 "The Keeper wants [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetTitledFirstName] on the side of House $restor_house_name$. Write to [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetHerHim], visit, flatter, remind [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetHerHim] of what the old kings did for [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetHerHis] family. A little at a time."
+ restor_speak_for_the_heir_decision_tooltip:0 "Make [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetTitledFirstName] think better of the heir of House $restor_house_name$. Once a year."
+ restor_speak_for_the_heir_decision_confirm:0 "Speak for the heir"
+
+ restor_send_for_the_heir_decision:0 "Send for the Heir"
+ restor_send_for_the_heir_decision_desc:0 "The heir of House $restor_house_name$ has no land and no safe roof. Send an escort and a purse, and bring the heir to your court, where you can keep watch yourself."
+ restor_send_for_the_heir_decision_tooltip:0 "Bring the heir of House $restor_house_name$ to your court."
+ restor_send_for_the_heir_decision_confirm:0 "Send the escort"
+
+ # ---- restor.0501 -------------------------------------------------------------------------------
+
+ restor.0501.t:0 "A Charge from the Keeper"
+ restor.0501.desc_win_over:0 "A letter from [restor_keeper.GetTitledFirstName], unsigned, in the hand you have learned to know. [restor_keeper.GetSheHe|U] wants [restor_charge_target.GetTitledFirstName] brought over to House $restor_house_name$.\n\nIt is done when [restor_charge_target.GetSheHe] swears the oath, or when [restor_charge_target.GetSheHe] thinks well enough of [restor_pretender.GetTitledFirstName] to back [restor_pretender.GetHerHim], which means an opinion of at least #high 30#!. You can #high Speak for the Heir#! from the decisions panel once a year, or sound [restor_charge_target.GetHerHim] out for the oath.\n\nYou have three years."
+ restor.0501.desc_war_chest:0 "A letter from [restor_keeper.GetTitledFirstName], unsigned, in the hand you have learned to know. The Sworn need gold before they need anything else, and [restor_keeper.GetSheHe] is asking you for #high 100#! of it.\n\nIt is done when you have sent 100 gold to [restor_pretender.GetTitledFirstName] with the #high Give to the Cause#! decision. You have three years."
+ restor.0501.desc_stir:0 "A letter from [restor_keeper.GetTitledFirstName], unsigned, in the hand you have learned to know. In [restor_charge_county.GetNameNoTier], people have stopped talking about House $restor_house_name$. [restor_keeper.GetSheHe|U] wants them talking again.\n\nIt is done when [restor_charge_county.GetNameNoTier] is #high stirred#!. Send an errand of the Sworn there, or, if you hold land in its duchy or next to it, use the #high Stir the Old Loyalties#! decision.\n\nYou have three years."
+ restor.0501.desc_shelter:0 "A letter from [restor_keeper.GetTitledFirstName], unsigned, in the hand you have learned to know. [restor_pretender.GetTitledFirstName] has no land of [restor_pretender.GetHerHis] own and no safe court, and the Keeper does not like where [restor_pretender.GetSheHe] is sleeping.\n\nIt is done when [restor_pretender.GetTitledFirstName] is a member of your court. Use the #high Send for the Heir#! decision to bring [restor_pretender.GetHerHim] in. Keeping the heir will make you easier to find.\n\nYou have three years."
+ restor.0501.desc_recruit:0 "A letter from [restor_keeper.GetTitledFirstName], unsigned, in the hand you have learned to know. $restor_society_name$ need more lords, and [restor_keeper.GetSheHe] thinks you know some who could be trusted.\n\nIt is done when someone you bring in swears the oath. Look among your own vassals and courtiers first: they already trust you. You have three years."
+ restor.0501.a:0 "It will be done."
+ restor.0501.a.win_over_tt:0 "If you do it in time: #P 60#! favour, higher standing, and the Keeper's good opinion"
+ restor.0501.a.war_chest_tt:0 "If you do it in time: #P 40#! favour, higher standing, and the Keeper's good opinion"
+ restor.0501.a.stir_tt:0 "If you do it in time: #P 50#! favour, higher standing, and the Keeper's good opinion"
+ restor.0501.a.shelter_tt:0 "If you do it in time: #P 60#! favour, higher standing, and the Keeper's good opinion"
+ restor.0501.a.recruit_tt:0 "If you do it in time: #P 50#! favour, higher standing, and the Keeper's good opinion"
+ restor.0501.b:0 "Tell the Keeper to ask someone else."
+ restor.0501.b.tt:0 "The charge goes to someone else"
+
+ # ---- restor.0510-0514 --------------------------------------------------------------------------
+
+ restor.0510.t:0 "Won Over"
+ restor.0510.desc_sworn:0 "[restor_charge_target.GetTitledFirstName] has sworn the oath. Another lord of $restor_crown_name$ stands with House $restor_house_name$, and the Keeper knows who brought [restor_charge_target.GetHerHim] in.\n\n[restor_keeper.GetTitledFirstName]'s letter is short. It says you did well."
+ restor.0510.desc:0 "[restor_charge_target.GetTitledFirstName] has started speaking well of [restor_pretender.GetTitledFirstName]. Not in public yet, but at [restor_charge_target.GetHerHis] own table, where it counts. When the standard is raised, [restor_charge_target.GetSheHe] will remember who talked to [restor_charge_target.GetHerHim] first.\n\n[restor_keeper.GetTitledFirstName]'s letter is short. It says you did well."
+ restor.0510.desc_fallback:0 "The lord the Keeper asked you to win over has come round to House $restor_house_name$.\n\n[restor_keeper.GetTitledFirstName]'s letter is short. It says you did well."
+ restor.0510.a:0 "One more."
+
+ restor.0511.t:0 "The Gold Arrives"
+ restor.0511.desc:0 "Word comes back through the usual hands: the gold reached [restor_pretender.GetTitledFirstName], and none of it went missing on the way.\n\nThe Keeper will not say what it is for. Swords, bribes, a winter's bread for men who will be needed in spring. It does not matter. It is more than most of the Sworn have given."
+ restor.0511.a:0 "Gold is easier to find than soldiers."
+
+ restor.0512.t:0 "The Old Name Is Spoken"
+ restor.0512.desc:0 "In [restor_charge_county.GetNameNoTier] they are talking about House $restor_house_name$ again. The priest has started praying for the old kings again, the old songs are sung in the alehouses, and nobody in the village will say who started it.\n\n[restor_keeper.GetTitledFirstName] sends word that [restor_keeper.GetSheHe] has heard. That is all [restor_keeper.GetSheHe] needs to say."
+ restor.0512.desc_fallback:0 "The county the Keeper asked you to stir is talking about House $restor_house_name$ again.\n\n[restor_keeper.GetTitledFirstName] sends word that [restor_keeper.GetSheHe] has heard. That is all [restor_keeper.GetSheHe] needs to say."
+ restor.0512.a:0 "Let them keep talking."
+
+ restor.0513.t:0 "The Heir Under Your Roof"
+ restor.0513.desc:0 "[restor_pretender.GetTitledFirstName] is at your court. [restor_pretender.GetSheHe|U] arrived with a small household and a smaller purse, and has been given the best rooms you have.\n\nIt is a risk. If the wrong people learn who your guest is, they will know what you are. But the heir of House $restor_house_name$ is safe tonight, and it is you who made [restor_pretender.GetHerHim] safe."
+ restor.0513.a:0 "No one will touch [restor_pretender.GetHerHim] here."
+
+ restor.0514.t:0 "A New Oath"
+ restor.0514.desc:0 "You have brought someone new into $restor_society_name$, as the Keeper asked. There is one more person who will answer when the call comes, and one more who knows your name.\n\n[restor_keeper.GetTitledFirstName] writes that [restor_keeper.GetSheHe] is pleased."
+ restor.0514.a:0 "Good."
+
+ # ---- restor.0520 -------------------------------------------------------------------------------
+
+ restor.0520.t:0 "The Keeper Is Disappointed"
+ restor.0520.desc_win_over:0 "Three years ago [restor_keeper.GetTitledFirstName] asked you to bring [restor_charge_target.GetTitledFirstName] over to House $restor_house_name$. [restor_charge_target.GetSheHe|U] is no closer to it now than then.\n\nThe Keeper's letter does not reproach you. It does not need to. The charge has been given to someone else."
+ restor.0520.desc_stir:0 "Three years ago [restor_keeper.GetTitledFirstName] asked you to stir [restor_charge_county.GetNameNoTier]. Nobody there talks about House $restor_house_name$ any more than they did.\n\nThe Keeper's letter does not reproach you. It does not need to. The charge has been given to someone else."
+ restor.0520.desc_war_chest:0 "Three years ago [restor_keeper.GetTitledFirstName] asked you for 100 gold for [restor_pretender.GetTitledFirstName]. It never came.\n\nThe Keeper's letter does not reproach you. It does not need to. The charge has been given to someone else."
+ restor.0520.desc_shelter:0 "Three years ago [restor_keeper.GetTitledFirstName] asked you to take [restor_pretender.GetTitledFirstName] into your court. The heir is still somewhere else, and still unsafe.\n\nThe Keeper's letter does not reproach you. It does not need to. The charge has been given to someone else."
+ restor.0520.desc_recruit:0 "Three years ago [restor_keeper.GetTitledFirstName] asked you to bring someone new into $restor_society_name$. You have not.\n\nThe Keeper's letter does not reproach you. It does not need to. The charge has been given to someone else."
+ restor.0520.a:0 "I will do better next time."
+ restor.0520.a.tt:0 "The Keeper will give you another charge in time"
+
+ # ---- restor.0530 -------------------------------------------------------------------------------
+
+ restor.0530.t:0 "Supper with [restor_charge_target.GetFirstNameNoTooltip]"
+ restor.0530.desc:0 "[restor_charge_target.GetTitledFirstName] is at your table tonight, the lord the Keeper asked you to win over. The talk has turned to $restor_crown_name$ twice already, and both times it was [restor_charge_target.GetSheHe] who turned it.\n\nYou could speak for [restor_pretender.GetTitledFirstName] now, plainly. If [restor_charge_target.GetSheHe] is not ready to hear it, [restor_charge_target.GetSheHe] will remember what you said. Or you could let a gift speak for you."
+ restor.0530.a:0 "I'll tell [restor_charge_target.GetHerHim] who the rightful heir is."
+ restor.0530.a.success:0 "[restor_charge_target.GetFirstNameNoTooltip] Listens"
+ restor.0530.a.failure:0 "[restor_charge_target.GetFirstNameNoTooltip] Will Not Hear It"
+ restor.0530.b:0 "Give [restor_charge_target.GetHerHim] a gift in the heir's name."
+ restor.0530.c:0 "Not tonight."
+
+ # ---- restor.0531 -------------------------------------------------------------------------------
+
+ restor.0531.t:0 "A Priest in [restor_charge_county.GetNameNoTier]"
+ restor.0531.desc:0 "One of your people has found a village priest in [restor_charge_county.GetNameNoTier] who still says the old prayers for House $restor_house_name$, quietly, at the end of the service when most have left.\n\nFor a little money he will say them at the start, where everyone can hear. That would stir the county, as the Keeper asked. It would also be one more person who knows where the money came from."
+ restor.0531.a:0 "Pay him."
+ restor.0531.b:0 "It's too dangerous."
+ restor.0531.b.tt:0 "The Keeper's charge stays open"
+
+ # ---- restor.0532 -------------------------------------------------------------------------------
+
+ restor.0532.t:0 "A Merchant from $restor_seat_name$"
+ restor.0532.desc:0 "A cloth merchant from $restor_seat_name$ asks to see you in private. His family did well under the old kings, and he trades in the towns where [restor_pretender.GetTitledFirstName] keeps [restor_pretender.GetHerHis] household.\n\nHe offers to carry gold to the heir hidden in his bales, and to add some of his own if the sum is worth the risk. It would go toward the Keeper's charge."
+ restor.0532.a:0 "Take 100 gold to the heir."
+ restor.0532.a.tt:0 "The merchant adds #P 25#! gold of his own"
+ restor.0532.b:0 "Take 50 now. I'll find the rest."
+ restor.0532.c:0 "Not now."
+
+ # ---- restor.0533 -------------------------------------------------------------------------------
+
+ restor.0533.t:0 "A Letter from the Heir"
+ restor.0533.desc:0 "[restor_pretender.GetTitledFirstName] has written to you in [restor_pretender.GetHerHis] own hand. [restor_pretender.GetSheHe|U] does not feel safe where [restor_pretender.GetSheHe] is. There have been strangers asking questions, and [restor_pretender.GetHerHis] host has started to look at [restor_pretender.GetHerHim] like a debt.\n\n[restor_pretender.GetSheHe|U] asks if your court has room. The Keeper asked you the same thing."
+ restor.0533.a:0 "Come. You will be safe here."
+ restor.0533.b:0 "Not yet. It would bring the hunters to my door."
+ restor.0533.b.tt:0 "The Keeper's charge stays open"
+
+ # ---- restor.0534 -------------------------------------------------------------------------------
+
+ restor.0534.t:0 "A Likely Recruit"
+ restor.0534.desc:0 "The Keeper wants you to bring someone new into $restor_society_name$, and you have been watching [restor_charge_recruit.GetTitledFirstName]. [restor_charge_recruit.GetSheHe|U] grumbles about who rules $restor_crown_name$ now and has twice asked what became of House $restor_house_name$.\n\nThat might be enough. Or [restor_charge_recruit.GetSheHe] might tell the wrong people the moment you have said too much."
+ restor.0534.a:0 "I'll sound [restor_charge_recruit.GetHerHim] out."
+ restor.0534.a.success:0 "[restor_charge_recruit.GetFirstNameNoTooltip] Swears the Oath"
+ restor.0534.a.failure:0 "[restor_charge_recruit.GetFirstNameNoTooltip] Refuses"
+ restor.0534.b:0 "Not [restor_charge_recruit.GetHerHim]."

@@ -1,0 +1,123 @@
+﻿l_english:
+
+ # ---- Interactions ------------------------------------------------------------------------------
+
+ restor_sound_out_interaction:0 "Sound Out"
+ restor_sound_out_interaction_desc:0 "Raise the old kingdom of $restor_crown_name$ in conversation, carefully, and find out where this person stands on House $restor_house_name$ before saying anything you cannot take back."
+ restor_sound_out_interaction_tt:0 "Learn whether they are #high sympathetic#!, cold, or #N dangerous#! to the cause. A cold answer raises your exposure a little, a dangerous one more. The sympathetic are far more likely to accept the oath."
+ restor_sound_out_already_sympathetic_tt:0 "Already known to be sympathetic. #high Offer the Oath#! instead."
+ restor_recruit_refused_recently_tt:0 "Refused the Sworn within the last five years"
+
+ restor_offer_oath_interaction:0 "Offer the Oath"
+ restor_offer_oath_interaction_desc:0 "Tell this person plainly what you are, and ask them to swear the oath of $restor_society_name$. If they refuse, they will know your secret."
+ restor_offer_oath_needs_trust_tt:0 "They have been sounded out and found sympathetic, or you are at least #high Trusted#! among the Sworn"
+ restor_offer_oath_interaction_sympathetic_tt:0 "They are known to be sympathetic, and #high likely#! to accept. If they join, you gain favour and standing. If they refuse, your exposure rises."
+ restor_offer_oath_interaction_cold_tt:0 "Nobody has sounded them out. They may well #N refuse#!, and a refusal raises your exposure. If they join, you gain favour and standing."
+
+ # ---- restor.0101 -------------------------------------------------------------------------------
+
+ restor.0101.t:0 "A Question About the Old Crown"
+ restor.0101.desc_intro:0 "[restor_recruiter.GetTitledFirstName] has sought your company more than once this season, and every time the talk comes back round to $restor_crown_name$. $restor_fall_sentence$ [restor_recruiter.GetSheHe|U] seems to think House $restor_house_name$ was robbed."
+ restor.0101.desc_intro_blood:0 "[restor_recruiter.GetTitledFirstName] has sought your company more than once this season, and every time the talk comes back round to $restor_crown_name$. $restor_fall_sentence$ It was your own family's crown, and [restor_recruiter.GetSheHe] talks about it as if it still is."
+ restor.0101.desc_society:0 "\n\nYou have heard of $restor_society_name$, who are sworn to put House $restor_house_name$ back on that throne and name [restor_pretender.GetTitledFirstName] as the rightful heir. [restor_recruiter.GetSheHe|U] has not said the name. But [restor_recruiter.GetSheHe] is plainly asking where you stand."
+ restor.0101.desc_society_no_heir:0 "\n\nYou have heard of $restor_society_name$, who are sworn to put House $restor_house_name$ back on that throne. [restor_recruiter.GetSheHe|U] has not said the name. But [restor_recruiter.GetSheHe] is plainly asking where you stand."
+ restor.0101.a:0 "House $restor_house_name$ was robbed. I don't care who hears me say it."
+ restor.0101.a.tt:0 "[restor_recruiter.GetFirstNameNoTooltip] will know you are #high sympathetic#! to the cause"
+ restor.0101.a.offer_tt:0 "Expect [restor_recruiter.GetHerHim] to come back soon with an offer"
+ restor.0101.b:0 "I'd rather talk about something else."
+ restor.0101.b.tt:0 "[restor_recruiter.GetFirstNameNoTooltip] will take the hint and let it drop"
+ restor.0101.c:0 "Talk like that gets people hanged, [restor_recruiter.GetFirstNameNoTooltip]."
+ restor.0101.c.tt:0 "[restor_recruiter.GetFirstNameNoTooltip] will take it as a warning, and will not raise the subject with you again"
+
+ # ---- restor.0102-0104 --------------------------------------------------------------------------
+
+ restor.0102.t:0 "A Friend to the House"
+ restor.0102.desc:0 "You raised the old kingdom with [restor_recruit.GetTitledFirstName], carefully, the way the Sworn are taught to. [restor_recruit.GetSheHe|U] did not change the subject. [restor_recruit.GetSheHe|U] said House $restor_house_name$ was robbed of $restor_crown_name$, and said it without lowering [restor_recruit.GetHerHis] voice.\n\nThat is as good an answer as anyone gets before the oath is offered."
+ restor.0102.a:0 "Then I'll offer [restor_recruit.GetHerHim] the oath now."
+ restor.0102.a.tt:0 "Ask [restor_recruit.GetFirstNameNoTooltip] to swear. Having answered as [restor_recruit.GetSheHe] did, [restor_recruit.GetSheHe] is #high likely#! to accept"
+ restor.0102.b:0 "Not yet. Let [restor_recruit.GetHerHim] think on it."
+ restor.0102.b.tt:0 "For five years [restor_recruit.GetFirstNameNoTooltip] is known to be #high sympathetic#!: any of the Sworn can #high Offer the Oath#!, and [restor_recruit.GetSheHe] is far more likely to take it"
+
+ restor.0103.t:0 "No Interest"
+ restor.0103.desc:0 "You raised the old kingdom with [restor_recruit.GetTitledFirstName]. [restor_recruit.GetSheHe|U] listened politely, said it was all a long time ago, and asked about your harvest.\n\nThere is nothing to be done with an answer like that, except hope [restor_recruit.GetSheHe] does not repeat the conversation to anyone."
+ restor.0103.a:0 "Leave it there."
+
+ restor.0104.t:0 "A Dangerous Conversation"
+ restor.0104.desc:0 "You raised the old kingdom with [restor_recruit.GetTitledFirstName], and [restor_recruit.GetHerHis] face went cold. [restor_recruit.GetSheHe|U] said that anyone still talking about House $restor_house_name$ ought to be reported, and looked straight at you while [restor_recruit.GetSheHe] said it.\n\n[restor_recruit.GetSheHe|U] has no proof of anything. But [restor_recruit.GetSheHe] will remember, and so will anyone [restor_recruit.GetSheHe] tells."
+ restor.0104.a:0 "I'll keep well away from [restor_recruit.GetHerHim] from now on."
+ restor.0104.b:0 "Send [restor_recruit.GetHerHim] a generous gift, and hope [restor_recruit.GetSheHe] takes the hint."
+
+ # ---- restor.0105 -------------------------------------------------------------------------------
+
+ restor.0105.t:0 "A Likely Lord"
+ restor.0105.desc_sympathetic:0 "[restor_recruit.GetTitledFirstName] has already told one of the Sworn that House $restor_house_name$ was robbed of $restor_crown_name$. Nobody has offered [restor_recruit.GetHerHim] the oath yet."
+ restor.0105.desc_blood:0 "[restor_recruit.GetTitledFirstName] is of House $restor_house_name$ and has never sworn the oath. Blood does not make anyone one of the Sworn, but it is a better start than most."
+ restor.0105.desc_land:0 "[restor_recruit.GetTitledFirstName] holds land that belonged to $restor_crown_name$ and has never sworn the oath. A lord on the old land is worth ten anywhere else."
+ restor.0105.desc_people:0 "[restor_recruit.GetTitledFirstName] is of the old kingdom's own people and has never sworn the oath. People of $restor_seat_name$ have long memories."
+ restor.0105.desc_hates_usurper:0 "\n\nWord is that [restor_recruit.GetSheHe] has no love for [restor_usurper.GetTitledFirstName]."
+ restor.0105.desc_unknown:0 "\n\nYou do not know yet where [restor_recruit.GetSheHe] stands."
+ restor.0105.desc_how:0 "\n\nYou can #high Sound Out#! a likely lord, or #high Offer the Oath#! to one who is ready, by right-clicking them. You could start with [restor_recruit.GetFirstNameNoTooltip]."
+ restor.0105.a:0 "I'll sound [restor_recruit.GetHerHim] out."
+ restor.0105.a.tt:0 "Raise the old kingdom with [restor_recruit.GetFirstNameNoTooltip] and see how [restor_recruit.GetSheHe] answers: #high sympathetic#!, cold, or #N dangerous#!"
+ restor.0105.b:0 "I'll offer [restor_recruit.GetHerHim] the oath."
+ restor.0105.b.tt:0 "Ask [restor_recruit.GetFirstNameNoTooltip] to swear. Having spoken for the house already, [restor_recruit.GetSheHe] is #high likely#! to accept"
+ restor.0105.c:0 "Not now."
+
+ # ---- restor.0110 -------------------------------------------------------------------------------
+
+ restor.0110.t:0 "An Offer in Private"
+ restor.0110.desc_intro:0 "[restor_recruiter.GetTitledFirstName] asks to speak with you alone, and once the door is shut [restor_recruiter.GetSheHe] does not waste words. [restor_recruiter.GetSheHe|U] is one of $restor_society_name$, sworn to put House $restor_house_name$ back on the throne of $restor_crown_name$. $restor_fall_sentence$"
+ restor.0110.desc_heir_kin:0 "\n\nThe Sworn name [restor_pretender.GetTitledFirstName], of your own house, as the rightful heir. They want you with them, and [restor_recruiter.GetSheHe] is asking you to swear the oath tonight."
+ restor.0110.desc_heir:0 "\n\nThe Sworn name [restor_pretender.GetTitledFirstName] as the rightful heir. They want you with them, and [restor_recruiter.GetSheHe] is asking you to swear the oath tonight."
+ restor.0110.desc_no_heir:0 "\n\nThe Sworn want you with them, and [restor_recruiter.GetSheHe] is asking you to swear the oath tonight."
+ restor.0110.desc_risk_usurper:0 "\n\n[restor_recruiter.GetSheHe|U] has just put [restor_recruiter.GetHerHis] life in your hands, and knows it. One word to [restor_usurper.GetTitledFirstName] would be enough."
+ restor.0110.desc_risk:0 "\n\n[restor_recruiter.GetSheHe|U] has just put [restor_recruiter.GetHerHis] life in your hands, and knows it."
+ restor.0110.a:0 "I'll swear it."
+ restor.0110.a.tt:0 "You join #high $restor_society_name$#! as one of the Sworn"
+ restor.0110.b:0 "No. And I'll forget you ever asked."
+ restor.0110.b.tt:0 "[restor_recruiter.GetFirstNameNoTooltip] leaves, and the Sworn will not ask you again for five years"
+ restor.0110.c:0 "I'll tell [restor_usurper.GetTitledFirstName] what you are."
+ restor.0110.c.tt:0 "[restor_recruiter.GetFirstNameNoTooltip] falls under #N heavy suspicion#!, and [restor_usurper.GetFirstNameNoTooltip] hears [restor_recruiter.GetHerHis] name"
+
+ # ---- restor.0111-0113 --------------------------------------------------------------------------
+
+ restor.0111.t:0 "A New Oath"
+ restor.0111.desc:0 "[restor_recruit.GetTitledFirstName] heard you out, asked the questions anyone sensible would ask, and then swore the oath of $restor_society_name$ with [restor_recruit.GetHerHis] hand on an old charter of $restor_crown_name$.\n\nThe Sworn are one stronger. The Keeper will hear that it was you who brought [restor_recruit.GetHerHim] in."
+ restor.0111.a:0 "Welcome to the Sworn, [restor_recruit.GetFirstNameNoTooltip]."
+
+ restor.0112.t:0 "The Oath Refused"
+ restor.0112.desc:0 "[restor_recruit.GetTitledFirstName] heard you out and said no. [restor_recruit.GetSheHe|U] was not angry, only careful, and [restor_recruit.GetSheHe] left without promising to keep quiet.\n\n[restor_recruit.GetSheHe|U] knows what you are now. Whether anyone else finds out is up to [restor_recruit.GetHerHim]."
+ restor.0112.a:0 "Send [restor_recruit.GetHerHim] gold. Enough to keep [restor_recruit.GetHerHis] mouth shut."
+ restor.0112.b:0 "[restor_recruit.GetSheHe|U] has no proof. Let [restor_recruit.GetHerHim] talk."
+
+ restor.0113.t:0 "Betrayed"
+ restor.0113.desc:0 "You offered [restor_recruit.GetTitledFirstName] the oath, and [restor_recruit.GetSheHe] went straight to [restor_usurper.GetTitledFirstName] with it.\n\nNobody will arrest you tomorrow. It is your word against [restor_recruit.GetHerHis], and nothing was written down. But from now on, [restor_usurper.GetFirstNameNoTooltip]'s people will be watching you."
+ restor.0113.desc_no_usurper:0 "You offered [restor_recruit.GetTitledFirstName] the oath, and [restor_recruit.GetSheHe] has been telling anyone who will listen.\n\nNobody will arrest you tomorrow. It is your word against [restor_recruit.GetHerHis], and nothing was written down. But from now on, people will be watching you."
+ restor.0113.a:0 "I'll deny everything."
+ restor.0113.b:0 "Pay someone to swear I was elsewhere that night."
+
+ # ---- restor.0115 -------------------------------------------------------------------------------
+
+ restor.0115.t:0 "Sworn In"
+ restor.0115.desc_intro:0 "[restor_recruiter.GetTitledFirstName] brings you after dark to a house you have never visited. A few people are waiting there. You swear the oath of $restor_society_name$ with your hand on an old charter of $restor_crown_name$, and only then do they tell you their names."
+ restor.0115.desc_keeper_brought_you:0 "\n\n[restor_recruiter.GetFirstNameNoTooltip] is the Keeper. [restor_recruiter.GetSheHe|U] leads the Sworn and gives them their work, and from tonight [restor_recruiter.GetSheHe] gives you yours."
+ restor.0115.desc_keeper:0 "\n\nOne of them is [restor_keeper.GetTitledFirstName], the Keeper, who leads the Sworn and gives them their work."
+ restor.0115.desc_no_keeper:0 "\n\nThe Sworn have no Keeper just now. The most senior of them will take up the post before long."
+ restor.0115.desc_heir_kin:0 "\n\nThey tell you what you already know: [restor_pretender.GetTitledFirstName] is the rightful heir, and your kin."
+ restor.0115.desc_heir:0 "\n\nThey tell you who the rightful heir is: [restor_pretender.GetTitledFirstName] of House $restor_house_name$."
+ restor.0115.desc_no_heir:0 "\n\nThere is no heir of House $restor_house_name$ to name just now, and the Keeper is deciding what that means for the Sworn."
+ restor.0115.desc_need_war:0 "\n\nThe crown sits on [restor_usurper.GetTitledFirstName]'s head. It will not be handed back. When the heir raises the standard, it will be taken by war, and you will be asked for men or gold."
+ restor.0115.desc_need_land:0 "\n\n[restor_pretender.GetFirstNameNoTooltip] has no land of [restor_pretender.GetHerHis] own. Before anything else, the heir needs lords willing to shelter [restor_pretender.GetHerHim], and land to rule from."
+ restor.0115.desc_need_ready:0 "\n\nThe Sworn are nearly ready. When the standard is raised, you will be asked for men or gold."
+ restor.0115.desc_need_support:0 "\n\nWhat the Sworn need now is support in the old kingdom: lords won over, counties stirred, and gold put aside for the day the standard is raised. The Keeper will give you a charge."
+ restor.0115.a:0 "I will keep the oath."
+ restor.0115.a.tt:0 "The #high $restor_society_name$#! tab beside Intrigue shows the society: the heir, the enemy, your standing, and what you can do next. Right-click a character to #high Sound Out#! a likely lord or #high Offer the Oath#!."
+
+ # ---- restor.0125 -------------------------------------------------------------------------------
+
+ restor.0125.t:0 "An Invitation from the Crown"
+ restor.0125.desc:0 "A herald from [restor_ruling_king.GetTitledFirstName] has come to your hall. House $restor_house_name$ wears the crown of $restor_crown_name$ again, and the people who made that happen no longer hide. They are $restor_society_name_public$ now, and the crown would like its own lords among them.\n\nJoining costs nothing but your name on the roll."
+ restor.0125.a:0 "I'd be honoured to join."
+ restor.0125.a.tt:0 "The #high $restor_society_name$#! tab beside Intrigue shows the order and what it is working toward."
+ restor.0125.b:0 "I serve the crown well enough without joining an order."
+ restor.0125.b.tt:0 "The crown will not ask again for five years"

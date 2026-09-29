@@ -1,0 +1,342 @@
+﻿# The Restorationists: the crown won, kept and lost. restor.0700-0899.
+#
+#   0701   triumph -- the new king
+#   0702   triumph -- every sworn member
+#   0703   triumph -- the deposed
+#   0710   the crown made whole (every de jure county under the king)
+#   0712   the crown passed to the king's child of another house; the society follows the blood
+#   0801   the crown lost again -- every member
+#   0810   a new pretender after the old one's death
+#   0811   the line has ended -- the Keeper decides what the Sworn are for now
+#   0820   a new Keeper
+
+namespace = restor
+
+# =====================================================================================
+#  Triumph
+# =====================================================================================
+
+restor.0701 = {
+	type = character_event
+	title = restor.0701.t
+	desc = restor.0701.desc
+	theme = realm
+	override_background = { reference = throne_room }
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	# Honour them in public: the order's first act in daylight.
+	option = {
+		name = restor.0701.a
+		add_prestige = 100
+		custom_tooltip = restor.0701.a.tt
+		hidden_effect = {
+			every_in_global_list = {
+				variable = restor_roster
+				limit = {
+					is_alive = yes
+					NOT = { this = root }
+				}
+				restor_favour_gain_effect = { VALUE = 30 }
+			}
+		}
+		ai_chance = { base = 70 }
+	}
+	option = {
+		name = restor.0701.b
+		add_gold = 100
+		ai_chance = { base = 30 }
+	}
+}
+
+restor.0702 = {
+	type = character_event
+	title = restor.0702.t
+	desc = restor.0702.desc
+	theme = realm
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_king }
+		character = scope:restor_king
+		animation = personality_bold
+	}
+	trigger = {
+		exists = scope:restor_king
+		NOT = { this = scope:restor_king }
+	}
+	option = {
+		name = restor.0702.a
+	}
+}
+
+restor.0703 = {
+	type = character_event
+	title = restor.0703.t
+	desc = restor.0703.desc
+	theme = war
+	left_portrait = {
+		character = root
+		animation = rage
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_king }
+		character = scope:restor_king
+	}
+	option = {
+		name = restor.0703.a
+		add_character_flag = restor_deposed_by_the_sworn
+	}
+}
+
+restor.0710 = {
+	type = character_event
+	title = restor.0710.t
+	desc = restor.0710.desc
+	theme = realm
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0710.a
+		add_character_modifier = restor_crown_whole_modifier
+		add_prestige = 250
+	}
+}
+
+restor.0712 = {
+	type = character_event
+	title = restor.0712.t
+	desc = restor.0712.desc
+	theme = realm
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = { exists = global_var:restor_crown.holder }
+		character = global_var:restor_crown.holder
+	}
+	option = {
+		name = restor.0712.a
+	}
+}
+
+# =====================================================================================
+#  The fall
+# =====================================================================================
+
+restor.0801 = {
+	type = character_event
+	title = restor.0801.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_new_holder }
+				desc = restor.0801.desc
+			}
+			desc = restor.0801.desc_destroyed
+		}
+	}
+	theme = war
+	left_portrait = {
+		character = root
+		animation = grief
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_new_holder }
+		character = scope:restor_new_holder
+		animation = personality_bold
+	}
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0801.a
+		custom_tooltip = restor.0801.a.tt
+	}
+}
+
+# =====================================================================================
+#  Succession
+# =====================================================================================
+
+restor.0810 = {
+	type = character_event
+	title = restor.0810.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { restor_is_pretender_trigger = yes }
+				desc = restor.0810.desc_you
+			}
+			triggered_desc = {
+				trigger = { exists = scope:restor_old_pretender }
+				desc = restor.0810.desc
+			}
+			desc = restor.0810.desc_plain
+		}
+	}
+	theme = death
+	left_portrait = {
+		character = root
+		animation = sadness
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+		}
+		character = scope:restor_pretender
+	}
+	trigger = { exists = global_var:restor_pretender }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0810.a
+	}
+}
+
+# The line has ended. The Keeper chooses: take up another house, or let the oath end with the blood.
+restor.0811 = {
+	type = character_event
+	title = restor.0811.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_candidate }
+				desc = restor.0811.desc
+			}
+			desc = restor.0811.desc_nobody
+		}
+	}
+	theme = death
+	left_portrait = {
+		character = root
+		animation = grief
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_candidate }
+		character = scope:restor_candidate
+		animation = personality_bold
+	}
+	trigger = { restor_active_trigger = yes }
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		# The strongest sworn lord of the crown's own people, with a house of their own to give.
+		ordered_in_global_list = {
+			variable = restor_roster
+			limit = {
+				is_alive = yes
+				is_adult = yes
+				is_landed = yes
+				exists = house
+			}
+			order_by = {
+				value = prestige
+				if = {
+					limit = { restor_holds_crown_land_trigger = yes }
+					add = 1000
+				}
+			}
+			save_scope_as = restor_candidate
+		}
+	}
+
+	# The cause goes on under a new house.
+	option = {
+		name = restor.0811.a
+		trigger = { exists = scope:restor_candidate }
+		scope:restor_candidate = {
+			set_global_variable = {
+				name = restor_house
+				value = house
+			}
+			restor_make_pretender_effect = yes
+		}
+		# The new house may already wear the crown -- the strongest sworn lord often does. Then the
+		# society has not lost its aim, it has just achieved it: no title changes hands, so
+		# on_title_gain never fires, and the triumph has to be called here.
+		if = {
+			limit = {
+				exists = global_var:restor_crown.holder
+				global_var:restor_crown.holder = { restor_of_the_blood_trigger = yes }
+			}
+			global_var:restor_crown.holder = { restor_triumph_effect = yes }
+		}
+		else = {
+			restor_recompute_usurper_effect = yes
+			hidden_effect = {
+				restor_notify_sworn_effect = { EVENT = restor.0810 DAYS = 3 }
+			}
+		}
+		ai_chance = { base = 90 }
+	}
+
+	# The oath was to the blood, and the blood is gone.
+	option = {
+		name = restor.0811.b
+		custom_tooltip = restor.0811.b.tt
+		hidden_effect = {
+			# Copied first: restor_leave_effect removes each member from the list being walked,
+			# which would skip every other one and leave half the Sworn sworn to nothing.
+			every_in_global_list = {
+				variable = restor_roster
+				add_to_temporary_list = restor_disbanded
+			}
+			every_in_list = {
+				list = restor_disbanded
+				restor_leave_effect = yes
+			}
+			clear_global_variable_list = restor_roster
+			remove_global_variable = restor_crown
+			if = {
+				limit = { exists = global_var:restor_keeper }
+				remove_global_variable = restor_keeper
+			}
+			if = {
+				limit = { exists = global_var:restor_usurper }
+				remove_global_variable = restor_usurper
+			}
+		}
+		ai_chance = { base = 10 }
+	}
+}
+
+restor.0820 = {
+	type = character_event
+	title = restor.0820.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { restor_is_keeper_trigger = yes }
+				desc = restor.0820.desc_you
+			}
+			desc = restor.0820.desc
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_keeper
+			NOT = { scope:restor_keeper = root }
+		}
+		character = scope:restor_keeper
+	}
+	trigger = { exists = global_var:restor_keeper }
+	immediate = { restor_save_scopes_effect = yes }
+	option = {
+		name = restor.0820.a
+	}
+}

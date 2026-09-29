@@ -1,0 +1,20 @@
+﻿# The Restorationists' everyday life: small marks the belonging events leave on a member.
+
+# restor.0201: carries a coin struck for the last king.
+restor_life_kings_coin_modifier = {
+	icon = prestige_positive
+	monthly_prestige = 0.25
+}
+
+# restor.0210: the kings of the fallen crown were brought to rest on your land.
+restor_life_kings_tombs_modifier = {
+	icon = prestige_positive
+	monthly_prestige = 0.5
+	monthly_piety = 0.25
+}
+
+# restor.0213: owns the old royal banner.
+restor_life_old_banner_modifier = {
+	icon = prestige_positive
+	monthly_prestige = 0.5
+}

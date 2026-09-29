@@ -78,6 +78,7 @@ internal sealed class AzgaarExportSummary
         RaceArchetype.Orc => "Orcs",
         RaceArchetype.Gnome => "Halflings",
         RaceArchetype.Giantkin => "Giants",
+        RaceArchetype.Hornkin => "Hornkin",
         _ => race.ToString(),
     };
 }

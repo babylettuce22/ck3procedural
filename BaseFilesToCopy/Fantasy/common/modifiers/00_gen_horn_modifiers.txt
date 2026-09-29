@@ -1,0 +1,9 @@
+﻿# A Hornborn who has filed their horns down, for the five years until they grow back: the exact
+# mirror of what the showing horns cost and give in 00_hornborn_trait.txt, so filed is neutral —
+# no stares, and no fear either. Keep the two in step.
+gen_filed_horns_modifier = {
+	icon = social_positive
+	attraction_opinion = 15
+	general_opinion = 10
+	dread_baseline_add = -10
+}

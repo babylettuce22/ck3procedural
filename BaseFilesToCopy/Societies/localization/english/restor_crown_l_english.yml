@@ -1,0 +1,53 @@
+﻿l_english:
+
+ # ---- Triumph -----------------------------------------------------------------------------------
+
+ restor.0701.t:0 "The Crown of $restor_crown_name$"
+ restor.0701.desc:0 "The crown of $restor_crown_name$ has not rested on a head of House $restor_house_name$ since $restor_fell_year$. It rests on yours now.\n\nThe people who made it happen are coming out of hiding. Lords who spent years pretending not to know each other stand together in your hall. They are no longer $restor_society_name$, meeting in cellars. They are $restor_society_name_public$, and everyone knows it."
+ restor.0701.a:0 "Let the whole kingdom see who kept faith."
+ restor.0701.a.tt:0 "Every member of the order gains #P 30#! favour"
+ restor.0701.b:0 "The crown first. Gratitude can wait."
+
+ restor.0702.t:0 "The Rightful Ruler Returns"
+ restor.0702.desc:0 "[restor_king.GetTitledFirstName] has been crowned ruler of $restor_crown_name$. House $restor_house_name$ has its crown back.\n\nFor years you could not say what you were sworn to, even to your family. Now the oath is something to be proud of. $restor_society_name$ is now $restor_society_name_public$, and you are one of it."
+ restor.0702.a:0 "Long live [restor_king.GetFirstNameNoTooltip]!"
+
+ restor.0703.t:0 "The Crown Is Taken"
+ restor.0703.desc:0 "[restor_king.GetTitledFirstName] of House $restor_house_name$ wears the crown of $restor_crown_name$.\n\nBehind [restor_king.GetHerHim] stands the society people used to laugh at: $restor_society_name$, a handful of old families and their grudges. There is nothing to laugh at now. They took what was yours."
+ restor.0703.a:0 "They will not keep it."
+
+ restor.0710.t:0 "The Crown Made Whole"
+ restor.0710.desc:0 "The last county of old $restor_crown_name$ answers to you. For the first time since $restor_fell_year$, the kingdom is whole again, with a king of House $restor_house_name$ at its head.\n\n$restor_society_name_public$ held a feast to mark it. The old members, most of them grey now, made a point of saying the name of every lord who died waiting for this day."
+ restor.0710.a:0 "Remember them. All of them."
+
+ restor.0712.t:0 "The Blood Continues"
+ restor.0712.desc:0 "The crown of $restor_crown_name$ has passed to the child of House $restor_house_name$'s last ruler, who belongs to another house by name.\n\nThe order met to decide what that means and decided quickly: the oath was always to the blood, not to the name above the door. $restor_society_name_public$ serves the new ruler exactly as it served the last."
+ restor.0712.a:0 "Long may the line continue."
+
+ # ---- The fall ----------------------------------------------------------------------------------
+
+ restor.0801.t:0 "The Crown Lost"
+ restor.0801.desc:0 "[restor_new_holder.GetTitledFirstName] holds the crown of $restor_crown_name$ now, and House $restor_house_name$ does not.\n\nEverything the Sworn worked for has been undone. Worse, everyone knows who the order are. They were proud to be seen while the rightful ruler wore the crown. Now every one of them is a name on a list.\n\nThe order goes back to what it was: $restor_society_name$, meeting in secret, waiting."
+ restor.0801.desc_destroyed:0 "The crown of $restor_crown_name$ is gone, broken up and abolished, and House $restor_house_name$ rules nothing that bears its name.\n\nThe order goes back to what it was: $restor_society_name$, meeting in secret, waiting. And this time everyone knows who they are."
+ restor.0801.a:0 "We did it once. We will do it again."
+ restor.0801.a.tt:0 "The Sworn go back into hiding. Everyone's #high exposure#! starts at #N 10#!."
+
+ # ---- Succession --------------------------------------------------------------------------------
+
+ restor.0810.t:0 "The New Heir"
+ restor.0810.desc:0 "[restor_old_pretender.GetTitledFirstName] is dead. The claim to $restor_crown_name$ passes to [restor_pretender.GetTitledFirstName], and the Sworn have sworn to [restor_pretender.GetHerHim] exactly as they swore to [restor_old_pretender.GetHerHim]."
+ restor.0810.desc_plain:0 "[restor_pretender.GetTitledFirstName] is now the heir of House $restor_house_name$ and the one the Sworn mean to crown ruler of $restor_crown_name$."
+ restor.0810.desc_you:0 "The claim of House $restor_house_name$ to the crown of $restor_crown_name$ is yours now.\n\nThe Sworn have already sent word. They swore to your family, and your family is you."
+ restor.0810.a:0 "The line goes on."
+
+ restor.0811.t:0 "The Last of the Line"
+ restor.0811.desc:0 "No one of House $restor_house_name$ is left alive. The Sworn have come to you, as Keeper, to ask what their oath means now.\n\nSome say it ends here. Others point to [restor_candidate.GetTitledFirstName], the strongest of the sworn lords, and say the crown of $restor_crown_name$ still needs someone to wear it."
+ restor.0811.desc_nobody:0 "No one of House $restor_house_name$ is left alive, and no sworn lord has the strength to take up the claim. The Sworn have come to you, as Keeper, to ask what their oath means now."
+ restor.0811.a:0 "The crown needs a head. [restor_candidate.GetFirstNameNoTooltip]'s will do."
+ restor.0811.b:0 "Our oath was to them. It ends with them."
+ restor.0811.b.tt:0 "$restor_society_name$ is dissolved. No one is sworn any longer."
+
+ restor.0820.t:0 "A New Keeper"
+ restor.0820.desc:0 "The Sworn have a new Keeper: [restor_keeper.GetTitledFirstName]. From now on, [restor_keeper.GetSheHe] decides who is trusted, who is sent where, and when the society meets."
+ restor.0820.desc_you:0 "The Sworn have chosen you as their Keeper. From now on, you decide who is trusted, who is sent where, and when the society meets. Every charge the society hands out comes from you."
+ restor.0820.a:0 "So be it."

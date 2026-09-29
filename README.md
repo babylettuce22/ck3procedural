@@ -387,9 +387,9 @@ features.
 
 ## Credits & Attributions
 
-Most third-party assets bundled with this tool are CC0 and oblige nothing. Four are **CC-BY-4.0**,
+Most third-party assets bundled with this tool are CC0 and oblige nothing. Three are **CC-BY-4.0**,
 which does: the author must be credited wherever the work is shared. Commercial use is allowed for
-all four. The full record — sources, licences, what each was used for and how it was modified —
+all three. The full record — sources, licences, what each was used for and how it was modified —
 is in [`BaseFilesToCopy/Core/CREDITS.md`](BaseFilesToCopy/Core/CREDITS.md), which is copied into
 every mod this tool generates so the credit travels with the work rather than staying in the repo.
 
@@ -406,9 +406,4 @@ every mod this tool generates so the credit travels with the work rather than st
 > This work is based on "Shoulder Armor"
 > (https://sketchfab.com/3d-models/shoulder-armor-053d84b1034c429ab476778022d64ff5)
 > by ilyaballz (https://sketchfab.com/ilyaballz) licensed under CC-BY-4.0
-> (http://creativecommons.org/licenses/by/4.0/)
-
-> This work is based on "Medieval Shoulder Pad"
-> (https://sketchfab.com/3d-models/medieval-shoulder-pad-5376ef05f3d3448889517d9bd0ff8421)
-> by ViniciusMello (https://sketchfab.com/ViniciusMello) licensed under CC-BY-4.0
 > (http://creativecommons.org/licenses/by/4.0/)

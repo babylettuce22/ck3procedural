@@ -1,0 +1,60 @@
+﻿# The Restorationists' powers: the questions their interactions ask. restor.0400-0499.
+# See common/character_interactions/00_restor_powers.txt.
+
+# THIS title is something the old charters can be forged for: the crown itself (when someone holds
+# it -- a usurped crown), a duchy of the crown, or a county of it, which the pretender has no claim
+# on yet. Used by Forge the Old Charters.
+restor_power_forgeable_title_trigger = {
+	restor_active_trigger = yes
+	exists = global_var:restor_pretender
+	OR = {
+		this = global_var:restor_crown
+		AND = {
+			tier = tier_duchy
+			exists = de_jure_liege
+			de_jure_liege = global_var:restor_crown
+		}
+		restor_crown_county_trigger = yes
+	}
+	save_temporary_scope_as = restor_forge_check
+	global_var:restor_pretender = {
+		NOT = { has_claim_on = scope:restor_forge_check }
+	}
+}
+
+# THIS county title is one its holder could give away without giving away the seat they live in.
+# Vanilla's own test for a grantable county (court.8040).
+restor_power_grantable_county_trigger = {
+	tier = tier_county
+	exists = holder
+	NOT = { this = holder.capital_county }
+	is_leased_out = no
+	is_landless_type_title = no
+}
+
+# THIS is a landless heir the Sworn could take in or give land to.
+restor_power_homeless_heir_trigger = {
+	restor_is_pretender_trigger = yes
+	is_landed = no
+	is_imprisoned = no
+	is_landless_adventurer = no
+}
+
+# THIS member would be named by scope:restor_defector if they went over to the usurper: the Keeper
+# who threw them out, anyone whose secret they know, and anyone close to them -- same realm, kin,
+# friends and lovers.
+restor_power_defector_knows_trigger = {
+	has_trait = restor_member
+	NOT = { this = scope:restor_defector }
+	OR = {
+		restor_is_keeper_trigger = yes
+		top_liege = scope:restor_defector.top_liege
+		is_close_or_extended_family_of = scope:restor_defector
+		has_relation_friend = scope:restor_defector
+		has_relation_lover = scope:restor_defector
+		any_secret = {
+			secret_type = secret_restor_member
+			any_secret_knower = { this = scope:restor_defector }
+		}
+	}
+}

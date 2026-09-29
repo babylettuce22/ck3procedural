@@ -1,0 +1,849 @@
+﻿# The Restorationist society's core: membership, the meters, the people, the phases.
+# See README.txt for the state these read and write. Every other file changes that state through
+# these effects and never by hand -- the roster list, the meters' tooltips and the phase transitions
+# all have more than one moving part, and a hand-rolled copy is the one that forgets a part.
+
+# =====================================================================================
+#  Membership
+# =====================================================================================
+
+# Swears THIS character in. $RANK$ is starting trait XP on restor_rank (0 for a new recruit).
+# Safe to call on somebody already sworn: their standing is raised to at least $RANK$ and nothing
+# they have earned is wiped.
+restor_swear_in_effect = {
+	if = {
+		limit = { NOT = { has_trait = restor_member } }
+		add_trait = restor_member
+	}
+
+	# Raise to AT LEAST $RANK$, never add it: this runs on people already sworn (a new Keeper, a new
+	# pretender, the triumph), and add_trait_xp adds -- the review found a Keeper started at 155. There
+	# is no way to read track XP as a number, so climb in small steps until the gate passes.
+	while = {
+		limit = {
+			NOT = { restor_rank_at_least_trigger = { RANK = $RANK$ } }
+		}
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 5
+		}
+	}
+
+	# Read by the panel on every redraw; a variable read before it is set is an error, not a zero.
+	if = {
+		limit = { NOT = { has_variable = restor_favour } }
+		set_variable = { name = restor_favour value = 0 }
+	}
+	if = {
+		limit = { NOT = { has_variable = restor_exposure } }
+		set_variable = { name = restor_exposure value = 0 }
+	}
+
+	if = {
+		limit = {
+			NOT = {
+				is_target_in_global_variable_list = {
+					name = restor_roster
+					target = this
+				}
+			}
+		}
+		add_to_global_variable_list = {
+			name = restor_roster
+			target = this
+		}
+	}
+
+	# In the restored realm the order is public, and joining it is an honour rather than a risk.
+	if = {
+		limit = {
+			restor_restored_trigger = yes
+			NOT = { has_character_modifier = restor_order_member_modifier }
+		}
+		add_character_modifier = restor_order_member_modifier
+	}
+}
+
+# Takes THIS character out: the trait, the meters, the roster, any secret about it.
+restor_leave_effect = {
+	if = {
+		limit = { has_trait = restor_member }
+		remove_trait = restor_member
+	}
+	remove_variable = restor_favour
+	remove_variable = restor_exposure
+	remove_variable = restor_charge
+	remove_variable = restor_charge_target
+	remove_variable = restor_charge_given
+	remove_variable = restor_charge_goal
+	clear_variable_list = restor_charge_old_recruits
+	if = {
+		limit = {
+			is_target_in_global_variable_list = {
+				name = restor_roster
+				target = this
+			}
+		}
+		remove_list_global_variable = {
+			name = restor_roster
+			target = this
+		}
+	}
+	restor_secret_remove_effect = yes
+	if = {
+		limit = { has_character_modifier = restor_under_suspicion_modifier }
+		remove_character_modifier = restor_under_suspicion_modifier
+	}
+	if = {
+		limit = { has_character_modifier = restor_highly_suspect_modifier }
+		remove_character_modifier = restor_highly_suspect_modifier
+	}
+	if = {
+		limit = { has_character_modifier = restor_order_member_modifier }
+		remove_character_modifier = restor_order_member_modifier
+	}
+}
+
+# Runs every member's roster entry past a trigger in one place, for the events that speak to all of
+# them. $EVENT$ is the event id; $DAYS$ the delay. The pretender and the Keeper are members, so they
+# are reached too.
+restor_notify_sworn_effect = {
+	every_in_global_list = {
+		variable = restor_roster
+		limit = { is_alive = yes }
+		trigger_event = {
+			id = $EVENT$
+			days = $DAYS$
+		}
+	}
+}
+
+# Saves the society's people as scopes an event's loc can name: scope:restor_pretender,
+# scope:restor_keeper, scope:restor_usurper, scope:restor_crown (the title). Each only when it
+# exists -- guard loc that names one with a triggered_desc on `exists = scope:x`. Call it first
+# thing in any event's immediate block.
+restor_save_scopes_effect = {
+	if = {
+		limit = { exists = global_var:restor_pretender }
+		global_var:restor_pretender = { save_scope_as = restor_pretender }
+	}
+	if = {
+		limit = { exists = global_var:restor_keeper }
+		global_var:restor_keeper = { save_scope_as = restor_keeper }
+	}
+	if = {
+		limit = { exists = global_var:restor_usurper }
+		global_var:restor_usurper = { save_scope_as = restor_usurper }
+	}
+	if = {
+		limit = { exists = global_var:restor_crown }
+		global_var:restor_crown = { save_scope_as = restor_crown }
+	}
+}
+
+# =====================================================================================
+#  The people: pretender, Keeper, usurper
+# =====================================================================================
+
+# THIS becomes the pretender, and is sworn if they were not.
+restor_make_pretender_effect = {
+	set_global_variable = {
+		name = restor_pretender
+		value = this
+	}
+	restor_swear_in_effect = { RANK = 50 }
+}
+
+# THIS becomes the Keeper, and is sworn at Elder standing if they were below it.
+restor_make_keeper_effect = {
+	set_global_variable = {
+		name = restor_keeper
+		value = this
+	}
+	restor_swear_in_effect = { RANK = 75 }
+}
+
+# The usurper: the crown's holder if one exists and is not of the house; else whoever the old seat
+# answers to at the top, unless that is the pretender's own realm. Unset when nobody fits.
+restor_recompute_usurper_effect = {
+	# The last usurper, if still a fair one, is kept rather than re-drawn, so the enemy does not
+	# change hands every year between two lords of similar size.
+	if = {
+		limit = { exists = global_var:restor_usurper }
+		global_var:restor_usurper = { save_scope_as = restor_prev_usurper }
+		remove_global_variable = restor_usurper
+	}
+
+	if = {
+		# Crowned. Whoever wears it is the enemy -- unless they are of the house (then this is the
+		# triumph's business) or sworn themselves (a member who took the crown is not an usurper,
+		# and making them one would hide them from half the set).
+		limit = { exists = global_var:restor_crown.holder }
+		if = {
+			limit = {
+				global_var:restor_crown.holder = { restor_valid_usurper_trigger = yes }
+			}
+			set_global_variable = {
+				name = restor_usurper
+				value = global_var:restor_crown.holder
+			}
+		}
+	}
+	else_if = {
+		limit = {
+			exists = scope:restor_prev_usurper
+			scope:restor_prev_usurper = { restor_valid_usurper_trigger = yes }
+		}
+		set_global_variable = {
+			name = restor_usurper
+			value = scope:restor_prev_usurper
+		}
+	}
+	else_if = {
+		limit = {
+			exists = global_var:restor_seat.holder
+			global_var:restor_seat.holder.top_liege = { restor_valid_usurper_trigger = yes }
+		}
+		set_global_variable = {
+			name = restor_usurper
+			value = global_var:restor_seat.holder.top_liege
+		}
+	}
+	else = {
+		# The old seat is in friendly hands; the enemy is whoever else holds the crown's land.
+		global_var:restor_crown = {
+			random_de_jure_county = {
+				limit = {
+					exists = holder
+					holder.top_liege = { restor_valid_usurper_trigger = yes }
+				}
+				holder.top_liege = { save_scope_as = restor_new_usurper }
+			}
+		}
+		if = {
+			limit = { exists = scope:restor_new_usurper }
+			set_global_variable = {
+				name = restor_usurper
+				value = scope:restor_new_usurper
+			}
+		}
+	}
+}
+
+# The pretender died, left the house, or was never set. Their primary heir if of the house; else the
+# eldest adult of the house anywhere; else a child of it; else the line has ended and the Keeper is
+# asked what the sworn do now.
+#
+# scope:restor_old_pretender, when set, is the one who is gone -- read by the announcement.
+restor_pretender_succession_effect = {
+	if = {
+		limit = { exists = global_var:restor_pretender }
+		remove_global_variable = restor_pretender
+	}
+
+	if = {
+		limit = {
+			exists = scope:restor_old_pretender
+			scope:restor_old_pretender = {
+				exists = primary_heir
+				primary_heir = {
+					restor_can_succeed_trigger = yes
+					restor_of_the_blood_trigger = yes
+				}
+			}
+		}
+		scope:restor_old_pretender.primary_heir = { restor_make_pretender_effect = yes }
+	}
+	else_if = {
+		limit = {
+			global_var:restor_house = {
+				any_house_member = {
+					restor_can_succeed_trigger = yes
+					is_adult = yes
+				}
+			}
+		}
+		global_var:restor_house = {
+			ordered_house_member = {
+				limit = {
+					restor_can_succeed_trigger = yes
+					is_adult = yes
+				}
+				order_by = age
+				restor_make_pretender_effect = yes
+			}
+		}
+	}
+	else_if = {
+		limit = {
+			global_var:restor_house = {
+				any_house_member = { restor_can_succeed_trigger = yes }
+			}
+		}
+		global_var:restor_house = {
+			ordered_house_member = {
+				limit = { restor_can_succeed_trigger = yes }
+				order_by = age
+				restor_make_pretender_effect = yes
+			}
+		}
+	}
+
+	if = {
+		limit = { exists = global_var:restor_pretender }
+		restor_notify_sworn_effect = { EVENT = restor.0810 DAYS = 3 }
+	}
+	else = {
+		# No one of the blood is left. The Keeper decides what the sworn are for now.
+		if = {
+			limit = { exists = global_var:restor_keeper }
+			global_var:restor_keeper = { trigger_event = { id = restor.0811 days = 3 } }
+		}
+	}
+}
+
+# The Keeper died or left: the highest-standing adult member takes it, the pretender excluded.
+restor_keeper_succession_effect = {
+	if = {
+		limit = { exists = global_var:restor_keeper }
+		remove_global_variable = restor_keeper
+	}
+	ordered_in_global_list = {
+		variable = restor_roster
+		limit = {
+			restor_can_succeed_trigger = yes
+			NOT = { restor_is_keeper_trigger = yes }
+			is_adult = yes
+			NOT = { restor_is_pretender_trigger = yes }
+		}
+		# Rung first, by bands a skill cannot overtake; then diplomacy among equals.
+		order_by = {
+			value = diplomacy
+			if = {
+				limit = { restor_rank_at_least_trigger = { RANK = 75 } }
+				add = 300
+			}
+			else_if = {
+				limit = { restor_rank_at_least_trigger = { RANK = 50 } }
+				add = 200
+			}
+			else_if = {
+				limit = { restor_rank_at_least_trigger = { RANK = 25 } }
+				add = 100
+			}
+		}
+		restor_make_keeper_effect = yes
+		save_scope_as = restor_new_keeper
+	}
+	if = {
+		limit = { exists = global_var:restor_keeper }
+		restor_notify_sworn_effect = { EVENT = restor.0820 DAYS = 3 }
+
+		# The line ended while there was no Keeper to decide what that meant. The new one decides now.
+		if = {
+			limit = { NOT = { exists = global_var:restor_pretender } }
+			global_var:restor_keeper = { trigger_event = { id = restor.0811 days = 10 } }
+		}
+	}
+}
+
+# =====================================================================================
+#  Favour -- the personal currency
+# =====================================================================================
+#
+# Through these two and nothing else: change_variable is silent on tooltips and on screen, so a
+# power that cost favour would otherwise look free. Same three parts as the prototype's visibility
+# pair -- a saved value so ONE tooltip key names any amount, the tooltip before, the toast after.
+
+restor_favour_gain_effect = {
+	save_scope_value_as = {
+		name = restor_favour_delta
+		value = $VALUE$
+	}
+	if = {
+		limit = { NOT = { has_variable = restor_favour } }
+		set_variable = { name = restor_favour value = 0 }
+	}
+	change_variable = {
+		name = restor_favour
+		add = $VALUE$
+	}
+	custom_tooltip = restor_favour_gain_tt
+	hidden_effect = {
+		if = {
+			limit = { is_ai = no }
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = restor_favour_toast
+				left_icon = root
+			}
+		}
+	}
+}
+
+restor_favour_spend_effect = {
+	save_scope_value_as = {
+		name = restor_favour_delta
+		value = $VALUE$
+	}
+	change_variable = {
+		name = restor_favour
+		subtract = $VALUE$
+	}
+	custom_tooltip = restor_favour_spend_tt
+	hidden_effect = {
+		if = {
+			limit = { var:restor_favour < 0 }
+			set_variable = { name = restor_favour value = 0 }
+		}
+	}
+}
+
+# =====================================================================================
+#  Exposure -- underground only
+# =====================================================================================
+#
+# The prototype's visibility machinery, renamed and pointed at a real enemy. In the RESTORED phase
+# both effects do nothing: the order is public and there is nothing left to expose.
+
+restor_exposure_gain_effect = {
+	if = {
+		limit = { restor_underground_trigger = yes }
+		save_scope_value_as = {
+			name = restor_exposure_delta
+			value = $VALUE$
+		}
+		if = {
+			limit = { NOT = { has_variable = restor_exposure } }
+			set_variable = { name = restor_exposure value = 0 }
+		}
+		change_variable = {
+			name = restor_exposure
+			add = $VALUE$
+		}
+		custom_tooltip = restor_exposure_gain_tt
+		hidden_effect = {
+			if = {
+				limit = { is_ai = no }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor_exposure_toast
+					left_icon = root
+				}
+			}
+			restor_exposure_check_effect = yes
+		}
+	}
+}
+
+restor_exposure_loss_effect = {
+	if = {
+		limit = {
+			restor_underground_trigger = yes
+			has_variable = restor_exposure
+		}
+		save_scope_value_as = {
+			name = restor_exposure_delta
+			value = $VALUE$
+		}
+		change_variable = {
+			name = restor_exposure
+			subtract = $VALUE$
+		}
+		custom_tooltip = restor_exposure_loss_tt
+		hidden_effect = {
+			if = {
+				limit = { var:restor_exposure < 0 }
+				set_variable = { name = restor_exposure value = 0 }
+			}
+			restor_exposure_check_effect = yes
+		}
+	}
+}
+
+# The ladder: 15 under suspicion and a findable secret; 25 highly suspect, and the usurper hears of
+# it. Re-evaluated in both directions, because the panel shows the number.
+restor_exposure_check_effect = {
+	if = {
+		limit = { var:restor_exposure >= 25 }
+		if = {
+			limit = { has_character_modifier = restor_under_suspicion_modifier }
+			remove_character_modifier = restor_under_suspicion_modifier
+		}
+		if = {
+			limit = { NOT = { has_character_modifier = restor_highly_suspect_modifier } }
+			add_character_modifier = restor_highly_suspect_modifier
+			trigger_event = { id = restor.0302 days = 1 }
+			if = {
+				limit = {
+					exists = global_var:restor_usurper
+					NOT = { this = global_var:restor_usurper }
+				}
+				save_scope_as = restor_suspect
+				global_var:restor_usurper = { trigger_event = { id = restor.0303 days = 5 } }
+			}
+		}
+		restor_secret_create_effect = yes
+	}
+	else_if = {
+		limit = { var:restor_exposure >= 15 }
+		if = {
+			limit = { has_character_modifier = restor_highly_suspect_modifier }
+			remove_character_modifier = restor_highly_suspect_modifier
+		}
+		if = {
+			limit = { NOT = { has_character_modifier = restor_under_suspicion_modifier } }
+			add_character_modifier = restor_under_suspicion_modifier
+			trigger_event = { id = restor.0300 days = 1 }
+		}
+		restor_secret_create_effect = yes
+	}
+	else = {
+		if = {
+			limit = { has_character_modifier = restor_under_suspicion_modifier }
+			remove_character_modifier = restor_under_suspicion_modifier
+		}
+		if = {
+			limit = { has_character_modifier = restor_highly_suspect_modifier }
+			remove_character_modifier = restor_highly_suspect_modifier
+		}
+		restor_secret_remove_effect = yes
+	}
+}
+
+# Yearly. A weighted draw of 1-5 in which the careful draw bigger, after CK2's decay.
+restor_exposure_decay_effect = {
+	if = {
+		limit = {
+			has_variable = restor_exposure
+			var:restor_exposure >= 1
+		}
+		random_list = {
+			50 = { restor_exposure_loss_effect = { VALUE = 1 } }
+			20 = {
+				modifier = {
+					add = 10
+					OR = { has_trait = deceitful has_trait = patient has_trait = paranoid }
+				}
+				modifier = { add = 5 intrigue >= 12 }
+				modifier = { add = 5 intrigue >= 16 }
+				restor_exposure_loss_effect = { VALUE = 2 }
+			}
+			15 = {
+				modifier = {
+					add = 7
+					OR = { has_trait = deceitful has_trait = patient has_trait = paranoid }
+				}
+				modifier = { add = 4 intrigue >= 12 }
+				modifier = { add = 4 intrigue >= 16 }
+				restor_exposure_loss_effect = { VALUE = 3 }
+			}
+			10 = {
+				modifier = {
+					add = 5
+					OR = { has_trait = deceitful has_trait = patient has_trait = paranoid }
+				}
+				modifier = { add = 3 intrigue >= 14 }
+				restor_exposure_loss_effect = { VALUE = 5 }
+			}
+		}
+	}
+}
+
+restor_secret_create_effect = {
+	if = {
+		limit = {
+			has_trait = restor_member
+			restor_underground_trigger = yes
+			NOT = { any_secret = { secret_type = secret_restor_member } }
+		}
+		add_secret = {
+			type = secret_restor_member
+		}
+	}
+}
+
+restor_secret_remove_effect = {
+	every_secret = {
+		limit = { secret_type = secret_restor_member }
+		remove_secret = yes
+	}
+}
+
+# =====================================================================================
+#  Support and its milestones
+# =====================================================================================
+
+restor_recompute_support_effect = {
+	set_global_variable = {
+		name = restor_support
+		value = restor_support_value
+	}
+	if = {
+		limit = { NOT = { exists = global_var:restor_support_level } }
+		set_global_variable = { name = restor_support_level value = 0 }
+	}
+
+	# Milestones only climb. A meter that crosses 50 twice does not announce it twice.
+	if = {
+		limit = {
+			global_var:restor_support >= 75
+			global_var:restor_support_level < 3
+		}
+		set_global_variable = { name = restor_support_level value = 3 }
+		restor_notify_sworn_effect = { EVENT = restor.0603 DAYS = 1 }
+	}
+	else_if = {
+		limit = {
+			global_var:restor_support >= restor_rising_support_value
+			global_var:restor_support_level < 2
+		}
+		set_global_variable = { name = restor_support_level value = 2 }
+		restor_notify_sworn_effect = { EVENT = restor.0602 DAYS = 1 }
+	}
+	else_if = {
+		limit = {
+			global_var:restor_support >= 25
+			global_var:restor_support_level < 1
+		}
+		set_global_variable = { name = restor_support_level value = 1 }
+		restor_notify_sworn_effect = { EVENT = restor.0601 DAYS = 1 }
+	}
+}
+
+# Recomputes the meter now rather than at the next yearly pulse, so a change the player just made
+# shows at once. There is no way to push the meter directly, on purpose: it is recomputed from the
+# map every year, so anything that should raise it has to change the map -- a stirred county, a
+# sworn lord, land in the pretender's realm.
+restor_support_refresh_effect = {
+	if = {
+		limit = { restor_underground_trigger = yes }
+		restor_recompute_support_effect = yes
+	}
+}
+
+# =====================================================================================
+#  The phases
+# =====================================================================================
+
+# Called once, at game start, after the generated setup has placed everyone.
+restor_world_started_effect = {
+	restor_recompute_usurper_effect = yes
+
+	# The meter's opening value sets the milestone it starts past, silently: support that begins at
+	# 30 is the state of the world, not news, and must not send "The Old Name" on day one.
+	set_global_variable = { name = restor_support value = restor_support_value }
+	if = {
+		limit = { global_var:restor_support >= 75 }
+		set_global_variable = { name = restor_support_level value = 3 }
+	}
+	else_if = {
+		limit = { global_var:restor_support >= restor_rising_support_value }
+		set_global_variable = { name = restor_support_level value = 2 }
+	}
+	else_if = {
+		limit = { global_var:restor_support >= 25 }
+		set_global_variable = { name = restor_support_level value = 1 }
+	}
+	else = {
+		set_global_variable = { name = restor_support_level value = 0 }
+	}
+	set_global_variable = { name = restor_restored_count value = 0 }
+	set_global_variable = { name = restor_fallen_count value = 0 }
+	set_global_variable = { name = restor_war_chest value = 0 }
+}
+
+# The crown is back on the house's head. ROOT is the new holder.
+restor_triumph_effect = {
+	set_global_variable = { name = restor_phase value = 2 }
+	change_global_variable = { name = restor_restored_count add = 1 }
+	save_scope_as = restor_king
+
+	# Whoever crowned themselves is the pretender no longer: they are the king. The next in line is
+	# the heir to the crown in the ordinary way, and the society's pretender slot is cleared.
+	if = {
+		limit = { exists = global_var:restor_pretender }
+		remove_global_variable = restor_pretender
+	}
+	if = {
+		limit = { exists = global_var:restor_usurper }
+		global_var:restor_usurper = { save_scope_as = restor_deposed }
+		remove_global_variable = restor_usurper
+	}
+
+	add_character_modifier = {
+		modifier = restor_restored_monarch_modifier
+		years = 20
+	}
+	restor_swear_in_effect = { RANK = 75 }
+
+	every_in_global_list = {
+		variable = restor_roster
+		limit = { is_alive = yes }
+		restor_secret_remove_effect = yes
+		set_variable = { name = restor_exposure value = 0 }
+		if = {
+			limit = { has_character_modifier = restor_under_suspicion_modifier }
+			remove_character_modifier = restor_under_suspicion_modifier
+		}
+		if = {
+			limit = { has_character_modifier = restor_highly_suspect_modifier }
+			remove_character_modifier = restor_highly_suspect_modifier
+		}
+		if = {
+			limit = { NOT = { has_character_modifier = restor_order_member_modifier } }
+			add_character_modifier = restor_order_member_modifier
+		}
+		if = {
+			limit = { NOT = { this = scope:restor_king } }
+			add_character_modifier = {
+				modifier = restor_faithful_modifier
+				years = 20
+			}
+			add_opinion = {
+				target = scope:restor_king
+				modifier = restor_crowned_me_opinion
+			}
+		}
+	}
+
+	# The deposed remember. A house relation where the DLC has one; an opinion everywhere.
+	if = {
+		limit = { exists = scope:restor_deposed }
+		scope:restor_deposed = {
+			add_opinion = {
+				target = scope:restor_king
+				modifier = restor_usurped_my_house_opinion
+			}
+		}
+	}
+
+	trigger_event = { id = restor.0701 days = 1 }
+	restor_notify_sworn_effect = { EVENT = restor.0702 DAYS = 3 }
+	if = {
+		limit = {
+			exists = scope:restor_deposed
+			scope:restor_deposed = { is_alive = yes }
+		}
+		scope:restor_deposed = { trigger_event = { id = restor.0703 days = 3 } }
+	}
+}
+
+# The crown has left the house again. ROOT is the one who lost it; scope:restor_new_holder, if set,
+# who has it now.
+restor_fall_effect = {
+	set_global_variable = { name = restor_phase value = 1 }
+	change_global_variable = { name = restor_fallen_count add = 1 }
+	set_global_variable = { name = restor_support_level value = 0 }
+
+	# Once per PHASE, not per game: an usurped crown's only way back is the standard, and the
+	# restored realm's "made whole" is earned again after every restoration.
+	if = {
+		limit = { exists = global_var:restor_standard_raised }
+		remove_global_variable = restor_standard_raised
+	}
+	if = {
+		limit = { exists = global_var:restor_crown_whole }
+		remove_global_variable = restor_crown_whole
+	}
+
+	every_in_global_list = {
+		variable = restor_roster
+		limit = { is_alive = yes }
+		if = {
+			limit = { has_character_modifier = restor_order_member_modifier }
+			remove_character_modifier = restor_order_member_modifier
+		}
+		# Everyone knew who the order were while it was public. That knowledge does not go away.
+		set_variable = { name = restor_exposure value = 10 }
+	}
+
+	# The one who lost it becomes the pretender if they are of the house and alive to try again.
+	if = {
+		limit = {
+			restor_can_succeed_trigger = yes
+			restor_of_the_blood_trigger = yes
+		}
+		restor_make_pretender_effect = yes
+	}
+	else = {
+		save_scope_as = restor_old_pretender
+		restor_pretender_succession_effect = yes
+	}
+
+	restor_recompute_usurper_effect = yes
+	restor_recompute_support_effect = yes
+	restor_notify_sworn_effect = { EVENT = restor.0801 DAYS = 2 }
+}
+
+# =====================================================================================
+#  Yearly
+# =====================================================================================
+
+restor_yearly_effect = {
+	if = {
+		limit = { restor_active_trigger = yes }
+
+		# The roster is the source of truth for "every member"; the dead are pruned here as well as
+		# on death, in case an on_death was missed (a character removed by a script effect).
+		# Collected first and removed after: removing from a list mid-walk skips its neighbours.
+		every_in_global_list = {
+			variable = restor_roster
+			limit = {
+				OR = {
+					is_alive = no
+					NOT = { has_trait = restor_member }
+				}
+			}
+			add_to_temporary_list = restor_stale
+		}
+		every_in_list = {
+			list = restor_stale
+			save_scope_as = restor_stale_member
+			remove_list_global_variable = {
+				name = restor_roster
+				target = scope:restor_stale_member
+			}
+		}
+
+		if = {
+			limit = {
+				OR = {
+					NOT = { exists = global_var:restor_keeper }
+					global_var:restor_keeper = { is_alive = no }
+				}
+			}
+			restor_keeper_succession_effect = yes
+		}
+
+		# The same repair for the pretender, should one ever die without on_death reaching us.
+		if = {
+			limit = {
+				exists = global_var:restor_pretender
+				global_var:restor_pretender = { is_alive = no }
+			}
+			global_var:restor_pretender = { save_scope_as = restor_old_pretender }
+			restor_pretender_succession_effect = yes
+		}
+
+		if = {
+			limit = { restor_underground_trigger = yes }
+			restor_recompute_usurper_effect = yes
+			restor_recompute_support_effect = yes
+		}
+		else_if = {
+			limit = { restor_restored_trigger = yes }
+			# The restored realm's aim: the whole crown under the king. Announced once.
+			if = {
+				limit = {
+					NOT = { exists = global_var:restor_crown_whole }
+					exists = global_var:restor_crown.holder
+					restor_king_share_value >= 100
+				}
+				set_global_variable = { name = restor_crown_whole value = yes }
+				global_var:restor_crown.holder = { trigger_event = { id = restor.0710 days = 1 } }
+			}
+		}
+	}
+}

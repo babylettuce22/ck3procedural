@@ -23,6 +23,7 @@ phenotype_human = {
     ruler_designer_cost = 0
 
     opposites = {
+        phenotype_horned
         phenotype_gracile
         phenotype_stocky
         phenotype_rough_hewn
@@ -49,6 +50,7 @@ phenotype_gracile = {
     ruler_designer_cost = 20
 
     opposites = {
+        phenotype_horned
         phenotype_human
         phenotype_stocky
         phenotype_rough_hewn
@@ -107,6 +109,7 @@ phenotype_sylvan = {
     ruler_designer_cost = 20
 
     opposites = {
+        phenotype_horned
         phenotype_human
         phenotype_gracile
         phenotype_stocky
@@ -148,6 +151,7 @@ phenotype_stocky = {
     ruler_designer_cost = 20
 
     opposites = {
+        phenotype_horned
         phenotype_human
         phenotype_gracile
         phenotype_rough_hewn
@@ -191,6 +195,7 @@ phenotype_rough_hewn = {
     ruler_designer_cost = 15
 
     opposites = {
+        phenotype_horned
         phenotype_human
         phenotype_gracile
         phenotype_stocky
@@ -219,6 +224,7 @@ phenotype_towering = {
     ruler_designer_cost = 25
 
     opposites = {
+        phenotype_horned
         phenotype_human
         phenotype_gracile
         phenotype_stocky
@@ -247,6 +253,7 @@ phenotype_diminutive = {
     ruler_designer_cost = 20 # was 10: +15 scheme success and +2 learning outvalue Dusk-Adapted at 20
 
     opposites = {
+        phenotype_horned
         phenotype_human
         phenotype_gracile
         phenotype_stocky
@@ -274,6 +281,7 @@ phenotype_dusk_adapted = {
     ruler_designer_cost = 20
 
     opposites = {
+        phenotype_horned
         phenotype_human
         phenotype_gracile
         phenotype_stocky
@@ -299,4 +307,38 @@ phenotype_dusk_adapted = {
     # elderly-decay system; the deepkin fade (world_weary) instead of falling apart.
     flag = is_immortal
     no_prowess_loss_from_age = yes
+}
+
+# Hornkin — the horned people. Highland and steppe herders, or hunters of the tribal forests; their
+# horns are an accessory gene carried in their DNA (a mix of styles per culture), enforced by the
+# gen_race_horns group of the generated 99_gen_race_morphs.txt together with the skin mound they grow
+# from. Mortal aging, human lifespan.
+#
+# Hardy and proud rather than feared: horns are ordinary among their own, so no dread and no general
+# opinion cost here — that belongs to the Hornborn (00_hornborn_trait.txt), the horned born among
+# peoples who are not. Clannish: strong same_opinion, a mild distrust of the unhorned.
+phenotype_horned = {
+    physical = yes
+    inherit_chance = 0
+    shown_in_ruler_designer = yes
+    ruler_designer_cost = 20
+
+    opposites = {
+        phenotype_human
+        phenotype_gracile
+        phenotype_stocky
+        phenotype_rough_hewn
+        phenotype_towering
+        phenotype_diminutive
+        phenotype_dusk_adapted
+        phenotype_sylvan
+    }
+    icon = "horned.dds"
+
+    prowess = 2
+    martial = 1
+    health = 0.25
+    movement_speed = 0.05
+    same_opinion = 10
+    opposite_opinion = -5
 }

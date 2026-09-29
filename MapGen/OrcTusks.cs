@@ -30,8 +30,47 @@ internal static class OrcTusks
     public const string NoneTemplate = "gen_orc_tusks_none";
     public const string LowerTemplate = "gen_orc_tusks_lower";
 
-    /// <summary>The attribute the template sets and the teeth asset maps to the tusk blendshape.</summary>
+    /// <summary>The attribute the standard template sets and the teeth asset maps to its blendshape.</summary>
     public const string Attribute = "gen_bs_orc_tusks_lower";
+
+    /// <summary>
+    /// One tusk's shape: the path's bend and tip as (out, up, forward) offsets from the lip exit,
+    /// the girth at the base and the tip, and — for a snapped tusk — how far along its path it ends.
+    /// </summary>
+    public sealed record Shape(V Rise, V Tip, double RadiusBase, double RadiusTip, double? Cut = null);
+
+    /// <summary>
+    /// A variant: both tusks' shapes, the character's left (+x) first. Every variant grows the SAME
+    /// appended vertices (<see cref="Rings"/> × <see cref="Segments"/> + 1 per tusk) from the same
+    /// collapsed root, so each ships as one more teeth blendshape on one more gene template.
+    /// Reviewed as offline renders and approved 2026-09-28 (ck3devtools/tusk_probe/variants.py).
+    /// </summary>
+    public sealed record Variant(string Name, Shape Left, Shape Right);
+
+    // The standard tusk, thickened on review (base 0.40 -> 0.50, tip 0.05 -> 0.08): the first ones
+    // read thin in game. Stubby barely clears the upper lip, blunt; great flares out and up to the
+    // nostrils, boar-style; a broken tusk is the standard one snapped at 70% of its path.
+    private static readonly Shape Standard = new(new(0.20, 1.10, 0.45), new(0.45, 2.20, 0.30), 0.50, 0.08);
+    private static readonly Shape Stubby = new(new(0.16, 0.72, 0.42), new(0.28, 1.30, 0.34), 0.58, 0.17);
+    private static readonly Shape Great = new(new(0.40, 1.35, 0.62), new(1.20, 3.10, 0.40), 0.60, 0.08);
+    private static readonly Shape Snapped = Standard with { Cut = 0.70 };
+
+    /// <summary>Every variant, the standard one first (its template is the original <c>lower</c>).</summary>
+    public static readonly Variant[] Variants =
+    [
+        new("lower", Standard, Standard),
+        new("stubby", Stubby, Stubby),
+        new("great", Great, Great),
+        new("broken_left", Snapped, Standard),
+        new("broken_right", Standard, Snapped),
+    ];
+
+    /// <summary>The variants a DNA may carry; the broken ones are scars, set by flag, never inherited.</summary>
+    public static readonly string[] Inherited = ["lower", "stubby", "great"];
+
+    public static string TemplateOf(string variant) => $"gen_orc_tusks_{variant}";
+    public static string AttributeOf(string variant) => $"gen_bs_orc_tusks_{variant}";
+    public static string BrokenFlag(string side) => $"gen_tusk_broken_{side}";
 
     public const string JawBone = "bn_h_jaw_low";
     public const string UpperTeethBone = "bn_h_face_lower";
@@ -41,11 +80,9 @@ internal static class OrcTusks
     private const int Segments = 8;                // around it
     private static readonly (float U, float V) EnamelUv = (0.346f, 0.244f);   // uniform ivory in both teeth diffuses
 
-    // The path, as (out, up, forward) offsets from the exit point; forward is −z.
+    // The path starts inside the gum; the rest is per variant (Shape), as (out, up, forward) offsets
+    // from the exit point, forward being −z.
     private const double Bury = 0.4;               // spine starts this far below the canine top
-    private static readonly V Rise = new(0.20, 1.10, 0.45);   // the bend, in front of the upper lip
-    private static readonly V Tip = new(0.45, 2.20, 0.30);    // leans back toward the lip, hugging it
-    private const double RadiusBase = 0.40, RadiusTip = 0.05;
 
     /// <summary>A full-grown tusk and where it sits. Streams are ready to append to a mesh.</summary>
     public sealed record Tusk(
@@ -57,14 +94,14 @@ internal static class OrcTusks
     /// <summary>Skin weights for every vertex of one tusk, and the head vertices they came from.</summary>
     public sealed record Anchor(int[] HeadVertices, int[] Bones, float[] Weights);
 
-    /// <summary>Both tusks, left then right.</summary>
+    /// <summary>Both tusks of <paramref name="variant"/>, left then right.</summary>
     /// <param name="teethP">Teeth positions.</param>
     /// <param name="teethN">Teeth normals, used only to match the mesh's winding convention.</param>
     /// <param name="influences">Stride of <paramref name="teethIx"/>: ix.Length / vertex count.</param>
     /// <param name="scale">Tusk size; the female head is smaller and takes 0.9.</param>
     public static List<Tusk> Build(
         float[] teethP, float[] teethN, int[] teethTri, int[] teethIx, float[] teethW, int influences,
-        int jawBone, int upperTeethBone, float[] headP, double scale)
+        int jawBone, int upperTeethBone, float[] headP, double scale, Variant variant)
     {
         bool flip = !CounterClockwise(teethP, teethN, teethTri);
         var tusks = new List<Tusk>();
@@ -72,7 +109,7 @@ internal static class OrcTusks
         foreach (var (root, side) in CanineRoots(teethP, teethIx, teethW, influences, jawBone))
         {
             var (crease, front) = LipLine(teethP, teethIx, teethW, influences, upperTeethBone, headP, root.X);
-            tusks.Add(Grow(root, side, scale, crease, front, flip));
+            tusks.Add(Grow(root, side, scale, crease, front, flip, side > 0 ? variant.Left : variant.Right));
         }
 
         return tusks;
@@ -156,12 +193,13 @@ internal static class OrcTusks
         return (crease, front);
     }
 
-    private static Tusk Grow(V root, double side, double scale, double crease, double front, bool flip)
+    private static Tusk Grow(V root, double side, double scale, double crease, double front, bool flip, Shape shape)
     {
         var exit = new V(root.X + 0.12 * side * scale, crease + 0.15, front - 0.10);
         var inside = new V(root.X + 0.05 * side * scale, crease - 0.10, (root.Z + front) / 2 + 0.2);
         V Off(V o) => exit + new V(o.X * side * scale, o.Y * scale, -o.Z * scale);
-        V[] path = [root + new V(0, -Bury * scale, 0), inside, exit, Off(Rise), Off(Tip)];
+        V[] path = [root + new V(0, -Bury * scale, 0), inside, exit, Off(shape.Rise), Off(shape.Tip)];
+        double end = shape.Cut ?? 0.985;
 
         V Spine(double t) => CatmullRom(path, t);
         V Dir(double t) => (Spine(Math.Min(1, t + 0.01)) - Spine(Math.Max(0, t - 0.01))).Normalized;
@@ -170,25 +208,29 @@ internal static class OrcTusks
         V a = default;
         for (int r = 0; r < Rings; r++)
         {
-            double t = r / (double)(Rings - 1) * 0.985;
+            double t = r / (double)(Rings - 1) * end;
             V c = Spine(t), d = Dir(t);
             a = (Math.Abs(d.Z) < 0.9 ? V.Cross(d, new V(0, 0, 1)) : V.Cross(d, new V(1, 0, 0))).Normalized;
             V b = V.Cross(d, a);
 
             // Full girth until the tusk clears the lips (t = 0.5 is the exit point), then taper.
             double tt = Math.Max(0.0, (t - 0.5) / 0.5);
-            double radius = (RadiusBase + (RadiusTip - RadiusBase) * Math.Pow(tt, 1.1)) * scale;
+            double radius = (shape.RadiusBase + (shape.RadiusTip - shape.RadiusBase) * Math.Pow(tt, 1.1)) * scale;
+            bool breakRing = shape.Cut is not null && r == Rings - 1;
 
             for (int s = 0; s < Segments; s++)
             {
                 double angle = 2 * Math.PI * s / Segments;
                 V n = a * Math.Cos(angle) + b * Math.Sin(angle);
-                pos.Add(c + n * radius); nrm.Add(n); tan.Add(d);
+                // A snapped tusk's last ring is tilted, so the break is a slanted face, not a cut.
+                pos.Add(c + n * radius + (breakRing ? d * (0.35 * radius * Math.Cos(angle)) : default)); nrm.Add(n); tan.Add(d);
                 uv.Add(((float)(EnamelUv.U + 0.004 * Math.Cos(angle)), (float)(EnamelUv.V + 0.004 * t)));
             }
         }
 
-        pos.Add(Spine(1.0)); nrm.Add(Dir(1.0)); tan.Add(a); uv.Add(EnamelUv);
+        // The tip closes the tube: a point for a whole tusk, the middle of a flat cap for a snapped one.
+        double tipAt = shape.Cut ?? 1.0;
+        pos.Add(Spine(tipAt)); nrm.Add(Dir(tipAt)); tan.Add(a); uv.Add(EnamelUv);
 
         var tri = new List<int>();
         for (int r = 0; r < Rings - 1; r++)

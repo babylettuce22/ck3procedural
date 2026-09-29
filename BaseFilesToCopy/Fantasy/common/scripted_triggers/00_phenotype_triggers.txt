@@ -1,4 +1,4 @@
-﻿# The seven fantasy races, as one question. Not the same as gen_has_phenotype_trigger below —
+﻿# The eight fantasy races, as one question. Not the same as gen_has_phenotype_trigger below —
 # phenotype_human is a race too, just not a fantastical one.
 gen_has_fantasy_phenotype_trigger = {
 	OR = {
@@ -8,6 +8,63 @@ gen_has_fantasy_phenotype_trigger = {
 		has_trait = phenotype_rough_hewn
 		has_trait = phenotype_towering
 		has_trait = phenotype_diminutive
+		has_trait = phenotype_dusk_adapted
+		has_trait = phenotype_horned
+	}
+}
+
+# Does this character have horns at all — the horned people, or a Hornborn of any other race?
+# What gen_file_horns_decision and the horn-style effects ask. (The portrait side asks the same
+# question in the generated gen_race_horns group.)
+gen_has_horns_trigger = {
+	OR = {
+		has_trait = phenotype_horned
+		has_trait = hornborn
+	}
+}
+
+# A Hornborn whose horns are on show — not filed down. What the AI's marriage reluctance asks
+# (AI_HORNS_SHOWING_MARRIAGE_PENALTY, Emit/InteractionWriter.cs): the stigma is in what people see.
+# The horned people are not here — among their own horns are ordinary, and their marriages outside
+# the race already carry the cross-race penalty.
+gen_hornborn_horns_showing_trigger = {
+	has_trait = hornborn
+	NOT = { has_trait = phenotype_horned }
+	NOT = { has_character_flag = gen_horns_filed }
+}
+
+# Does this character have tusks at all — an orc, or a half-orc at half size? (00_tusk_effects.txt)
+gen_has_tusks_trigger = {
+	OR = {
+		has_trait = phenotype_rough_hewn
+		has_character_flag = gen_half_orc
+	}
+}
+
+# Has one of those tusks been snapped? (00_tusk_effects.txt; drawn by the generated gen_race_tusks group)
+gen_has_broken_tusk_trigger = {
+	OR = {
+		has_character_flag = gen_tusk_broken_left
+		has_character_flag = gen_tusk_broken_right
+	}
+}
+
+# Does this character already have a horn-style flag (00_horn_effects.txt)?
+gen_has_horn_style_trigger = {
+	OR = {
+		has_character_flag = gen_horn_style_ibex
+		has_character_flag = gen_horn_style_ram
+		has_character_flag = gen_horn_style_forward
+		has_character_flag = gen_horn_style_nubs
+	}
+}
+
+# The three elves — high, wood and deepkin — who share the pointed ear. What a human child needs one
+# parent to be to come out half-elf (gen_resolve_half_race_effect).
+gen_is_elf_phenotype_trigger = {
+	OR = {
+		has_trait = phenotype_gracile
+		has_trait = phenotype_sylvan
 		has_trait = phenotype_dusk_adapted
 	}
 }
@@ -63,6 +120,7 @@ gen_has_conflicting_phenotype_trigger = {
 			has_trait = phenotype_towering
 			has_trait = phenotype_diminutive
 			has_trait = phenotype_dusk_adapted
+			has_trait = phenotype_horned
 		}
 		AND = {
 			has_character_flag = gen_phenotype_human
@@ -96,6 +154,7 @@ gen_has_fantasy_race_ethnicity_trigger = {
 		gen_is_gnome_ethnicity_trigger = yes
 		gen_is_giantkin_ethnicity_trigger = yes
 		gen_is_deepkin_ethnicity_trigger = yes
+		gen_is_hornkin_ethnicity_trigger = yes
 	}
 }
 
@@ -163,6 +222,10 @@ gen_is_different_race_than = {
 		AND = {
 			has_trait = phenotype_dusk_adapted
 			scope:gen_target_char = { NOT = { has_trait = phenotype_dusk_adapted } }
+		}
+		AND = {
+			has_trait = phenotype_horned
+			scope:gen_target_char = { NOT = { has_trait = phenotype_horned } }
 		}
 	}
 }

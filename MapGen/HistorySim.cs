@@ -119,17 +119,20 @@ public sealed partial class HistorySim
     /// colonisation and ruination; without it neither ever happens. See <see cref="WildsGround"/>.</param>
     /// <param name="earlier">The history the written world was applied from, if any: its houses'
     /// standing carries on rather than being read afresh off the map. See <see cref="SeatStanding"/>.</param>
+    /// <param name="peoples">Every county's faith and the world's generated peoples and faiths, for
+    /// assimilation and conversion; without it neither ever happens. See <see cref="PeopleGround"/>.</param>
     public static HistorySim? Resume(RealmMap realms, int startYear, int tickYears = 1,
         RulerMap? rulers = null, PrehistoryMap? prehistory = null, WildsGround? wilds = null,
-        AppliedHistory? earlier = null)
+        AppliedHistory? earlier = null, PeopleGround? peoples = null)
     {
         if (realms.History is not { Rules: { } rules } start) return null;
 
         var (polities, owner) = Formation.CopyLiving(start.Polities);
 
         // Settling and abandoning land adds counties to the realm simulation's ground and takes them
-        // away, so a history that can do either works on its own copies: the rules are the written
-        // world's and are read again by the next Resume. Copies enumerate as the originals do.
+        // away, and assimilation changes their people, so a history that can do any of it works on
+        // its own copies: the rules are the written world's and are read again by the next Resume.
+        // Copies enumerate as the originals do.
         var sim = new Formation.Sim
         {
             Polities = polities,
@@ -137,7 +140,7 @@ public sealed partial class HistorySim
             Adjacent = wilds is null ? rules.Adjacent
                 : rules.Adjacent.ToDictionary(kv => kv.Key, kv => new HashSet<Title>(kv.Value)),
             Development = rules.Development,
-            CountyCulture = wilds is null ? rules.CountyCulture : new Dictionary<Title, Culture>(rules.CountyCulture),
+            CountyCulture = wilds is null && peoples is null ? rules.CountyCulture : new Dictionary<Title, Culture>(rules.CountyCulture),
             Events = [],
             AvgKingdom = rules.AvgKingdom,
             Reach = rules.Reach,
@@ -149,14 +152,15 @@ public sealed partial class HistorySim
         };
 
         var history = new HistorySim(sim, rules.Seed, startYear);
-        history.SeatStartRulers(rulers, prehistory);
+        history.SeatStartRulers(rulers, prehistory, earlier);
         history.SeatGrudges(prehistory);
         history.SeatStanding(earlier);
         history.SeatExclaves();
-        history.SeatDeJure();
+        history.SeatDeJure(earlier);
         history.SeatWilds(wilds);
+        history.SeatPeoples(peoples, earlier);
         history.SeatWars();
-        history.SeatIndependence();
+        history.SeatIndependence(earlier);
         history.KeepFrame();
         return history;
     }
@@ -203,6 +207,11 @@ public sealed partial class HistorySim
         // The frontier's year: land settled and land abandoned, after the wars and successions and
         // on its own stream, so switching either changes nothing else's dice this year.
         WildsYear();
+
+        // The peoples' year: counties taking their lords' culture and faith, once the year has
+        // settled who their lords are, each on a stream of its own. What it changes, the realm
+        // simulation reads next year through cohesion. See HistoryPeoples.
+        PeoplesYear();
 
         // Last: drift reads who holds what once the year's conquests and partitions are done, and
         // changes no realm, so nothing after it could depend on it.
@@ -269,6 +278,7 @@ public sealed partial class HistorySim
         CheckWilds(problems);
         CheckWars(problems);
         CheckHouses(problems);
+        CheckPeoples(problems);
         return problems;
     }
 

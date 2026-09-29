@@ -31,6 +31,86 @@ public static partial class ContentWriter
     {
         public static WildsLayer Unmoved(WildernessMap wilderness, CultureMap cultures, FaithMap faiths, FrontierMap wilds)
             => new(wilderness, cultures, faiths, wilds, false);
+
+        /// <summary>
+        /// When the history assimilated or converted any county, what each of them was before and
+        /// when it changed — what an additional bookmark dated inside the history writes. Null
+        /// when it changed none.
+        /// </summary>
+        public PeopleTimeline? Peoples { get; init; }
+    }
+
+    /// <summary>
+    /// The counties an applied history assimilated or converted, and the people and faith each had
+    /// before (the generated world's, with the frontier's settlers laid over it).
+    /// </summary>
+    internal sealed record PeopleTimeline(CultureMap Before, FaithMap FaithsBefore,
+        IReadOnlyDictionary<Title, List<(int Year, Culture? Culture, Faith? Faith)>> Changes)
+    {
+        /// <summary>
+        /// A county's people and faith in <paramref name="year"/>, by key, each only where it differs
+        /// from <paramref name="now"/> and <paramref name="faithNow"/>; null when neither does.
+        /// </summary>
+        public (string? Culture, string? Faith)? Then(Title county, int year, Culture now, Faith faithNow)
+        {
+            if (!Changes.TryGetValue(county, out var changes)) return null;
+            var culture = Before.For(county);
+            var faith = FaithsBefore.For(county);
+            foreach (var (when, c, f) in changes)
+            {
+                if (when > year) break;
+                culture = c ?? culture;
+                faith = f ?? faith;
+            }
+            string? cultureThen = culture == now ? null : culture.Key;
+            string? faithThen = faith == faithNow ? null : faith.Key;
+            return cultureThen is null && faithThen is null ? null : (cultureThen, faithThen);
+        }
+    }
+
+    /// <summary>
+    /// The realm layer's peoples with every county the history assimilated or converted given the
+    /// culture and faith it last took — copies, as <see cref="SettleWilds"/> makes. The same layer
+    /// when the history changed none. A county wild at the applied date keeps the wild's people.
+    /// </summary>
+    private static WildsLayer ChangePeoples(AppliedHistory applied, WildsLayer layer, List<Title> counties)
+    {
+        if (!applied.MovesPeoples) return layer;
+
+        var byIndex = counties.Where(c => c.Tier == "c").ToDictionary(c => c.Index);
+        var cultureByKey = layer.Cultures.Cultures.GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.First());
+        var faithByKey = layer.Faiths.Faiths.GroupBy(f => f.Key).ToDictionary(g => g.Key, g => g.First());
+        var cultureOf = new Dictionary<Title, Culture>(layer.Cultures.ByCounty);
+        var faithOf = new Dictionary<Title, Faith>(layer.Faiths.ByCounty);
+        var changes = new Dictionary<Title, List<(int, Culture?, Faith?)>>();
+
+        foreach (var change in applied.Peoples.OrderBy(p => p.Year))
+        {
+            if (!byIndex.TryGetValue(change.County, out var county) || layer.Wilderness.Contains(county)) continue;
+            var culture = change.Culture is { } c ? cultureByKey.GetValueOrDefault(c) : null;
+            var faith = change.Faith is { } f ? faithByKey.GetValueOrDefault(f) : null;
+            if (culture is null && faith is null) continue;
+
+            (changes.TryGetValue(county, out var list) ? list : changes[county] = []).Add((change.Year, culture, faith));
+            if (culture is not null) cultureOf[county] = culture;
+            if (faith is not null) faithOf[county] = faith;
+        }
+
+        int assimilated = changes.Keys.Count(c => cultureOf[c] != layer.Cultures.For(c));
+        int converted = changes.Keys.Count(c => faithOf[c] != layer.Faiths.For(c));
+        Console.WriteLine($"  applied history: {assimilated} counties took another culture and {converted} another faith");
+
+        return new WildsLayer(layer.Wilderness,
+            new CultureMap { Heritages = layer.Cultures.Heritages, Cultures = layer.Cultures.Cultures, ByCounty = cultureOf },
+            new FaithMap
+            {
+                Religions = layer.Faiths.Religions, Faiths = layer.Faiths.Faiths, ByCounty = faithOf,
+                ImportedStructure = layer.Faiths.ImportedStructure, Whole = layer.Faiths.Whole,
+            },
+            layer.Wilds, true)
+        {
+            Peoples = new PeopleTimeline(layer.Cultures, layer.Faiths, changes),
+        };
     }
 
     /// <summary>
@@ -68,6 +148,10 @@ public static partial class ContentWriter
             ? SettleWilds(applied, history, counties, wilderness, cultures, generatedFaiths, generatedWilderness,
                 provinces, order, landCount, provinceTerrain)
             : WildsLayer.Unmoved(generatedWilderness, cultures, generatedFaiths, generatedWilds);
+
+        // And the peoples as the history left them, over the settlers: the counties that took their
+        // lords' culture or faith. Before the governments, which read a county's culture.
+        wilds = ChangePeoples(applied, wilds, counties);
         var faiths = wilds.Faiths;
         cultures = wilds.Cultures;
 
@@ -136,8 +220,8 @@ public static partial class ContentWriter
 
         return new AppliedRealms(realms, governments, hegemonShare, lineage, pastRulers, applied.ColoursFor(capitals),
             drifted, wilds, applied.DiplomacyFor(capitals, counties), seatParents,
-            new RememberedPast(HistoryChronicle.Events(applied.Chronicle, empires, cultures, wilderness), applied.ChronicleSince,
-                HistoryChronicle.Events(applied.HeadlinesOrChronicle, empires, cultures, wilderness)),
+            new RememberedPast(HistoryChronicle.Events(applied.Chronicle, empires, cultures, wilderness, faiths), applied.ChronicleSince,
+                HistoryChronicle.Events(applied.HeadlinesOrChronicle, empires, cultures, wilderness, faiths)),
             eraGovernments);
     }
 
@@ -284,7 +368,7 @@ public static partial class ContentWriter
             var built = BuildProvinceHistory(cfg, empires, world.ProvinceTerrain, development, cultures, faiths,
                 governments, wilderness, worldCenters, world.SilkRoad, cfg.Seed, result.Azgaar);
             eraHoldings = BuildEraHoldings(cfg, empires, wilderness, eraGovernments, built.Holdings, realms,
-                world.Cultures, world.Faiths);
+                world.Cultures, world.Faiths, wilds);
             EmitProvinceHistory(modDir, built.Rows, built.Holdings, eraHoldings);
             return built;
         });
@@ -294,7 +378,8 @@ public static partial class ContentWriter
         // Every writer here walks the de jure tree, so a drifted tree changes what they write or the
         // order they write it in; with nothing drifted they would write what is already there. The
         // formation decisions also skip empires with no settled land, and the realm words follow
-        // the settlers' culture, so a moved frontier rewrites them too.
+        // the settlers' culture, so a moved frontier rewrites them too — as do counties that took
+        // another culture or faith (WildsLayer.Moved covers both).
         if (drifted > 0 || wilds.Moved)
         {
             Core.Stage.Time("de jure", () =>
@@ -514,6 +599,23 @@ public static partial class ContentWriter
             prehistory!.Eras = Core.Stage.Time("additional bookmarks", () => BookmarkEras.Build(
                 cfg, counties, realms, rulers!, prehistory!, cultures, faiths, governments, wilderness,
                 eraGovernments));
+
+        // The Restorationist society: a fallen crown, its house and its sworn, read off the world
+        // the lines above decided. Its own files only, and nothing it mints is added to prehistory,
+        // so every other file is byte-identical with the society on or off. Here rather than at the
+        // end so a re-emit of the history layer redoes it with the realms that history left.
+        if (cfg.EnableSocieties)
+        {
+            var restoration = Core.Stage.Time("restoration society", () => Restoration.Build(
+                empires, realms, cultures, faiths, wilderness, rulers!, prehistory!, cfg));
+            RestorationWriter.WriteAll(modDir, cfg, restoration, cultures, ethnicities);
+            Console.WriteLine(restoration is null
+                ? "  restoration society: no fallen crown fits this world; the society is switched off"
+                : $"  restoration society: {restoration.Crown.Key} ({restoration.CountyCount} counties) fell in "
+                  + $"{restoration.FellYear} ({(restoration.CrownHeld ? "usurped" : "broken")}, {restoration.FallKind}, {(restoration.FromHistory ? "recorded" : "invented")}); "
+                  + $"pretender {restoration.PretenderId} ({(restoration.PretenderLanded ? "landed" : "in exile")}), "
+                  + $"{restoration.Members.Count} sworn, usurper {restoration.UsurperId ?? "none"}");
+        }
 
         // Beside the artifacts rather than beside the roster: both are things the rulers
         // already own on the start date, and both need the rulers to exist first.

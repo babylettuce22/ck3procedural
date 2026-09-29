@@ -1,0 +1,35 @@
+﻿# The skin mound horns grow from: a head blendshape raising the scalp around each horn root, so the
+# horn rises out of a swelling of the skull instead of stopping at a hard edge. Skin-coloured by
+# construction. Emit/RaceHeadWriter.cs builds the blendshape and maps this attribute on both heads;
+# MapGen/Horns.cs is the shape. Set together with the gen_horns accessory by whatever gives a
+# character horns.
+#
+# In Core beside the other race-feature genes: Emit/PortraitWriter.cs writes it into every persistent
+# DNA record on every map. Index 0 must stay the empty template.
+
+morph_genes = {
+	gen_bs_horn_boss = {
+		inheritable = yes
+		group = head
+
+		gen_horn_boss_none = {
+			index = 0
+			visible = no
+			male = {}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		gen_horn_boss_on = {
+			index = 1
+			visible = no
+			male = {
+				setting = { attribute = "gen_bs_horn_boss"  value = { min = 0.0 max = 1.0 }  age = age_preset_child_features_wide_range }
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+	}
+}

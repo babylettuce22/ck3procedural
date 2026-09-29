@@ -24,6 +24,8 @@ public static class Program
         int scale = 2;
         string? modDir = null;
         List<int> historyYears = [];
+        MapGen.RealmRules historyRules = MapGen.RealmRules.All;
+        string? appliedHistoryPath = null;
         bool gui = args.Length == 0;
         bool staticOnly = false;
         bool guiOnly = false;
@@ -157,6 +159,19 @@ public static class Program
                 // to accept, continue and accept again ("--history-years 150,60"). See QuickHistory.
                 case "--history-years" when i + 1 < args.Length:
                     historyYears = [.. args[++i].Split(',').Select(int.Parse)];
+                    break;
+
+                // Which of the History workspace's rules the --history-years run keeps, as the
+                // RealmRules number (all of them when left out) — for proving a rule's off switch
+                // leaves the history as it was before the rule existed.
+                case "--history-rules" when i + 1 < args.Length:
+                    historyRules = (MapGen.RealmRules)int.Parse(args[++i]);
+                    break;
+
+                // Write the world with the history saved in this proctool_history.json, as a full
+                // write — for proving a re-emit comes out the same.
+                case "--applied-history" when i + 1 < args.Length:
+                    appliedHistoryPath = args[++i];
                     break;
 
                 case "--static-only":
@@ -477,6 +492,12 @@ public static class Program
                     cfg.EnableSocieties = true;
                     break;
 
+                // The hand-written prototype the society system grew out of, kept as a reference
+                // (BaseFilesToCopy/SocietyPrototype). Ignored when --societies is also given.
+                case "--society-prototype":
+                    cfg.EnableSocietyPrototype = true;
+                    break;
+
                 // Native rank titles and realm names (MapGen/NativeTitles.cs), both off by default.
                 case "--native-titles":
                     cfg.NativeRankTitles = true;
@@ -763,6 +784,10 @@ public static class Program
             {
                 sets.Add(Ck3MapGen.Emit.StaticFileWriter.Societies);
             }
+            else if (cfg.EnableSocietyPrototype)
+            {
+                sets.Add(Ck3MapGen.Emit.StaticFileWriter.SocietyPrototype);
+            }
 
             // Using UtcNow as runStarted ensures all previously existing files in the target
             // folder are considered older than this run and will be overwritten/refreshed.
@@ -805,7 +830,7 @@ public static class Program
             //
             // --societies here as well as on a full run: the HUD tab is a .gui edit, so it is one
             // of the things --gui-only exists to iterate on without regenerating a world.
-            GuiWriter.WriteAll(modDir, options.GameDir, cfg.EnableSocieties, cfg.EnableWilderness,
+            GuiWriter.WriteAll(modDir, options.GameDir, cfg.EnableSocieties || cfg.EnableSocietyPrototype, cfg.EnableWilderness,
                 cfg.EnableChronicle);
 
             return 0;
@@ -869,10 +894,23 @@ public static class Program
         try
         {
             var result = Generator.Generate(options);
+
+            // A history saved beside a mod, written as a full write the way the GUI's Write mod does
+            // with one restored — moved to its year after the world is built. What a re-emit of the
+            // same history has to reproduce, file for file.
+            if (appliedHistoryPath is not null)
+            {
+                var saved = MapGen.AppliedHistory.Load(Path.GetDirectoryName(Path.GetFullPath(appliedHistoryPath))!)
+                    ?? throw new InvalidOperationException($"No readable history at {appliedHistoryPath}.");
+                options.AppliedHistory = saved;
+                result = result.WithConfig(result.Config.AtStartYear(saved.Year, saved.PeopleSalt));
+                Console.WriteLine($"Applied history: written as {result.Config.StartYear}");
+            }
+
             if (modDir is not null)
             {
                 var written = Generator.WriteMod(result, options, modDir);
-                if (historyYears.Count > 0) AcceptHistory(result, written, modDir, options.GameDir, historyYears);
+                if (historyYears.Count > 0) AcceptHistory(result, written, modDir, options.GameDir, historyYears, historyRules);
             }
             if (debugImages ?? modDir is null)
                 Core.Stage.Time("debug images", () => Generator.WriteDebugImages(result, outDir, scale));
@@ -897,17 +935,18 @@ public static class Program
     /// player watches the history and accepts, continues and accepts again.
     /// </summary>
     private static void AcceptHistory(GenerationResult result, Emit.WrittenContent written, string modDir,
-        string gameDir, List<int> years)
+        string gameDir, List<int> years, MapGen.RealmRules rules)
     {
         MapGen.AppliedHistory? applied = null;
         foreach (int span in years)
         {
             var history = AppGUI.QuickHistory.PrepareAsync(result, written, applied).GetAwaiter().GetResult()
                 ?? throw new InvalidOperationException("This world has no grown realms to run a history on.");
+            if (rules != MapGen.RealmRules.All) history.Rules = rules;
             for (int y = 0; y < span; y++) history.Tick();
 
             applied = history.Capture();
-            Console.WriteLine($"History: run on {span} years, accepted in {applied.Year}");
+            Console.WriteLine($"History: run on {span} years, accepted in {applied.Year}{history.PeoplesSummary()}");
             (result, written) = Core.Stage.Time("apply history",
                 () => Emit.ContentWriter.ApplyHistory(modDir, gameDir, result, written, applied));
             applied.Save(modDir);

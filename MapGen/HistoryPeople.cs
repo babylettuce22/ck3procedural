@@ -95,10 +95,14 @@ public sealed partial class HistorySim
     /// seated at its capital, of that man's dynasty. A realm with none to be had — no written
     /// people, or a seat the roster does not cover — is given a ruler and a house of its own.
     /// </summary>
-    private void SeatStartRulers(RulerMap? rulers, PrehistoryMap? prehistory)
+    /// <param name="earlier">The history the written world was applied from, if any: a ruler it had
+    /// on a throne still reigns, and keeps the year he was crowned rather than starting afresh here.</param>
+    private void SeatStartRulers(RulerMap? rulers, PrehistoryMap? prehistory, AppliedHistory? earlier = null)
     {
         var byDynasty = new Dictionary<string, SimHouse>(StringComparer.Ordinal);
         var rng = new Rng(_seed ^ 0x5EA7);
+        var crowned = earlier?.Realms.Where(r => r.Ruler is not null && r.RulerCrowned > 0 && r.RulerCrowned <= StartYear)
+            .ToDictionary(r => r.Id, r => (r.Ruler!, r.RulerCrowned)) ?? [];
 
         foreach (var p in _sim.Polities.OrderBy(p => p.Capital.Index))
         {
@@ -120,7 +124,13 @@ public sealed partial class HistorySim
                 Seat(p, new SimRuler
                 {
                     Id = _nextRuler++, Name = ruler.Name, Female = ruler.Female, Born = ruler.BirthYear,
-                    House = house, Crowned = StartYear,
+                    House = house,
+                    // The year the written world crowned him: his own reign's start when an earlier
+                    // history had him on the throne, else the grant date HistoryWriter seats every
+                    // start-date holder on. Never the start itself — that made every liege "new" for
+                    // two years and tripled the vassals' breakaways as every history opened.
+                    Crowned = crowned.TryGetValue(p.Id, out var reign) && reign.Item1 == ruler.Name
+                        ? reign.Item2 : Math.Max(1, StartYear - 5),
                     Parent = ruler.ParentId is { } parentId ? Carried(parentId, prehistory, house) : null,
                 });
             }

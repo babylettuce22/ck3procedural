@@ -32,6 +32,27 @@
  trait_phenotype_dusk_adapted_desc:0 "Adapted to subterranean depths and nocturnal life, individuals with this trait possess acute senses and a calm, calculating demeanor in the dark."
  trait_phenotype_dusk_adapted_character_desc:0 "Adapted to subterranean depths and nocturnal life, [ROOT.GetCharacter.GetFirstNameNoTooltip] possesses acute senses and a calm, calculating demeanor in the dark."
 
+ trait_phenotype_horned:0 "Horned"
+ trait_phenotype_horned_desc:0 "Born of the horned people, herders of the high pastures and the open steppe. Their horns grow from the brow in childhood and are as ordinary among their own kind as a beard."
+ trait_phenotype_horned_character_desc:0 "Born of the horned people, [ROOT.GetCharacter.GetFirstNameNoTooltip] carries the horns of [ROOT.GetCharacter.GetHerHis] kin and the hardiness of a life spent with the herds."
+
+ # HORNBORN
+ trait_hornborn:0 "Hornborn"
+ trait_hornborn_desc:0 "Born with horns to a people who have none. Some trace it to horned blood somewhere in the line; others call it an ill omen. Strangers stare, and the Hornborn keep close to one another."
+ trait_hornborn_character_desc:0 "Born with horns to a people who have none, [ROOT.GetCharacter.GetFirstNameNoTooltip] draws stares wherever [ROOT.GetCharacter.GetSheHe] goes, and finds a ready friend in any other Hornborn."
+
+ gen_file_horns_decision:0 "File Down Horns"
+ gen_file_horns_decision_desc:0 "Horns can be sawn and filed down to stumps. Without them a Hornborn draws no stares and makes a match more easily, but inspires no fear either. They grow back within a few years."
+ gen_file_horns_decision_tooltip:0 "File your horns down to stumps for the next five years."
+ gen_file_horns_decision_confirm:0 "Fetch the file"
+ gen_file_horns_still_growing:0 "Your horns have not yet grown back"
+
+ gen_filed_horns_modifier:0 "Filed Horns"
+ gen_filed_horns_modifier_desc:0 "This character has filed their horns down to stumps. They draw no stares for it, and no fear. The horns will grow back."
+
+ gen_tusk_broken_toast:0 "A Tusk Snapped"
+
  # Marriage stuff
  AI_DIFFERENT_RACE_MARRIAGE_PENALTY:0 "Different Heritage/Race: $VALUE|=+0$"
+ AI_HORNS_SHOWING_MARRIAGE_PENALTY:0 "Hornborn, Horns Showing: $VALUE|=+0$"
  AI_DIFFERENT_RACE_ISOLATIONIST_PENALTY:0 "Isolationist Culture: $VALUE|=+0$"

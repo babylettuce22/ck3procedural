@@ -59,7 +59,7 @@ public static class FlatmapInk
     /// <summary>Draws the enabled halves onto <paramref name="bgra"/> in place and returns a line for the log.</summary>
     public static string Draw(byte[] bgra, int w, int h, bool[] land, ProvinceMap provinces, int[] order,
         RouteNetwork? routes, WildernessMap? wilderness, int seed, bool roads, bool flourishes, bool feather = false,
-        float[]? elevation = null, bool hachures = false)
+        float[]? elevation = null, bool hachures = false, IReadOnlyList<Landmark>? landmarks = null, string? gameDir = null)
     {
         var cv = new Canvas(bgra, w, h);
         double k = Scale(w);
@@ -106,6 +106,13 @@ public static class FlatmapInk
             notes.Add("compass rose");
         }
 
+        // Over the hachures and roads, which the paper lifted round each name keeps clear of it.
+        if (flourishes && landmarks is { Count: > 0 })
+        {
+            int lettered = LetterLandmarks(cv, landmarks, gameDir, k);
+            if (lettered > 0) notes.Add($"lettered {lettered} landmark(s)");
+        }
+
         // Last, over everything that runs to the edge.
         if (flourishes)
         {
@@ -114,6 +121,105 @@ public static class FlatmapInk
         }
 
         return notes.Count == 0 ? "nothing to ink" : string.Join(", ", notes);
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Landmark names
+
+    /// <summary>
+    /// Each landmark's name (see <see cref="Landmark"/>), lettered along its line in spaced italic,
+    /// the way an old map names a range or a sea: small beside the realm names, in the coastline's
+    /// sepia a little short of full strength, with the paper lifted just round the letters so they
+    /// read over hachures and roads. The type is the game's own italic (Gitan), so it sits with the
+    /// rest of the map's text rather than competing with the realm names' script.
+    ///
+    /// The size is the largest that fits in most of the line, capped by kind: a crater's name is
+    /// set a little larger than a line's, which has more length to spread along. A name that would
+    /// come out too small to read is left off rather than squeezed.
+    /// </summary>
+    private static int LetterLandmarks(Canvas cv, IReadOnlyList<Landmark> landmarks, string? gameDir, double k)
+    {
+        if (LetteringFont(gameDir) is not { } family) return 0;
+        const float tracking = 0.28f;
+        int lettered = 0;
+
+        foreach (var landmark in landmarks)
+        {
+            var line = landmark.Label.Select(p => (Pt)(p.X * cv.W, p.Y * cv.H)).ToList();
+            if (line.Count < 2) continue;
+            if (line[^1].X < line[0].X) line.Reverse();
+            double length = 0;
+            for (int i = 1; i < line.Count; i++) length += Dist(line[i - 1], line[i]);
+
+            // Measured at a round size, then scaled: advance grows in step with the size.
+            var probe = new SixLabors.Fonts.TextOptions(family.CreateFont(100f)) { Tracking = tracking };
+            double per100 = SixLabors.Fonts.TextMeasurer.MeasureAdvance(landmark.Name, probe).Width;
+            double cap = (landmark.Kind is "basin" or "sea" ? 30 : 24) * k;
+            double size = Math.Min(cap, 100 * 0.8 * length / Math.Max(1, per100));
+            if (size < 10 * k) continue;
+
+            var options = new SixLabors.Fonts.TextOptions(family.CreateFont((float)size))
+            {
+                Tracking = tracking,
+                VerticalAlignment = SixLabors.Fonts.VerticalAlignment.Center,
+            };
+            double width = SixLabors.Fonts.TextMeasurer.MeasureAdvance(landmark.Name, options).Width;
+            var baseline = Stretch(line, (length - width) / 2, (length + width) / 2 + size);
+            var path = new SixLabors.ImageSharp.Drawing.Path(new SixLabors.ImageSharp.Drawing.LinearLineSegment(
+                baseline.Select(p => new SixLabors.ImageSharp.PointF((float)p.X, (float)p.Y)).ToArray()));
+
+            // One set of rings per glyph, filled even-odd so the counters of an "a" or an "o" stay open.
+            var glyphs = SixLabors.ImageSharp.Drawing.Text.TextBuilder.GenerateGlyphs(landmark.Name, path, options)
+                .Select(g => g.Paths.SelectMany(p => p.Flatten()).Select(r => r.Points.ToArray().Select(p => (Pt)(p.X, p.Y)).ToList()).ToList())
+                .Where(g => g.Count > 0)
+                .ToList();
+            if (glyphs.Count == 0) continue;
+
+            foreach (var rings in glyphs)
+            {
+                cv.FillEvenOdd(rings);
+                foreach (var ring in rings) cv.Stroke([.. ring, ring[0]], 2.4 * k);
+            }
+            cv.Lift(0.3);
+            foreach (var rings in glyphs) cv.FillEvenOdd(rings);
+            cv.Ink(Sepia, 0.78);
+            lettered++;
+        }
+        return lettered;
+    }
+
+    /// <summary>The stretch of <paramref name="line"/> between two distances along it.</summary>
+    private static List<Pt> Stretch(List<Pt> line, double from, double to)
+    {
+        var part = new List<Pt>();
+        double walked = 0;
+        for (int i = 1; i < line.Count; i++)
+        {
+            double step = Dist(line[i - 1], line[i]);
+            double a = walked, b = walked + step;
+            walked = b;
+            if (b < from || a > to || step <= 0) continue;
+            if (part.Count == 0) part.Add(Lerp(line[i - 1], line[i], Math.Clamp((from - a) / step, 0, 1)));
+            part.Add(Lerp(line[i - 1], line[i], Math.Clamp((to - a) / step, 0, 1)));
+        }
+        return part;
+    }
+
+    /// <summary>The game's italic if the install has it, a Windows italic serif if not.</summary>
+    private static SixLabors.Fonts.FontFamily? LetteringFont(string? gameDir)
+    {
+        if (gameDir is not null)
+        {
+            string path = System.IO.Path.Combine(gameDir, "fonts", "Gitan", "GitanLatin-Italic.otf");
+            if (System.IO.File.Exists(path))
+            {
+                try { return new SixLabors.Fonts.FontCollection().Add(path); }
+                catch (Exception e) when (e is System.IO.IOException or SixLabors.Fonts.InvalidFontFileException) { }
+            }
+        }
+        foreach (string name in new[] { "Georgia", "Book Antiqua", "Cambria" })
+            if (SixLabors.Fonts.SystemFonts.TryGet(name, out var family)) return family;
+        return null;
     }
 
     // ------------------------------------------------------------------------------------------
@@ -1178,6 +1284,35 @@ public static class FlatmapInk
                 {
                     double c = PolygonCover(poly, x, y);
                     if (c > 0) Set(y * W + x, c);
+                }
+        }
+
+        /// <summary>
+        /// Several rings filled as one shape, even-odd: a ring inside another is a hole. What a
+        /// letter needs, whose counters are rings of their own; <see cref="Fill"/> would close them.
+        /// </summary>
+        public void FillEvenOdd(IReadOnlyList<IReadOnlyList<Pt>> rings)
+        {
+            var all = rings.Where(r => r.Count > 2).ToList();
+            if (all.Count == 0) return;
+            if (!Box(all.Min(r => r.Min(p => p.X)) - 1, all.Min(r => r.Min(p => p.Y)) - 1,
+                    all.Max(r => r.Max(p => p.X)) + 1, all.Max(r => r.Max(p => p.Y)) + 1,
+                    out int bx0, out int by0, out int bx1, out int by1)) return;
+            Touch(bx0, by0, bx1, by1);
+            for (int y = by0; y <= by1; y++)
+                for (int x = bx0; x <= bx1; x++)
+                {
+                    int hits = 0;
+                    for (int sy = 0; sy < 4; sy++)
+                        for (int sx = 0; sx < 4; sx++)
+                        {
+                            double px = x + (sx + 0.5) / 4, py = y + (sy + 0.5) / 4;
+                            bool inside = false;
+                            foreach (var ring in all)
+                                if (Inside(ring, px, py)) inside = !inside;
+                            if (inside) hits++;
+                        }
+                    if (hits > 0) Set(y * W + x, hits / 16.0);
                 }
         }
 

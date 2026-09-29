@@ -1,0 +1,64 @@
+﻿# The exposure pack's yearly pulses (restor.0300-0399). Redeclaring a vanilla on_action appends.
+
+# ---- The usurper's year: they hunt ----------------------------------------------------------------
+#
+# Only while the society is underground, only for the usurper, and only when there is something to
+# hunt: somebody sworn inside the realm, or support high enough that the old kingdom is talking.
+
+random_yearly_playable_pulse = {
+	on_actions = { restor_usurper_pulse }
+}
+
+restor_usurper_pulse = {
+	trigger = {
+		restor_underground_trigger = yes
+		restor_is_usurper_trigger = yes
+		is_imprisoned = no
+		OR = {
+			AND = {
+				exists = global_var:restor_support
+				global_var:restor_support >= 25
+			}
+			any_in_global_list = {
+				variable = restor_roster
+				is_alive = yes
+				NOT = { this = root }
+				any_liege_or_above = { this = root }
+			}
+		}
+	}
+	random_events = {
+		250 = 0
+		100 = restor.0320
+		100 = restor.0321
+		100 = restor.0322
+		100 = restor.0323
+		100 = restor.0324
+	}
+}
+
+# ---- A member's year under suspicion ----------------------------------------------------------------
+#
+# Exposure 10 and up. Each event offers a way to shed some of it, at a price.
+
+random_yearly_everyone_pulse = {
+	on_actions = { restor_exposure_member_pulse }
+}
+
+restor_exposure_member_pulse = {
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		is_alive = yes
+		is_adult = yes
+		has_variable = restor_exposure
+		var:restor_exposure >= 10
+	}
+	random_events = {
+		200 = 0
+		100 = restor.0330
+		100 = restor.0331
+		100 = restor.0332
+		100 = restor.0333
+	}
+}

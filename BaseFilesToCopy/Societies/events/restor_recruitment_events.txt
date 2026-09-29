@@ -1,0 +1,689 @@
+﻿# The Restorationists: recruitment. restor.0100-0199.
+#
+# A courtship in two steps (see common/scripted_effects/00_restor_recruitment_effects.txt):
+#
+#   0101   a player is sounded out by a member (sympathetic / cold / dangerous)
+#   0102   the recruiter hears: sympathetic
+#   0103   the recruiter hears: cold
+#   0104   the recruiter hears: dangerous
+#   0105   a player member is pointed at a likely lord
+#   0110   a player is offered the oath (accept / refuse / report)
+#   0111   the recruiter hears: accepted
+#   0112   the recruiter hears: refused -- buy the silence or not
+#   0113   the recruiter hears: reported to the usurper
+#   0115   the new member's first night among the Sworn
+#   0125   restored: the crown asks a player lord to join the order openly
+#
+# Events go only to players. An AI on either side is settled by the effects, so AI-to-AI recruiting
+# makes no events at all.
+
+namespace = restor
+
+# =====================================================================================
+#  restor.0101 -- a player is sounded out
+# =====================================================================================
+#
+# Often the first a player outside the society hears of it, so the society, the crown, the house and
+# the heir are all named plainly.
+
+restor.0101 = {
+	type = character_event
+	title = restor.0101.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { restor_of_the_blood_trigger = yes }
+				desc = restor.0101.desc_intro_blood
+			}
+			desc = restor.0101.desc_intro
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_pretender }
+				desc = restor.0101.desc_society
+			}
+			desc = restor.0101.desc_society_no_heir
+		}
+	}
+	theme = intrigue
+	override_background = { reference = sitting_room }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:restor_recruiter
+		animation = scheme
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		NOT = { has_trait = restor_member }
+		exists = scope:restor_recruiter
+		scope:restor_recruiter = {
+			is_alive = yes
+			has_trait = restor_member
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	# Sympathetic.
+	option = {
+		name = restor.0101.a
+		custom_tooltip = restor.0101.a.tt
+		if = {
+			limit = { scope:restor_recruiter = { is_ai = yes } }
+			custom_tooltip = restor.0101.a.offer_tt
+		}
+		hidden_effect = { restor_sound_out_sympathetic_effect = yes }
+		ai_chance = {
+			base = 10
+			modifier = { add = restor_recruit_pull_value }
+		}
+	}
+
+	# Cold.
+	option = {
+		name = restor.0101.b
+		custom_tooltip = restor.0101.b.tt
+		hidden_effect = { restor_sound_out_cold_effect = yes }
+		ai_chance = { base = 35 }
+	}
+
+	# Dangerous.
+	option = {
+		name = restor.0101.c
+		custom_tooltip = restor.0101.c.tt
+		hidden_effect = { restor_sound_out_dangerous_effect = yes }
+		ai_chance = {
+			base = 5
+			modifier = { add = restor_recruit_push_value }
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0102-0104 -- the recruiter hears where they stand
+# =====================================================================================
+
+restor.0102 = {
+	type = character_event
+	title = restor.0102.t
+	desc = restor.0102.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		character = scope:restor_recruit
+		animation = interested
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:restor_recruit
+		scope:restor_recruit = { is_alive = yes }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	# Straight to the oath.
+	option = {
+		name = restor.0102.a
+		trigger = {
+			scope:restor_recruit = {
+				NOT = { has_trait = restor_member }
+				restor_recruitable_trigger = yes
+			}
+		}
+		custom_tooltip = restor.0102.a.tt
+		hidden_effect = {
+			save_scope_as = restor_recruiter
+			restor_offer_oath_start_effect = yes
+		}
+	}
+
+	option = {
+		name = restor.0102.b
+		custom_tooltip = restor.0102.b.tt
+	}
+}
+
+restor.0103 = {
+	type = character_event
+	title = restor.0103.t
+	desc = restor.0103.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:restor_recruit
+		animation = dismissal
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:restor_recruit
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	option = {
+		name = restor.0103.a
+		restor_exposure_gain_effect = { VALUE = 2 }
+	}
+}
+
+restor.0104 = {
+	type = character_event
+	title = restor.0104.t
+	desc = restor.0104.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:restor_recruit
+		animation = disapproval
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:restor_recruit
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	option = {
+		name = restor.0104.a
+		restor_exposure_gain_effect = { VALUE = 8 }
+	}
+
+	option = {
+		name = restor.0104.b
+		trigger = {
+			gold >= medium_gold_value
+			scope:restor_recruit = { is_alive = yes }
+		}
+		pay_short_term_gold = {
+			target = scope:restor_recruit
+			gold = medium_gold_value
+		}
+		restor_exposure_gain_effect = { VALUE = 4 }
+	}
+}
+
+# =====================================================================================
+#  restor.0105 -- a likely lord (a player member)
+# =====================================================================================
+#
+# The yearly pulse's nudge, so a player finds the two interactions without reading a manual. The
+# candidate is picked by the same weights the AI uses.
+
+restor.0105 = {
+	type = character_event
+	title = restor.0105.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:restor_recruit = { has_character_flag = restor_sounded_sympathetic } }
+				desc = restor.0105.desc_sympathetic
+			}
+			triggered_desc = {
+				trigger = { scope:restor_recruit = { restor_of_the_blood_trigger = yes } }
+				desc = restor.0105.desc_blood
+			}
+			triggered_desc = {
+				trigger = { scope:restor_recruit = { restor_holds_crown_land_trigger = yes } }
+				desc = restor.0105.desc_land
+			}
+			desc = restor.0105.desc_people
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_usurper
+					scope:restor_recruit = { opinion = { target = scope:restor_usurper value <= -20 } }
+				}
+				desc = restor.0105.desc_hates_usurper
+			}
+			desc = restor.0105.desc_unknown
+		}
+		desc = restor.0105.desc_how
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:restor_recruit
+		animation = idle
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:restor_recruit
+		scope:restor_recruit = {
+			is_alive = yes
+			NOT = { has_trait = restor_member }
+			restor_recruitable_trigger = yes
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		save_scope_as = restor_recruiter
+	}
+
+	option = {
+		name = restor.0105.a
+		trigger = { scope:restor_recruit = { NOT = { has_character_flag = restor_sounded_sympathetic } } }
+		custom_tooltip = restor.0105.a.tt
+		hidden_effect = { restor_sound_out_start_effect = yes }
+	}
+
+	option = {
+		name = restor.0105.b
+		trigger = { scope:restor_recruit = { has_character_flag = restor_sounded_sympathetic } }
+		custom_tooltip = restor.0105.b.tt
+		hidden_effect = { restor_offer_oath_start_effect = yes }
+	}
+
+	option = {
+		name = restor.0105.c
+	}
+}
+
+# =====================================================================================
+#  restor.0110 -- a player is offered the oath
+# =====================================================================================
+
+restor.0110 = {
+	type = character_event
+	title = restor.0110.t
+	desc = {
+		desc = restor.0110.desc_intro
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_pretender
+					restor_of_the_blood_trigger = yes
+				}
+				desc = restor.0110.desc_heir_kin
+			}
+			triggered_desc = {
+				trigger = { exists = scope:restor_pretender }
+				desc = restor.0110.desc_heir
+			}
+			desc = restor.0110.desc_no_heir
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_usurper }
+				desc = restor.0110.desc_risk_usurper
+			}
+			desc = restor.0110.desc_risk
+		}
+	}
+	theme = secret
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:restor_recruiter
+		animation = personality_honorable
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		NOT = { has_trait = restor_member }
+		exists = scope:restor_recruiter
+		scope:restor_recruiter = {
+			is_alive = yes
+			has_trait = restor_member
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	# Swear.
+	option = {
+		name = restor.0110.a
+		custom_tooltip = restor.0110.a.tt
+		hidden_effect = { restor_oath_accepted_effect = yes }
+		ai_chance = {
+			base = 5
+			modifier = { add = restor_recruit_pull_value }
+			modifier = {
+				add = 50
+				has_character_flag = restor_sounded_sympathetic
+			}
+		}
+	}
+
+	# Refuse.
+	option = {
+		name = restor.0110.b
+		custom_tooltip = restor.0110.b.tt
+		hidden_effect = { restor_oath_refused_effect = yes }
+		ai_chance = { base = 30 }
+	}
+
+	# Report.
+	option = {
+		name = restor.0110.c
+		trigger = { exists = scope:restor_usurper }
+		add_prestige = minor_prestige_gain
+		custom_tooltip = restor.0110.c.tt
+		hidden_effect = { restor_oath_reported_effect = yes }
+		ai_chance = {
+			base = 0
+			modifier = { add = restor_recruit_report_value }
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0111-0113 -- the recruiter hears the answer to the oath
+# =====================================================================================
+
+restor.0111 = {
+	type = character_event
+	title = restor.0111.t
+	desc = restor.0111.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		character = scope:restor_recruit
+		animation = personality_honorable
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:restor_recruit
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	option = {
+		name = restor.0111.a
+		restor_recruiter_reward_effect = yes
+	}
+}
+
+restor.0112 = {
+	type = character_event
+	title = restor.0112.t
+	desc = restor.0112.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:restor_recruit
+		animation = dismissal
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:restor_recruit
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	# Buy the silence.
+	option = {
+		name = restor.0112.a
+		trigger = {
+			gold >= medium_gold_value
+			scope:restor_recruit = { is_alive = yes }
+		}
+		pay_short_term_gold = {
+			target = scope:restor_recruit
+			gold = medium_gold_value
+		}
+		restor_exposure_gain_effect = { VALUE = 5 }
+	}
+
+	# Let them carry it.
+	option = {
+		name = restor.0112.b
+		restor_exposure_gain_effect = { VALUE = 15 }
+	}
+}
+
+restor.0113 = {
+	type = character_event
+	title = restor.0113.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_usurper }
+				desc = restor.0113.desc
+			}
+			desc = restor.0113.desc_no_usurper
+		}
+	}
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		character = scope:restor_recruit
+		animation = personality_honorable
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_usurper }
+		character = scope:restor_usurper
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:restor_recruit
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	option = {
+		name = restor.0113.a
+		restor_exposure_gain_effect = { VALUE = 25 }
+	}
+
+	option = {
+		name = restor.0113.b
+		trigger = { gold >= medium_gold_value }
+		remove_short_term_gold = medium_gold_value
+		restor_exposure_gain_effect = { VALUE = 15 }
+	}
+}
+
+# =====================================================================================
+#  restor.0115 -- the first night
+# =====================================================================================
+#
+# The new member's introduction: who they met, who the heir is, who leads, and what the Sworn need
+# from them now -- then where to find the society's tab.
+
+restor.0115 = {
+	type = character_event
+	title = restor.0115.t
+	desc = {
+		desc = restor.0115.desc_intro
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:restor_recruiter = { restor_is_keeper_trigger = yes } }
+				desc = restor.0115.desc_keeper_brought_you
+			}
+			triggered_desc = {
+				trigger = { exists = scope:restor_keeper }
+				desc = restor.0115.desc_keeper
+			}
+			desc = restor.0115.desc_no_keeper
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_pretender
+					restor_of_the_blood_trigger = yes
+				}
+				desc = restor.0115.desc_heir_kin
+			}
+			triggered_desc = {
+				trigger = { exists = scope:restor_pretender }
+				desc = restor.0115.desc_heir
+			}
+			desc = restor.0115.desc_no_heir
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = global_var:restor_crown.holder
+					exists = scope:restor_usurper
+				}
+				desc = restor.0115.desc_need_war
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_pretender
+					scope:restor_pretender = { is_landed = no }
+				}
+				desc = restor.0115.desc_need_land
+			}
+			triggered_desc = {
+				trigger = {
+					exists = global_var:restor_support
+					global_var:restor_support >= 50
+				}
+				desc = restor.0115.desc_need_ready
+			}
+			desc = restor.0115.desc_need_support
+		}
+	}
+	theme = secret
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = personality_honorable
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_recruiter }
+		character = scope:restor_recruiter
+		animation = happiness
+	}
+	lower_left_portrait = {
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+		}
+		character = scope:restor_pretender
+	}
+	lower_right_portrait = {
+		trigger = {
+			exists = scope:restor_keeper
+			NOT = { scope:restor_keeper = root }
+			NOT = { scope:restor_keeper = scope:restor_recruiter }
+		}
+		character = scope:restor_keeper
+	}
+
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:restor_recruiter
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+	}
+
+	option = {
+		name = restor.0115.a
+		custom_tooltip = restor.0115.a.tt
+	}
+}
+
+# =====================================================================================
+#  restor.0125 -- restored: the crown's lords are asked to join the order
+# =====================================================================================
+
+restor.0125 = {
+	type = character_event
+	title = restor.0125.t
+	desc = restor.0125.desc
+	theme = realm
+	override_background = { reference = throne_room }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:restor_ruling_king
+		animation = personality_honorable
+	}
+
+	trigger = {
+		restor_recruit_public_candidate_trigger = yes
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		global_var:restor_crown.holder = { save_scope_as = restor_ruling_king }
+	}
+
+	option = {
+		name = restor.0125.a
+		restor_recruit_join_order_effect = yes
+		custom_tooltip = restor.0125.a.tt
+	}
+
+	option = {
+		name = restor.0125.b
+		custom_tooltip = restor.0125.b.tt
+		hidden_effect = {
+			add_character_flag = {
+				flag = restor_refused_recently
+				years = 5
+			}
+		}
+	}
+}

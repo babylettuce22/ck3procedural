@@ -9,6 +9,9 @@
  gen_bs_elf_ears:0 "Pointed Ears"
  # The orc tusk gene, likewise (common/genes/gen_bs_orc_tusks.txt).
  gen_bs_orc_tusks:0 "Tusks"
+ # Horns: the accessory gene is generated with the horn models; the skin mound is static in Core.
+ gen_horns:0 "Horns"
+ gen_bs_horn_boss:0 "Horn Base"
 
  gen_early_realm_stability:0 "A Stable Realm"
  gen_early_realm_stability_desc:0 "This realm is in a period of internal alignment."

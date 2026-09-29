@@ -1,0 +1,61 @@
+﻿# One line naming a member's current charge, for the society panel: [Character.Custom('RestorCurrentCharge')].
+# ROOT is the member. Keys in restor_charge_l_english.yml.
+
+RestorCurrentCharge = {
+	type = character
+
+	text = {
+		trigger = {
+			has_variable = restor_charge
+			var:restor_charge = flag:win_over
+			exists = var:restor_charge_target
+		}
+		localization_key = restor_charge_line_win_over
+	}
+	text = {
+		trigger = {
+			has_variable = restor_charge
+			var:restor_charge = flag:war_chest
+		}
+		localization_key = restor_charge_line_war_chest
+	}
+	text = {
+		trigger = {
+			has_variable = restor_charge
+			var:restor_charge = flag:stir
+			exists = var:restor_charge_target
+		}
+		localization_key = restor_charge_line_stir
+	}
+	text = {
+		trigger = {
+			has_variable = restor_charge
+			var:restor_charge = flag:shelter
+			exists = var:restor_charge_target
+		}
+		localization_key = restor_charge_line_shelter
+	}
+	text = {
+		trigger = {
+			has_variable = restor_charge
+			var:restor_charge = flag:recruit
+		}
+		localization_key = restor_charge_line_recruit
+	}
+	text = {
+		localization_key = restor_charge_line_none
+	}
+}
+
+# The deadline, or "overdue" in the days between the timer running out and the next check.
+RestorChargeDeadline = {
+	type = character
+
+	text = {
+		trigger = { has_variable = restor_charge_given }
+		localization_key = restor_charge_deadline
+	}
+	text = {
+		localization_key = restor_charge_overdue
+	}
+}

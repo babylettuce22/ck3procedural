@@ -1,0 +1,158 @@
+﻿# Horns: who has them, which style when the genome does not say, and filing them down.
+#
+# The drawing is done by the gen_race_horns group of the generated
+# gfx/portraits/portrait_modifiers/99_gen_race_morphs.txt (Emit/RaceMorphWriter.cs). This file keeps
+# the script-side facts that group reads: the phenotype_horned and hornborn traits, the
+# gen_horn_style_* fallback flags, and the timed gen_horns_filed flag.
+
+# A child of the horned people who came out of another race is Hornborn.
+#
+# Runs at birth after the race is decided. The birth roll gives a mixed child one parent's race
+# whole, so a horned parent's child is either horned (and horns are ordinary) or Hornborn. Hornborn
+# is also a vanilla genetic trait, so the engine may already have handed it down from a Hornborn
+# parent, or rolled it spontaneously; among the horned people it means nothing and is taken away.
+gen_resolve_hornborn_effect = {
+	if = {
+		limit = { has_trait = phenotype_horned }
+		remove_trait = hornborn
+	}
+	else_if = {
+		limit = {
+			NOT = { has_trait = hornborn }
+			OR = {
+				mother ?= { has_trait = phenotype_horned }
+				real_father ?= { has_trait = phenotype_horned }
+			}
+		}
+		add_trait = hornborn
+	}
+}
+
+# A horn style flag, at birth, for a child whose horns the portrait must FORCE.
+#
+# The portrait draws a flagged character's flag style whatever their DNA says, and an unflagged
+# horned-race character's DNA horns. So the flag goes to:
+#   - every Hornborn, whose DNA usually carries no horns at all;
+#   - a horned child with a flagged parent (keep the family style), or with a parent who is not
+#     horned — the birth roll gave it the horned parent's race, but its genome may have come from the
+#     other side.
+# A horned child of two unflagged horned parents gets none: it inherits its horns in the DNA, which is
+# how a culture's mix of styles runs in families. (No has_gene: dead in script, and unproven on
+# accessory genes even in the portrait, where it failed — see Emit/RaceMorphWriter.cs HornGroup.)
+gen_assign_horn_style_effect = {
+	if = {
+		limit = {
+			NOT = { gen_has_horn_style_trigger = yes }
+			OR = {
+				AND = {
+					has_trait = hornborn
+					NOT = { has_trait = phenotype_horned }
+				}
+				AND = {
+					has_trait = phenotype_horned
+					OR = {
+						mother ?= { gen_has_horn_style_trigger = yes }
+						real_father ?= { gen_has_horn_style_trigger = yes }
+						mother ?= { NOT = { has_trait = phenotype_horned } }
+						real_father ?= { NOT = { has_trait = phenotype_horned } }
+					}
+				}
+			}
+		}
+		gen_pick_horn_style_effect = yes
+	}
+}
+
+# A parent's style when a parent has one (family resemblance), otherwise a roll that favours the
+# grander styles — a Hornborn is a mark, not a whisper.
+gen_pick_horn_style_effect = {
+	if = {
+		limit = { mother ?= { has_character_flag = gen_horn_style_ibex } }
+		add_character_flag = gen_horn_style_ibex
+	}
+	else_if = {
+		limit = { mother ?= { has_character_flag = gen_horn_style_ram } }
+		add_character_flag = gen_horn_style_ram
+	}
+	else_if = {
+		limit = { mother ?= { has_character_flag = gen_horn_style_forward } }
+		add_character_flag = gen_horn_style_forward
+	}
+	else_if = {
+		limit = { mother ?= { has_character_flag = gen_horn_style_nubs } }
+		add_character_flag = gen_horn_style_nubs
+	}
+	else_if = {
+		limit = { real_father ?= { has_character_flag = gen_horn_style_ibex } }
+		add_character_flag = gen_horn_style_ibex
+	}
+	else_if = {
+		limit = { real_father ?= { has_character_flag = gen_horn_style_ram } }
+		add_character_flag = gen_horn_style_ram
+	}
+	else_if = {
+		limit = { real_father ?= { has_character_flag = gen_horn_style_forward } }
+		add_character_flag = gen_horn_style_forward
+	}
+	else_if = {
+		limit = { real_father ?= { has_character_flag = gen_horn_style_nubs } }
+		add_character_flag = gen_horn_style_nubs
+	}
+	else = {
+		random_list = {
+			30 = { add_character_flag = gen_horn_style_ibex }
+			30 = { add_character_flag = gen_horn_style_ram }
+			25 = { add_character_flag = gen_horn_style_forward }
+			15 = { add_character_flag = gen_horn_style_nubs }
+		}
+	}
+}
+
+# The yearly and game-start upkeep: no Hornborn among the horned people, and a style for every
+# Hornborn — which catches the ones the engine invents (random_creation) and never births. Horned
+# characters are left to their DNA unless a parent says otherwise (gen_assign_horn_style_effect).
+gen_horns_upkeep_effect = {
+	if = {
+		limit = {
+			has_trait = phenotype_horned
+			has_trait = hornborn
+		}
+		remove_trait = hornborn
+	}
+	gen_assign_horn_style_effect = yes
+}
+
+# Filing the horns down (gen_file_horns_decision).
+#
+# Five years, then they grow back: the flag and the modifier are timed together, and the portrait
+# returns to full horns when the flag lapses. Staying filed is upkeep, not a one-off.
+#
+# For a Hornborn it is passing — the modifier cancels what the showing horns do, stares and fear
+# alike, and the AI's marriage reluctance lapses with the flag (gen_hornborn_horns_showing_trigger).
+# Among the horned people it is shameful: a heavier prestige cost and stress for the proud, and no
+# social gain, since horns were never held against them by their own.
+gen_file_horns_effect = {
+	add_character_flag = {
+		flag = gen_horns_filed
+		years = 5
+	}
+	if = {
+		limit = { has_trait = phenotype_horned }
+		add_prestige = medium_prestige_loss
+		stress_impact = {
+			base = minor_stress_impact_gain
+			arrogant = medium_stress_impact_gain
+			zealous = minor_stress_impact_gain
+		}
+	}
+	else = {
+		add_prestige = minor_prestige_loss
+		add_character_modifier = {
+			modifier = gen_filed_horns_modifier
+			years = 5
+		}
+		stress_impact = {
+			arrogant = medium_stress_impact_gain
+		}
+	}
+}

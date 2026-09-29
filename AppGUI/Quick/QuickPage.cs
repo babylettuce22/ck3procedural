@@ -75,6 +75,7 @@ internal sealed class QuickPage : Panel
 
     // map step
     private readonly List<(QuickMapType Type, MapTile Tile)> _tiles = [];
+    private readonly TileStrip _tileStrip = new() { Name = "quickTypes" };
     private readonly MapPreview _preview = new();
     private readonly Label _typeName = MakeLabel("", new Font("Segoe UI Semibold", 13f), Theme.Text);
     private readonly Label _typeBlurb = MakeLabel("", Body, Theme.TextDim, wrap: true);
@@ -485,6 +486,7 @@ internal sealed class QuickPage : Panel
     private void SyncControls()
     {
         foreach (var (type, tile) in _tiles) tile.Selected = type.Key == _choices.MapType;
+        if (_tiles.FirstOrDefault(t => t.Tile.Selected).Tile is { } picked) _tileStrip.EnsureVisible(picked);
         _size.Value = _choices.Size;
         _era.Value = _choices.Era;
         _climate.Value = _choices.Climate;
@@ -522,7 +524,7 @@ internal sealed class QuickPage : Panel
     {
         var title = MakeLabel("Choose a map", Title, Theme.Text);
         var subtitle = MakeLabel("Pick the shape of the land, then roll until the coastline feels right.", Subtitle, Theme.TextDim);
-        _mapPanel.Controls.AddRange([title, subtitle, _preview, _typeName, _typeBlurb, _seedCaption, _seedBox, _reroll, _previous, _mapHint]);
+        _mapPanel.Controls.AddRange([title, subtitle, _tileStrip, _preview, _typeName, _typeBlurb, _seedCaption, _seedBox, _reroll, _previous, _mapHint]);
 
         // Relief: how rugged the land is, whatever its shape. Changes the preview and, through the
         // game's hill and mountain shares, how the world plays. See QuickTerrain.
@@ -551,7 +553,7 @@ internal sealed class QuickPage : Panel
             tile.Click += (_, _) => PickType(type);
             new WrappingToolTip { InitialDelay = 400 }.SetToolTip(tile, type.Blurb);
             _tiles.Add((type, tile));
-            _mapPanel.Controls.Add(tile);
+            _tileStrip.Add(tile);
         }
 
         _reroll.Click += (_, _) => Reroll();
@@ -567,14 +569,15 @@ internal sealed class QuickPage : Panel
             y += title.PreferredHeight + S(2);
             y += StepPanel.Place(subtitle, x, y, w) + S(16);
 
-            // The tiles span the column; a tile's picture is as tall as half its width, so past a
-            // point they stop growing and spread apart instead, and the preview keeps its height.
+            // The tiles span the column at the size six of them would take; a tile's picture is as
+            // tall as half its width, so past a point they stop growing and spread apart instead,
+            // and the preview keeps its height. More types than fit scroll sideways (TileStrip).
             // A name too long for one line takes two, on every tile, so the row stays even.
-            var (tileW, gap) = StepPanel.Spread(w, _tiles.Count, S(10), S(210));
-            int tileH = _tiles.Count == 0 ? 0 : _tiles.Max(t => t.Tile.HeightFor(tileW));
-            for (int i = 0; i < _tiles.Count; i++)
-                _tiles[i].Tile.Bounds = new Rectangle(x + i * (tileW + gap), y, tileW, tileH);
-            y += tileH + S(18);
+            int stripH = _tileStrip.Measure(w);
+            _tileStrip.Bounds = new Rectangle(x, y, w, stripH);
+            if (_tiles.FirstOrDefault(t => t.Tile.Selected).Tile is { } chosen)
+                _tileStrip.EnsureVisible(chosen, animate: false);
+            y += stripH + S(18);
 
             // The seed and relief controls keep to the right edge at a readable width; the preview
             // takes the rest, as large as the height allows, centred in it.
@@ -706,7 +709,8 @@ internal sealed class QuickPage : Panel
         string path = type.PresetPathFor(_choices.Mountains);
         _preview.Chip = MapChip(type);
 
-        Task.Run(() => ForgePreview.Render(path, seed, 1024, 512, cts.Token, relief)).ContinueWith(task =>
+        var feature = type.Feature;
+        Task.Run(() => ForgePreview.Render(path, seed, 1024, 512, cts.Token, relief, feature)).ContinueWith(task =>
         {
             var bitmap = task.Result;
             if (IsDisposed || !IsHandleCreated) { bitmap?.Dispose(); return; }
@@ -736,13 +740,14 @@ internal sealed class QuickPage : Panel
     {
         if (_thumbnailsStarted) return;
         _thumbnailsStarted = true;
-        var work = _tiles.Select(t => (t.Type.PresetPath, t.Tile)).ToList();
+        var work = _tiles.Select(t => (t.Type.PresetPath, t.Type.Feature, t.Tile)).ToList();
 
         Task.Run(() =>
         {
-            foreach (var (path, tile) in work)
+            foreach (var (path, feature, tile) in work)
             {
-                var bitmap = ForgePreview.Render(path, ThumbnailSeed, 384, 192, CancellationToken.None);
+                var bitmap = ForgePreview.Render(path, ThumbnailSeed, 384, 192, CancellationToken.None,
+                    feature: feature);
                 if (bitmap is null) continue;
                 if (IsDisposed || !IsHandleCreated) { bitmap.Dispose(); return; }
                 BeginInvoke(() => tile.Thumbnail = bitmap);

@@ -71,14 +71,15 @@ public static partial class ContentWriter
         var silkRoad = world.SilkRoad;
         var waterNames = world.WaterNames;
 
+        // The race head features — elves' ears, orcs' tusks, horns — built from the installed game's
+        // head so they always match it. FIRST, because whether the horn gene shipped decides whether
+        // the ethnicity files (and later the portrait DNA) may name it.
+        Core.Stage.Time("race head shapes", () => RaceHeadWriter.WriteAll(modDir, gameDir, cfg));
+
         Core.Stage.Time("ethnicity files", () => EthnicityWriter.WriteAll(modDir, ethnicities));
 
         // The render-time enforcement of those ethnicities' races — same table, other end.
         Core.Stage.Time("race morph modifiers", () => RaceMorphWriter.WriteAll(modDir, cfg, ethnicities));
-
-        // The head shapes those modifiers force — the elves' pointed ears — built from the
-        // installed game's head so they always match it.
-        Core.Stage.Time("race head shapes", () => RaceHeadWriter.WriteAll(modDir, gameDir, cfg));
 
         Core.Stage.Time("government overrides",
             () => GovernmentWriter.WriteNomadNaming(modDir, gameDir, counties.Any(governments.IsNomad)));
@@ -95,7 +96,7 @@ public static partial class ContentWriter
             WriteProvinceTerrain(modDir, provinceTerrain, landCount);
             (provinceRows, holdings) = BuildProvinceHistory(cfg, empires, provinceTerrain, development, cultures, faiths, governments, wilderness, worldCenters, silkRoad, cfg.Seed, azgaar);
             eraHoldings = BuildEraHoldings(cfg, empires, wilderness, eraGovernments, holdings, realms,
-                generatedCultures, generatedFaiths);
+                generatedCultures, generatedFaiths, world.RealmLayer);
             EmitProvinceHistory(modDir, provinceRows, holdings, eraHoldings);
             WriteLocalisation(modDir, empires, waterNames, provinces, baronyCount, landCount, riverCount);
         });
@@ -221,6 +222,7 @@ public static partial class ContentWriter
 
         Core.Stage.Time("mountain passes",
             () => PassWriter.WriteAll(modDir, MapGen.MountainPasses.ProvinceIds(provinces, order, baronyCount).ToList()));
+        Core.Stage.Time("landmarks", () => PassWriter.WriteLandmarks(modDir, world.Landmarks));
 
         Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, generatedFaiths.Declared(), cfg.Seed));
 
@@ -264,7 +266,7 @@ public static partial class ContentWriter
         Core.Stage.Time("faction rules", () => FactionWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
         Core.Stage.Time("GUI changes",
-            () => GuiWriter.WriteAll(modDir, gameDir, cfg.EnableSocieties, cfg.EnableWilderness,
+            () => GuiWriter.WriteAll(modDir, gameDir, cfg.EnableSocieties || cfg.EnableSocietyPrototype, cfg.EnableWilderness,
                 cfg.EnableChronicle));
 
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
@@ -289,7 +291,8 @@ public static partial class ContentWriter
         // same buffer further down, and re-rendering or re-reading it there would be the same
         // parchment twice.
         var flatmap = Core.Stage.Time("flatmap", () => FlatmapWriter.WriteAll(
-            modDir, cfg, provinces, order, landCount, provinceElevation, routes, generatedWilderness));
+            modDir, cfg, provinces, order, landCount, provinceElevation, routes, generatedWilderness,
+            world.Landmarks, gameDir));
 
         // The launcher and Workshop picture, cut from the same buffer while it is still in memory.
         Core.Stage.Time("thumbnail", () => ThumbnailWriter.Write(modDir, gameDir, flatmap));
@@ -474,6 +477,7 @@ public static partial class ContentWriter
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
             sets.Add(StaticFileWriter.Fantasy);
         if (cfg.EnableSocieties) sets.Add(StaticFileWriter.Societies);
+        else if (cfg.EnableSocietyPrototype) sets.Add(StaticFileWriter.SocietyPrototype);
         Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir, sets, runStarted));
 
         // DEAD LAST, and both halves of that matter.
@@ -1371,10 +1375,13 @@ public static partial class ContentWriter
     /// (<see cref="RealmMap.Wilderness"/>). A county settled since then is wild on that date — the
     /// wilderness holding on its seat, nothing elsewhere, the unsettled people — and one fallen
     /// since is held: its ruler's seat holding, and the people and faith the generated world gave it.
+    /// A county held on both dates that the history assimilated or converted in between keeps, on
+    /// the earlier date, the people and faith it had then (<see cref="WildsLayer.Peoples"/>).
     /// </summary>
     private static EraHoldings? BuildEraHoldings(MapConfig cfg, List<Title> empires, WildernessMap wilderness,
         Dictionary<int, GovernmentMap>? eraGovernments, IReadOnlyDictionary<int, string> holdings,
-        RealmMap? realms = null, CultureMap? generatedCultures = null, FaithMap? generatedFaiths = null)
+        RealmMap? realms = null, CultureMap? generatedCultures = null, FaithMap? generatedFaiths = null,
+        WildsLayer? layer = null)
     {
         if (eraGovernments is null) return null;
 
@@ -1387,7 +1394,7 @@ public static partial class ContentWriter
         {
             var provinces = new Dictionary<int, ProvinceThen>();
             var wildThen = realms?.EraMaps?.GetValueOrDefault(year)?.Wilderness;
-            int settledSince = 0, fallenSince = 0;
+            int settledSince = 0, fallenSince = 0, changedSince = 0;
 
             foreach (var county in counties)
             {
@@ -1397,10 +1404,23 @@ public static partial class ContentWriter
 
                 if (!wildNow && !wasWild)
                 {
-                    if (!holdings.TryGetValue(seat.ProvinceId, out var today) || !seatHoldings.Contains(today)) continue;
+                    string? seatThen = null;
+                    if (holdings.TryGetValue(seat.ProvinceId, out var today) && seatHoldings.Contains(today))
+                    {
+                        string then = GovernmentMap.CapitalHolding(BookmarkEras.EraGovernment(governments.For(county)));
+                        if (then != today) seatThen = then;
+                    }
 
-                    string then = GovernmentMap.CapitalHolding(BookmarkEras.EraGovernment(governments.For(county)));
-                    if (then != today) provinces[seat.ProvinceId] = new ProvinceThen(then);
+                    // Its people and faith then, where the history has since changed either.
+                    if (layer?.Peoples?.Then(county, year, layer.Cultures.For(county), layer.Faiths.For(county)) is { } people)
+                    {
+                        changedSince++;
+                        foreach (var barony in county.SeatFirst().Where(b => b.ProvinceId > 0))
+                            provinces[barony.ProvinceId] = new ProvinceThen(
+                                barony == seat && seatThen is not null ? seatThen : holdings.GetValueOrDefault(barony.ProvinceId, "none"),
+                                people.Culture, people.Faith);
+                    }
+                    else if (seatThen is not null) provinces[seat.ProvinceId] = new ProvinceThen(seatThen);
                 }
                 else if (!wildNow && wasWild)
                 {
@@ -1422,11 +1442,12 @@ public static partial class ContentWriter
             }
 
             dates.Add((year, $"{year - 1}.1.1", provinces));
-            var seats = provinces.Values.Where(p => p.Culture is null).ToList();
+            var seats = provinces.Values.Where(p => p.Culture is null && p.Faith is null).ToList();
             Console.WriteLine($"  additional bookmark {year}: {seats.Count} seats held as "
                 + string.Join(", ", seats.GroupBy(p => p.Holding).OrderByDescending(g => g.Count())
                     .Select(g => $"{g.Count()} {g.Key.Replace("_holding", "")}"))
-                + (wildThen is null ? "" : $"; {settledSince} counties wild then and settled since, {fallenSince} held then and fallen since"));
+                + (wildThen is null ? "" : $"; {settledSince} counties wild then and settled since, {fallenSince} held then and fallen since")
+                + (changedSince == 0 ? "" : $"; {changedSince} of another culture or faith then"));
         }
 
         return new EraHoldings(dates, cfg.StartYear, $"{Math.Max(1, cfg.StartYear - 5)}.1.1");

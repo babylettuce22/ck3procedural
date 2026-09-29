@@ -106,6 +106,8 @@ public static class AzgaarNaming
         if (tag.Contains("orc") || tag.Contains("ork") || tag.Contains("goblin")) return RaceArchetype.Orc;
         if (tag.Contains("gnom") || tag.Contains("halfling") || tag.Contains("hobbit")) return RaceArchetype.Gnome;
         if (tag.Contains("giant")) return RaceArchetype.Giantkin;
+        if (tag.Contains("horn") || tag.Contains("tiefling") || tag.Contains("satyr") || tag.Contains("faun")
+            || tag.Contains("minotaur")) return RaceArchetype.Hornkin;
         return null;
     }
 

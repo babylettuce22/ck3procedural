@@ -53,15 +53,22 @@ public static class StaticFileWriter
     public const string Fantasy = "Fantasy";
 
     /// <summary>
-    /// The hand-written society prototype: one membership trait with a rank track, one rite
-    /// gated on it, and the approach event that puts the first member in the world.
-    ///
-    /// Gated, and off by default, because none of it is generated yet — the keys are
-    /// <c>society_*</c> rather than <c>gen_*</c> and no emitter writes or reads them. It ships
-    /// so the gating can be exercised in a real game ahead of the generator that will replace
-    /// it, and it references nothing a seed can change, so it is safe on any map.
+    /// The society system: today the Restorationists, a secret order sworn to put a fallen crown
+    /// back on its house's head. The static half — events, interactions, effects, the panel — reads
+    /// everything per-world through global variables that
+    /// <see cref="RestorationWriter"/> sets at game start, so no file here names a generated key.
+    /// Off by default (<see cref="Config.MapConfig.EnableSocieties"/>).
     /// </summary>
     public const string Societies = "Societies";
+
+    /// <summary>
+    /// The hand-written society prototype the system grew out of: one membership trait with a rank
+    /// track, one rite gated on it, and the approach event that puts the first member in the world.
+    /// Kept as the reference implementation of the CK3 mechanisms it proved (activity gating, the
+    /// cloned abduct scheme, the exposure-driven secret). Never shipped beside <see cref="Societies"/>:
+    /// both define the society panel's scripted_guis, which the HUD tab calls by name.
+    /// </summary>
+    public const string SocietyPrototype = "SocietyPrototype";
 
     /// <summary>
     /// Files that document or configure a set rather than belong in a mod.

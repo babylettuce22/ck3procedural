@@ -1,0 +1,597 @@
+﻿# The Restorationists' charges: giving, checking, completing, expiring. restor.0500-0599.
+# See README.txt, DIRECTION: CHARGES, and 00_restor_charge_triggers.txt for the state.
+#
+# One path for everything. The yearly member pulse and the players' quarterly check both call
+# restor_charge_check_effect; the decisions and events that do a charge's work call it too, so a
+# charge completes the moment it is done rather than at the next pulse.
+#
+# ROOT is the member throughout.
+
+# =====================================================================================
+#  The pulses
+# =====================================================================================
+
+# The yearly member pulse (restor_charge_pulse).
+restor_charge_pulse_effect = {
+	if = {
+		limit = { has_variable = restor_charge }
+		restor_charge_check_effect = yes
+
+		# Still open: the AI works at it in the abstract; a player is given a chance to act on it.
+		if = {
+			limit = { has_variable = restor_charge }
+			if = {
+				limit = { is_ai = yes }
+				random = {
+					chance = 35
+					restor_charge_ai_attempt_effect = yes
+				}
+			}
+			else = {
+				random = {
+					chance = 50
+					restor_charge_opportunity_effect = yes
+				}
+			}
+		}
+	}
+	else_if = {
+		limit = { restor_charge_can_be_offered_trigger = yes }
+		random = {
+			chance = 50
+			restor_charge_offer_effect = yes
+		}
+	}
+}
+
+# Checks an open charge: withdrawn if the world made it impossible, paid if it is done, failed if
+# its three years are up.
+restor_charge_check_effect = {
+	if = {
+		limit = { has_variable = restor_charge }
+		if = {
+			limit = { restor_charge_invalid_trigger = yes }
+			restor_charge_withdraw_effect = yes
+		}
+		else_if = {
+			limit = { restor_charge_done_trigger = yes }
+			restor_charge_complete_effect = yes
+		}
+		else_if = {
+			limit = { NOT = { has_variable = restor_charge_given } }
+			restor_charge_expire_effect = yes
+		}
+	}
+}
+
+# =====================================================================================
+#  Giving a charge
+# =====================================================================================
+
+# Picks a charge that can be done right now and gives it. The AI takes it silently; a player gets
+# the Keeper's letter (restor.0501) and may turn it down.
+restor_charge_offer_effect = {
+	random_list = {
+		30 = {
+			trigger = { restor_charge_win_over_possible_trigger = yes }
+			restor_charge_give_win_over_effect = yes
+		}
+		25 = {
+			trigger = { restor_charge_stir_possible_trigger = yes }
+			modifier = {
+				add = 15
+				restor_holds_crown_land_trigger = yes
+			}
+			restor_charge_give_stir_effect = yes
+		}
+		20 = {
+			trigger = { restor_charge_war_chest_possible_trigger = yes }
+			modifier = {
+				add = 20
+				gold >= 200
+			}
+			restor_charge_give_war_chest_effect = yes
+		}
+		# The heir without a roof comes first when it applies.
+		60 = {
+			trigger = { restor_charge_shelter_possible_trigger = yes }
+			restor_charge_give_shelter_effect = yes
+		}
+		10 = {
+			restor_charge_give_recruit_effect = yes
+		}
+	}
+	if = {
+		limit = {
+			has_variable = restor_charge
+			is_ai = no
+		}
+		trigger_event = { id = restor.0501 days = 1 }
+	}
+}
+
+# The timer every charge shares.
+restor_charge_start_timer_effect = {
+	set_variable = {
+		name = restor_charge_given
+		value = yes
+		years = 3
+	}
+}
+
+restor_charge_give_win_over_effect = {
+	global_var:restor_crown = {
+		random_de_jure_county = {
+			limit = {
+				exists = holder
+				holder = { restor_charge_win_over_target_trigger = yes }
+			}
+			holder = { save_scope_as = restor_charge_pick }
+		}
+	}
+	if = {
+		limit = { exists = scope:restor_charge_pick }
+		set_variable = { name = restor_charge value = flag:win_over }
+		set_variable = { name = restor_charge_target value = scope:restor_charge_pick }
+		restor_charge_start_timer_effect = yes
+	}
+}
+
+# The nearest county of the crown that is not stirred yet.
+restor_charge_give_stir_effect = {
+	location = { save_scope_as = restor_charge_member_location }
+	global_var:restor_crown = {
+		ordered_de_jure_county = {
+			limit = { restor_charge_stir_target_trigger = yes }
+			order_by = {
+				value = "title_province.squared_distance(scope:restor_charge_member_location)"
+				multiply = -1
+			}
+			save_scope_as = restor_charge_pick_county
+		}
+	}
+	if = {
+		limit = { exists = scope:restor_charge_pick_county }
+		set_variable = { name = restor_charge value = flag:stir }
+		# restor_charge_target is a character for the other kinds; tiger types a variable by its
+		# first set and would call this a mismatch.
+		#tiger-ignore(key=scopes)
+		set_variable = { name = restor_charge_target value = scope:restor_charge_pick_county }
+		restor_charge_start_timer_effect = yes
+	}
+}
+
+# The goal is what the member has given so far, plus 100.
+restor_charge_give_war_chest_effect = {
+	set_variable = { name = restor_charge value = flag:war_chest }
+	if = {
+		limit = { has_variable = restor_given_to_cause }
+		set_variable = { name = restor_charge_goal value = var:restor_given_to_cause }
+		change_variable = { name = restor_charge_goal add = 100 }
+	}
+	else = {
+		set_variable = { name = restor_charge_goal value = 100 }
+	}
+	restor_charge_start_timer_effect = yes
+}
+
+restor_charge_give_shelter_effect = {
+	set_variable = { name = restor_charge value = flag:shelter }
+	set_variable = { name = restor_charge_target value = global_var:restor_pretender }
+	restor_charge_start_timer_effect = yes
+}
+
+# Remembers who this member had already brought in, so only a new oath counts.
+restor_charge_give_recruit_effect = {
+	set_variable = { name = restor_charge value = flag:recruit }
+	clear_variable_list = restor_charge_old_recruits
+	every_in_global_list = {
+		variable = restor_roster
+		limit = {
+			has_opinion_modifier = {
+				target = root
+				modifier = restor_brought_me_in_opinion
+			}
+		}
+		save_temporary_scope_as = restor_charge_old
+		root = {
+			add_to_variable_list = {
+				name = restor_charge_old_recruits
+				target = scope:restor_charge_old
+			}
+		}
+	}
+	restor_charge_start_timer_effect = yes
+}
+
+# =====================================================================================
+#  Reading and clearing the state
+# =====================================================================================
+
+# For event loc: scope:restor_charge_target (a character) or scope:restor_charge_county (a title),
+# and scope:restor_charge_kind (the flag). Call before clearing, so the event still has them.
+restor_charge_save_state_effect = {
+	if = {
+		limit = { has_variable = restor_charge }
+		save_scope_value_as = {
+			name = restor_charge_kind
+			value = var:restor_charge
+		}
+	}
+	if = {
+		limit = {
+			has_variable = restor_charge
+			var:restor_charge = flag:stir
+			exists = var:restor_charge_target
+		}
+		# Through the county's own province and back, so the saved scope is typed as a title (tiger
+		# types restor_charge_target as a character). At run time it is the same county.
+		#tiger-ignore(key=scopes)
+		var:restor_charge_target.title_province.county = { save_scope_as = restor_charge_county }
+	}
+	else_if = {
+		limit = {
+			has_variable = restor_charge
+			OR = {
+				var:restor_charge = flag:win_over
+				var:restor_charge = flag:shelter
+			}
+			exists = var:restor_charge_target
+		}
+		var:restor_charge_target = { save_scope_as = restor_charge_target }
+	}
+}
+
+restor_charge_clear_effect = {
+	remove_variable = restor_charge
+	remove_variable = restor_charge_target
+	remove_variable = restor_charge_given
+	remove_variable = restor_charge_goal
+	clear_variable_list = restor_charge_old_recruits
+}
+
+# =====================================================================================
+#  Endings
+# =====================================================================================
+
+# What a kept charge pays. Called from the completion events' options (so the player sees it) and
+# directly for the AI.
+restor_charge_reward_effect = {
+	restor_favour_gain_effect = { VALUE = $FAVOUR$ }
+	add_trait_xp = {
+		trait = restor_member
+		track = restor_rank
+		value = $XP$
+	}
+	if = {
+		limit = {
+			exists = global_var:restor_keeper
+			NOT = { global_var:restor_keeper = root }
+		}
+		global_var:restor_keeper = {
+			add_opinion = {
+				target = root
+				modifier = restor_kept_charge_opinion
+			}
+		}
+	}
+	hidden_effect = { restor_support_refresh_effect = yes }
+}
+
+# The charge is done. Players get the event for its kind; the AI is paid at once. The state is
+# cleared before the event arrives, so a second check in the meantime cannot pay twice.
+restor_charge_complete_effect = {
+	restor_save_scopes_effect = yes
+	restor_charge_save_state_effect = yes
+	if = {
+		limit = { is_ai = no }
+		if = {
+			limit = { var:restor_charge = flag:win_over }
+			trigger_event = { id = restor.0510 days = 1 }
+		}
+		else_if = {
+			limit = { var:restor_charge = flag:war_chest }
+			trigger_event = { id = restor.0511 days = 1 }
+		}
+		else_if = {
+			limit = { var:restor_charge = flag:stir }
+			trigger_event = { id = restor.0512 days = 1 }
+		}
+		else_if = {
+			limit = { var:restor_charge = flag:shelter }
+			trigger_event = { id = restor.0513 days = 1 }
+		}
+		else = {
+			trigger_event = { id = restor.0514 days = 1 }
+		}
+	}
+	else = {
+		if = {
+			limit = {
+				OR = {
+					var:restor_charge = flag:win_over
+					var:restor_charge = flag:shelter
+				}
+			}
+			restor_charge_reward_effect = { FAVOUR = 60 XP = 15 }
+		}
+		else_if = {
+			limit = { var:restor_charge = flag:stir }
+			restor_charge_reward_effect = { FAVOUR = 50 XP = 12 }
+		}
+		else_if = {
+			limit = { var:restor_charge = flag:war_chest }
+			restor_charge_reward_effect = { FAVOUR = 40 XP = 10 }
+		}
+		else = {
+			restor_charge_reward_effect = { FAVOUR = 50 XP = 12 }
+		}
+	}
+	restor_charge_clear_effect = yes
+}
+
+# What a failed or refused charge costs.
+restor_charge_penalty_effect = {
+	restor_favour_spend_effect = { VALUE = $FAVOUR$ }
+	if = {
+		limit = {
+			exists = global_var:restor_keeper
+			NOT = { global_var:restor_keeper = root }
+		}
+		global_var:restor_keeper = {
+			add_opinion = {
+				target = root
+				modifier = restor_failed_charge_opinion
+			}
+		}
+	}
+}
+
+# Three years and nothing done.
+restor_charge_expire_effect = {
+	restor_save_scopes_effect = yes
+	restor_charge_save_state_effect = yes
+	if = {
+		limit = { is_ai = no }
+		trigger_event = { id = restor.0520 days = 1 }
+	}
+	else = {
+		restor_charge_penalty_effect = { FAVOUR = 15 }
+	}
+	restor_charge_clear_effect = yes
+}
+
+# The world made the charge impossible. No blame; a player is told why.
+restor_charge_withdraw_effect = {
+	restor_save_scopes_effect = yes
+	restor_charge_save_state_effect = yes
+	if = {
+		limit = { is_ai = no }
+		if = {
+			limit = { NOT = { restor_underground_trigger = yes } }
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = restor_charge_withdrawn_toast
+				left_icon = root
+				custom_tooltip = restor_charge_withdrawn_restored_tt
+			}
+		}
+		else = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = restor_charge_withdrawn_toast
+				left_icon = root
+				custom_tooltip = restor_charge_withdrawn_tt
+			}
+		}
+	}
+	restor_charge_clear_effect = yes
+}
+
+# =====================================================================================
+#  The AI's abstract year of work
+# =====================================================================================
+#
+# Each kind does its real work on the map where it has one, then completes. A roll that cannot be
+# made (no gold, nobody to recruit) simply leaves the charge open for another year.
+
+restor_charge_ai_attempt_effect = {
+	if = {
+		limit = { var:restor_charge = flag:stir }
+		var:restor_charge_target = {
+			add_county_modifier = {
+				modifier = restor_county_stirred
+				years = 10
+			}
+		}
+		restor_charge_complete_effect = yes
+	}
+	else_if = {
+		limit = { var:restor_charge = flag:win_over }
+		var:restor_charge_target = { save_scope_as = restor_charge_target }
+		random_list = {
+			30 = {
+				modifier = {
+					add = 20
+					scope:restor_charge_target = {
+						opinion = {
+							target = root
+							value >= 30
+						}
+					}
+				}
+				modifier = {
+					add = 10
+					diplomacy >= 14
+				}
+				scope:restor_charge_target = {
+					restor_swear_in_effect = { RANK = 0 }
+					add_opinion = {
+						target = root
+						modifier = restor_brought_me_in_opinion
+					}
+				}
+			}
+			70 = {
+				scope:restor_charge_target = {
+					add_opinion = {
+						target = global_var:restor_pretender
+						modifier = friendliness_opinion
+						opinion = 30
+					}
+				}
+			}
+		}
+		restor_charge_complete_effect = yes
+	}
+	else_if = {
+		limit = {
+			var:restor_charge = flag:war_chest
+			gold >= 100
+		}
+		remove_short_term_gold = 100
+		global_var:restor_pretender = { add_gold = 100 }
+		change_global_variable = { name = restor_war_chest add = 100 }
+		restor_charge_complete_effect = yes
+	}
+	else_if = {
+		limit = { var:restor_charge = flag:shelter }
+		add_courtier = global_var:restor_pretender
+		global_var:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = restor_sheltered_the_heir_opinion
+			}
+		}
+		restor_exposure_gain_effect = { VALUE = 5 }
+		restor_charge_complete_effect = yes
+	}
+	else_if = {
+		limit = {
+			var:restor_charge = flag:recruit
+			OR = {
+				any_vassal = { restor_charge_recruit_candidate_trigger = yes }
+				any_courtier = {
+					is_adult = yes
+					restor_charge_recruit_candidate_trigger = yes
+				}
+			}
+		}
+		restor_charge_pick_recruit_effect = yes
+		scope:restor_charge_recruit = {
+			restor_swear_in_effect = { RANK = 0 }
+			add_opinion = {
+				target = root
+				modifier = restor_brought_me_in_opinion
+			}
+		}
+		restor_charge_complete_effect = yes
+	}
+}
+
+# Saves scope:restor_charge_recruit: a vassal if there is one to ask, else a courtier.
+restor_charge_pick_recruit_effect = {
+	if = {
+		limit = { any_vassal = { restor_charge_recruit_candidate_trigger = yes } }
+		random_vassal = {
+			limit = { restor_charge_recruit_candidate_trigger = yes }
+			weight = {
+				base = 1
+				modifier = {
+					add = 2
+					opinion = {
+						target = root
+						value >= 25
+					}
+				}
+			}
+			save_scope_as = restor_charge_recruit
+		}
+	}
+	else = {
+		random_courtier = {
+			limit = {
+				is_adult = yes
+				restor_charge_recruit_candidate_trigger = yes
+			}
+			weight = {
+				base = 1
+				modifier = {
+					add = 2
+					opinion = {
+						target = root
+						value >= 25
+					}
+				}
+			}
+			save_scope_as = restor_charge_recruit
+		}
+	}
+}
+
+# =====================================================================================
+#  A player's chance to act
+# =====================================================================================
+#
+# Once a year, sometimes, a player with an open charge is handed a way to do it: restor.0530-0534.
+# Each event re-checks that it still applies.
+
+restor_charge_opportunity_effect = {
+	if = {
+		limit = { var:restor_charge = flag:win_over }
+		trigger_event = { id = restor.0530 days = { 30 120 } }
+	}
+	else_if = {
+		limit = { var:restor_charge = flag:stir }
+		trigger_event = { id = restor.0531 days = { 30 120 } }
+	}
+	else_if = {
+		limit = { var:restor_charge = flag:war_chest }
+		trigger_event = { id = restor.0532 days = { 30 120 } }
+	}
+	else_if = {
+		limit = { var:restor_charge = flag:shelter }
+		trigger_event = { id = restor.0533 days = { 30 120 } }
+	}
+	else = {
+		trigger_event = { id = restor.0534 days = { 30 120 } }
+	}
+}
+
+# Stirring a county by hand: the fallback decision and restor.0531.
+restor_charge_stir_county_effect = {
+	$COUNTY$ = {
+		add_county_modifier = {
+			modifier = restor_county_stirred
+			years = 10
+		}
+	}
+}
+
+# Sending gold for the war-chest charge outside the decision (restor.0532). Counts toward the
+# charge exactly as the decision does.
+restor_charge_send_gold_effect = {
+	remove_short_term_gold = $GOLD$
+	global_var:restor_pretender = { add_gold = $GOLD$ }
+	change_global_variable = { name = restor_war_chest add = $GOLD$ }
+	custom_tooltip = restor_charge_gold_counts_tt
+	hidden_effect = {
+		if = {
+			limit = { NOT = { has_variable = restor_given_to_cause } }
+			set_variable = { name = restor_given_to_cause value = 0 }
+		}
+		change_variable = { name = restor_given_to_cause add = $GOLD$ }
+	}
+}
+
+# Bringing the heir to this member's court: the fallback decision and restor.0533.
+restor_charge_take_in_heir_effect = {
+	add_courtier = global_var:restor_pretender
+	global_var:restor_pretender = {
+		add_opinion = {
+			target = root
+			modifier = restor_sheltered_the_heir_opinion
+		}
+	}
+	restor_exposure_gain_effect = { VALUE = 10 }
+}

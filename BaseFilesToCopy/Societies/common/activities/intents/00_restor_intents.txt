@@ -1,0 +1,38 @@
+﻿# Why anybody goes to the Gathering or on the Errand.
+#
+# `host_intents` is mandatory: an activity with no intents offers the planner nothing to select and
+# the planner refuses to start while logging nothing. One intent each, auto-completing, for the
+# prototype's reason -- the activity finishing is what resolves it, and a second verdict would only
+# compete with the activity's own.
+#
+# No `is_target_valid` on either: that turns an intent into a character picker drawn from the
+# activity's own participants, which is the wrong list for anything the Errand goes out to find.
+
+restor_gathering_intent = {
+	icon = worship_devil_intent
+
+	auto_complete = yes
+
+	# Vanilla's generic "your intent stopped being possible" notification.
+	on_invalidated = { trigger_event = activity_system.0090 }
+
+	ai_will_do = {
+		value = 100
+	}
+
+	scripted_animation = {
+		animation = personality_rational
+	}
+}
+
+restor_errand_intent = {
+	icon = worship_devil_intent
+
+	auto_complete = yes
+
+	on_invalidated = { trigger_event = activity_system.0090 }
+
+	ai_will_do = {
+		value = 100
+	}
+}

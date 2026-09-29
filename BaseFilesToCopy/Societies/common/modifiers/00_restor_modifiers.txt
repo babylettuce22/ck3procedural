@@ -1,0 +1,66 @@
+﻿# Restorationist modifiers. Character modifiers first, then county modifiers.
+
+# ---- Exposure (underground only) ----------------------------------------------------------------
+#
+# Same deterministic ladder the prototype used, after CK2: crossing a line puts the mark on, falling
+# back under it takes it off. No discovery roll lives here -- the danger is the usurper's spymaster
+# finding the secret the first line creates.
+
+restor_under_suspicion_modifier = {
+	icon = intrigue_negative
+	monthly_prestige = -0.25
+}
+
+restor_highly_suspect_modifier = {
+	icon = intrigue_negative
+	monthly_prestige = -0.5
+	general_opinion = -5
+}
+
+# ---- The restored realm -------------------------------------------------------------------------
+
+# The king (or queen) the society crowned. Years in the plural: long enough to see a reign through
+# its first difficulties, not forever.
+restor_restored_monarch_modifier = {
+	icon = prestige_positive
+	monthly_prestige = 2
+	vassal_opinion = 10
+	levy_size = 0.1
+}
+
+# Everyone who was sworn when the crown came back. Public now, and remembered for it.
+restor_faithful_modifier = {
+	icon = prestige_positive
+	monthly_prestige = 0.5
+	opinion_of_liege = 10
+}
+
+# Marks the realm while the order stands public, so the character sheet shows the phase.
+restor_order_member_modifier = {
+	icon = diplomacy_positive
+	diplomacy = 1
+}
+
+# The king's once-only reward for making the crown whole again.
+restor_crown_whole_modifier = {
+	icon = prestige_positive
+	monthly_prestige = 1
+	domain_limit = 1
+}
+
+# Took part in raising the standard. Six years; the rising is a war, not a lifestyle.
+restor_raised_the_standard_modifier = {
+	icon = martial_positive
+	levy_size = 0.15
+	army_maintenance_mult = -0.1
+}
+
+# ---- Counties ---------------------------------------------------------------------------------
+
+# The old loyalties stirred: the errand came here, and people who had stopped saying the old
+# king's name say it again. Counts toward support; costs the holder a little control if they are not
+# of the cause.
+restor_county_stirred = {
+	icon = county_modifier_opinion_negative
+	county_opinion_add = -5
+}

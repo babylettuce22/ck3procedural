@@ -13,7 +13,9 @@ public enum RaceArchetype
     Orc,
     Gnome,
     Giantkin,
-    Deepkin
+    Deepkin,
+    // Appended, not inserted, so every existing race keeps its ordinal.
+    Hornkin
 }
 
 /// <summary>
@@ -56,6 +58,7 @@ internal static class RaceSkin
         RaceArchetype.Gnome => "gen_skin_gnome",
         RaceArchetype.Giantkin => "gen_skin_giantkin",
         RaceArchetype.Deepkin => "gen_skin_deepkin",
+        RaceArchetype.Hornkin => "gen_skin_hornkin",
         _ => null
     };
 
@@ -77,6 +80,8 @@ internal static class RaceSkin
         RaceArchetype.Gnome => (0.30f, 0.35f, 0.80f, 0.58f),
         RaceArchetype.Giantkin => (0.00f, 0.30f, 0.45f, 0.52f),
         RaceArchetype.Deepkin => (0.00f, 0.30f, 0.50f, 0.52f),
+        // Weathered herders: mid tones, sun-darkened rather than pale.
+        RaceArchetype.Hornkin => (0.20f, 0.38f, 0.70f, 0.62f),
         _ => (0.10f, 0.25f, 0.70f, 0.55f)
     };
 
@@ -193,8 +198,75 @@ internal static class RaceMorphs
             new("gene_bs_ear_outward", "ear_outward_pos", 0.25f, 0.45f),
             new("gene_jaw_width", "jaw_width_neg", 0.32f, 0.42f),
         ],
+        // Highland and steppe herders: rangy rather than bulky, a strong brow for the horns to rise
+        // from. The horns themselves are not in this table — they are an accessory gene (a mix of
+        // styles per culture, written in ApplyMorphGenes) and are enforced by their own portrait
+        // group in Emit/RaceMorphWriter.cs, together with the skin mound they grow from.
+        RaceArchetype.Hornkin =>
+        [
+            new("gene_height", "normal_height", 0.54f, 0.66f),
+            new("gene_bs_body_type", "body_fat_head_fat_low", 0.44f, 0.54f),
+            new("gene_bs_body_shape", "body_shape_triangle_half", 0.45f, 0.70f, Tiered: false),
+            new("gene_jaw_width", "jaw_width_pos", 0.60f, 0.80f),
+            new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.55f, 0.80f),
+        ],
         _ => []
     };
+
+    /// <summary>
+    /// What the elves' men get on top of <see cref="Of"/>, forced at render time only — an ethnicity
+    /// cannot split by sex, so this has no <see cref="Ethnicities.ApplyMorphGenes"/> counterpart.
+    ///
+    /// The elf tables narrow jaw, chin and neck for everyone, and vanilla's handsome men lean on a
+    /// solid jaw. Take it away and nothing narrows the mouth to match, so an inherited human mouth
+    /// became the widest thing in the lower face, full-lipped and pushed out past a receding chin —
+    /// under upswept eyes, arched brows and thin plucked eyebrows (rendered 2026-09-28, a high elf
+    /// king who read as made-up rather than ageless). So for men: a gentler jaw narrowing, a cut
+    /// jawline, the chin brought forward, a narrower, thinner, set-back mouth, and ordinary brows.
+    /// Women keep the ethnicity's face untouched.
+    ///
+    /// The mouth and chin rows overrule inheritance for these men, which costs some family
+    /// resemblance there; the ranges are wide enough that brothers still differ.
+    /// </summary>
+    public static IReadOnlyList<RaceMorph> MaleOf(RaceArchetype archetype) => archetype switch
+    {
+        RaceArchetype.HighElf =>
+        [
+            new("gene_jaw_width", "jaw_width_neg", 0.42f, 0.48f),
+            // The ethnicity's 0.15-0.35 cheeks and 0.10-0.28 brow arch, pulled down for men only.
+            new("gene_bs_cheek_forward", "cheek_forward_pos", 0.08f, 0.22f),
+            new("gene_bs_forehead_brow_curve", "forehead_brow_curve_pos", 0.00f, 0.15f),
+            .. MaleElfFace,
+            new("gene_eyebrows_shape", "avg_spacing_avg_thickness", 0.00f, 1.00f, Tiered: false),
+            new("gene_eyebrows_fullness", "layer_2_avg_thickness", 0.00f, 1.00f, Tiered: false),
+        ],
+        RaceArchetype.WoodElf =>
+        [
+            new("gene_jaw_width", "jaw_width_neg", 0.38f, 0.48f),
+            .. MaleElfFace,
+        ],
+        RaceArchetype.Deepkin =>
+        [
+            new("gene_jaw_width", "jaw_width_neg", 0.40f, 0.47f),
+            .. MaleElfFace,
+            new("gene_eyebrows_fullness", "layer_2_avg_thickness", 0.00f, 1.00f, Tiered: false),
+        ],
+        _ => []
+    };
+
+    /// <summary>
+    /// The lower face every elf man shares. Untiered: this corrects toward vanilla's own male
+    /// ranges rather than exaggerating a race, so a surreal map should not push it further.
+    /// </summary>
+    private static readonly RaceMorph[] MaleElfFace =
+    [
+        new("gene_bs_jaw_def", "jaw_def_pos", 0.12f, 0.32f, Tiered: false),
+        new("gene_chin_forward", "chin_forward_pos", 0.54f, 0.62f, Tiered: false),
+        new("gene_mouth_width", "mouth_width_neg", 0.40f, 0.47f, Tiered: false),
+        new("gene_mouth_forward", "mouth_forward_neg", 0.42f, 0.48f, Tiered: false),
+        new("gene_bs_mouth_upper_lip_full", "mouth_upper_lip_full_neg", 0.10f, 0.30f, Tiered: false),
+        new("gene_bs_mouth_lower_lip_full", "mouth_lower_lip_full_neg", 0.05f, 0.25f, Tiered: false),
+    ];
 }
 
 public sealed class GeneMorphEntry
@@ -1086,13 +1158,14 @@ public static class Ethnicities
     /// </summary>
     private static IReadOnlyList<RaceArchetype> FantasyPoolFor()
     {
-        // ExoticSurreal is an INTENSITY setting, not a ninth race. It pushes every race's colour
+        // ExoticSurreal is an INTENSITY setting, not an extra race. It pushes every race's colour
         // and morphology further from human; it does not add a people of its own. The roster is the
-        // same eight in every mode.
+        // same nine in every mode.
         return
         [
             RaceArchetype.Human, RaceArchetype.Dwarf, RaceArchetype.WoodElf, RaceArchetype.HighElf,
-            RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.Deepkin
+            RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.Deepkin,
+            RaceArchetype.Hornkin
         ];
     }
 
@@ -1171,14 +1244,15 @@ public static class Ethnicities
     private static readonly RaceArchetype[] TerrainRaces =
     [
         RaceArchetype.Dwarf, RaceArchetype.HighElf, RaceArchetype.WoodElf, RaceArchetype.Orc,
-        RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.Deepkin
+        RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.Deepkin, RaceArchetype.Hornkin
     ];
 
     /// <summary>Every race a culture-level roll may produce.</summary>
     private static readonly RaceArchetype[] CultureRaces =
     [
         RaceArchetype.Human, RaceArchetype.Dwarf, RaceArchetype.HighElf, RaceArchetype.WoodElf,
-        RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.Deepkin
+        RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.Deepkin,
+        RaceArchetype.Hornkin
     ];
 
     /// <summary>
@@ -1259,6 +1333,11 @@ public static class Ethnicities
             // Caves under broken country and the dark of the fens — the "subterranean depths" of
             // their trait, kept off the high mountains dwarves, orcs and giants already contest.
             (RaceArchetype.Deepkin, TerrainClass.Hills or TerrainClass.Wetlands) => 10,
+            // Herders of the open ground nobody else claims — steppe and dry scrub, where only orcs
+            // otherwise score — then the highland pastures and tribal forests they share.
+            (RaceArchetype.Hornkin, TerrainClass.Steppe or TerrainClass.Drylands) => 12,
+            (RaceArchetype.Hornkin, TerrainClass.Hills or TerrainClass.Taiga) => 10,
+            (RaceArchetype.Hornkin, TerrainClass.Forest) => 8,
             (RaceArchetype.Human, TerrainClass.Plains or TerrainClass.Farmlands or TerrainClass.Hills) => 8,
             _ => 1
         };
@@ -1309,10 +1388,13 @@ public static class Ethnicities
                     => [RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Giantkin],
 
                 TerrainClass.Hills
-                    => [RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Deepkin, RaceArchetype.Human],
+                    => [RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Deepkin, RaceArchetype.Hornkin, RaceArchetype.Human],
 
                 TerrainClass.Forest or TerrainClass.Taiga or TerrainClass.Jungle
-                    => [RaceArchetype.WoodElf, RaceArchetype.Gnome, RaceArchetype.Orc],
+                    => [RaceArchetype.WoodElf, RaceArchetype.Gnome, RaceArchetype.Orc, RaceArchetype.Hornkin],
+
+                TerrainClass.Steppe or TerrainClass.Drylands
+                    => [RaceArchetype.Hornkin, RaceArchetype.Orc],
 
                 TerrainClass.Arctic
                     => [RaceArchetype.Giantkin, RaceArchetype.Dwarf],
@@ -1639,8 +1721,9 @@ public static class Ethnicities
 
     /// <summary>
     /// The phonology a race speaks, or null for humans, who draw from the world's real-world
-    /// flavours like any people. Three fantasy tongues for seven races, grouped by kinship: the
+    /// flavours like any people. Four fantasy tongues for eight races, grouped by kinship: the
     /// deepkin are estranged elves, gnomes are dwarf-kin, and giants are as rough-tongued as orcs.
+    /// The hornkin have a tongue of their own, from the back of the throat.
     /// Applied by <see cref="Cultures.SpeakAsRace"/>.
     /// </summary>
     public static LanguageFlavour? TongueOf(RaceArchetype archetype) => archetype switch
@@ -1648,6 +1731,7 @@ public static class Ethnicities
         RaceArchetype.HighElf or RaceArchetype.WoodElf or RaceArchetype.Deepkin => LanguageFlavour.Sylvan,
         RaceArchetype.Dwarf or RaceArchetype.Gnome => LanguageFlavour.Dwarven,
         RaceArchetype.Orc or RaceArchetype.Giantkin => LanguageFlavour.Harsh,
+        RaceArchetype.Hornkin => LanguageFlavour.Guttural,
         _ => null
     };
 
@@ -1671,23 +1755,32 @@ public static class Ethnicities
                 // a comic ear rather than an elegant one.
                 // Upswept eyes are the strongest elf cue stock geometry has after height, so the
                 // high elf takes it harder than the wood elf does.
-                Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.58f, 0.70f);
+                // Vanilla's own ceiling for this gene is 0.70, and at the old 0.58-0.70 every high
+                // elf sat on it: upswept became a squint.
+                Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.55f, 0.63f);
                 // No gene_eye_distance. Close-set eyes read as unsettling in a human face at any
                 // strength, and vanilla holds this gene to 0.45-0.55 for a beautiful character —
                 // pushing it to 0.20 was working directly against the look this race wants.
-                Shape(def, rng, f, "gene_bs_eye_fold_shape", "eye_fold_shape_02_pos", 0.18f, 0.34f);
+                //
+                // Every gene_bs_ value below is a blendshape strength, and vanilla's register for
+                // those is small: its ethnicities put ~90% of weight in 0-0.2 (@blend1), a few
+                // percent in 0.2-0.5, and 0.5-0.8 (@blend3) is a one-in-a-hundred outlier. The old
+                // tables had cheeks and brow at 0.55-0.85 — every elf a blend3 outlier on three
+                // genes at once, which rendered as hollow, bony, gaunt faces (2026-09-28). The
+                // race now sits at the top of blend1 and into blend2: distinct, not deformed.
+                Shape(def, rng, f, "gene_bs_eye_fold_shape", "eye_fold_shape_02_pos", 0.10f, 0.24f);
                 Shape(def, rng, f, "gene_head_height", "head_height_pos", 0.54f, 0.64f);
                 Shape(def, rng, f, "gene_forehead_height", "forehead_height_pos", 0.54f, 0.64f);
                 Shape(def, rng, f, "gene_forehead_brow_height", "forehead_brow_height_pos", 0.56f, 0.68f);
-                Shape(def, rng, f, "gene_bs_forehead_brow_curve", "forehead_brow_curve_pos", 0.55f, 0.80f);
-                Shape(def, rng, f, "gene_bs_cheek_forward", "cheek_forward_pos", 0.60f, 0.85f);
-                Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.55f, 0.80f);
+                Shape(def, rng, f, "gene_bs_forehead_brow_curve", "forehead_brow_curve_pos", 0.10f, 0.28f);
+                Shape(def, rng, f, "gene_bs_cheek_forward", "cheek_forward_pos", 0.15f, 0.35f);
+                Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.15f, 0.35f);
                 Shape(def, rng, f, "gene_chin_width", "chin_width_neg", 0.36f, 0.46f);
-                Shape(def, rng, f, "gene_bs_nose_length", "nose_length_pos", 0.25f, 0.45f);
+                Shape(def, rng, f, "gene_bs_nose_length", "nose_length_pos", 0.08f, 0.24f);
                 // gene_bs_nose_profile has no "straight" template — only _neg, _pos, and the two
                 // hawk variants — so the straight elven nose is a *weak* _pos rather than a template
                 // of its own. On a bs gene the neutral end is 0, not 0.5, so this range is correct.
-                Shape(def, rng, f, "gene_bs_nose_profile", "nose_profile_pos", 0.15f, 0.35f);
+                Shape(def, rng, f, "gene_bs_nose_profile", "nose_profile_pos", 0.05f, 0.20f);
                 // Ages slowly rather than not at all. `no_aging` is literally an empty template, so
                 // at high weight a high elf who reigns for sixty years never changes face, which
                 // costs the player a cue they actually read.
@@ -1712,13 +1805,15 @@ public static class Ethnicities
                 Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.50f, 0.75f);
                 // Slanted eyes come from gene_eye_angle alone. There is no gene_bs_eye_slant in
                 // vanilla — nothing matching "slant" exists at all.
-                Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.55f, 0.75f);
-                Shape(def, rng, f, "gene_bs_eye_size", "eye_size_pos", 0.30f, 0.52f);
+                // Blendshape strengths held to vanilla's register, as for the high elf above; the
+                // old 0.45-0.75 cheeks and nose ridge were one-in-a-hundred outliers on everyone.
+                Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.54f, 0.64f);
+                Shape(def, rng, f, "gene_bs_eye_size", "eye_size_pos", 0.10f, 0.28f);
                 Shape(def, rng, f, "gene_head_width", "head_width_pos", 0.52f, 0.64f);
-                Shape(def, rng, f, "gene_bs_cheek_forward", "cheek_forward_pos", 0.45f, 0.70f);
-                Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.50f, 0.70f);
-                Shape(def, rng, f, "gene_bs_nose_size", "nose_size_neg", 0.26f, 0.44f);
-                Shape(def, rng, f, "gene_bs_nose_ridge_angle", "nose_ridge_angle_pos", 0.45f, 0.70f);
+                Shape(def, rng, f, "gene_bs_cheek_forward", "cheek_forward_pos", 0.12f, 0.32f);
+                Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.15f, 0.35f);
+                Shape(def, rng, f, "gene_bs_nose_size", "nose_size_neg", 0.10f, 0.28f);
+                Shape(def, rng, f, "gene_bs_nose_ridge_angle", "nose_ridge_angle_pos", 0.10f, 0.30f);
                 AddGene(def, "gene_age", "old_beauty_1", 0.0f, 0.7f, weight: 70);
                 AddGene(def, "gene_age", "no_aging", 0.0f, 1.0f, weight: 30);
                 AddGene(def, "gene_eyebrows_fullness", "layer_2_avg_thickness", 0.0f, 1.0f);
@@ -1771,8 +1866,13 @@ public static class Ethnicities
                 // axis and body_type sits barely above neutral.
                 // The race-defining genes come from the shared table so the ethnicity and the
                 // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                // The tusk row is the standard tusk's strength; AddTusks spreads it over the variants.
                 foreach (var m in RaceMorphs.Of(archetype))
-                    Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
+                {
+                    if (m.Gene == OrcTusks.Gene) AddTusks(def, rng, m.Tiered ? f : Untiered, m);
+                    else Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
+                }
+
                 Shape(def, rng, f, "gene_neck_width", "neck_width_pos", 0.80f, 1.0f);
                 // A brow that juts without also sitting low over a sunken eye reads as a bump
                 // rather than a scowl, so the ridge, its height, the forehead slope and the eye
@@ -1871,13 +1971,15 @@ public static class Ethnicities
                     Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.56f, 0.72f);
                 Shape(def, rng, f, "gene_neck_width", "neck_width_neg", 0.32f, 0.42f);
-                Shape(def, rng, f, "gene_bs_eye_size", "eye_size_pos", 0.45f, 0.68f);
+                // Blendshape strengths held to vanilla's register, as for the high elf. The eyes
+                // stay the one gene allowed well into blend2, since they are this race's mark.
+                Shape(def, rng, f, "gene_bs_eye_size", "eye_size_pos", 0.20f, 0.40f);
                 Shape(def, rng, f, "gene_eye_depth", "eye_depth_pos", 0.36f, 0.46f);
-                Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.56f, 0.70f);
-                Shape(def, rng, f, "gene_bs_cheek_forward", "cheek_forward_pos", 0.52f, 0.74f);
-                Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.50f, 0.72f);
+                Shape(def, rng, f, "gene_eye_angle", "eye_angle_pos", 0.54f, 0.63f);
+                Shape(def, rng, f, "gene_bs_cheek_forward", "cheek_forward_pos", 0.12f, 0.32f);
+                Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.12f, 0.32f);
                 Shape(def, rng, f, "gene_chin_width", "chin_width_neg", 0.34f, 0.44f);
-                Shape(def, rng, f, "gene_bs_nose_length", "nose_length_neg", 0.20f, 0.38f);
+                Shape(def, rng, f, "gene_bs_nose_length", "nose_length_neg", 0.10f, 0.26f);
                 AddGene(def, "gene_age", "old_beauty_1", 0.0f, 0.6f, weight: 65);
                 AddGene(def, "gene_age", "no_aging", 0.0f, 1.0f, weight: 35);
                 AddGene(def, "gene_eyebrows_fullness", "layer_2_low_thickness", 0.0f, 1.0f);
@@ -1886,6 +1988,22 @@ public static class Ethnicities
                 AddGene(def, "gene_baldness", "no_baldness", 0.0f, 0.15f);
                 AddGene(def, "gene_hair_type", "hair_straight", 0.0f, 1.0f, weight: 80);
                 AddGene(def, "gene_hair_type", "hair_wavy", 0.0f, 1.0f, weight: 20);
+                break;
+
+            case RaceArchetype.Hornkin:
+                // Highland and steppe herders. The race-defining genes come from the shared table
+                // so the ethnicity and the portrait-modifier enforcement cannot drift apart.
+                foreach (var m in RaceMorphs.Of(archetype))
+                    Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
+                Shape(def, rng, f, "gene_neck_width", "neck_width_pos", 0.55f, 0.75f);
+                Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.50f, 0.70f);
+                Shape(def, rng, f, "gene_bs_nose_profile", "nose_profile_pos", 0.20f, 0.45f);
+                AddGene(def, "complexion", "complexion_5", 0.30f, 0.70f);
+                AddGene(def, "gene_body_hair", "body_hair_dense", 0.35f, 0.70f);
+                AddGene(def, "gene_hair_type", "hair_wavy", 0.0f, 1.0f, weight: 45);
+                AddGene(def, "gene_hair_type", "hair_curly", 0.0f, 1.0f, weight: 35);
+                AddGene(def, "gene_hair_type", "hair_straight", 0.0f, 1.0f, weight: 20);
+                AddHorns(def, mode, rng);
                 break;
 
 
@@ -2149,6 +2267,20 @@ public static class Ethnicities
                 AddColor(def, "eye_color", Eye.Gold, weight: 20);
                 break;
 
+            case RaceArchetype.Hornkin:
+                // Ashen at low intensity, crimson at the top of the ramp (see gen_skin_hornkin), under
+                // dark weathered hair and the goat-and-ram eyes of herders.
+                ApplyRaceSkin(def, archetype, mode);
+                AddColor(def, "hair_color", Hair.Black, weight: 35);
+                AddColor(def, "hair_color", Hair.DarkBrown, weight: 30);
+                AddColor(def, "hair_color", Hair.Auburn, weight: 20);
+                AddColor(def, "hair_color", Hair.Brown, weight: 15);
+                AddColor(def, "eye_color", Eye.Amber, weight: 35);
+                AddColor(def, "eye_color", Eye.Gold, weight: 30);
+                AddColor(def, "eye_color", Eye.Hazel, weight: 20);
+                AddColor(def, "eye_color", Eye.DarkBrown, weight: 15);
+                break;
+
 
             case RaceArchetype.Human:
             default:
@@ -2249,6 +2381,54 @@ public static class Ethnicities
             picked.Add((pool[i].Key, i == 0 ? lead : rest));
 
         return picked;
+    }
+
+    /// <summary>
+    /// A horned people's mix of horn styles, and the skin mound every horn grows from.
+    ///
+    /// A mix rather than one style, so a people reads as a people and not a uniform: a shuffled
+    /// order takes weights 50/25/15/10, so each culture has a signature style, a common second and
+    /// rarer others — and because <c>gen_horns</c> is inheritable, families keep theirs. On a
+    /// low-fantasy map the nubs are pushed to the front, so horned folk there are marked rather than
+    /// monstrous. The filed stump is never rolled; filing is something a character does.
+    /// </summary>
+    private static void AddHorns(EthnicityDef def, FantasyRaceMode mode, Rng rng)
+    {
+        string[] styles = ["ibex", "ram", "forward", "nubs"];
+        for (int i = styles.Length - 1; i > 0; i--)
+        {
+            int j = rng.Int(0, i);                                // inclusive both ends
+            (styles[i], styles[j]) = (styles[j], styles[i]);
+        }
+
+        int[] weights = [50, 25, 15, 10];
+        for (int i = 0; i < styles.Length; i++)
+        {
+            int w = weights[i] + (mode == FantasyRaceMode.LowFantasy && styles[i] == "nubs" ? 60 : 0);
+            AddGene(def, Horns.Gene, Horns.TemplateOf(styles[i]), 0.0f, 1.0f, weight: w);
+        }
+
+        AddGene(def, Horns.BossGene, Horns.BossTemplate, 1.0f, 1.0f);
+    }
+
+    /// <summary>
+    /// An orc culture's mix of inherited tusk shapes (MapGen/OrcTusks.cs): standard, stubby and great
+    /// shuffled onto weights 12/6/3, so one clan runs to great tusks and another to stubby ones, and
+    /// families keep theirs by inheritance. All at the standard tusk's strength. Broken tusks are
+    /// scars and never in a DNA.
+    /// </summary>
+    private static void AddTusks(EthnicityDef def, Rng rng, float intensity, RaceMorph standard)
+    {
+        string[] variants = [.. OrcTusks.Inherited];
+        for (int i = variants.Length - 1; i > 0; i--)
+        {
+            int j = rng.Int(0, i);                                // inclusive both ends
+            (variants[i], variants[j]) = (variants[j], variants[i]);
+        }
+
+        int[] weights = [12, 6, 3];
+        for (int i = 0; i < variants.Length; i++)
+            Shape(def, rng, intensity, OrcTusks.Gene, OrcTusks.TemplateOf(variants[i]), standard.Min, standard.Max, weights[i]);
     }
 
     private static void AddGene(EthnicityDef def, string geneKey, string subGeneName, float min, float max, int weight = 10)

@@ -114,6 +114,12 @@ internal sealed class HistoryPanel : Panel
             + "Settled land takes its settlers' culture and faith"),
         ("Wilds", RealmRules.Ruination, "Ruination", "A county of an unstable realm can be abandoned and fall to ruin. "
             + "Never a realm's seat or a de jure capital. Needs a world written with ruins on"),
+        ("Cultures and faiths",RealmRules.Assimilation, "Assimilation", "A county held for a generation by lords of another people "
+            + "slowly takes their culture — fastest where its neighbours already have, never across a race. No culture "
+            + "loses more than half its land or grows past twice it. A realm of one people holds together better"),
+        ("Cultures and faiths",RealmRules.Conversion, "Conversion", "A county slowly takes its lords' faith, a little faster than their "
+            + "culture and slowest where it is holy to the faith it keeps. No faith loses more than half its land or "
+            + "grows past twice it"),
     ];
 
     /// <summary>
@@ -139,10 +145,17 @@ internal sealed class HistoryPanel : Panel
             4.0, s => s.Colonisation, (s, v) => s with { Colonisation = v }),
         ("Wilds", "Ruin", "How often neglected land is abandoned",
             4.0, s => s.Ruination, (s, v) => s with { Ruination = v }),
+        ("Cultures and faiths","Assimilation pace", "How fast counties take their lords' culture — 1× is about two and a half centuries "
+            + "for a county among its lords' people", 3.0, s => s.Assimilation, (s, v) => s with { Assimilation = v }),
+        ("Cultures and faiths","Conversion pace", "How fast counties take their lords' faith — 1× is about a century and a half "
+            + "for a county among its lords' faithful", 3.0, s => s.Conversion, (s, v) => s with { Conversion = v }),
     ];
 
-    /// <summary>What the map is coloured by: realms as they stand, or the de jure tree as drift has left it.</summary>
-    private enum MapView { Realms, Kingdoms, Empires }
+    /// <summary>
+    /// What the map is coloured by: realms as they stand, the de jure tree as drift has left it, or
+    /// the counties' peoples and faiths as assimilation and conversion have.
+    /// </summary>
+    private enum MapView { Realms, Kingdoms, Empires, Cultures, Faiths }
 
     private MapView _mapView = MapView.Realms;
     private readonly Dictionary<MapView, Button> _viewButtons = [];
@@ -185,6 +198,9 @@ internal sealed class HistoryPanel : Panel
 
     /// <summary>The frontier the history runs over; null on a world with no wilderness.</summary>
     private WildsGround? _wildsGround;
+
+    /// <summary>The peoples and faiths the history assimilates and converts; null on a world written without them.</summary>
+    private PeopleGround? _peoples;
 
     /// <summary>The start date's people, whose houses realms that endure are still ruled by. See <see cref="AppliedHistory.Capture"/>.</summary>
     private RulerMap? _rulers;
@@ -256,6 +272,8 @@ internal sealed class HistoryPanel : Panel
         tips.SetToolTip(_viewButtons[MapView.Realms], "Colour the map by independent realm");
         tips.SetToolTip(_viewButtons[MapView.Kingdoms], "Colour the map by de jure kingdom, as drift has left them");
         tips.SetToolTip(_viewButtons[MapView.Empires], "Colour the map by de jure empire, as drift has left them");
+        tips.SetToolTip(_viewButtons[MapView.Cultures], "Colour the map by each county's culture, as assimilation has left them");
+        tips.SetToolTip(_viewButtons[MapView.Faiths], "Colour the map by each county's faith, as conversion has left them");
 
         var speedLabel = new Label { Text = "years / second", AutoSize = true, Font = Theme.Ui, ForeColor = Theme.TextDim, Margin = new Padding(2, 10, 3, 3) };
 
@@ -349,8 +367,8 @@ internal sealed class HistoryPanel : Panel
 
         int years = applied.Year - applied.FromYear;
         _appliedNote.Text = $"Applied history: the world is written starting in {applied.Year}, "
-            + $"{years} years on from {applied.FromYear}. Titles, cultures and faiths are the generated ones; "
-            + "advancement is unchanged.";
+            + $"{years} years on from {applied.FromYear}. Titles, cultures and faiths are the generated ones — "
+            + "the history only moves which counties keep which; advancement is unchanged.";
     }
 
     /// <summary>
@@ -369,6 +387,7 @@ internal sealed class HistoryPanel : Panel
         _wilderness = written?.Wilderness;
         _generatedWilderness = written?.World?.Wilderness;
         _wildsGround = null;
+        _peoples = written is not null && result is not null ? QuickHistory.PeoplesOf(written, result.Config) : null;
         _rulers = written?.Rulers;
         _prehistory = written?.Prehistory;
         _keptColours = written?.World?.RealmColours;
@@ -486,7 +505,8 @@ internal sealed class HistoryPanel : Panel
         if (_realms is null || _canvas is null) return;
 
         Pause();
-        _sim = HistorySim.Resume(_realms, _startYear, rulers: _rulers, prehistory: _prehistory, wilds: _wildsGround, earlier: _applied);
+        _sim = HistorySim.Resume(_realms, _startYear, rulers: _rulers, prehistory: _prehistory, wilds: _wildsGround, earlier: _applied,
+            peoples: _peoples);
         _colourOf.Clear();
         _nextColour = 0;
         _shownEvents = 0;
@@ -608,7 +628,16 @@ internal sealed class HistoryPanel : Panel
         for (int c = 0; c < colours.Length; c++)
         {
             var county = _canvas.Counties[c];
-            if (tier is not null)
+            if (_mapView == MapView.Cultures)
+            {
+                if (_sim.CultureOf(county) is { } culture) colours[c] = culture.Color;
+            }
+            else if (_mapView == MapView.Faiths)
+            {
+                if (_sim.FaithOf(county) is { Color: var (r, g, b) })
+                    colours[c] = ((byte)Math.Round(r * 255), (byte)Math.Round(g * 255), (byte)Math.Round(b * 255));
+            }
+            else if (tier is not null)
             {
                 // Wilderness keeps its blank so the de jure view still shows where the realms end.
                 if (_sim.OwnerOf(county) is not null && _sim.DeJureOf(county, tier) is { } title) colours[c] = title.Color;
@@ -658,6 +687,7 @@ internal sealed class HistoryPanel : Panel
         {
             RealmRules.Colonisation => _sim?.HasWilds == true,
             RealmRules.Ruination => _sim?.CanRuin == true,
+            RealmRules.Assimilation or RealmRules.Conversion => _sim?.HasPeoples == true,
             _ => true,
         };
         foreach (var (rule, box) in _ruleBoxes)
@@ -672,6 +702,8 @@ internal sealed class HistoryPanel : Panel
             {
                 "Settling pace" => Available(RealmRules.Colonisation),
                 "Ruin" => Available(RealmRules.Ruination),
+                "Assimilation pace" => Available(RealmRules.Assimilation),
+                "Conversion pace" => Available(RealmRules.Conversion),
                 _ => true,
             };
             bar.Value = Math.Clamp((int)Math.Round(get(next) * 10), bar.Minimum, bar.Maximum);
@@ -736,6 +768,8 @@ internal sealed class HistoryPanel : Panel
             text += $" · claimed by {claim.Claimant.Capital.Name} until {claim.Until}";
         if (_sim.DeJureOf(county, "k") is { } kingdom)
             text += $" · de jure {kingdom.Name}" + (_sim.DeJureOf(county, "e") is { } empire ? $", {empire.Name}" : "");
+        if (_sim.CultureOf(county) is { } culture)
+            text += $" · {culture.Name}" + (_sim.FaithOf(county) is { } faith ? $", {faith.Name}" : "");
         _readout.Text = text;
     }
 
@@ -942,7 +976,8 @@ internal sealed class HistoryPanel : Panel
             FormationKind.WarDeclared => _showConquests.Checked ? e.Note : null,
             FormationKind.WarEnded => _showConquests.Checked || e.Note?.Contains(" was abandoned:") != true ? e.Note : null,
             FormationKind.Partitioned or FormationKind.Usurped or FormationKind.Drifted
-                or FormationKind.Colonised or FormationKind.Ruined or FormationKind.Feud or FormationKind.Standing => e.Note,
+                or FormationKind.Colonised or FormationKind.Ruined or FormationKind.Feud or FormationKind.Standing
+                or FormationKind.Assimilated or FormationKind.Converted => e.Note,
             _ => null,
         };
 

@@ -12,11 +12,30 @@ using System.IO;
 /// Set only for slots that genuinely come in mirrored pairs. A head or spine slot has none, and a
 /// piece there must never be auto-mirrored — there is nothing to mirror it onto.
 /// </param>
-public sealed record BoneSlot(string Suffix, string Bone, string? Opposite = null)
+/// <param name="Weighted">
+/// Whether a piece here also gets heavier-body variants (<see cref="BodyTier"/>). Set for slots that
+/// sit against the torso, where the fat blend shape swells the clothing through a rigid piece.
+/// </param>
+/// <param name="Rigid">
+/// Whether a heavier variant MOVES as one body rather than deforming with the fat field. Right for a
+/// hard object such as a medallion or a slung sword: sampled per vertex, the belly's larger swell pushed
+/// a chest disc's lower rays further than its top and turned circles into skewed ovals. A collar that
+/// wraps the swelling chest wants the deformation and leaves this off.
+/// </param>
+public sealed record BoneSlot(string Suffix, string Bone, string? Opposite = null, bool Weighted = false,
+    bool Rigid = false)
 {
     /// <summary>The slot's short name, used in gene and accessory keys.</summary>
     public string Key => Suffix.TrimStart('_');
 }
+
+/// <summary>
+/// A heavier-body copy of a piece: moved along the body's fat blend shape and chosen by weight.
+/// </summary>
+/// <param name="Suffix">Appended to the piece's name, e.g. <c>gen_piece_sunburst_chest_heavy</c>.</param>
+/// <param name="MinWeight">The <c>scope:current_weight</c> from which this copy is worn.</param>
+/// <param name="Morph">How far along the fat shape the copy is moved, 0..1.</param>
+public sealed record BodyTier(string Suffix, int MinWeight, double Morph);
 
 /// <summary>
 /// One drawable shape inside a piece, and the textures its material names.
@@ -33,12 +52,25 @@ public sealed record PieceShape(string Name, string? Diffuse, string? Normal, st
 /// Whether the source is the OTHER side's mesh and must be reflected across the body's midline
 /// before it is baked. See <see cref="BonePieceStep.Reflect"/>.
 /// </param>
-public sealed record BonePiece(string Set, BoneSlot Slot, string Source, bool Mirror = false)
+/// <param name="Tier">The heavier-body variant this is, or null for the piece as authored.</param>
+/// <param name="Female">
+/// Authored on the FEMALE body (from <c>attachments/female/</c>), so baked against the female rig and
+/// female fat shape, and worn by women through the female list of the male piece's gene template.
+/// </param>
+public sealed record BonePiece(string Set, BoneSlot Slot, string Source, bool Mirror = false, BodyTier? Tier = null,
+    bool Female = false)
 {
-    public string Name => $"gen_piece_{Set}_{Slot.Key}";
+    public string Name => (Tier is null ? $"gen_piece_{Set}_{Slot.Key}" : $"gen_piece_{Set}_{Slot.Key}_{Tier.Suffix}")
+        + (Female ? "_f" : "");
 
     /// <summary>Filled in by the bake, which is the only pass that reads the mesh.</summary>
     public List<PieceShape> Shapes { get; } = [];
+
+    /// <summary>
+    /// The mod path of the set's heraldry mask, or null for a piece drawn in its own colours.
+    /// Set by <see cref="BonePieceStep"/>'s texture conversion; see <see cref="PieceTextures"/>.
+    /// </summary>
+    public string? CoaMask { get; set; }
 }
 
 /// <summary>
@@ -100,14 +132,55 @@ public static class BonePieceStep
     ///
     /// The shorthands exist because shoulders are the common case and were the first thing built.
     /// A new slot is one row here plus a mesh named for it — no other code changes.
+    ///
+    /// Elbow and forearm hang off different bones on purpose: a couter caps the joint and should
+    /// follow the forearm's swing (<c>bn_*_elbow</c>), while a vambrace sits mid-forearm where the
+    /// twist bone (<c>bn_*_forearm</c>) is, so it turns with the wrist the way the sleeve does. The
+    /// neck and chest slots sit on the spine, which barely deforms, so a rigid piece holds there.
     /// </summary>
     private static readonly BoneSlot[] Slots =
     [
         new("_shoulder_l", "bn_l_shoulder", "_shoulder_r"),
         new("_shoulder_r", "bn_r_shoulder", "_shoulder_l"),
+        new("_forearm_l",  "bn_l_forearm",  "_forearm_r"),
+        new("_forearm_r",  "bn_r_forearm",  "_forearm_l"),
+        new("_elbow_l",    "bn_l_elbow",    "_elbow_r"),
+        new("_elbow_r",    "bn_r_elbow",    "_elbow_l"),
+        new("_neck",       "bn_sp_cervical", Weighted: true),
+        new("_chest",      "bn_sp_thoracic", Weighted: true, Rigid: true),
+        new("_back",       "bn_sp_thoracic", Weighted: true, Rigid: true),
+        new("_strap",      "bn_sp_thoracic", Weighted: true),
         new("_head",       "bn_h_head_mid"),
         new("_l",          "bn_l_shoulder", "_r"),
         new("_r",          "bn_r_shoulder", "_l"),
+    ];
+
+    /// <summary>
+    /// The heavier-body copies every piece in a <see cref="BoneSlot.Weighted"/> slot gets, lightest first.
+    ///
+    /// **How weight reaches the body**, from vanilla's own portrait script: any positive
+    /// <c>current_weight</c> (<c>overweight_threshold = 0</c>) modifies <c>gene_bs_body_type</c> by
+    /// <c>weight_for_portrait * 0.5</c> (<c>99_special.txt</c>), and the gene's curve maps 0.5..1.0 onto
+    /// the fat shape's 0..1 (<c>01_genes_morph.txt</c>) — so the shape stands at roughly weight/100.
+    /// Characters start between -35 and 35 (<c>DEFAULT_BASE_WEIGHT_MIN/MAX</c>); 50 is obese.
+    ///
+    /// Four bands of 20, each copy moved to just past its band's middle (morph = floor/100 + 0.12): the
+    /// worst case is then ~0.4 units off the cloth at the chest (0.1 of a 3.9 bulge, x1.15), inside the
+    /// pendants' 1.2 stand-off either way. Two bands of 35 left a unit of error at the edges, which
+    /// the tighter stand-off could no longer hide. Below 20 the authored piece holds: 0.2 of the shape
+    /// is 0.9 at the chest, still under its stand-off.
+    ///
+    /// No thin tiers, measured rather than assumed: the gaunt shape moves the body 0 at the chest, 0.3
+    /// on the upper chest and at most 1.4 on the outer forearm, and the garments follow it only 0.07-
+    /// 1.27x there — so the worst thin case is about a unit of extra gap at the collar's sides, and
+    /// only below weight -70 (full gaunt; characters start between -35 and 35).
+    /// </summary>
+    private static readonly BodyTier[] Tiers =
+    [
+        new("fat20", 20, 0.32),
+        new("fat40", 40, 0.52),
+        new("fat60", 60, 0.72),
+        new("fat80", 80, 0.92),
     ];
 
     private static string GeneOf(BoneSlot slot) => $"gen_armor_piece_{slot.Key}";
@@ -163,10 +236,16 @@ public static class BonePieceStep
         string? dir = Locate();
         if (dir is null) return 0;
 
-        var pieces = Read(dir);
+        var pieces = Read(dir, female: false);
         if (pieces.Count == 0) return 0;
 
+        // Female versions, when authored: the same pieces fitted to the female body. A set without them
+        // falls back to the male piece on women, which is the behaviour before they existed.
+        string femaleDir = Path.Combine(dir, FemaleSubdir);
+        if (System.IO.Directory.Exists(femaleDir)) pieces.AddRange(Read(femaleDir, female: true));
+
         var frames = BoneFrames.Read(gameDir);
+        var femaleFrames = BoneFrames.Read(gameDir, female: true);
 
         if (frames.Count == 0)
         {
@@ -175,6 +254,10 @@ public static class BonePieceStep
             return 0;
         }
 
+        var fat = BodyFat.Read(gameDir);
+        var femaleFat = BodyFat.Read(gameDir, female: true);
+        pieces = WithTiers(pieces, fat, femaleFat);
+
         string outDir = Path.Combine(modDir, ModelDir.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(outDir);
 
@@ -182,14 +265,16 @@ public static class BonePieceStep
 
         foreach (var piece in pieces)
         {
-            if (!frames.TryGetValue(piece.Slot.Bone, out var frame))
+            var rig = piece.Female ? femaleFrames : frames;
+
+            if (!rig.TryGetValue(piece.Slot.Bone, out var frame))
             {
-                Console.WriteLine($"  bone pieces: {piece.Slot.Bone} is not in the portrait skeleton "
-                    + $"- {Path.GetFileName(piece.Source)} skipped");
+                Console.WriteLine($"  bone pieces: {piece.Slot.Bone} is not in the "
+                    + (piece.Female ? "female" : "male") + $" portrait skeleton - {Path.GetFileName(piece.Source)} skipped");
                 continue;
             }
 
-            if (Bake(piece.Source, Path.Combine(outDir, piece.Name + ".mesh"), frame, piece))
+            if (Bake(piece.Source, Path.Combine(outDir, piece.Name + ".mesh"), frame, piece, piece.Female ? femaleFat : fat))
                 baked.Add(piece);
         }
 
@@ -208,6 +293,20 @@ public static class BonePieceStep
         WriteModifiers(modDir, baked, byCulture);
         WriteDebug(modDir, sets);
 
+        int tiered = baked.Count(p => p.Tier is not null);
+
+        if (tiered > 0)
+            Console.WriteLine($"    {tiered} heavier-body variant(s): "
+                + string.Join(", ", Tiers.Select(t => $"{t.Suffix} from weight {t.MinWeight}"))
+                + " - slots " + string.Join("/", baked.Where(p => p.Tier is not null).Select(p => p.Slot.Key)
+                    .Distinct().OrderBy(s => s, StringComparer.Ordinal)));
+
+        int women = baked.Count(p => p.Female);
+
+        if (women > 0)
+            Console.WriteLine($"    {women} female-fitted piece(s), sets "
+                + string.Join(", ", baked.Where(p => p.Female).Select(p => p.Set).Distinct().OrderBy(s => s, StringComparer.Ordinal)));
+
         Console.WriteLine($"  bone pieces: {baked.Count} piece(s), {sets.Count} set(s) "
             + $"({string.Join(", ", sets)}), slots "
             + string.Join("/", baked.Select(p => p.Slot.Key).Distinct().OrderBy(s => s, StringComparer.Ordinal))
@@ -222,6 +321,13 @@ public static class BonePieceStep
     private static string? Locate() => Core.AssetPaths.Directory(SourceDir);
 
     /// <summary>
+    /// Where female-fitted versions of the pieces live, beside the male ones: same file names, authored
+    /// on the female body. A subfolder rather than a suffix, because <see cref="Read"/> matches slots by
+    /// the END of the name and a trailing marker would hide the slot.
+    /// </summary>
+    private const string FemaleSubdir = "female";
+
+    /// <summary>
     /// Every piece in the folder, by the slot its filename ends in.
     ///
     /// A suffix rather than a sidecar file, the same convention the weapon forge uses for parts
@@ -229,7 +335,7 @@ public static class BonePieceStep
     /// folder. A mesh claiming no slot is skipped and said so — the slot decides which bone it is
     /// baked against, and guessing would place it silently wrong.
     /// </summary>
-    private static List<BonePiece> Read(string dir)
+    private static List<BonePiece> Read(string dir, bool female)
     {
         var found = new List<BonePiece>();
 
@@ -246,7 +352,7 @@ public static class BonePieceStep
                 continue;
             }
 
-            found.Add(new BonePiece(name[..^slot.Suffix.Length], slot, path));
+            found.Add(new BonePiece(name[..^slot.Suffix.Length], slot, path, Female: female));
         }
 
         return Pair(found);
@@ -283,13 +389,80 @@ public static class BonePieceStep
             var other = Slots.FirstOrDefault(s => s.Suffix == opposite);
             if (other is null) continue;
 
-            added.Add(new BonePiece(piece.Set, other, piece.Source, Mirror: true));
+            added.Add(new BonePiece(piece.Set, other, piece.Source, Mirror: true, Female: piece.Female));
 
-            Console.WriteLine($"    {piece.Set}: no {opposite} mesh, mirroring {Path.GetFileName(piece.Source)} "
-                + $"onto {other.Bone} - author one to override");
+            // said once per set and slot, not again for the female copy of the same mirroring
+            if (!piece.Female)
+                Console.WriteLine($"    {piece.Set}: no {opposite} mesh, mirroring {Path.GetFileName(piece.Source)} "
+                    + $"onto {other.Bone} - author one to override");
         }
 
         return [.. pieces, .. added];
+    }
+
+    /// <summary>
+    /// Adds a heavier-body copy of every piece in a weighted slot, one per <see cref="Tiers"/> row.
+    ///
+    /// Derived, not authored: the copy is the same source mesh moved along the body's fat blend
+    /// shape at bake time (<see cref="Swell"/>), so every set — and any piece dropped in later — gets
+    /// its variants with no extra art and no chance of the two drifting apart. Same UVs, so the
+    /// set's textures and heraldry mask serve both unchanged.
+    ///
+    /// Built with the constructor, never <c>with</c>: a record copy would share the original's
+    /// <see cref="BonePiece.Shapes"/> list, and the bake would append both pieces' shapes to it.
+    /// </summary>
+    private static List<BonePiece> WithTiers(List<BonePiece> pieces, BodyFat? fat, BodyFat? femaleFat)
+    {
+        if (!pieces.Any(p => p.Slot.Weighted)) return pieces;
+
+        if (fat is null)
+        {
+            Console.WriteLine("  bone pieces: could not read the body's fat blend shape from the game "
+                + "directory - no heavier-body variants");
+            return pieces;
+        }
+
+        // each sex swells along its own body's fat shape, so a female piece is only tiered when the
+        // female shape could be read
+        var tiered = pieces
+            .Where(p => p.Slot.Weighted && (!p.Female || femaleFat is not null))
+            .SelectMany(p => Tiers.Select(t => new BonePiece(p.Set, p.Slot, p.Source, p.Mirror, t, p.Female)));
+
+        return [.. pieces, .. tiered];
+    }
+
+    /// <summary>
+    /// Moves a heavier-body copy's positions out along the fat shape, in BODY space.
+    ///
+    /// Body space because that is where the field lives, and after any mirroring because the field
+    /// is sampled where the piece finally sits. Normals are left as they are: the displacement is a
+    /// smooth, low-frequency swell a few units across a piece, which tilts no surface enough to show.
+    /// </summary>
+    private static void Swell(float[] p, BodyFat fat, BodyTier tier, bool rigid)
+    {
+        double scale = tier.Morph * BodyFat.GarmentScale;
+        int n = p.Length / 3;
+        if (n == 0) return;
+
+        var delta = new (double X, double Y, double Z)[n];
+        for (int v = 0; v < n; v++) delta[v] = fat.Delta(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
+
+        // A rigid piece takes the field's MEAN over its vertices as one translation: it sits where the
+        // swollen clothing is on average, and stays the shape it was modelled.
+        if (rigid)
+        {
+            double mx = 0, my = 0, mz = 0;
+            foreach (var (x, y, z) in delta) { mx += x; my += y; mz += z; }
+            var mean = (mx / n, my / n, mz / n);
+            Array.Fill(delta, mean);
+        }
+
+        for (int v = 0; v < n; v++)
+        {
+            p[v * 3] += (float)(delta[v].X * scale);
+            p[v * 3 + 1] += (float)(delta[v].Y * scale);
+            p[v * 3 + 2] += (float)(delta[v].Z * scale);
+        }
     }
 
     /// <summary>
@@ -335,7 +508,7 @@ public static class BonePieceStep
     /// once rotated, so carrying the old one over would describe a volume the geometry has left — and
     /// the engine culls against it, which shows as a piece that vanishes at certain angles.
     /// </summary>
-    private static bool Bake(string source, string target, BoneFrame frame, BonePiece piece)
+    private static bool Bake(string source, string target, BoneFrame frame, BonePiece piece, BodyFat? fat)
     {
         PdxNode root;
 
@@ -385,7 +558,7 @@ public static class BonePieceStep
                 //
                 // `PAULDRON_ISO_Shape.003` says nothing about which set or side it is, and the .003
                 // is Blender's duplicate counter, which moves whenever the object is copied. After
-                // this the same message names `gen_piece_pauldron2_shoulder_l` and needs no lookup.
+                // this the same message names `gen_piece_gothic_shoulder_l` and needs no lookup.
                 //
                 // A shape name is a label: nothing inside the .mesh refers to it, and the mirrored
                 // copies of one source can safely share it because meshsettings is scoped to its own
@@ -406,6 +579,9 @@ public static class BonePieceStep
                 // midline, and doing it after the bake would reflect across the bone's own axes and
                 // put the piece somewhere arbitrary.
                 if (piece.Mirror) Reflect(node, p);
+
+                // A heavier-body copy swells with the body before it is taken into the bone's frame.
+                if (piece.Tier is { } tier && fat is not null) Swell(p, fat, tier, piece.Slot.Rigid);
 
                 for (int i = 0; i + 2 < p.Length; i += 3)
                 {
@@ -579,6 +755,17 @@ public static class BonePieceStep
     private const string ShaderFile = "gfx/FX/jomini/portrait.shader";
 
     /// <summary>
+    /// The same shader with <c>COA_ENABLED</c>, for a set that ships a heraldry mask.
+    ///
+    /// Vanilla's precedent is the tournament lance (<c>ep2_lance_01_a.asset</c>): a rigid prop on
+    /// <c>portrait_attachment_with_coa</c> whose entity names a <c>coa_mask</c>, and whose pennant
+    /// takes the bearer's colours. It is the one portrait path where a game value reaches a prop's
+    /// colour without a copy of the prop per colour. Its mesh carries three UV sets and the mask
+    /// is sampled in the first; the emblem channel reads the third.
+    /// </summary>
+    private const string CoaShader = "portrait_attachment_with_coa";
+
+    /// <summary>
     /// One entity per piece, with a <c>meshsettings</c> block per shape.
     ///
     /// The block's <c>name</c> must match the shape's name inside the <c>.mesh</c> — it is how the
@@ -616,7 +803,7 @@ public static class BonePieceStep
                 if (shape.Normal is { Length: > 0 } n) b.Raw($"\t\ttexture_normal = \"{n}\"\n");
                 if (shape.Specular is { Length: > 0 } s) b.Raw($"\t\ttexture_specular = \"{s}\"\n");
 
-                b.Raw($"\t\tshader = \"{Shader}\"\n");
+                b.Raw($"\t\tshader = \"{(piece.CoaMask is null ? Shader : CoaShader)}\"\n");
                 b.Raw($"\t\tshader_file = \"{ShaderFile}\"\n");
                 b.Raw("\t}\n");
             }
@@ -625,6 +812,16 @@ public static class BonePieceStep
             b.Raw("entity = {\n");
             b.Raw($"\tname = \"{piece.Name}_entity\"\n");
             b.Raw($"\tpdxmesh = \"{piece.Name}_mesh\"\n");
+
+            if (piece.CoaMask is { } mask)
+            {
+                b.Raw("\n\tgame_data = {\n");
+                b.Raw("\t\tportrait_entity_user_data = {\n");
+                b.Raw($"\t\t\tcoa_mask = \"{mask}\"\n");
+                b.Raw("\t\t}\n");
+                b.Raw("\t}\n");
+            }
+
             b.Raw("}\n");
         }
 
@@ -668,9 +865,12 @@ public static class BonePieceStep
                         Specular = made.Properties,
                     };
                 }
+
+                if (made.Coa is { } coa) piece.CoaMask = $"{ModelDir}/{coa}";
             }
 
-            Console.WriteLine($"    {set}: repacked its own textures to {made.Diffuse} and two more");
+            Console.WriteLine($"    {set}: repacked its own textures to {made.Diffuse} and two more"
+                + (made.Coa is null ? "" : ", plus a heraldry mask - coloured by the wearer's coat of arms"));
             done++;
         }
 
@@ -869,8 +1069,12 @@ public static class BonePieceStep
 
                     int index = 1;
 
-                    foreach (var piece in pieces.Where(p => p.Slot == slot))
+                    // One template per MALE piece; a female-fitted counterpart rides in its female list.
+                    foreach (var piece in pieces.Where(p => p.Slot == slot && !p.Female))
                     {
+                        var female = pieces.FirstOrDefault(p => p.Female && p.Set == piece.Set
+                            && p.Slot == piece.Slot && p.Tier == piece.Tier);
+
                         using (b.Block(TemplateOf(piece)))
                         {
                             // Unique within this gene; index 0 is the empty default above.
@@ -879,9 +1083,18 @@ public static class BonePieceStep
                             using (b.Block("male"))
                                 b.Field("1", piece.Name);
 
-                            // One bake serves both sexes - the transform is relative to the bone,
-                            // and the rigs differ in where a bone sits rather than how it is turned.
-                            b.Field("female", "male");
+                            // The engine maps the accessory a modifier names to the SAME POSITION in the
+                            // wearer's own list - vanilla's modifiers name only m_ accessories, and
+                            // dde_hre_war lists lo/hi/roy in the same order for both sexes. So a woman
+                            // gets the female-fitted piece with no modifier of its own. Without one she
+                            // wears the male piece, which lands male-sized: the female rig's shoulders
+                            // sit at +-15.0 against +-17.9 and its neck ~10 lower.
+                            if (female is not null)
+                                using (b.Block("female"))
+                                    b.Field("1", female.Name);
+                            else
+                                b.Field("female", "male");
+
                             b.Field("boy", "male");
                             b.Field("girl", "female");
                         }
@@ -911,6 +1124,10 @@ public static class BonePieceStep
     private static void WriteModifiers(string modDir, List<BonePiece> pieces,
         Dictionary<string, List<string>> byCulture)
     {
+        // Heavier-body copies ride the SAME gates as the piece they copy, plus a weight floor, and
+        // outweigh it by a little - so under `selection_behavior = max` a character past the floor
+        // wears the copy and everyone else the original, whichever gate (flag, creator, owner) let
+        // them in. Each heavier tier outweighs the one below, and its floor implies that one's.
         string dir = Path.Combine(modDir, "gfx", "portraits", "portrait_modifiers");
         Directory.CreateDirectory(dir);
 
@@ -931,7 +1148,9 @@ public static class BonePieceStep
                 b.Field("selection_behavior", "max");
                 b.Field("priority", 8);
 
-                foreach (var piece in pieces.Where(p => p.Slot == slot))
+                // male pieces only: a woman reaches her female-fitted piece through the template's
+                // female list (see WriteGenes), not through a modifier of its own
+                foreach (var piece in pieces.Where(p => p.Slot == slot && !p.Female))
                 {
                     var cultures = byCulture.TryGetValue(piece.Set, out var list) ? list : [];
 
@@ -957,8 +1176,9 @@ public static class BonePieceStep
                             // The debug flag, weighted above the artifact so a forced set always wins.
                             using (b.Block("modifier"))
                             {
-                                b.Field("add", 2000);
+                                b.Field("add", 2000 + TierBonus(piece));
                                 b.Field("has_character_flag", FlagOf(piece.Set));
+                                WeightGate(b, piece);
                             }
 
                             // No culture drew this set - possible when there are more sets than
@@ -975,7 +1195,8 @@ public static class BonePieceStep
                             foreach (bool byCreator in new[] { true, false })
                             using (b.Block("modifier"))
                             {
-                                b.Field("add", byCreator ? 1000 : 600);
+                                b.Field("add", (byCreator ? 1000 : 600) + TierBonus(piece));
+                                WeightGate(b, piece);
 
                                 // The settings-window kill switch (gen_settings_armor_pieces in
                                 // Core/common/scripted_guis/00_gen_settings_panel_guis.txt). The
@@ -1036,6 +1257,23 @@ public static class BonePieceStep
         ParadoxText.WriteBom(Path.Combine(dir, "zz_gen_pieces.txt"), b.ToString());
     }
 
+    /// <summary>How far a heavier-body copy outweighs the piece it copies: 0 for the original.</summary>
+    private static int TierBonus(BonePiece piece) =>
+        piece.Tier is null ? 0 : 10 * (Array.IndexOf(Tiers, piece.Tier) + 1);
+
+    /// <summary>
+    /// The weight floor a heavier-body copy adds to each of its gates.
+    ///
+    /// <c>scope:current_weight</c> is what vanilla's own <c>99_special.txt</c> reads to fatten the body
+    /// in the first place, so the copy switches on from the same number that swells the clothes.
+    /// Written by hand because <c>Field</c> would put its <c>=</c> between the comparison's halves.
+    /// </summary>
+    private static void WeightGate(JominiBuilder b, BonePiece piece)
+    {
+        if (piece.Tier is { } tier)
+            b.Raw($"{b.IndentAt(b.Depth)}scope:current_weight >= {tier.MinWeight}\n");
+    }
+
     /// <summary>
     /// An event that forces one set on, so placement can be judged without finding an artifact.
     ///
@@ -1074,7 +1312,20 @@ public static class BonePieceStep
 
         foreach (string other in sets) b.Raw($"\t\tremove_character_flag = {FlagOf(other)}\n");
 
-        b.Raw("\t}\n}\n");
+        b.Raw("\t}\n");
+
+        // Weight steps, so the heavier-body copies can be checked on the character already open
+        // rather than by hunting for a fat one. `change_current_weight` is relative - vanilla uses it
+        // that way in 328 places - and 20 is one tier band per click.
+        for (int w = 0; w < 2; w++)
+        {
+            b.Raw("\toption = {\n");
+            b.Raw($"\t\tname = pmg_piece.0001.{(char)('a' + sets.Count + 1 + w)}\n");
+            b.Raw($"\t\tchange_current_weight = {(w == 0 ? 20 : -20)}\n");
+            b.Raw("\t\ttrigger_event = { id = pmg_piece.0001 days = 0 }\n\t}\n");
+        }
+
+        b.Raw("}\n");
 
         ParadoxText.WriteBom(Path.Combine(dir, "zz_gen_piece_events.txt"), b.ToString());
 
@@ -1087,13 +1338,17 @@ public static class BonePieceStep
             + "culture consistently and two cultures differ.\\n\\nWhat to look for: that every slot "
             + "the set covers is filled, that the pieces sit ON the body rather than through it or "
             + "beside it, and that they hold up on a fat or muscular character - a bone-attached "
-            + "piece is rigid and does not follow the body's shape, which is the one thing that "
-            + "could sink the approach.");
+            + "piece is rigid and does not follow the body's shape, so pieces against the torso "
+            + "swap to a heavier copy from weight "
+            + string.Join(" and ", Tiers.Select(t => t.MinWeight))
+            + ". Use the weight options to step through them.");
 
         for (int i = 0; i < sets.Count; i++)
             loc.Add($"pmg_piece.0001.{(char)('a' + i)}", $"Wear the '{sets[i]}' set");
 
         loc.Add($"pmg_piece.0001.{(char)('a' + sets.Count)}", "Take them off");
+        loc.Add($"pmg_piece.0001.{(char)('a' + sets.Count + 1)}", "Gain weight (+20)");
+        loc.Add($"pmg_piece.0001.{(char)('a' + sets.Count + 2)}", "Lose weight (-20)");
 
         loc.Write(Path.Combine(modDir, "localization", "english", "zz_gen_piece_l_english.yml"));
     }

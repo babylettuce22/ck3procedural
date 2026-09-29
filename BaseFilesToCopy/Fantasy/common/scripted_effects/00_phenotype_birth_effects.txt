@@ -48,6 +48,57 @@ gen_resolve_child_phenotype_effect = {
 			gen_take_parent_race_effect = { PARENT = real_father }
 		}
 	}
+
+	gen_resolve_half_race_effect = yes
+
+	# Horns, once the race is known: Hornborn for a child of the horned people who came out of
+	# another race, and a fallback horn style for anyone owed horns (00_horn_effects.txt).
+	gen_resolve_hornborn_effect = yes
+	gen_assign_horn_style_effect = yes
+}
+
+# Half-elves and half-orcs. Runs after the race is decided, and only marks a child who came out HUMAN:
+# a child who took the elf or orc parent's race is simply that race, full features and all.
+#
+# A human child is half-elf when a parent is an elf, or when BOTH parents are half-elves. A half-elf
+# with a plain human has plain human children — the half features are not passed on — and a
+# half-elf with a full elf either rolls elf or rolls human with an elf parent, which is half-elf
+# again. The same for orcs.
+#
+# The flags carry the LOOK only: gfx/portraits/portrait_modifiers/99_gen_race_morphs.txt (generated,
+# see Emit/RaceMorphWriter.cs) gives gen_half_elf half-strength pointed ears and gen_half_orc
+# half-grown tusks, and clears inherited ears and tusks on every other human of a mixed line. Race
+# is still one trait, so nothing else in the phenotype system needs to know half-races exist.
+gen_resolve_half_race_effect = {
+	if = {
+		limit = { has_trait = phenotype_human }
+		if = {
+			limit = {
+				OR = {
+					mother ?= { gen_is_elf_phenotype_trigger = yes }
+					real_father ?= { gen_is_elf_phenotype_trigger = yes }
+					AND = {
+						mother ?= { has_character_flag = gen_half_elf }
+						real_father ?= { has_character_flag = gen_half_elf }
+					}
+				}
+			}
+			add_character_flag = gen_half_elf
+		}
+		else_if = {
+			limit = {
+				OR = {
+					mother ?= { has_trait = phenotype_rough_hewn }
+					real_father ?= { has_trait = phenotype_rough_hewn }
+					AND = {
+						mother ?= { has_character_flag = gen_half_orc }
+						real_father ?= { has_character_flag = gen_half_orc }
+					}
+				}
+			}
+			add_character_flag = gen_half_orc
+		}
+	}
 }
 
 # Copies one parent's race onto the newborn.
@@ -85,6 +136,10 @@ gen_take_parent_race_effect = {
 	else_if = {
 		limit = { scope:gen_race_donor = { has_trait = phenotype_dusk_adapted } }
 		add_trait = phenotype_dusk_adapted
+	}
+	else_if = {
+		limit = { scope:gen_race_donor = { has_trait = phenotype_horned } }
+		add_trait = phenotype_horned
 	}
 	else = {
 		# The chosen donor is human. Say so explicitly: an unmarked child is indistinguishable from

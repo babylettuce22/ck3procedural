@@ -1,0 +1,246 @@
+﻿# Helpers for the Gathering and the Errand (restor.0900-0999). See the two activity files for the
+# design.
+
+# =====================================================================================
+#  Plan the Rising: which counties the hall can reach
+# =====================================================================================
+#
+# Root = the host. Builds three temporary lists:
+#
+#   restor_rising_hall   everyone in the hall (the host included, and alone when the event was
+#                        fired outside an activity)
+#   restor_rising_own    unstirred crown counties held directly by someone in the hall
+#   restor_rising_near   unstirred crown counties next to land held by someone in the hall, and
+#                        held by nobody in it
+#
+# Temporary lists do not outlive the effect block that built them, so restor.0902 calls this
+# once in `immediate` to count and again inside the chosen option to act.
+restor_gathering_rising_lists_effect = {
+	if = {
+		limit = { exists = scope:activity }
+		scope:activity = {
+			every_attending_character = {
+				add_to_list = restor_rising_hall
+			}
+		}
+	}
+	if = {
+		limit = { NOT = { is_in_list = restor_rising_hall } }
+		add_to_list = restor_rising_hall
+	}
+
+	every_in_list = {
+		list = restor_rising_hall
+		every_held_county = {
+			limit = {
+				restor_crown_county_trigger = yes
+				NOT = { has_county_modifier = restor_county_stirred }
+				NOT = { is_in_list = restor_rising_own }
+			}
+			add_to_list = restor_rising_own
+		}
+	}
+
+	every_in_list = {
+		list = restor_rising_hall
+		every_held_county = {
+			every_neighboring_county = {
+				limit = {
+					restor_crown_county_trigger = yes
+					NOT = { has_county_modifier = restor_county_stirred }
+					NOT = { is_in_list = restor_rising_own }
+					NOT = { is_in_list = restor_rising_near }
+					exists = holder
+					holder = { NOT = { is_in_list = restor_rising_hall } }
+				}
+				add_to_list = restor_rising_near
+			}
+		}
+	}
+}
+
+# Saves the counts restor.0902's desc and option triggers read:
+#   scope:restor_rising_n           how many counties the hall can stir: one per landed lord
+#                                   present, at least one, at most five
+#   scope:restor_rising_own_count   size of restor_rising_own
+#   scope:restor_rising_near_count  size of restor_rising_near
+# Call after restor_gathering_rising_lists_effect, in the same block.
+restor_gathering_rising_counts_effect = {
+	save_scope_value_as = {
+		name = restor_rising_n
+		value = {
+			value = 0
+			every_in_list = {
+				list = restor_rising_hall
+				limit = { is_landed = yes }
+				add = 1
+			}
+			min = 1
+			max = 5
+		}
+	}
+	save_scope_value_as = {
+		name = restor_rising_own_count
+		value = list_size:restor_rising_own
+	}
+	save_scope_value_as = {
+		name = restor_rising_near_count
+		value = list_size:restor_rising_near
+	}
+}
+
+# Stirs up to scope:restor_rising_n counties of the list $LIST$ for ten years, richest first, and
+# saves how many as scope:restor_stirred_now. Support is recomputed at once, so the panel moves
+# while the player is still looking at the result.
+restor_gathering_stir_list_effect = {
+	save_scope_value_as = {
+		name = restor_stirred_now
+		value = {
+			value = list_size:$LIST$
+			max = scope:restor_rising_n
+		}
+	}
+	ordered_in_list = {
+		list = $LIST$
+		order_by = development_level
+		max = scope:restor_rising_n
+		check_range_bounds = no
+		add_county_modifier = {
+			modifier = restor_county_stirred
+			years = 10
+		}
+	}
+	restor_support_refresh_effect = yes
+}
+
+# =====================================================================================
+#  Everyone in the hall
+# =====================================================================================
+#
+# Rank XP and favour to every attendee, the host included. When the event was fired outside an
+# activity (the DebugPanel), the host alone.
+restor_gathering_reward_hall_effect = {
+	if = {
+		limit = { exists = scope:activity }
+		scope:activity = {
+			every_attending_character = {
+				limit = { has_trait = restor_member }
+				add_trait_xp = {
+					trait = restor_member
+					track = restor_rank
+					value = $XP$
+				}
+				restor_favour_gain_effect = { VALUE = $FAVOUR$ }
+			}
+		}
+	}
+	else = {
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = $XP$
+		}
+		restor_favour_gain_effect = { VALUE = $FAVOUR$ }
+	}
+}
+
+# Tells every guest (everyone attending but the host) what the host decided. $PURPOSE$ is a flag
+# the notice's desc reads off the activity.
+restor_gathering_tell_guests_effect = {
+	if = {
+		limit = { exists = scope:activity }
+		scope:activity = {
+			set_variable = {
+				name = restor_gathering_purpose
+				value = flag:$PURPOSE$
+			}
+			every_attending_character = {
+				limit = { NOT = { this = scope:host } }
+				trigger_event = {
+					id = restor.0906
+					days = 1
+				}
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  The Errand
+# =====================================================================================
+
+# The county the Errand went to, as scope:restor_errand_county. Unset outside an activity.
+restor_errand_save_county_effect = {
+	if = {
+		limit = {
+			exists = scope:activity
+			exists = scope:activity.activity_location
+		}
+		scope:activity.activity_location.county = { save_scope_as = restor_errand_county }
+	}
+}
+
+# What the road cost, on top of the purpose's own exposure. Root = the host, in restor.0914, with
+# the snapshot values scope:restor_hasty / scope:restor_clean and scope:restor_witness (if any).
+# The witness roll ends in a toast either way, so the player always learns whether they talked.
+restor_errand_consequences_effect = {
+	if = {
+		limit = { exists = scope:restor_hasty }
+		restor_exposure_gain_effect = { VALUE = 2 }
+	}
+	if = {
+		limit = { NOT = { exists = scope:restor_clean } }
+		restor_exposure_gain_effect = { VALUE = 3 }
+		if = {
+			limit = { exists = scope:restor_witness }
+			random_list = {
+				50 = {
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = restor.0914.witness_talks
+						left_icon = root
+						right_icon = scope:restor_witness
+						restor_exposure_gain_effect = { VALUE = 3 }
+						if = {
+							limit = { any_secret = { secret_type = secret_restor_member } }
+							custom_tooltip = restor.0914.witness_secret_tt
+							hidden_effect = {
+								random_secret = {
+									limit = { secret_type = secret_restor_member }
+									reveal_to = scope:restor_witness
+								}
+							}
+						}
+					}
+				}
+				50 = {
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = restor.0914.witness_quiet
+						left_icon = root
+						right_icon = scope:restor_witness
+						custom_tooltip = restor.0914.witness_quiet_tt
+					}
+				}
+			}
+		}
+	}
+}
+
+# A veteran of the crown's people, found on the Errand and brought home to the host's court as a
+# knight. Saved as scope:restor_old_soldier. Root = the host; scope:restor_errand_county must be set.
+restor_errand_find_soldier_effect = {
+	create_character = {
+		template = knight
+		dynasty = none
+		location = root.location
+		culture = scope:restor_errand_county.culture
+		faith = scope:restor_errand_county.faith
+		gender_female_chance = root_soldier_female_chance
+		save_scope_as = restor_old_soldier
+	}
+	scope:restor_old_soldier = {
+		set_employer = root
+		set_knight_status = force
+	}
+}

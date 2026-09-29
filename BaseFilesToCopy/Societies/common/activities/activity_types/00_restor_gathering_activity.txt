@@ -1,0 +1,324 @@
+﻿# THE GATHERING -- the Sworn meet at a Captain's or the Keeper's hall. Events restor.0901-0908.
+#
+# A port of the prototype's rite (../../../../SocietyPrototype/common/activities/activity_types/
+# 00_society_rite_activity.txt), whose mechanics were proven in game. Kept from it, deliberately:
+#
+#   THE THREE GATES   is_shown (a non-member never sees it), can_start_showing_failures_only (a
+#                     member who cannot hold one is told why), can_be_activity_guest (the engine's
+#                     veto on every proposed guest, whatever proposed them). Membership is asserted
+#                     in all three, because each is evaluated at a different moment.
+#   `rules`, NOT `defaults`, for the guest invite rules: a default rule arrives ticked, so the
+#                     guest list silently fills itself and the host never chooses whom to name.
+#   is_valid on a LIVE activity: everything in it must hold of a gathering already under way.
+#   background needs texture + environment + ambience together, or CK3 logs "Field 'background'
+#                     not set", which reads like a missing texture and is not.
+#   FIVE art files derived from the keys (icon, header icon, header background, phase icon), all
+#                     warnings only; see gfx/interface/.
+#
+# What changed is the purpose. The host decides on the first night what the Gathering is for
+# (restor.0901): renew the oath, plan the rising, or judge a member who stayed away. Every
+# attendee takes +3 exposure when it ends, because a dozen traitors under one roof is a risk
+# whatever they talked about. Completing it pays the host.
+#
+# The events are fired from the phase's on_phase_active, which runs once per attending character
+# -- the host gets the chain, each guest gets the arrival event. scope:activity and scope:host ride
+# along into the triggered events.
+
+activity_restor_gathering = {
+	activity_group_type = restor_group
+	sort_order = 5
+
+	# ---- Gate one: who knows it exists ------------------------------------------------------
+	is_shown = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+
+		is_playable_character = yes
+		highest_held_title_tier > tier_barony
+
+		trigger_if = {
+			limit = { is_ai = yes }
+			is_at_war = no
+			NOT = { has_variable = conqueror }
+			NOT = { has_realm_law = uncrowned }
+		}
+	}
+
+	# ---- Gate two: who may call one --------------------------------------------------------
+	#
+	# A Captain or the Keeper. A new member can be invited to a Gathering long before they can
+	# call one.
+	can_always_plan = no
+
+	can_start_showing_failures_only = {
+		is_available_adult = yes
+		NOT = { is_activity_type_on_cooldown = activity_restor_gathering }
+
+		custom_tooltip = {
+			text = restor_gathering_requires_membership_tt
+			has_trait = restor_member
+			restor_underground_trigger = yes
+		}
+		custom_tooltip = {
+			text = restor_gathering_requires_rank_tt
+			OR = {
+				restor_is_keeper_trigger = yes
+				restor_rank_at_least_trigger = { RANK = 50 }
+			}
+		}
+	}
+
+	is_valid = {
+		NOT = { has_variable = activity_invalidated }
+		scope:host = {
+			is_playable_character = yes
+			is_incapable = no
+			has_trait = restor_member
+		}
+	}
+
+	on_host_death = {
+		scope:activity = {
+			set_variable = { name = activity_invalidated }
+		}
+	}
+
+	on_invalidated = {
+		invalidation_imprisoned_effect = yes
+		invalidation_incapable_effect = yes
+	}
+
+	# ---- Who was asked ----------------------------------------------------------------------
+	#
+	# CK3 has no record of who declined an invitation: a declined guest simply stops being invited.
+	# So the activity remembers everyone it has seen invited or travelling, and restor.0901 looks
+	# for somebody on that list who is not in the hall. When the list turns out empty (the
+	# invitations may not exist yet when on_start runs), 0901 falls back to the prototype's rule:
+	# a sworn member of the host's own court or realm who is not there.
+	on_start = {
+		every_invited_character = {
+			save_scope_as = restor_invitee
+			scope:activity = {
+				add_to_variable_list = {
+					name = restor_gathering_invited
+					target = scope:restor_invitee
+				}
+			}
+		}
+	}
+
+	on_enter_travel_state = {
+		if = {
+			limit = { NOT = { this = scope:host } }
+			save_scope_as = restor_invitee
+			scope:activity = {
+				add_to_variable_list = {
+					name = restor_gathering_invited
+					target = scope:restor_invitee
+				}
+			}
+		}
+	}
+
+	###################
+	# WHERE
+	###################
+
+	# The host's own seat, and nowhere else.
+	is_location_valid = {
+		this = scope:host.capital_province
+	}
+
+	province_filter = capital
+	ai_province_filter = capital
+	is_single_location = yes
+	max_province_icons = 3
+
+	province_description = {
+		desc = activity_restor_gathering_province_desc
+	}
+
+	###################
+	# WHEN
+	###################
+
+	wait_time_before_start = { months = 3 }
+	max_guest_arrival_delay_time = { months = 5 }
+	cooldown = { years = 4 }
+
+	# Declared and empty, as witch_ritual ships it: the purpose is chosen on the night (restor.0901),
+	# after the host has seen who came, because who came decides what the Gathering can do.
+	options = {
+	}
+
+	###################
+	# PHASES
+	###################
+
+	phases = {
+		restor_gathering_phase = {
+			is_predefined = yes
+
+			on_phase_active = {
+				if = {
+					limit = { this = scope:host }
+					scope:activity = { progress_activity_phase_after = { weeks = 2 } }
+					trigger_event = {
+						id = restor.0901
+						days = 1
+					}
+					# Somebody outside notices the traffic. Half the time.
+					random = {
+						chance = 50
+						trigger_event = {
+							id = restor.0908
+							days = 10
+						}
+					}
+				}
+				else = {
+					trigger_event = {
+						id = restor.0905
+						days = 2
+					}
+				}
+			}
+		}
+	}
+
+	###################
+	# INTENTS
+	###################
+
+	host_intents = {
+		default = restor_gathering_intent
+		intents = { restor_gathering_intent }
+	}
+
+	guest_intents = {
+		default = restor_gathering_intent
+		intents = { restor_gathering_intent }
+	}
+
+	###################
+	# GUESTS
+	###################
+
+	max_guests = 12
+
+	# A gathering of one is not a gathering.
+	allow_zero_guest_invites = no
+	open_invite = no
+
+	guest_invite_rules = {
+		rules = {
+			1 = restor_invite_rule_court
+			2 = restor_invite_rule_elsewhere
+		}
+	}
+
+	# Gate three. `is_healthy`, not `is_available`: vanilla's own base rule already handles
+	# availability, with a carve-out for guests already travelling here that `is_available` would
+	# undo.
+	can_be_activity_guest = {
+		has_trait = restor_member
+		restor_underground_trigger = yes
+		is_adult = yes
+		is_healthy = yes
+		in_diplomatic_range = scope:host
+	}
+
+	guest_join_chance = {
+		base = 40
+		base_activity_modifier = yes
+		activity_guest_shared_ai_accept_modifier = yes
+	}
+
+	###################
+	# PAYOUT
+	###################
+
+	# Once per attending character, `this` being that character. Everyone who was in the hall is a
+	# little easier to find afterwards; the host, who called it, is paid for the work.
+	on_complete = {
+		restor_exposure_gain_effect = { VALUE = 3 }
+		if = {
+			limit = { this = scope:host }
+			restor_favour_gain_effect = { VALUE = 25 }
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = 5
+			}
+		}
+	}
+
+	###################
+	# AI
+	###################
+
+	# Rarely. A Gathering is a real risk, and the AI's Sworn should hold one now and then rather than
+	# every time the cooldown lifts.
+	ai_will_do = {
+		value = 10
+		if = {
+			limit = { restor_is_keeper_trigger = yes }
+			add = 10
+		}
+		if = {
+			limit = { has_trait = gregarious }
+			add = 5
+		}
+		if = {
+			limit = { has_trait = paranoid }
+			add = -10
+		}
+		if = {
+			limit = { is_at_war = yes }
+			add = -40
+		}
+		if = {
+			limit = {
+				has_variable = restor_exposure
+				var:restor_exposure >= 15
+			}
+			add = -20
+		}
+	}
+
+	ai_check_interval_by_tier = {
+		barony = 0
+		county = 60
+		duchy = 60
+		kingdom = 60
+		empire = 60
+		hegemony = 60
+	}
+
+	ai_will_select_province = {
+		value = 10
+	}
+
+	###################
+	# GRAPHICS
+	###################
+
+	background = {
+		trigger = { always = yes }
+		texture = "gfx/interface/illustrations/event_scenes/temple.dds"
+		environment = "environment_event_temple"
+		ambience = "event:/SFX/Events/Backgrounds/temple_generic"
+	}
+
+	window_characters = {
+		host = {
+			camera = camera_body
+			effect = {
+				scope:host = { add_to_list = characters }
+			}
+			scripted_animation = {
+				animation = personality_rational
+			}
+		}
+	}
+}

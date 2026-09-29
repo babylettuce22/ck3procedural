@@ -1,0 +1,335 @@
+﻿# Recruitment: sounding out, offering the oath, and the answers. restor.0100-0199.
+#
+# CK2's lesson: recruiting is a courtship in two steps, not a yes/no. First a member SOUNDS OUT a
+# likely lord -- the answer is sympathetic, cold, or dangerous. Then, to the sympathetic (or on a
+# Trusted member's own judgement) the member OFFERS THE OATH -- accepted, refused, or reported.
+#
+# One set of odds, in one place. Whoever asks -- a player through the interaction, an AI member
+# through the interaction or the yearly pulse -- the answer comes from:
+#   a PLAYER being asked     their own choice, in restor.0101 / restor.0110
+#   an AI being asked        the rolls below, weighted by restor_recruit_pull_value / _push_value
+# and is then applied by the answer effects, which tell a PLAYER recruiter by event and settle an AI
+# recruiter's side silently. So an AI asking an AI raises no event at all, and the roll grows the
+# roster in the background.
+#
+# Scopes, set by whoever starts the exchange and carried through every event of it:
+#   scope:restor_recruiter   the member asking
+#   scope:restor_recruit     the one being asked
+
+# =====================================================================================
+#  Starting an exchange -- scope:restor_recruiter and scope:restor_recruit already saved
+# =====================================================================================
+
+restor_sound_out_start_effect = {
+	scope:restor_recruit = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = restor.0101 days = { 3 10 } }
+		}
+		else = {
+			restor_sound_out_roll_effect = yes
+		}
+	}
+}
+
+restor_offer_oath_start_effect = {
+	scope:restor_recruit = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = restor.0110 days = { 3 10 } }
+		}
+		else = {
+			restor_offer_oath_roll_effect = yes
+		}
+	}
+}
+
+# =====================================================================================
+#  The AI's answers -- THIS is the one being asked
+# =====================================================================================
+
+restor_sound_out_roll_effect = {
+	save_scope_as = restor_recruit
+	random_list = {
+		10 = {
+			modifier = { add = restor_recruit_pull_value }
+			restor_sound_out_sympathetic_effect = yes
+		}
+		35 = {
+			modifier = {
+				add = 15
+				has_trait = content
+			}
+			modifier = {
+				add = 10
+				has_trait = craven
+			}
+			restor_sound_out_cold_effect = yes
+		}
+		5 = {
+			modifier = { add = restor_recruit_push_value }
+			restor_sound_out_dangerous_effect = yes
+		}
+	}
+}
+
+restor_offer_oath_roll_effect = {
+	save_scope_as = restor_recruit
+	random_list = {
+		5 = {
+			modifier = { add = restor_recruit_pull_value }
+			modifier = {
+				add = 50
+				has_character_flag = restor_sounded_sympathetic
+			}
+			restor_oath_accepted_effect = yes
+		}
+		30 = {
+			modifier = {
+				add = 15
+				has_trait = content
+			}
+			modifier = {
+				add = 10
+				has_trait = craven
+			}
+			restor_oath_refused_effect = yes
+		}
+		0 = {
+			trigger = { exists = global_var:restor_usurper }
+			modifier = { add = restor_recruit_report_value }
+			restor_oath_reported_effect = yes
+		}
+	}
+}
+
+# =====================================================================================
+#  The answers to being sounded out -- THIS is the one who was asked
+# =====================================================================================
+
+restor_sound_out_sympathetic_effect = {
+	save_scope_as = restor_recruit
+	add_character_flag = {
+		flag = restor_sounded_sympathetic
+		years = 5
+	}
+	scope:restor_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = restor.0102 days = { 5 12 } }
+		}
+	}
+	# An AI member who has found a willing player does not leave them waiting: the offer follows.
+	if = {
+		limit = {
+			is_ai = no
+			scope:restor_recruiter = { is_ai = yes }
+		}
+		trigger_event = { id = restor.0110 days = { 20 40 } }
+	}
+}
+
+restor_sound_out_cold_effect = {
+	save_scope_as = restor_recruit
+	scope:restor_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = restor.0103 days = { 5 12 } }
+		}
+		else = {
+			restor_exposure_gain_effect = { VALUE = 2 }
+		}
+	}
+}
+
+restor_sound_out_dangerous_effect = {
+	save_scope_as = restor_recruit
+	scope:restor_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = restor.0104 days = { 5 12 } }
+		}
+		else = {
+			restor_exposure_gain_effect = { VALUE = 8 }
+		}
+	}
+}
+
+# =====================================================================================
+#  The answers to the oath -- THIS is the one who was asked
+# =====================================================================================
+
+restor_oath_accepted_effect = {
+	save_scope_as = restor_recruit
+	restor_swear_in_effect = { RANK = 0 }
+	if = {
+		limit = { has_character_flag = restor_sounded_sympathetic }
+		remove_character_flag = restor_sounded_sympathetic
+	}
+	add_opinion = {
+		target = scope:restor_recruiter
+		modifier = restor_brought_me_in_opinion
+	}
+	if = {
+		limit = { is_ai = no }
+		trigger_event = { id = restor.0115 days = 2 }
+	}
+	scope:restor_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = restor.0111 days = { 3 8 } }
+		}
+		else = {
+			restor_recruiter_reward_effect = yes
+		}
+	}
+	restor_support_refresh_effect = yes
+}
+
+restor_oath_refused_effect = {
+	save_scope_as = restor_recruit
+	restor_recruit_turned_away_effect = yes
+	scope:restor_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = restor.0112 days = { 3 8 } }
+		}
+		else = {
+			restor_exposure_gain_effect = { VALUE = 15 }
+			# Half of the AI buy the silence when they can afford to, as a player can in restor.0112.
+			if = {
+				limit = { gold >= medium_gold_value }
+				random = {
+					chance = 50
+					pay_short_term_gold = {
+						target = scope:restor_recruit
+						gold = medium_gold_value
+					}
+					restor_exposure_loss_effect = { VALUE = 10 }
+				}
+			}
+		}
+	}
+}
+
+restor_oath_reported_effect = {
+	save_scope_as = restor_recruit
+	restor_recruit_turned_away_effect = yes
+	scope:restor_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = restor.0113 days = { 3 8 } }
+		}
+		else = {
+			# Enough to cross the "highly suspect" line from nothing: the core ladder tells the usurper.
+			restor_exposure_gain_effect = { VALUE = 25 }
+		}
+	}
+}
+
+# What a refusal leaves on the one who refused, either way.
+restor_recruit_turned_away_effect = {
+	if = {
+		limit = { has_character_flag = restor_sounded_sympathetic }
+		remove_character_flag = restor_sounded_sympathetic
+	}
+	add_character_flag = {
+		flag = restor_refused_recently
+		years = 5
+	}
+	add_opinion = {
+		target = scope:restor_recruiter
+		modifier = restor_refused_the_oath_opinion
+	}
+}
+
+# =====================================================================================
+#  The recruiter's reward -- THIS is the recruiter
+# =====================================================================================
+
+restor_recruiter_reward_effect = {
+	restor_favour_gain_effect = { VALUE = 25 }
+	add_trait_xp = {
+		trait = restor_member
+		track = restor_rank
+		value = 8
+	}
+	restor_exposure_gain_effect = { VALUE = 5 }
+	# A count of everyone this member has sworn in, for the recruit charge and anything else that
+	# wants to know. Read with has_variable first.
+	hidden_effect = {
+		if = {
+			limit = { NOT = { has_variable = restor_recruits } }
+			set_variable = { name = restor_recruits value = 0 }
+		}
+		change_variable = { name = restor_recruits add = 1 }
+	}
+}
+
+# =====================================================================================
+#  Finding someone to ask -- scope:restor_recruiter saved
+# =====================================================================================
+
+# Fills the temporary list restor_candidates. Rulers holding the old land or of the old people
+# within reach, and every adult of the house wherever they are.
+restor_recruit_gather_candidates_effect = {
+	every_ruler = {
+		limit = { restor_recruit_candidate_trigger = yes }
+		add_to_temporary_list = restor_candidates
+	}
+	if = {
+		limit = { exists = global_var:restor_house }
+		global_var:restor_house = {
+			every_house_member = {
+				limit = {
+					is_alive = yes
+					NOT = { is_in_list = restor_candidates }
+					restor_recruit_candidate_trigger = yes
+				}
+				add_to_temporary_list = restor_candidates
+			}
+		}
+	}
+}
+
+# An AI member's approach, from the yearly pulse. THIS is the recruiter. Picks one candidate,
+# weighted toward the likeliest, and takes the next step with them: the oath to someone already
+# known to be sympathetic, else a sounding-out. A player candidate gets the events; an AI one the
+# roll. Either way the recruiter waits three years before trying again.
+restor_recruit_ai_approach_effect = {
+	save_scope_as = restor_recruiter
+	restor_recruit_gather_candidates_effect = yes
+	random_in_list = {
+		list = restor_candidates
+		weight = {
+			base = 1
+			modifier = { add = restor_recruit_candidate_value }
+		}
+		save_scope_as = restor_recruit
+		scope:restor_recruiter = {
+			add_character_flag = {
+				flag = restor_recruited_lately
+				years = 3
+			}
+		}
+		if = {
+			limit = { has_character_flag = restor_sounded_sympathetic }
+			restor_offer_oath_start_effect = yes
+		}
+		else = {
+			restor_sound_out_start_effect = yes
+		}
+	}
+}
+
+# The restored realm: THIS joins the order openly. No oath in the dark, no exposure.
+restor_recruit_join_order_effect = {
+	restor_swear_in_effect = { RANK = 0 }
+	if = {
+		limit = { exists = global_var:restor_crown.holder }
+		add_opinion = {
+			target = global_var:restor_crown.holder
+			modifier = restor_brought_me_in_opinion
+		}
+	}
+}

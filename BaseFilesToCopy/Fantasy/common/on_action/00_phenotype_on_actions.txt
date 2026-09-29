@@ -53,6 +53,8 @@ gen_phenotype_game_start_on_action = {
 			gen_sanitize_phenotype_effect = yes
 			gen_reconcile_phenotype_with_genes_effect = yes
 			gen_assign_phenotype_effect = yes
+			gen_horns_upkeep_effect = yes
+			gen_tusks_game_start_effect = yes
 		}
 	}
 }
@@ -106,5 +108,12 @@ gen_phenotype_assign_on_action = {
 		gen_reconcile_phenotype_with_genes_effect = yes
 
 		gen_assign_phenotype_effect = yes
+
+		# After the race is settled: no Hornborn among the horned people, and a fallback horn
+		# style for anyone owed horns (00_horn_effects.txt).
+		gen_horns_upkeep_effect = yes
+
+		# A bad wound may snap a tusk (00_tusk_effects.txt).
+		gen_tusks_upkeep_effect = yes
 	}
 }

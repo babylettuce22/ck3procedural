@@ -8,7 +8,8 @@ namespace Ck3MapGen.AppGUI;
 /// The chronicle beside the map while a Quick world's history runs: one line per headline, newest
 /// at the top, on a card. The year stands in a gutter on the first line of each year only, so a
 /// busy year reads as one block; a swatch in the realm's map colour ties each line to the map.
-/// A new line glows briefly as it arrives.
+/// A new line glows briefly as it arrives. Hovering a line with a place says so
+/// (<see cref="HoverChanged"/>), so the map can light up where it happened.
 ///
 /// Painted as one control, like <see cref="ShowcaseFeed"/>: lines are text, not buttons, and one
 /// surface scrolls and animates without flicker. Line heights are measured once per width.
@@ -28,7 +29,15 @@ internal sealed class ChronicleFeed : Control
         public float Glow { get; set; } = 1f;
         public int MeasuredFor { get; set; } = -1;
         public int Height { get; set; }
+
+        /// <summary>Where the entry was last painted, for finding the one under the mouse.</summary>
+        public int Top { get; set; } = int.MinValue;
     }
+
+    /// <summary>The line under the mouse, or null when it leaves them — so the map can show where it happened.</summary>
+    public event Action<ChronicleLine?>? HoverChanged;
+
+    private Entry? _hover;
 
     private readonly List<Entry> _entries = [];          // newest first
     private readonly System.Windows.Forms.Timer _animate = new() { Interval = 30 };
@@ -58,7 +67,28 @@ internal sealed class ChronicleFeed : Control
         _animate.Stop();
         _entries.Clear();
         _scroll = 0;
+        SetHover(null);
         Invalidate();
+    }
+
+    private void SetHover(Entry? entry)
+    {
+        if (ReferenceEquals(entry, _hover)) return;
+        _hover = entry;
+        Invalidate();
+        HoverChanged?.Invoke(entry?.Line);
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        SetHover(_entries.FirstOrDefault(x => e.Y >= x.Top && e.Y < x.Top + x.Height && x.Line.Mark is not null));
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        SetHover(null);
     }
 
     /// <summary>Lines that just happened, oldest first. The view stays put when scrolled back.</summary>
@@ -168,6 +198,7 @@ internal sealed class ChronicleFeed : Control
                 bool firstOfYear = entry.Line.Year != lastYear;
                 lastYear = entry.Line.Year;
 
+                entry.Top = y;
                 if (y + h > 0 && y < Height) DrawEntry(g, entry, y, h, firstOfYear);
                 y += h;
             }
@@ -180,6 +211,11 @@ internal sealed class ChronicleFeed : Control
 
     private void DrawEntry(Graphics g, Entry entry, int y, int h, bool firstOfYear)
     {
+        if (ReferenceEquals(entry, _hover))
+        {
+            using var hover = new SolidBrush(Theme.SurfaceHigh);
+            g.FillRectangle(hover, 1, y, Width - 2, h);
+        }
         if (entry.Glow > 0f)
         {
             using var glow = new SolidBrush(Color.FromArgb((int)(entry.Glow * 255), Theme.AccentSoft));

@@ -1,0 +1,60 @@
+﻿# The usurper's decision: turn the realm over looking for the Sworn. See restor_root_out_effect.
+#
+# Shown only to the usurper (a non-member who knows the society exists: restor.0011 told them). Every
+# member inside the realm gains 10 exposure and is warned (restor.0312); the most exposed of them is
+# named to the usurper (restor.0310). If nobody sworn is inside the realm, a toast says so.
+
+restor_root_out_the_sworn_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_prison.dds"
+	}
+	ai_check_interval = 36
+
+	desc = restor_root_out_the_sworn_decision_desc
+	selection_tooltip = restor_root_out_the_sworn_decision_tooltip
+
+	cooldown = { years = 5 }
+
+	is_shown = {
+		restor_underground_trigger = yes
+		restor_is_usurper_trigger = yes
+		NOT = { has_trait = restor_member }
+	}
+
+	is_valid_showing_failures_only = {
+		is_adult = yes
+		is_imprisoned = no
+	}
+
+	cost = {
+		gold = 150
+		prestige = 100
+	}
+
+	effect = {
+		custom_tooltip = restor_root_out_the_sworn_effect_tt
+		hidden_effect = { restor_root_out_effect = yes }
+	}
+
+	ai_potential = {
+		restor_is_usurper_trigger = yes
+		gold >= 300
+	}
+
+	ai_will_do = {
+		base = 5
+		modifier = { add = 20 has_trait = paranoid }
+		modifier = { add = 10 has_trait = wrathful }
+		modifier = {
+			add = 15
+			exists = global_var:restor_support
+			global_var:restor_support >= 25
+		}
+		modifier = {
+			add = 25
+			exists = global_var:restor_support
+			global_var:restor_support >= 50
+		}
+		modifier = { add = -5 has_trait = trusting }
+	}
+}

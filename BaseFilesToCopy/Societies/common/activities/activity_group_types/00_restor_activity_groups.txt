@@ -1,0 +1,15 @@
+﻿# The Restorationists' own foldout in the activity planner: the Gathering and the Errand.
+#
+# A group is plain script (see the prototype's 00_society_activity_groups.txt for the long note):
+# one key here, `activity_group_type = restor_group` on each activity, and the loc key
+# activity_group_type_restor_group. The foldout hides itself when it is empty, so a character who
+# is not sworn -- who fails both activities' is_shown -- never sees the header at all.
+#
+# 150 sits in the empty band between the engine-filled groups (200+) and vanilla's generic list
+# (10), so the Sworn see their business above the hunts and feasts without it displacing an
+# invitation.
+
+restor_group = {
+	sort_order = 150
+	gui_tags = { big_button }
+}

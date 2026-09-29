@@ -286,7 +286,7 @@ public static class Retinues
             ["Runners", "Raiders", "Javelins", "Hunters"],
             "They never form a line, and there is nothing to break.",
             ["skirmishers"],
-            [RaceArchetype.Orc, RaceArchetype.WoodElf, RaceArchetype.Gnome]),
+            [RaceArchetype.Orc, RaceArchetype.WoodElf, RaceArchetype.Gnome, RaceArchetype.Hornkin]),
 
         new(Doctrine.HorseArchery, "archer_cavalry", (1.1, 0.8, 1.3, 1.0),
             [TerrainClass.Steppe, TerrainClass.Drylands, TerrainClass.Plains],
@@ -306,7 +306,7 @@ public static class Retinues
             ["Horse", "Riders", "Lances", "Scouts"],
             "Light horse for the pursuit, the raid and the road.",
             ["nomadic_riders", "light_cavalry"],
-            []),
+            [RaceArchetype.Hornkin]),
 
         new(Doctrine.Lancers, "heavy_cavalry", (1.1, 1.2, 0.85, 0.8),
             [TerrainClass.Farmlands, TerrainClass.Plains, TerrainClass.Floodplains],

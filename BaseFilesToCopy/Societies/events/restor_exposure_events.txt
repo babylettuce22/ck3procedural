@@ -1,0 +1,2001 @@
+﻿# The Restorationists: exposure, and the usurper's side. restor.0300-0399.
+#
+# The member's side
+#   0300   exposure crossed 15: under suspicion, a findable secret now exists
+#   0301   the member's secret was exposed: everyone knows
+#   0302   exposure crossed 25: highly suspect, the usurper is being told
+#   0307   the usurper offers a pardon for names
+#   0312   the usurper is rooting out the Sworn in their realm
+#   0330-0333  yearly, exposure 10+: a servant, a watched meeting place, a spouse, a moneylender
+#
+# The usurper's side
+#   0303   a name is suspected (a member crossed 25)
+#   0305   the spymaster found a member's secret
+#   0306   a member's secret was exposed
+#   0310   Root Out the Sworn names the most exposed member of the realm
+#   0320-0324  yearly: an informer, the old songs, a silent priest, intercepted letters, a toast
+#
+# "Inside the usurper's realm" is `any_liege_or_above = usurper`, or a guest at the usurper's own
+# court. That is also where secret_restor_member is criminal, so it is where arrest makes sense.
+
+namespace = restor
+
+# =====================================================================================
+#  restor.0300 -- under suspicion
+# =====================================================================================
+
+restor.0300 = {
+	type = character_event
+	title = restor.0300.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_usurper
+					NOT = { scope:restor_usurper = root }
+				}
+				desc = restor.0300.desc
+			}
+			desc = restor.0300.desc_nousurper
+		}
+	}
+	theme = intrigue
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_usurper
+			NOT = { scope:restor_usurper = root }
+		}
+		character = scope:restor_usurper
+		animation = scheme
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	# Lie low.
+	option = {
+		name = restor.0300.a
+		if = {
+			limit = {
+				exists = scope:restor_usurper
+				NOT = { scope:restor_usurper = root }
+			}
+			custom_tooltip = restor.0300.a.tt
+		}
+		else = { custom_tooltip = restor.0300.a.tt_nousurper }
+		ai_chance = { base = 70 }
+	}
+
+	# Burn the letters.
+	option = {
+		name = restor.0300.b
+		restor_exposure_loss_effect = { VALUE = 4 }
+		restor_favour_spend_effect = { VALUE = 10 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0302 -- highly suspect
+# =====================================================================================
+
+restor.0302 = {
+	type = character_event
+	title = restor.0302.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_usurper
+					NOT = { scope:restor_usurper = root }
+				}
+				desc = restor.0302.desc
+			}
+			desc = restor.0302.desc_nousurper
+		}
+	}
+	theme = intrigue
+	override_background = { reference = alley_night }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_usurper
+			NOT = { scope:restor_usurper = root }
+		}
+		character = scope:restor_usurper
+		animation = scheme
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	# Stop writing.
+	option = {
+		name = restor.0302.a
+		custom_tooltip = restor.0302.a.tt
+		ai_chance = { base = 50 }
+	}
+
+	# Pay the talkers.
+	option = {
+		name = restor.0302.b
+		trigger = { gold >= 50 }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = 50
+		restor_exposure_loss_effect = { VALUE = 6 }
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = paranoid }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Get out.
+	option = {
+		name = restor.0302.c
+		trigger = {
+			NOT = { restor_is_pretender_trigger = yes }
+			NOT = { restor_is_keeper_trigger = yes }
+		}
+		custom_tooltip = restor.0302.c.tt
+		hidden_effect = { restor_leave_effect = yes }
+		if = {
+			limit = { exists = scope:restor_keeper }
+			scope:restor_keeper = {
+				add_opinion = {
+					target = root
+					modifier = restor_failed_charge_opinion
+				}
+			}
+		}
+		ai_chance = {
+			base = 10
+			modifier = { add = 25 has_trait = craven }
+			modifier = { add = -10 restor_rank_at_least_trigger = { RANK = 50 } }
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0301 -- the member's secret is exposed
+# =====================================================================================
+
+restor.0301 = {
+	type = character_event
+	title = restor.0301.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_usurper
+					NOT = { scope:restor_usurper = root }
+					any_liege_or_above = { this = scope:restor_usurper }
+				}
+				desc = restor.0301.desc_inside
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_usurper
+					NOT = { scope:restor_usurper = root }
+				}
+				desc = restor.0301.desc_outside
+			}
+			desc = restor.0301.desc_nousurper
+		}
+	}
+	theme = secret
+	override_background = { reference = throne_room }
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_usurper
+			NOT = { scope:restor_usurper = root }
+		}
+		character = scope:restor_usurper
+		animation = anger
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_refuge }
+		character = scope:restor_refuge
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		# A sworn lord outside the usurper's reach, for a courtier to run to.
+		if = {
+			limit = {
+				is_ruler = no
+				is_imprisoned = no
+			}
+			random_in_global_list = {
+				variable = restor_roster
+				limit = {
+					is_alive = yes
+					is_landed = yes
+					is_imprisoned = no
+					NOT = { this = root }
+					NOT = { restor_is_usurper_trigger = yes }
+					OR = {
+						NOT = { exists = global_var:restor_usurper }
+						NOT = { any_liege_or_above = { this = global_var:restor_usurper } }
+					}
+				}
+				save_scope_as = restor_refuge
+			}
+		}
+	}
+
+	# Deny it.
+	option = {
+		name = restor.0301.a
+		duel = {
+			skill = intrigue
+			value = decent_skill_rating
+			45 = {
+				desc = restor.0301.a.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -40
+				}
+				modifier = { add = 10 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.0301.a.success
+					left_icon = root
+					add_prestige = minor_prestige_loss
+				}
+				restor_exposure_loss_effect = { VALUE = 5 }
+			}
+			55 = {
+				desc = restor.0301.a.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -50
+				}
+				modifier = { add = 10 has_trait = honest }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0301.a.failure
+					left_icon = root
+					add_prestige = medium_prestige_loss
+				}
+				restor_exposure_gain_effect = { VALUE = 5 }
+			}
+		}
+		stress_impact = { honest = minor_stress_impact_gain }
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = deceitful }
+			modifier = { add = -20 has_trait = honest }
+		}
+	}
+
+	# Run to a sworn court.
+	option = {
+		name = restor.0301.b
+		trigger = { exists = scope:restor_refuge }
+		scope:restor_refuge = { add_courtier = root }
+		restor_exposure_loss_effect = { VALUE = 5 }
+		custom_tooltip = restor.0301.b.tt
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = craven }
+		}
+	}
+
+	# Confess, and name names.
+	option = {
+		name = restor.0301.c
+		trigger = {
+			exists = scope:restor_usurper
+			NOT = { scope:restor_usurper = root }
+			NOT = { restor_is_pretender_trigger = yes }
+			NOT = { restor_is_keeper_trigger = yes }
+		}
+		restor_name_others_effect = yes
+		custom_tooltip = restor.0301.c.tt
+		hidden_effect = { restor_leave_effect = yes }
+		scope:restor_usurper = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 20
+			}
+			hidden_effect = {
+				if = {
+					limit = { is_ai = no }
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = restor_confessed_to_you_toast
+						left_icon = root
+					}
+				}
+			}
+		}
+		if = {
+			limit = {
+				exists = scope:restor_keeper
+				NOT = { scope:restor_keeper = root }
+			}
+			scope:restor_keeper = {
+				add_opinion = {
+					target = root
+					modifier = restor_betrayed_the_cause_opinion
+				}
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			just = minor_stress_impact_gain
+			brave = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 15
+			modifier = { add = 30 has_trait = craven }
+			modifier = { add = 15 has_trait = deceitful }
+			modifier = { add = -15 restor_rank_at_least_trigger = { RANK = 50 } }
+			modifier = { add = -10 has_trait = brave }
+		}
+	}
+
+	# Own it.
+	option = {
+		name = restor.0301.d
+		add_prestige = medium_prestige_gain
+		restor_favour_gain_effect = { VALUE = 20 }
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 5
+		}
+		if = {
+			limit = {
+				exists = scope:restor_usurper
+				NOT = { scope:restor_usurper = root }
+				any_liege_or_above = { this = scope:restor_usurper }
+			}
+			custom_tooltip = restor.0301.d.tt_inside
+		}
+		stress_impact = { craven = medium_stress_impact_gain }
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = 20 has_trait = zealous }
+			modifier = { add = 15 restor_rank_at_least_trigger = { RANK = 50 } }
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0303 -- the usurper hears a name
+# =====================================================================================
+
+restor.0303 = {
+	type = character_event
+	title = restor.0303.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:restor_suspect = {
+						OR = {
+							any_liege_or_above = { this = root }
+							is_foreign_court_guest_of = root
+							is_pool_guest_of = root
+						}
+					}
+				}
+				desc = restor.0303.desc_inside
+			}
+			desc = restor.0303.desc_outside
+		}
+	}
+	theme = intrigue
+	override_background = { reference = council_chamber }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:restor_suspect
+		animation = worry
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:restor_suspect
+		scope:restor_suspect = {
+			is_alive = yes
+			has_trait = restor_member
+		}
+		NOT = { has_character_flag = restor_rooting_out }
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	# Watch them.
+	option = {
+		name = restor.0303.a
+		restor_their_exposure_gain_effect = { WHO = scope:restor_suspect VALUE = 5 }
+		ai_chance = { base = 40 }
+	}
+
+	# Summon them and ask.
+	option = {
+		name = restor.0303.b
+		trigger = {
+			is_imprisoned = no
+			scope:restor_suspect = {
+				is_imprisoned = no
+				OR = {
+					any_liege_or_above = { this = root }
+					is_foreign_court_guest_of = root
+					is_pool_guest_of = root
+				}
+			}
+		}
+		restor_question_suspect_effect = { SUSPECT = scope:restor_suspect }
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 intrigue >= 12 }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Ignore it.
+	option = {
+		name = restor.0303.c
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = trusting }
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0305 -- the spymaster finds a secret
+# =====================================================================================
+
+restor.0305 = {
+	type = character_event
+	title = restor.0305.t
+	desc = restor.0305.desc
+	theme = intrigue
+	override_background = { reference = study }
+	left_portrait = {
+		character = root
+		animation = schadenfreude
+	}
+	right_portrait = {
+		character = scope:restor_found_member
+		animation = worry
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_spymaster }
+		character = scope:restor_spymaster
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:restor_found_member
+		scope:restor_found_member = {
+			is_alive = yes
+			has_trait = restor_member
+			any_secret = { secret_type = secret_restor_member }
+		}
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		cp:councillor_spymaster ?= { save_scope_as = restor_spymaster }
+		restor_reveal_secret_to_root_effect = { WHO = scope:restor_found_member }
+		scope:restor_found_member = {
+			random_secret = {
+				limit = { secret_type = secret_restor_member }
+				save_scope_as = restor_found_secret
+			}
+		}
+	}
+
+	# Tell everyone.
+	option = {
+		name = restor.0305.a
+		trigger = { exists = scope:restor_found_secret }
+		scope:restor_found_secret = { expose_secret = root }
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = vengeful }
+			modifier = { add = 15 has_trait = wrathful }
+		}
+	}
+
+	# Keep it as leverage.
+	option = {
+		name = restor.0305.b
+		if = {
+			limit = {
+				exists = scope:restor_found_secret
+				scope:restor_found_secret = { is_criminal_for = scope:restor_found_member }
+				can_add_hook = {
+					target = scope:restor_found_member
+					type = strong_blackmail_hook
+				}
+			}
+			add_hook = {
+				type = strong_blackmail_hook
+				target = scope:restor_found_member
+				secret = scope:restor_found_secret
+			}
+		}
+		else_if = {
+			limit = {
+				can_add_hook = {
+					target = scope:restor_found_member
+					type = suspicious_activity_hook
+				}
+			}
+			add_hook = {
+				type = suspicious_activity_hook
+				target = scope:restor_found_member
+			}
+		}
+		else = {
+			custom_tooltip = restor.0305.b.nohook_tt
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = deceitful }
+			modifier = { add = 15 has_trait = patient }
+		}
+	}
+
+	# Offer a pardon for names.
+	option = {
+		name = restor.0305.c
+		trigger = {
+			scope:restor_found_member = {
+				NOT = { restor_is_pretender_trigger = yes }
+				NOT = { restor_is_keeper_trigger = yes }
+			}
+		}
+		save_scope_as = restor_turner
+		custom_tooltip = restor.0305.c.tt
+		scope:restor_found_member = { trigger_event = { id = restor.0307 days = 3 } }
+		ai_chance = {
+			base = 25
+			modifier = { add = 20 diplomacy >= 12 }
+		}
+	}
+
+	# Watch them.
+	option = {
+		name = restor.0305.d
+		restor_their_exposure_gain_effect = { WHO = scope:restor_found_member VALUE = 5 }
+		ai_chance = { base = 10 }
+	}
+}
+
+# =====================================================================================
+#  restor.0306 -- the usurper, when a member is exposed
+# =====================================================================================
+
+restor.0306 = {
+	type = character_event
+	title = restor.0306.t
+	desc = {
+		# Who they are, then what the crown means to ROOT: worn, or only the old seat's land.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_crown
+					has_title = scope:restor_crown
+				}
+				desc = restor.0306.desc_crowned
+			}
+			desc = restor.0306.desc_uncrowned
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:restor_exposed_member = { is_imprisoned_by = root } }
+				desc = restor.0306.desc_prisoner
+			}
+			triggered_desc = {
+				trigger = {
+					scope:restor_exposed_member = {
+						OR = {
+							any_liege_or_above = { this = root }
+							is_foreign_court_guest_of = root
+							is_pool_guest_of = root
+						}
+					}
+				}
+				desc = restor.0306.desc_inside
+			}
+			desc = restor.0306.desc_outside
+		}
+	}
+	theme = dread
+	override_background = { reference = throne_room }
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:restor_exposed_member
+		animation = fear
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:restor_exposed_member
+		scope:restor_exposed_member = {
+			is_alive = yes
+			has_trait = restor_member
+		}
+		NOT = { scope:restor_exposed_member = root }
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	# Arrest.
+	option = {
+		name = restor.0306.a
+		trigger = {
+			is_imprisoned = no
+			scope:restor_exposed_member = {
+				is_imprisoned = no
+				OR = {
+					any_liege_or_above = { this = root }
+					is_foreign_court_guest_of = root
+					is_pool_guest_of = root
+				}
+			}
+		}
+		restor_arrest_member_effect = { WHO = scope:restor_exposed_member }
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = wrathful }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Outlaw.
+	option = {
+		name = restor.0306.b
+		add_opinion = {
+			target = scope:restor_exposed_member
+			modifier = coup_plotter_opinion
+		}
+		custom_tooltip = restor.0306.b.tt
+		scope:restor_exposed_member = { add_prestige = major_prestige_loss }
+		ai_chance = { base = 30 }
+	}
+
+	# Pardon, in public.
+	option = {
+		name = restor.0306.c
+		add_prestige = minor_prestige_gain
+		scope:restor_exposed_member = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 30
+			}
+		}
+		random_list = {
+			45 = {
+				desc = restor.0306.c.forswears
+				modifier = {
+					add = 20
+					scope:restor_exposed_member = { has_trait = craven }
+				}
+				modifier = {
+					add = 15
+					scope:restor_exposed_member = { has_trait = honest }
+				}
+				modifier = {
+					add = -20
+					scope:restor_exposed_member = { restor_rank_at_least_trigger = { RANK = 50 } }
+				}
+				# The heir and the Keeper are the cause; they cannot walk away from it.
+				modifier = {
+					factor = 0
+					scope:restor_exposed_member = {
+						OR = {
+							restor_is_pretender_trigger = yes
+							restor_is_keeper_trigger = yes
+						}
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0306.c.forswears
+					left_icon = scope:restor_exposed_member
+				}
+				scope:restor_exposed_member = {
+					hidden_effect = {
+						if = {
+							limit = { is_ai = no }
+							send_interface_toast = {
+								type = event_toast_effect_neutral
+								title = restor.0306.c.forswears
+								left_icon = root
+							}
+						}
+					}
+					custom_tooltip = restor.0306.c.forswears_tt
+					hidden_effect = { restor_leave_effect = yes }
+				}
+			}
+			55 = {
+				desc = restor.0306.c.keeps
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0306.c.keeps
+					left_icon = scope:restor_exposed_member
+				}
+			}
+		}
+		ai_chance = {
+			base = 15
+			modifier = { add = 25 has_trait = forgiving }
+			modifier = { add = 15 has_trait = compassionate }
+		}
+	}
+
+	# Make an example.
+	option = {
+		name = restor.0306.d
+		add_dread = medium_dread_gain
+		if = {
+			limit = { scope:restor_exposed_member = { is_imprisoned_by = root } }
+			execute_prisoner_effect = {
+				VICTIM = scope:restor_exposed_member
+				EXECUTIONER = root
+			}
+		}
+		else = {
+			add_opinion = {
+				target = scope:restor_exposed_member
+				modifier = coup_plotter_opinion
+			}
+			scope:restor_exposed_member = { add_prestige = major_prestige_loss }
+		}
+		save_scope_as = restor_hunter
+		custom_tooltip = restor.0306.d.tt
+		hidden_effect = {
+			every_in_global_list = {
+				variable = restor_roster
+				limit = {
+					is_alive = yes
+					has_trait = restor_member
+					NOT = { this = scope:restor_hunter }
+					NOT = { this = scope:restor_exposed_member }
+					OR = {
+						any_liege_or_above = { this = scope:restor_hunter }
+						is_foreign_court_guest_of = scope:restor_hunter
+						is_pool_guest_of = scope:restor_hunter
+					}
+				}
+				restor_exposure_gain_effect = { VALUE = 5 }
+			}
+		}
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			forgiving = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 15
+			modifier = { add = 30 has_trait = sadistic }
+			modifier = { add = 20 has_trait = wrathful }
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0307 -- the pardon for names
+# =====================================================================================
+
+restor.0307 = {
+	type = character_event
+	title = restor.0307.t
+	desc = restor.0307.desc
+	theme = intrigue
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:restor_turner
+		animation = scheme
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:restor_turner
+		scope:restor_turner = { is_alive = yes }
+		NOT = { restor_is_pretender_trigger = yes }
+		NOT = { restor_is_keeper_trigger = yes }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		save_scope_as = restor_pardoned
+	}
+
+	# Take the pardon.
+	option = {
+		name = restor.0307.a
+		restor_name_others_effect = yes
+		custom_tooltip = restor.0307.a.tt
+		hidden_effect = { restor_leave_effect = yes }
+		if = {
+			limit = {
+				exists = scope:restor_keeper
+				NOT = { scope:restor_keeper = root }
+			}
+			scope:restor_keeper = {
+				add_opinion = {
+					target = root
+					modifier = restor_betrayed_the_cause_opinion
+				}
+			}
+		}
+		scope:restor_turner = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 20
+			}
+			hidden_effect = {
+				if = {
+					limit = { is_ai = no }
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = restor.0307.a.toast
+						left_icon = root
+					}
+				}
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			brave = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			modifier = { add = 30 has_trait = craven }
+			modifier = { add = 15 has_trait = deceitful }
+			modifier = { add = -20 has_trait = honest }
+			modifier = { add = -10 restor_rank_at_least_trigger = { RANK = 25 } }
+			modifier = { add = -15 restor_rank_at_least_trigger = { RANK = 50 } }
+		}
+	}
+
+	# Refuse.
+	option = {
+		name = restor.0307.b
+		scope:restor_turner = {
+			add_opinion = {
+				target = root
+				modifier = treachery_opinion
+			}
+			hidden_effect = {
+				if = {
+					limit = { is_ai = no }
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = restor.0307.b.toast
+						left_icon = root
+					}
+				}
+			}
+		}
+		restor_exposure_gain_effect = { VALUE = 5 }
+		restor_favour_gain_effect = { VALUE = 15 }
+		ai_chance = {
+			base = 50
+			modifier = { add = 20 has_trait = brave }
+			modifier = { add = 20 has_trait = zealous }
+		}
+	}
+}
+
+# =====================================================================================
+#  restor.0310 -- Root Out the Sworn names someone
+# =====================================================================================
+
+restor.0310 = {
+	type = character_event
+	title = restor.0310.t
+	desc = restor.0310.desc
+	theme = intrigue
+	override_background = { reference = dungeon }
+	left_portrait = {
+		character = root
+		animation = schadenfreude
+	}
+	right_portrait = {
+		character = scope:restor_named
+		animation = fear
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:restor_named
+		scope:restor_named = {
+			is_alive = yes
+			has_trait = restor_member
+		}
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_reveal_secret_to_root_effect = { WHO = scope:restor_named }
+		scope:restor_named = {
+			random_secret = {
+				limit = { secret_type = secret_restor_member }
+				save_scope_as = restor_named_secret
+			}
+		}
+	}
+
+	# Question them.
+	option = {
+		name = restor.0310.a
+		trigger = {
+			is_imprisoned = no
+			scope:restor_named = { is_imprisoned = no }
+		}
+		restor_question_suspect_effect = { SUSPECT = scope:restor_named }
+		ai_chance = { base = 40 }
+	}
+
+	# Expose them.
+	option = {
+		name = restor.0310.b
+		trigger = { exists = scope:restor_named_secret }
+		scope:restor_named_secret = { expose_secret = root }
+		ai_chance = { base = 30 }
+	}
+
+	# Offer a pardon for names.
+	option = {
+		name = restor.0310.c
+		trigger = {
+			scope:restor_named = {
+				NOT = { restor_is_pretender_trigger = yes }
+				NOT = { restor_is_keeper_trigger = yes }
+			}
+		}
+		save_scope_as = restor_turner
+		custom_tooltip = restor.0305.c.tt_named
+		scope:restor_named = { trigger_event = { id = restor.0307 days = 3 } }
+		ai_chance = { base = 20 }
+	}
+
+	# Watch them.
+	option = {
+		name = restor.0310.d
+		restor_their_exposure_gain_effect = { WHO = scope:restor_named VALUE = 5 }
+		ai_chance = { base = 10 }
+	}
+}
+
+# =====================================================================================
+#  restor.0312 -- to each member caught in the search
+# =====================================================================================
+
+restor.0312 = {
+	type = character_event
+	title = restor.0312.t
+	desc = restor.0312.desc
+	theme = intrigue
+	override_background = { reference = courtyard }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_hunter }
+		character = scope:restor_hunter
+		animation = anger
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:restor_hunter
+	}
+	immediate = { restor_save_scopes_effect = yes }
+
+	# Go to ground.
+	option = {
+		name = restor.0312.a
+		restor_exposure_loss_effect = { VALUE = 4 }
+		restor_favour_spend_effect = { VALUE = 10 }
+		ai_chance = { base = 50 }
+	}
+
+	# Carry on.
+	option = {
+		name = restor.0312.b
+		ai_chance = { base = 50 }
+	}
+}
+
+# =====================================================================================
+#  The usurper's year -- restor.0320-0324
+# =====================================================================================
+
+# The Informer: a man who says he can sell you names.
+restor.0320 = {
+	type = character_event
+	title = restor.0320.t
+	desc = restor.0320.desc
+	theme = intrigue
+	override_background = { reference = tavern }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_spymaster }
+		character = scope:restor_spymaster
+		animation = scheme
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		restor_is_usurper_trigger = yes
+		NOT = { has_character_flag = restor_seen_0320 }
+		any_in_global_list = {
+			variable = restor_roster
+			is_alive = yes
+			NOT = { this = root }
+		}
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_seen_0320 years = 6 }
+		cp:councillor_spymaster ?= { save_scope_as = restor_spymaster }
+		restor_pick_mark_anywhere_effect = yes
+	}
+
+	# Pay him.
+	option = {
+		name = restor.0320.a
+		trigger = {
+			gold >= 50
+			exists = scope:restor_mark
+		}
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = 50
+		random_list = {
+			65 = {
+				desc = restor.0320.a.success
+				modifier = {
+					add = 15
+					exists = scope:restor_spymaster
+					scope:restor_spymaster = { intrigue >= 12 }
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0320.a.success
+					left_icon = scope:restor_mark
+				}
+				restor_their_exposure_gain_effect = { WHO = scope:restor_mark VALUE = 10 }
+				custom_tooltip = restor_secret_revealed_tt
+				hidden_effect = { restor_reveal_secret_to_root_effect = { WHO = scope:restor_mark } }
+			}
+			35 = {
+				desc = restor.0320.a.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0320.a.failure
+					left_icon = root
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = paranoid }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Have him followed.
+	option = {
+		name = restor.0320.b
+		trigger = { exists = scope:restor_mark }
+		random_list = {
+			40 = {
+				desc = restor.0320.b.success
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0320.b.success
+					left_icon = scope:restor_mark
+				}
+				restor_their_exposure_gain_effect = { WHO = scope:restor_mark VALUE = 6 }
+			}
+			60 = {
+				desc = restor.0320.b.failure
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.0320.b.failure
+					left_icon = root
+				}
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# Throw him out.
+	option = {
+		name = restor.0320.c
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = trusting }
+		}
+	}
+}
+
+# The Old Songs: the old kingdom's songs sung at a feast in the old seat.
+restor.0321 = {
+	type = character_event
+	title = restor.0321.t
+	desc = restor.0321.desc
+	theme = feast_activity
+	override_background = { reference = feast }
+	left_portrait = {
+		character = root
+		animation = disapproval
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:restor_seat_holder }
+		character = scope:restor_seat_holder
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		restor_is_usurper_trigger = yes
+		NOT = { has_character_flag = restor_seen_0321 }
+		exists = global_var:restor_seat
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_seen_0321 years = 6 }
+		global_var:restor_seat = {
+			save_scope_as = restor_seat_county
+			holder ?= { save_scope_as = restor_seat_holder }
+		}
+		restor_pick_mark_in_realm_effect = yes
+	}
+
+	# Fine the hall.
+	option = {
+		name = restor.0321.a
+		add_gold = 25
+		add_dread = 5
+		scope:restor_seat_county = {
+			if = {
+				limit = { has_county_modifier = restor_county_stirred }
+				remove_county_modifier = restor_county_stirred
+			}
+		}
+		custom_tooltip = restor.0321.a.tt
+		ai_chance = { base = 40 }
+	}
+
+	# Let them sing.
+	option = {
+		name = restor.0321.b
+		scope:restor_seat_county = {
+			add_county_modifier = {
+				modifier = restor_county_stirred
+				years = 5
+			}
+		}
+		custom_tooltip = restor.0321.b.tt
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = content }
+		}
+	}
+
+	# Find out who paid.
+	option = {
+		name = restor.0321.c
+		trigger = { exists = scope:restor_mark }
+		random_list = {
+			50 = {
+				desc = restor.0321.c.success
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0321.c.success
+					left_icon = scope:restor_mark
+				}
+				restor_their_exposure_gain_effect = { WHO = scope:restor_mark VALUE = 8 }
+			}
+			50 = {
+				desc = restor.0321.c.failure
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.0321.c.failure
+					left_icon = root
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+}
+
+# The Priest's Silence: a priest who leaves the usurper's name out of the prayers.
+restor.0322 = {
+	type = character_event
+	title = restor.0322.t
+	desc = restor.0322.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		restor_is_usurper_trigger = yes
+		NOT = { has_character_flag = restor_seen_0322 }
+		exists = capital_county
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_seen_0322 years = 6 }
+		save_scope_as = restor_hunter
+		global_var:restor_crown = {
+			random_de_jure_county = {
+				limit = {
+					exists = holder
+					holder = {
+						OR = {
+							this = scope:restor_hunter
+							any_liege_or_above = { this = scope:restor_hunter }
+						}
+					}
+				}
+				save_scope_as = restor_priest_county
+			}
+		}
+		if = {
+			limit = { NOT = { exists = scope:restor_priest_county } }
+			capital_county = { save_scope_as = restor_priest_county }
+		}
+		restor_pick_mark_in_realm_effect = yes
+	}
+
+	# Replace him.
+	option = {
+		name = restor.0322.a
+		add_piety = minor_piety_loss
+		scope:restor_priest_county = {
+			if = {
+				limit = { has_county_modifier = restor_county_stirred }
+				remove_county_modifier = restor_county_stirred
+			}
+		}
+		custom_tooltip = restor.0322.a.tt
+		ai_chance = { base = 40 }
+	}
+
+	# Flog him.
+	option = {
+		name = restor.0322.b
+		add_dread = minor_dread_gain
+		add_piety = medium_piety_loss
+		scope:restor_priest_county = {
+			if = {
+				limit = { has_county_modifier = restor_county_stirred }
+				remove_county_modifier = restor_county_stirred
+			}
+		}
+		stress_impact = { compassionate = minor_stress_impact_gain }
+		ai_chance = {
+			base = 15
+			modifier = { add = 25 has_trait = wrathful }
+			modifier = { add = 20 has_trait = sadistic }
+		}
+	}
+
+	# Ask who taught him.
+	option = {
+		name = restor.0322.c
+		trigger = { exists = scope:restor_mark }
+		random_list = {
+			50 = {
+				desc = restor.0322.c.success
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0322.c.success
+					left_icon = scope:restor_mark
+				}
+				restor_their_exposure_gain_effect = { WHO = scope:restor_mark VALUE = 8 }
+			}
+			50 = {
+				desc = restor.0322.c.failure
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.0322.c.failure
+					left_icon = root
+				}
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# Leave it.
+	option = {
+		name = restor.0322.d
+		scope:restor_priest_county = {
+			add_county_modifier = {
+				modifier = restor_county_stirred
+				years = 5
+			}
+		}
+		custom_tooltip = restor.0321.b.tt
+		ai_chance = {
+			base = 15
+			modifier = { add = 20 has_trait = content }
+		}
+	}
+}
+
+# Intercepted Letters: a sworn lord's correspondence, caught on the road.
+restor.0323 = {
+	type = character_event
+	title = restor.0323.t
+	desc = restor.0323.desc
+	theme = intrigue
+	override_background = { reference = study }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_mark }
+		character = scope:restor_mark
+		animation = idle
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		restor_is_usurper_trigger = yes
+		NOT = { has_character_flag = restor_seen_0323 }
+		save_temporary_scope_as = restor_reader
+		any_in_global_list = {
+			variable = restor_roster
+			is_alive = yes
+			is_adult = yes
+			NOT = { this = scope:restor_reader }
+			any_liege_or_above = { this = scope:restor_reader }
+		}
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_seen_0323 years = 6 }
+		restor_pick_mark_in_realm_effect = yes
+	}
+
+	# Copy them and send them on.
+	option = {
+		name = restor.0323.a
+		trigger = { exists = scope:restor_mark }
+		random_list = {
+			60 = {
+				desc = restor.0323.a.success
+				modifier = { add = 15 intrigue >= 14 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0323.a.success
+					left_icon = scope:restor_mark
+				}
+				restor_their_exposure_gain_effect = { WHO = scope:restor_mark VALUE = 10 }
+				custom_tooltip = restor_secret_revealed_tt
+				hidden_effect = { restor_reveal_secret_to_root_effect = { WHO = scope:restor_mark } }
+			}
+			40 = {
+				desc = restor.0323.a.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0323.a.failure
+					left_icon = scope:restor_mark
+				}
+				restor_their_exposure_loss_effect = { WHO = scope:restor_mark VALUE = 3 }
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 intrigue >= 12 }
+		}
+	}
+
+	# Keep them.
+	option = {
+		name = restor.0323.b
+		trigger = { exists = scope:restor_mark }
+		restor_their_exposure_gain_effect = { WHO = scope:restor_mark VALUE = 8 }
+		ai_chance = { base = 40 }
+	}
+
+	# Burn them unread.
+	option = {
+		name = restor.0323.c
+		ai_chance = {
+			base = 10
+			modifier = { add = 20 has_trait = honest }
+		}
+	}
+}
+
+# A Toast at Your Table: one of your own lords drinks to the true king.
+restor.0324 = {
+	type = character_event
+	title = restor.0324.t
+	desc = {
+		desc = restor.0324.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_crown
+					has_title = scope:restor_crown
+				}
+				desc = restor.0324.desc_crowned
+			}
+			desc = restor.0324.desc_uncrowned
+		}
+	}
+	theme = feast_activity
+	override_background = { reference = feast }
+	left_portrait = {
+		character = root
+		animation = disapproval
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_mark }
+		character = scope:restor_mark
+		animation = happiness
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		restor_is_usurper_trigger = yes
+		NOT = { has_character_flag = restor_seen_0324 }
+		save_temporary_scope_as = restor_reader
+		any_in_global_list = {
+			variable = restor_roster
+			is_alive = yes
+			is_adult = yes
+			NOT = { this = scope:restor_reader }
+			any_liege_or_above = { this = scope:restor_reader }
+		}
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_seen_0324 years = 6 }
+		restor_pick_mark_in_realm_effect = yes
+	}
+
+	# Ask which king.
+	option = {
+		name = restor.0324.a
+		trigger = { exists = scope:restor_mark }
+		duel = {
+			skill = intrigue
+			target = scope:restor_mark
+			50 = {
+				desc = restor.0324.a.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -45
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0324.a.success
+					left_icon = scope:restor_mark
+					if = {
+						limit = {
+							can_add_hook = {
+								target = scope:restor_mark
+								type = suspicious_activity_hook
+							}
+						}
+						add_hook = {
+							type = suspicious_activity_hook
+							target = scope:restor_mark
+						}
+					}
+				}
+				restor_their_exposure_gain_effect = { WHO = scope:restor_mark VALUE = 10 }
+			}
+			50 = {
+				desc = restor.0324.a.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -45
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0324.a.failure
+					left_icon = scope:restor_mark
+					add_prestige = minor_prestige_loss
+				}
+			}
+		}
+		ai_chance = { base = 40 }
+	}
+
+	# Drink, and remember.
+	option = {
+		name = restor.0324.b
+		trigger = { exists = scope:restor_mark }
+		restor_their_exposure_gain_effect = { WHO = scope:restor_mark VALUE = 5 }
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = patient }
+		}
+	}
+
+	# Throw him out.
+	option = {
+		name = restor.0324.c
+		trigger = { exists = scope:restor_mark }
+		add_dread = 5
+		scope:restor_mark = {
+			add_opinion = {
+				target = root
+				modifier = insulted_opinion
+			}
+		}
+		restor_their_exposure_gain_effect = { WHO = scope:restor_mark VALUE = 8 }
+		ai_chance = {
+			base = 25
+			modifier = { add = 20 has_trait = wrathful }
+		}
+	}
+}
+
+# =====================================================================================
+#  A member's year under suspicion -- restor.0330-0333 (exposure 10+)
+# =====================================================================================
+
+# A Servant Asks Questions.
+restor.0330 = {
+	type = character_event
+	title = restor.0330.t
+	desc = restor.0330.desc
+	theme = intrigue
+	override_background = { reference = corridor_day }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		NOT = { has_character_flag = restor_seen_0330 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_seen_0330 years = 5 }
+	}
+
+	# Dismiss him with wages.
+	option = {
+		name = restor.0330.a
+		trigger = { gold >= 25 }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = 25
+		restor_exposure_loss_effect = { VALUE = 5 }
+		ai_chance = { base = 40 }
+	}
+
+	# Pay him to forget.
+	option = {
+		name = restor.0330.b
+		trigger = { gold >= 15 }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = 15
+		random_list = {
+			70 = {
+				desc = restor.0330.b.success
+				modifier = { add = 10 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0330.b.success
+					left_icon = root
+				}
+				restor_exposure_loss_effect = { VALUE = 4 }
+			}
+			30 = {
+				desc = restor.0330.b.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0330.b.failure
+					left_icon = root
+				}
+				restor_exposure_gain_effect = { VALUE = 3 }
+			}
+		}
+		ai_chance = { base = 35 }
+	}
+
+	# Let him ask.
+	option = {
+		name = restor.0330.c
+		ai_chance = {
+			base = 25
+			modifier = { add = 20 has_trait = greedy }
+		}
+	}
+}
+
+# The Meeting Place Is Watched.
+restor.0331 = {
+	type = character_event
+	title = restor.0331.t
+	desc = restor.0331.desc
+	theme = intrigue
+	override_background = { reference = alley_night }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_keeper
+			NOT = { scope:restor_keeper = root }
+		}
+		character = scope:restor_keeper
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		NOT = { has_character_flag = restor_seen_0331 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_seen_0331 years = 5 }
+	}
+
+	# Find a new place.
+	option = {
+		name = restor.0331.a
+		restor_favour_spend_effect = { VALUE = 15 }
+		restor_exposure_loss_effect = { VALUE = 5 }
+		ai_chance = { base = 40 }
+	}
+
+	# Go anyway.
+	option = {
+		name = restor.0331.b
+		random_list = {
+			50 = {
+				desc = restor.0331.b.success
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0331.b.success
+					left_icon = root
+				}
+				restor_favour_gain_effect = { VALUE = 10 }
+			}
+			50 = {
+				desc = restor.0331.b.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0331.b.failure
+					left_icon = root
+				}
+				restor_exposure_gain_effect = { VALUE = 6 }
+			}
+		}
+		ai_chance = {
+			base = 25
+			modifier = { add = 25 has_trait = brave }
+		}
+	}
+
+	# Stay home.
+	option = {
+		name = restor.0331.c
+		restor_exposure_loss_effect = { VALUE = 3 }
+		if = {
+			limit = {
+				exists = scope:restor_keeper
+				NOT = { scope:restor_keeper = root }
+			}
+			scope:restor_keeper = {
+				add_opinion = {
+					target = root
+					modifier = restor_failed_charge_opinion
+				}
+			}
+		}
+		ai_chance = {
+			base = 25
+			modifier = { add = 25 has_trait = craven }
+		}
+	}
+}
+
+# Your Spouse Finds a Letter.
+restor.0332 = {
+	type = character_event
+	title = restor.0332.t
+	desc = restor.0332.desc
+	theme = family
+	override_background = { reference = bedchamber }
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		character = scope:restor_spouse
+		animation = disapproval
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		NOT = { has_character_flag = restor_seen_0332 }
+		any_spouse = {
+			is_alive = yes
+			is_adult = yes
+			NOT = { has_trait = restor_member }
+		}
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_seen_0332 years = 10 }
+		random_spouse = {
+			limit = {
+				is_alive = yes
+				is_adult = yes
+				NOT = { has_trait = restor_member }
+			}
+			save_scope_as = restor_spouse
+		}
+	}
+
+	# Tell the truth.
+	option = {
+		name = restor.0332.a
+		random_list = {
+			45 = {
+				desc = restor.0332.a.success
+				modifier = {
+					add = 20
+					scope:restor_spouse = {
+						opinion = {
+							target = root
+							value >= 40
+						}
+					}
+				}
+				modifier = {
+					add = 15
+					scope:restor_spouse = { restor_of_the_blood_trigger = yes }
+				}
+				modifier = {
+					add = -20
+					exists = scope:restor_usurper
+					scope:restor_spouse = {
+						OR = {
+							is_close_or_extended_family_of = scope:restor_usurper
+							this = scope:restor_usurper
+						}
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0332.a.success
+					left_icon = scope:restor_spouse
+				}
+				custom_tooltip = restor.0332.a.success_tt
+				hidden_effect = {
+					scope:restor_spouse = { restor_swear_in_effect = { RANK = 0 } }
+				}
+				restor_exposure_loss_effect = { VALUE = 3 }
+			}
+			55 = {
+				desc = restor.0332.a.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0332.a.failure
+					left_icon = scope:restor_spouse
+					scope:restor_spouse = {
+						add_opinion = {
+							target = root
+							modifier = suspicion_opinion
+							opinion = -30
+						}
+					}
+				}
+				restor_exposure_gain_effect = { VALUE = 5 }
+			}
+		}
+		stress_impact = { deceitful = minor_stress_impact_gain }
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = honest }
+		}
+	}
+
+	# Lie.
+	option = {
+		name = restor.0332.b
+		duel = {
+			skill = intrigue
+			target = scope:restor_spouse
+			50 = {
+				desc = restor.0332.b.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -45
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0332.b.success
+					left_icon = scope:restor_spouse
+				}
+			}
+			50 = {
+				desc = restor.0332.b.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -45
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0332.b.failure
+					left_icon = scope:restor_spouse
+					scope:restor_spouse = {
+						add_opinion = {
+							target = root
+							modifier = suspicion_opinion
+							opinion = -20
+						}
+					}
+				}
+				restor_exposure_gain_effect = { VALUE = 3 }
+			}
+		}
+		stress_impact = { honest = medium_stress_impact_gain }
+		ai_chance = {
+			base = 35
+			modifier = { add = 25 has_trait = deceitful }
+		}
+	}
+
+	# Burn every letter.
+	option = {
+		name = restor.0332.c
+		restor_exposure_loss_effect = { VALUE = 5 }
+		restor_favour_spend_effect = { VALUE = 15 }
+		ai_chance = {
+			base = 25
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+}
+
+# The Moneylender: the man who carried the Sworn's gold knows whose it was.
+restor.0333 = {
+	type = character_event
+	title = restor.0333.t
+	desc = restor.0333.desc
+	theme = stewardship
+	override_background = { reference = market }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		NOT = { has_character_flag = restor_seen_0333 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = { flag = restor_seen_0333 years = 5 }
+	}
+
+	# Pay him.
+	option = {
+		name = restor.0333.a
+		trigger = { gold >= 60 }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = 60
+		restor_exposure_loss_effect = { VALUE = 6 }
+		ai_chance = {
+			base = 40
+			modifier = { add = -25 has_trait = greedy }
+		}
+	}
+
+	# Threaten him.
+	option = {
+		name = restor.0333.b
+		random_list = {
+			50 = {
+				desc = restor.0333.b.success
+				modifier = { add = 15 dread >= 30 }
+				modifier = { add = 10 prowess >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.0333.b.success
+					left_icon = root
+				}
+				restor_exposure_loss_effect = { VALUE = 4 }
+			}
+			50 = {
+				desc = restor.0333.b.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0333.b.failure
+					left_icon = root
+				}
+				restor_exposure_gain_effect = { VALUE = 6 }
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = wrathful }
+		}
+	}
+
+	# He has no proof.
+	option = {
+		name = restor.0333.c
+		random_list = {
+			60 = {
+				desc = restor.0333.c.success
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.0333.c.success
+					left_icon = root
+				}
+			}
+			40 = {
+				desc = restor.0333.c.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.0333.c.failure
+					left_icon = root
+				}
+				restor_exposure_gain_effect = { VALUE = 5 }
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = greedy }
+		}
+	}
+}

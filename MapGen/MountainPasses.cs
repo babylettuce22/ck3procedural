@@ -19,7 +19,8 @@ public sealed record MountainPass(
 /// draws a range as one wall, ending where its slopes give out, so a long range has no door. This
 /// finds, wall by wall, the necks where the wall is thin and the land route between its two sides
 /// is long, and opens the lowest one — a corridor along the lowest ground through it, wide enough
-/// for a barony of its own. One pass per wall at most, and none where a short walk goes round.
+/// for a barony of its own. One pass per wall, and a second or third on a long wall only where the
+/// ones already cut leave the way round long; none where a short walk goes round.
 ///
 /// It runs on the finished mask, after the auto-cut has closed, opened, filled and dropped: run
 /// before, the closing would seal the corridor again. Nothing it does touches the heightmap; the
@@ -30,6 +31,12 @@ public static class MountainPasses
     /// <summary>How many necks of one wall are tried, a barony apart, before its pass is chosen:
     /// enough to cover a range forty baronies long end to end.</summary>
     private const int TestsPerWall = 64;
+
+    /// <summary>A wall may take one pass, and one more for every this many baronies it covers, up
+    /// to <see cref="MaxPassesPerWall"/>; each later one only where the earlier ones leave its way
+    /// round long.</summary>
+    private const double BaroniesPerExtraPass = 15;
+    private const int MaxPassesPerWall = 3;
 
     /// <summary>
     /// Two rim pixels whose floods meet inside the wall are on opposite sides of it only if they
@@ -82,6 +89,8 @@ public static class MountainPasses
         double across = 2.0 * radius;
         int maxSpan = Math.Max(2, (int)Math.Round(cfg.MountainPassMaxThickness * across));
         double minDetour = Math.Max(0, cfg.MountainPassMinDetour) * across;
+        // Half a barony radius: the auto-cut's opening already leaves no real wall thinner.
+        int minSpan = Math.Max(4, radius / 2);
 
         // Each wall's bounding box, so every per-wall array is the size of the wall, not the map.
         int walls = partSizes.Count;
@@ -104,9 +113,8 @@ public static class MountainPasses
             var b = box[wall - 1];
             if (b.X1 < 0 || partSizes[wall - 1] < barony / 2) continue;
 
-            var pass = TryWall(wall, b, mask, land, elevation, parts, width, height, maxSpan, minDetour,
-                across, radius, barony, routes, ref cleared);
-            if (pass is not null) passes.Add(pass);
+            passes.AddRange(TryWall(wall, b, mask, land, elevation, parts, width, height, minSpan, maxSpan,
+                minDetour, across, radius, barony, partSizes[wall - 1] / barony, routes, ref cleared));
         }
 
         return passes;
@@ -122,12 +130,12 @@ public static class MountainPasses
             return;
         }
         Console.WriteLine($"  mountain passes: {passes.Count} cut — " + string.Join("; ", passes.Select(p =>
-            $"{p.Thickness:F2} baronies thick, saddle {p.Saddle:F0}, way round over {p.Detour:F0} baronies")));
+            $"{p.Thickness:F2} baronies thick, saddle {p.Saddle:F0}, way round over {p.Detour:0.#} baronies")));
     }
 
-    private static MountainPass? TryWall(int wall, (int X0, int Y0, int X1, int Y1) b, bool[] mask, byte[] land,
-        float[] elevation, int[] parts, int width, int height, int maxSpan, double minDetour, double across,
-        int radius, double barony, RouteGrid routes, ref long cleared)
+    private static List<MountainPass> TryWall(int wall, (int X0, int Y0, int X1, int Y1) b, bool[] mask, byte[] land,
+        float[] elevation, int[] parts, int width, int height, int minSpan, int maxSpan, double minDetour,
+        double across, int radius, double barony, double wallBaronies, RouteGrid routes, ref long cleared)
     {
         // The box grows by one so the rim's passable neighbours are inside it.
         int x0 = Math.Max(0, b.X0 - 1), y0 = Math.Max(0, b.Y0 - 1);
@@ -184,7 +192,7 @@ public static class MountainPasses
                 if (lx + 1 < bw) Meet(l, l + 1);
                 if (ly + 1 < bh) Meet(l, l + bw);
             }
-        if (necks.Count == 0) return null;
+        if (necks.Count == 0) return [];
 
         // Thinnest first, so the necks tried spread along the whole wall. Ranking by saddle instead
         // spent every try on the wall's tapering ends, which are low, thin and a short walk round;
@@ -209,12 +217,20 @@ public static class MountainPasses
             if (!routes.Within(neck.A, neck.B, needed)) qualified.Add((neck.Saddle, neck.Span, neck.A, neck.B, needed));
         }
 
+        // 4. Lowest first. A long range can take more than one, but a neck is cut only while its way
+        // round is still long with the passes already cut open: one next to an earlier pass is a
+        // short walk through it, and is left whole.
+        var cut = new List<MountainPass>();
+        int allowed = Math.Min(MaxPassesPerWall, 1 + (int)(wallBaronies / BaroniesPerExtraPass));
         foreach (var neck in qualified.OrderBy(q => q.Saddle).ThenBy(q => q.Span).ThenBy(q => q.A))
         {
+            if (cut.Count >= allowed) break;
+            if (cut.Count > 0 && routes.Within(neck.A, neck.B, neck.Needed)) continue;
+
             var path = LowestPath(neck.A, neck.B, neck.Span, wall, mask, parts, elevation, width, height);
             if (path is null) continue;
 
-            // 4. Cut the corridor and give back whatever it cuts off that is too small to stand.
+            // 5. Cut the corridor and give back whatever it cuts off that is too small to stand.
             var (corridor, middle) = Widen(path, wall, mask, parts, elevation, width, height, radius);
             foreach (int g in corridor) mask[g] = false;
             routes.Open(corridor);
@@ -222,16 +238,20 @@ public static class MountainPasses
 
             float saddle = float.MinValue;
             foreach (int g in path) saddle = Math.Max(saddle, elevation[g]);
-            return new MountainPass((middle % width, middle / width), (neck.A % width, neck.A / width),
-                (neck.B % width, neck.B / width), saddle, neck.Span / across, neck.Needed / across, corridor.ToArray());
+            cut.Add(new MountainPass((middle % width, middle / width), (neck.A % width, neck.A / width),
+                (neck.B % width, neck.B / width), saddle, neck.Span / across, neck.Needed / across, corridor.ToArray()));
         }
-        return null;
+        return cut;
 
         void Meet(int l, int m)
         {
             if (dist[m] == 0 || from[l] == from[m]) return;
             int span = dist[l] + dist[m];
-            if (span > maxSpan) return;
+            // Too thin is not a neck: two rim pixels at a corner or notch of the edge are reached
+            // from different outside pixels a pixel or two apart, and pass for a crossing 2 px wide
+            // with nothing on the far side. Sorted thinnest first they took every try; on an
+            // inland-sea world 112 of 115 were these, and no wall got a pass.
+            if (span > maxSpan || span < minSpan) return;
             int a = Math.Min(from[l], from[m]), c = Math.Max(from[l], from[m]);
             double ax = a % width, ay = a / width, cx = c % width, cy = c / width;
             double apart = Math.Sqrt((ax - cx) * (ax - cx) + (ay - cy) * (ay - cy));

@@ -100,6 +100,118 @@ internal sealed class CountyCanvas
                 _across[o] = across;
             }
         });
+
+        // Where each county lies, so a mark over a few of them scans only their corner of the map.
+        _box = new Rectangle[Counties.Count];
+        var (minX, minY, maxX, maxY) = (new int[Counties.Count], new int[Counties.Count], new int[Counties.Count], new int[Counties.Count]);
+        Array.Fill(minX, int.MaxValue);
+        Array.Fill(minY, int.MaxValue);
+        Array.Fill(maxX, -1);
+        Array.Fill(maxY, -1);
+        for (int o = 0; o < _county.Length; o++)
+        {
+            int c = _county[o];
+            if (c < 0) continue;
+            int x = o % Width, y = o / Width;
+            if (x < minX[c]) minX[c] = x;
+            if (x > maxX[c]) maxX[c] = x;
+            if (y < minY[c]) minY[c] = y;
+            if (y > maxY[c]) maxY[c] = y;
+        }
+        for (int c = 0; c < Counties.Count; c++)
+            _box[c] = maxX[c] < 0 ? Rectangle.Empty : Rectangle.FromLTRB(minX[c], minY[c], maxX[c] + 1, maxY[c] + 1);
+    }
+
+    /// <summary>Each county's bounding box on the canvas; empty for one too small to show.</summary>
+    private readonly Rectangle[] _box;
+
+    /// <summary>
+    /// A highlight over some counties, to lay over a frame: a translucent fill of
+    /// <paramref name="colour"/>, a solid band of it along the edge — two pixels inside the
+    /// counties, one outside — and a dark halo beyond that, so it reads over any realm's colour,
+    /// its own included, and survives being drawn at half size. Cut to the counties' corner of the
+    /// map; <c>Bounds</c> says where that corner is on the canvas. Null when none of them shows.
+    /// </summary>
+    public (Bitmap Mask, Rectangle Bounds)? Mask(IReadOnlyCollection<int> counties, (byte R, byte G, byte B) colour)
+    {
+        const int Inner = 2, Outer = 1, Halo = 2, Far = Inner + Outer + Halo + 1;
+
+        var inSet = new bool[Counties.Count];
+        var box = Rectangle.Empty;
+        foreach (int c in counties)
+        {
+            if (c < 0 || c >= Counties.Count || _box[c].IsEmpty) continue;
+            inSet[c] = true;
+            box = box.IsEmpty ? _box[c] : Rectangle.Union(box, _box[c]);
+        }
+        if (box.IsEmpty) return null;
+
+        box.Inflate(Outer + Halo, Outer + Halo);
+        box.Intersect(new Rectangle(0, 0, Width, Height));
+        int w = box.Width, h = box.Height;
+
+        // Each pixel's distance, in chessboard steps, to the nearest pixel on the other side of the
+        // edge — two passes over the box, however large the counties are.
+        var inside = new bool[w * h];
+        var dist = new int[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                int c = _county[(box.Y + y) * Width + box.X + x];
+                inside[y * w + x] = c >= 0 && inSet[c];
+            }
+        for (int i = 0; i < dist.Length; i++) dist[i] = Far;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                for (int dy = -1; dy <= 0; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        if ((dy == 0 && dx >= 0) || x + dx < 0 || x + dx >= w || y + dy < 0) continue;
+                        int j = (y + dy) * w + x + dx;
+                        dist[i] = Math.Min(dist[i], inside[j] != inside[i] ? 1 : dist[j] + 1);
+                    }
+            }
+        for (int y = h - 1; y >= 0; y--)
+            for (int x = w - 1; x >= 0; x--)
+            {
+                int i = y * w + x;
+                for (int dy = 0; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        if ((dy == 0 && dx <= 0) || x + dx < 0 || x + dx >= w || y + dy >= h) continue;
+                        int j = (y + dy) * w + x + dx;
+                        dist[i] = Math.Min(dist[i], inside[j] != inside[i] ? 1 : dist[j] + 1);
+                    }
+            }
+
+        var bitmap = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        var data = bitmap.LockBits(new Rectangle(0, 0, w, h),
+            System.Drawing.Imaging.ImageLockMode.WriteOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+        try
+        {
+            var row = new int[w];
+            int rgb = colour.R << 16 | colour.G << 8 | colour.B;
+            int fill = 140 << 24 | rgb, edge = 255 << 24 | rgb, halo = 150 << 24 | 0x141414;
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    int i = y * w + x, d = dist[i];
+                    row[x] = inside[i] ? (d <= Inner ? edge : fill)
+                           : d <= Outer ? edge
+                           : d <= Outer + Halo ? halo
+                           : 0;
+                }
+                System.Runtime.InteropServices.Marshal.Copy(row, 0, data.Scan0 + y * data.Stride, w);
+            }
+        }
+        finally
+        {
+            bitmap.UnlockBits(data);
+        }
+        return (bitmap, box);
     }
 
     /// <summary>Every county, in the order the colour arrays passed to <see cref="Render"/> are read in.</summary>

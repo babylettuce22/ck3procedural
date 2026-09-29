@@ -1,0 +1,141 @@
+﻿# How close the Restorationists are to their aim. See README.txt, THE METERS.
+#
+# Counting de jure counties is vanilla's own shape (fp2_struggle_hostility_county_total_value):
+# `every_de_jure_county = { limit add }` inside the title. All of these assume the society is active
+# and are only read behind restor_active_trigger.
+
+restor_crown_county_count_value = {
+	value = 0
+	global_var:restor_crown = {
+		every_de_jure_county = { add = 1 }
+	}
+	# Never divide by zero, even on a crown with no land left.
+	min = 1
+}
+
+# Counties of the crown inside the pretender's realm, at any depth.
+restor_pretender_county_count_value = {
+	value = 0
+	if = {
+		limit = { exists = global_var:restor_pretender }
+		global_var:restor_crown = {
+			every_de_jure_county = {
+				limit = { restor_county_in_pretender_realm_trigger = yes }
+				add = 1
+			}
+		}
+	}
+}
+
+# Counties of the crown inside a sworn realm: held by somebody sworn, or by anyone answering (at any
+# depth) to somebody sworn. A sworn king's realm is the cause's ground whether or not each of his
+# counts took the oath -- counting only direct holdings capped the meter near 25 on a real map.
+restor_member_county_count_value = {
+	value = 0
+	global_var:restor_crown = {
+		every_de_jure_county = {
+			limit = {
+				exists = holder
+				holder = {
+					OR = {
+						has_trait = restor_member
+						any_liege_or_above = { has_trait = restor_member }
+					}
+				}
+			}
+			add = 1
+		}
+	}
+}
+
+restor_stirred_county_count_value = {
+	value = 0
+	global_var:restor_crown = {
+		every_de_jure_county = {
+			limit = { has_county_modifier = restor_county_stirred }
+			add = 1
+		}
+	}
+}
+
+restor_roster_size_value = {
+	value = 0
+	every_in_global_list = {
+		variable = restor_roster
+		add = 1
+	}
+}
+
+# The meter itself, 0-100.
+restor_support_value = {
+	value = 0
+
+	# 40 + 30 + 15 + 15. Balanced (2026-09-28 review) so a realistic map can reach the rising at 40
+	# without the pretender already holding the kingdom: a few sworn realms on the crown's land, some
+	# stirred counties and a dozen members get there; land in the pretender's own hands is still the
+	# heaviest single weight, and the crown decision separately asks for a quarter of it.
+	add = {
+		value = restor_pretender_county_count_value
+		divide = restor_crown_county_count_value
+		multiply = 40
+	}
+	add = {
+		value = restor_member_county_count_value
+		divide = restor_crown_county_count_value
+		multiply = 30
+	}
+	add = {
+		value = restor_stirred_county_count_value
+		divide = restor_crown_county_count_value
+		multiply = 15
+	}
+	add = {
+		value = restor_roster_size_value
+		max = 15
+	}
+
+	round = yes
+	min = 0
+	max = 100
+}
+
+# The share of the crown's counties inside the pretender's realm, as a percentage, for the crown
+# decision's tooltip and gate.
+restor_pretender_share_value = {
+	value = restor_pretender_county_count_value
+	divide = restor_crown_county_count_value
+	multiply = 100
+	round = yes
+}
+
+# The restored king's share of the crown's land, for the RESTORED phase's aim.
+restor_king_share_value = {
+	value = 0
+	if = {
+		limit = { exists = global_var:restor_crown.holder }
+		global_var:restor_crown = {
+			every_de_jure_county = {
+				limit = {
+					exists = holder
+					holder = {
+						OR = {
+							this = global_var:restor_crown.holder
+							any_liege_or_above = { this = global_var:restor_crown.holder }
+						}
+					}
+				}
+				add = 1
+			}
+		}
+		divide = restor_crown_county_count_value
+		multiply = 100
+		round = yes
+	}
+}
+
+# The share of the crown's counties the pretender's own realm needs before the society will crown
+# them: a quarter. Vanilla creation wants a majority; the Sworn's backing is the difference.
+restor_crowning_share_value = 25
+
+# What the Raise the Standard decision and the crowning need of the support meter.
+restor_rising_support_value = 40

@@ -4,7 +4,11 @@ using Ck3MapGen.Io;
 using System.IO;
 
 /// <summary>The three textures a piece is drawn with, as the entity must name them.</summary>
-public sealed record PieceTextureSet(string Diffuse, string Normal, string Properties);
+/// <param name="Coa">
+/// The heraldry mask, when the set has one: its file name beside the other three. See
+/// <see cref="PieceTextures.WriteCoaMask"/>.
+/// </param>
+public sealed record PieceTextureSet(string Diffuse, string Normal, string Properties, string? Coa = null);
 
 /// <summary>
 /// Converts a set's authoring textures into the three DDS files CK3 expects.
@@ -76,7 +80,41 @@ public static class PieceTextures
         WriteNormal(normal, Path.Combine(outDir, outNormal), diffuse);
         WriteProperties(properties, Path.Combine(outDir, outProps), diffuse);
 
-        return new PieceTextureSet(outDiffuse, outNormal, outProps);
+        string? outCoa = null;
+
+        if (Find(texturesDir, $"{set}_coa") is { } coa && WriteCoaMask(coa, Path.Combine(outDir, $"gen_piece_{set}_coa.dds")))
+            outCoa = $"gen_piece_{set}_coa.dds";
+
+        return new PieceTextureSet(outDiffuse, outNormal, outProps, outCoa);
+    }
+
+    /// <summary>
+    /// Writes a set's heraldry mask, channel for channel.
+    ///
+    /// **What each channel does**, read from <c>jomini/gfx/FX/jomini/portrait_coa.fxh</c>
+    /// (<c>ApplyCoa</c>), which the <c>portrait_attachment_with_coa</c> effect runs on the diffuse:
+    ///
+    /// * red — replaced by the wearer's coat of arms colour 1,
+    /// * green — colour 2,
+    /// * alpha — colour 3,
+    /// * blue — the whole emblem, sampled through the mesh's THIRD UV set (<c>u2</c>).
+    ///
+    /// Each test is <c>Mask &gt; 0.5</c>, so the mask is effectively binary; it is sampled in the
+    /// piece's own atlas UV (<c>u0</c>), the same space as the diffuse. Only the diffuse changes —
+    /// metalness and roughness still come from the properties map, which is why the regions it
+    /// covers are authored as non-metal enamel: a heraldic tint on metal reads as anodised, not
+    /// painted.
+    ///
+    /// Passed through unaltered rather than repacked — the authoring PNG is already in the shader's
+    /// layout, and alpha is a real channel here, unlike on the diffuse.
+    /// </summary>
+    private static bool WriteCoaMask(string source, string target)
+    {
+        if (DdsReader.Load(source) is not { } img) return false;
+
+        var (w, h) = Blocked(img.Width, img.Height);
+        DdsWriter.WriteDxt5(target, w, h, Crop(img, w, h));
+        return true;
     }
 
     private static string? Find(string dir, string stem) => Extensions
