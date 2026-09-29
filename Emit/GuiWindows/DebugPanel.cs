@@ -309,6 +309,21 @@ public static class DebugPanel
         // "Could not find widget 'gen_debug_panel_host'", with nothing else to distinguish that
         // from a visibility gate that is simply false.
         doc.Add(GuiBuilder.Of("gen_debug_panel_host"));
+        doc.Add(GuiBuilder.Of("window")
+            .Name("gen_debug_panel_launcher")
+            .ParentAnchor("bottom|hcenter")
+            .Position(0, -20)
+            .Size(140, 30)
+            .Visible(GuiExpr.And(
+                GuiExpr.Raw("InDebugMode"),
+                GuiExpr.Raw("GetPlayer.IsValid"),
+                GuiExpr.Raw("Not( IsPauseMenuShown )"),
+                GuiExpr.Raw("IsDefaultGUIMode")))
+            .Add(GuiBuilder.Of("button_standard")
+                .Size(140, 30)
+                .Text("GEN_DEBUG_PANEL_LAUNCHER")
+                .Tooltip("GEN_DEBUG_PANEL_LAUNCHER_TT")
+                .Runs(new ScriptedGui("gen_debug_panel_toggle", player))));
         doc.Ship(modDir);
 
         string registry = Path.Combine(modDir, "gui", "scripted_widgets");
@@ -320,7 +335,8 @@ public static class DebugPanel
             + "#\n"
             + "# Names the HOST type, not the window itself, for the reason spelled out in\n"
             + "# gui/scripted_widgets/gen_artifact_index.txt.\n"
-            + "gui/gen_debug_panel.gui = gen_debug_panel_host\n");
+            + "gui/gen_debug_panel.gui = gen_debug_panel_host\n"
+            + "gui/gen_debug_panel.gui = gen_debug_panel_launcher\n");
     }
 
     /// <summary>
@@ -864,6 +880,19 @@ public static class DebugPanel
             # a .gui naming a scripted_gui that does not exist logs nothing and evaluates false, so
             # a rename on either side produces a button that silently does nothing.
 
+            # Direct debug-mode HUD access; shares the decision's open state.
+            gen_debug_panel_toggle = {
+                scope = character
+                is_shown = { always = yes }
+                effect = {
+                    if = {
+                        limit = { has_variable = gen_debug_panel_open }
+                        remove_variable = gen_debug_panel_open
+                    }
+                    else = { set_variable = { name = gen_debug_panel_open value = yes } }
+                }
+            }
+
 
             # Is the panel open for this character, and close it.
             #
@@ -1311,6 +1340,9 @@ public static class DebugPanel
         loc.Add("gen_debug_panel_decision_tooltip",
             "Debug only. Shows how this map was generated and what the running game made of it.");
         loc.Add("gen_debug_panel_decision_confirm", "Open the panel");
+        loc.Add("GEN_DEBUG_PANEL_LAUNCHER", "World Debug");
+        loc.Add("GEN_DEBUG_PANEL_LAUNCHER_TT",
+            "Open or close the world debug menu: generation details, live counts, tools, and event launch buttons.");
 
         loc.Add("GEN_DEBUG_PANEL_TITLE", "Generated World");
 
