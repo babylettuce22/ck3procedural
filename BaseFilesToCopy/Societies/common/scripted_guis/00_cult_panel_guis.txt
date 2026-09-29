@@ -78,8 +78,48 @@ cult_panel_gather = {
 					}
 				}
 			}
+
+			# "Within reach" is the expensive part (it walks the faith's rulers), so it is built once
+			# here on opening and then only by cult_panel_reach_tick, not every second.
+			if = {
+				limit = { NOT = { has_variable = cult_panel_reach_built } }
+				cult_panel_gather_reach_effect = yes
+			}
 		}
 	}
+}
+
+# The fifteen-second refresh of "Within reach" (cult_panel_reach_tick). Nothing unless open.
+cult_panel_gather_reach = {
+	scope = character
+	is_shown = { cult_active_trigger = yes }
+	effect = {
+		if = {
+			limit = {
+				has_variable = society_panel_open
+				has_trait = cult_member
+			}
+			cult_panel_gather_reach_effect = yes
+		}
+	}
+}
+
+# ---- A row of "Within reach" -- asked of the candidate -------------------------------------------
+# Only what the circle has learned by asking. Never how they would answer.
+
+cult_panel_reach_sympathetic = {
+	scope = character
+	is_shown = { has_character_flag = cult_sounded_sympathetic }
+}
+
+cult_panel_reach_refused = {
+	scope = character
+	is_shown = { has_character_flag = cult_refused_recently }
+}
+
+cult_panel_reach_chaplain = {
+	scope = character
+	is_shown = { cult_recruit_is_chaplain_trigger = yes }
 }
 
 cult_panel_hidden = {
@@ -175,37 +215,24 @@ cult_panel_very_suspect = {
 	}
 }
 
+# A light that is a decision asks the engine whether it can be taken (can_execute_decision): every
+# requirement and the cost, and it cannot drift from the decision. See 00_restor_panel_guis.txt.
 cult_panel_can_unveil = {
 	scope = character
-	is_shown = {
-		cult_hollow_trigger = yes
-		OR = {
-			cult_is_hierophant_trigger = yes
-			AND = {
-				exists = global_var:cult_host_faith.religious_head
-				this = global_var:cult_host_faith.religious_head
-			}
-		}
-		cult_church_captured_trigger = yes
-		global_var:cult_rot >= cult_unveiling_rot_value
-	}
+	is_shown = { can_execute_decision = cult_unveil_decision }
 }
 
 cult_panel_can_offer = {
 	scope = character
-	is_shown = {
-		gold >= 100
-		NOT = { has_character_flag = cult_offered_recently }
-	}
+	is_shown = { can_execute_decision = cult_offer_to_the_dark_decision }
 }
 
 cult_panel_can_mass = {
 	scope = character
-	is_shown = {
-		cult_secret_phase_trigger = yes
-		OR = {
-			cult_rank_at_least_trigger = { RANK = 50 }
-			cult_is_hierophant_trigger = yes
-		}
-	}
+	is_shown = { cult_can_host_mass_trigger = yes }
+}
+
+cult_panel_can_defile = {
+	scope = character
+	is_shown = { cult_can_host_defilement_trigger = yes }
 }

@@ -1075,11 +1075,7 @@ restor.0210 = {
 						years = 20
 					}
 					restor_favour_gain_effect = { VALUE = 25 }
-					add_trait_xp = {
-						trait = restor_member
-						track = restor_rank
-						value = 5
-					}
+					restor_rank_gain_effect = { VALUE = 5 }
 				}
 			}
 			25 = {
@@ -1361,11 +1357,7 @@ restor.0213 = {
 						years = 20
 					}
 					restor_favour_gain_effect = { VALUE = 20 }
-					add_trait_xp = {
-						trait = restor_member
-						track = restor_rank
-						value = 5
-					}
+					restor_rank_gain_effect = { VALUE = 5 }
 				}
 			}
 			20 = {
@@ -1454,11 +1446,7 @@ restor.0214 = {
 	# I swore.
 	option = {
 		name = restor.0214.a
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 5
-		}
+		restor_rank_gain_effect = { VALUE = 5 }
 		stress_impact = {
 			base = minor_stress_impact_gain
 			honest = minor_stress_impact_loss
@@ -1914,11 +1902,7 @@ restor.0253 = {
 				modifier = restor_life_turned_me_away_opinion
 			}
 		}
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 3
-		}
+		restor_rank_gain_effect = { VALUE = 3 }
 		restor_favour_gain_effect = { VALUE = 5 }
 	}
 }

@@ -249,11 +249,7 @@ restor_recruit_turned_away_effect = {
 
 restor_recruiter_reward_effect = {
 	restor_favour_gain_effect = { VALUE = 25 }
-	add_trait_xp = {
-		trait = restor_member
-		track = restor_rank
-		value = 8
-	}
+	restor_rank_gain_effect = { VALUE = 8 }
 	restor_exposure_gain_effect = { VALUE = 5 }
 	# A count of everyone this member has sworn in, for the recruit charge and anything else that
 	# wants to know. Read with has_variable first.
@@ -330,6 +326,75 @@ restor_recruit_join_order_effect = {
 		add_opinion = {
 			target = global_var:restor_crown.holder
 			modifier = restor_brought_me_in_opinion
+		}
+	}
+}
+
+# =====================================================================================
+#  The panel's "Within reach" list -- THIS is the viewing player
+# =====================================================================================
+#
+# Fills the variable list restor_panel_candidates: the old house's living blood first, then the
+# lords of its people or its lands, greatest first, all within reach. Never ordered or filtered by
+# fit (see restor_panel_candidate_trigger). Run on the panel's first gather after opening and then
+# every fifteen seconds by restor_panel_reach_tick; restor_panel_reach_built marks it done until the
+# panel closes. Like the roster, the list is rebuilt only when its members changed, so it does not
+# lose its hover or scroll; the row's chips are asked live.
+restor_panel_gather_reach_effect = {
+	set_variable = { name = restor_panel_reach_built value = yes }
+	save_scope_as = restor_viewer
+	if = {
+		limit = { restor_underground_trigger = yes }
+		if = {
+			limit = { exists = global_var:restor_house }
+			global_var:restor_house = {
+				every_house_member = {
+					limit = {
+						is_alive = yes
+						restor_panel_candidate_trigger = yes
+					}
+					add_to_temporary_list = restor_panel_fresh
+				}
+			}
+		}
+		ordered_ruler = {
+			limit = {
+				NOT = { is_in_list = restor_panel_fresh }
+				restor_panel_candidate_trigger = yes
+			}
+			order_by = highest_held_title_tier
+			max = 40
+			check_range_bounds = no
+			add_to_temporary_list = restor_panel_fresh
+		}
+	}
+	if = {
+		limit = {
+			OR = {
+				any_in_list = {
+					list = restor_panel_fresh
+					NOT = {
+						scope:restor_viewer = {
+							is_target_in_variable_list = { name = restor_panel_candidates target = prev }
+						}
+					}
+				}
+				any_in_list = {
+					variable = restor_panel_candidates
+					NOT = { is_in_list = restor_panel_fresh }
+				}
+			}
+		}
+		clear_variable_list = restor_panel_candidates
+		every_in_list = {
+			list = restor_panel_fresh
+			save_scope_as = restor_panel_listed
+			scope:restor_viewer = {
+				add_to_variable_list = {
+					name = restor_panel_candidates
+					target = scope:restor_panel_listed
+				}
+			}
 		}
 	}
 }

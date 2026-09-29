@@ -100,6 +100,7 @@ cult.0501 = {
 	option = {
 		name = cult.0501.b
 		cult_charge_penalty_effect = { POWER = 10 }
+		cult_rank_loss_effect = { VALUE = 5 }
 		custom_tooltip = cult.0501.b.tt
 		hidden_effect = {
 			if = {
@@ -317,6 +318,7 @@ cult.0520 = {
 	option = {
 		name = cult.0520.a
 		cult_charge_penalty_effect = { POWER = 15 }
+		cult_charge_failed_standing_effect = yes
 		custom_tooltip = cult.0520.a.tt
 	}
 }
@@ -833,11 +835,16 @@ cult.0540 = {
 		cult_save_scopes_effect = yes
 		save_scope_as = cult_charge_member
 		var:cult_charge_giver = { save_scope_as = cult_charge_giver }
-		save_scope_value_as = {
-			name = cult_charge_asked
-			value = var:cult_charge_order
-		}
 		cult_charge_order_effect = yes
+		# Did the kind asked for come up empty, so the usual draw gave something else? Compared as
+		# variables: save_scope_value_as cannot hold a flag copied out of one.
+		if = {
+			limit = {
+				NOT = { var:cult_charge_order = flag:any }
+				NOT = { var:cult_charge_order = var:cult_charge }
+			}
+			save_scope_value_as = { name = cult_charge_fell_back value = yes }
+		}
 		remove_variable = cult_charge_order
 		cult_charge_save_state_effect = yes
 
@@ -866,10 +873,7 @@ cult.0540 = {
 					custom_tooltip = cult_charge_given_recruit_tt
 				}
 				if = {
-					limit = {
-						NOT = { scope:cult_charge_asked = flag:any }
-						NOT = { scope:cult_charge_asked = scope:cult_charge_kind }
-					}
+					limit = { exists = scope:cult_charge_fell_back }
 					custom_tooltip = cult_charge_given_fallback_tt
 				}
 			}

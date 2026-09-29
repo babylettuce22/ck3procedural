@@ -11,10 +11,10 @@
 # the society's decision is the cheaper door its backing opens, not the only one.
 
 restor_raise_the_standard_decision = {
+	decision_group_type = society
 	picture = {
 		reference = "gfx/interface/illustrations/decisions/decision_knight_kneeling.dds"
 	}
-	decision_group_type = major
 	ai_check_interval = 12
 
 	desc = restor_raise_the_standard_decision_desc
@@ -36,7 +36,9 @@ restor_raise_the_standard_decision = {
 	is_valid = {
 		custom_tooltip = {
 			text = restor_raise_the_standard_support_tt
-			global_var:restor_support >= restor_rising_support_value
+			# The live value, the same number the panel shows (the global is only refreshed yearly and
+			# on map changes, so the two used to disagree).
+			restor_support_value >= restor_rising_support_value
 		}
 	}
 
@@ -96,10 +98,10 @@ restor_raise_the_standard_decision = {
 }
 
 restor_restore_the_crown_decision = {
+	decision_group_type = society
 	picture = {
 		reference = "gfx/interface/illustrations/decisions/decision_realm.dds"
 	}
-	decision_group_type = major
 	ai_check_interval = 6
 
 	desc = restor_restore_the_crown_decision_desc
@@ -133,7 +135,9 @@ restor_restore_the_crown_decision = {
 		}
 		custom_tooltip = {
 			text = restor_restore_the_crown_support_tt
-			global_var:restor_support >= restor_rising_support_value
+			# The live value, the same number the panel shows (the global is only refreshed yearly and
+			# on map changes, so the two used to disagree).
+			restor_support_value >= restor_rising_support_value
 		}
 	}
 
@@ -180,6 +184,7 @@ restor_restore_the_crown_decision = {
 }
 
 restor_give_to_the_cause_decision = {
+	decision_group_type = society
 	picture = {
 		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
 	}
@@ -208,11 +213,7 @@ restor_give_to_the_cause_decision = {
 		global_var:restor_pretender = { add_gold = 100 }
 		change_global_variable = { name = restor_war_chest add = 100 }
 		restor_favour_gain_effect = { VALUE = 30 }
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 3
-		}
+		restor_rank_gain_effect = { VALUE = 3 }
 		hidden_effect = {
 			add_character_flag = { flag = restor_gave_recently years = 1 }
 			# Read by the war_chest charge. A counter, not a flag, so two gifts in a charge's
@@ -246,6 +247,7 @@ restor_give_to_the_cause_decision = {
 }
 
 restor_reward_the_faithful_decision = {
+	decision_group_type = society
 	picture = {
 		reference = "gfx/interface/illustrations/decisions/decision_realm.dds"
 	}
@@ -283,11 +285,7 @@ restor_reward_the_faithful_decision = {
 					modifier = restor_raised_before_the_sworn_opinion
 				}
 				restor_favour_gain_effect = { VALUE = 25 }
-				add_trait_xp = {
-					trait = restor_member
-					track = restor_rank
-					value = 5
-				}
+				restor_rank_gain_effect = { VALUE = 5 }
 			}
 		}
 	}

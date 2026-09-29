@@ -29,11 +29,13 @@ public sealed record AutoCutDiagnostics(
 /// first puts the wall's edge on the terrain instead.
 ///
 /// By default (<see cref="ImpassableRanking.Slope"/>) the first four steps below are one: land is
-/// ranked by its steepness at a barony's scale, lifted by its height above the local floor, and
-/// the share taken from the top; see <see cref="SlopeWalls"/>. Steepness is what makes ground
-/// impassable, and ranking by height walled smooth uplands while leaving escarpments and steep
-/// ridges near the sea passable. The cliffs, clean, size rule and passes follow as below, without
-/// the crest extension. <see cref="ImpassableRanking.Height"/> runs all seven:
+/// scored by its steepness at a barony's scale, lifted by its height above the local floor, and
+/// everything over a fixed line is wall, up to a cap; see <see cref="SlopeWalls"/>. Steepness is
+/// what makes ground impassable, and ranking by height walled smooth uplands while leaving
+/// escarpments and steep ridges near the sea passable. The cliffs, clean and size rule follow as
+/// below, without the crest extension; then lone round walls are dropped
+/// (<see cref="DropKnobs"/>), and the passes cut. <see cref="ImpassableRanking.Height"/> runs all
+/// seven:
 /// <list type="number">
 /// <item>Mountain ground: land above the gate line (the mountain line capped at
 /// <see cref="MapConfig.ImpassableGateHeight"/>), plus steep ground within a short reach of it.</item>
@@ -77,6 +79,17 @@ public sealed record AutoCutDiagnostics(
 /// </summary>
 public static class ImpassableAutoCut
 {
+    /// <summary>
+    /// The least a small wall must lengthen some trip past it, in barony widths, to stay, with
+    /// <see cref="MapConfig.ImpassableKnobBaronies"/>. Going round a round wall adds about its own
+    /// width, so walls that block nothing measured 0.4–1.9 on the Rift and archipelago worlds; walls
+    /// that close a neck against the sea or another wall measured 2.2 and up, several of them round.
+    /// </summary>
+    private const double MinDetourBaronies = 2;
+
+    /// <summary>How many points round a small wall its detour is measured between.</summary>
+    private const int DetourSamples = 16;
+
     /// <summary>
     /// The mask, one flag per province-raster pixel, or null when there is nothing to cut — no
     /// target share, no land, or no mountain ground — in which case the scored pass runs instead.
@@ -137,6 +150,8 @@ public static class ImpassableAutoCut
         long plateauPixels;
         if (bySlope)
         {
+            // Ranked by steepness, the share is only a cap; the line decides. See SlopeWalls.
+            share = Math.Clamp(cfg.ImpassableMaxShareOfLand, 0, 0.5);
             raw = SlopeWalls(elevation, land, landTotal, width, height, radius, close, cfg, share,
                 ceiling, out smooth, out cutHeight, out plateauPixels);
             target = qualifying = share;
@@ -348,6 +363,21 @@ public static class ImpassableAutoCut
             crests = $"; crests +{(double)added / landTotal:P1} of land, {dropped} wall(s) under {minWall:0.#} baronies dropped";
         }
 
+        // Small walls that block nothing, after the clean has fused what belongs together.
+        if (bySlope && masked > 0 && cfg.ImpassableKnobBaronies > 0)
+        {
+            int knobs = DropIdleWalls(mask, land, smooth, width, height, barony, radius,
+                cfg.ImpassableKnobBaronies, ceiling);
+            if (knobs > 0)
+            {
+                (parts, partSizes) = Label(mask, width, height);
+                pieces = partSizes.Count;
+                masked = 0;
+                foreach (int size in partSizes) masked += size;
+                crests += $", {knobs} small wall(s) blocking nothing dropped";
+            }
+        }
+
         if (masked == 0) return null;
 
         // 6. Passes, on the finished walls: any earlier and the closing would seal them again.
@@ -360,7 +390,8 @@ public static class ImpassableAutoCut
         if (bySlope)
         {
             Console.WriteLine($"  impassable auto-cut: {diagnostics.MaskShare:P1} of land in {pieces} wall piece(s) " +
-                              $"(ranked by slope: share {share:P0} down to a score of {cutHeight:F2} + " +
+                              $"(ranked by slope: score {cutHeight:F2} and up" +
+                              (cutHeight > cfg.ImpassableSlopeLine ? $", raised from {cfg.ImpassableSlopeLine:F2} to cap at {share:P0}" : "") + " + " +
                               $"{diagnostics.PlateauShare:P1} above the ceiling ({ceiling:F0}); " +
                               $"mountain line {mountainLine:F0}{cliffs}{crests})");
         }
@@ -430,15 +461,24 @@ public static class ImpassableAutoCut
     /// <see cref="MapConfig.ImpassableLiftScale"/>. The floor is the lowest ground six barony radii
     /// around, so a massif counts for more than a bluff of the same steepness while a shoulder on a
     /// high plain counts for little. Ground gentler than <see cref="MapConfig.ImpassableMinSlope"/>
-    /// never scores. The share is taken from the top score down.
+    /// never scores. Everything scoring <see cref="MapConfig.ImpassableSlopeLine"/> or more is wall;
+    /// only where that would pass <paramref name="share"/> (<see cref="MapConfig.ImpassableMaxShareOfLand"/>)
+    /// does the line rise to fit it.
     ///
     /// Water is taken at sea level before the smoothing, or every coast would read as a cliff down
-    /// to the seabed. Ground above the ceiling is walled whatever it scores, outside the share, and
+    /// to the seabed. Ground above the ceiling is walled whatever it scores, outside the cap, and
     /// so is a set-piece's barrier (see <see cref="AppGUI.QuickFeatures.Barrier"/>), inside it.
     ///
-    /// Measured against the height ranking on two 8192 worlds (Rift 630583, scar 288855): smooth
-    /// high ground walled (238–400, ruggedness under 1.2) fell from 60% and 66% to under 2%, and
-    /// steep ground below 238 walled (ruggedness 3 or more) rose from 20% and 39% to 71%.
+    /// Measured against the height ranking on nine worlds (six 8192, two 4096, Lowlands to
+    /// Highlands, three set-pieces): walled land 0.7% on a lowland pangaea, 5.5–9.6% on the rest,
+    /// and 15% on the wall world, where the Wall fills the cap. Smooth high ground walled
+    /// (238–400, ruggedness under 1.2) fell from 60% and 66% to 1.2% and 0.6% on the Rift (630583)
+    /// and scar (288855) worlds, and steep ground below 238 walled (ruggedness 3 or more) rose from
+    /// 20% and 39% to 50% and 61%.
+    ///
+    /// A long, broad range whose ridges are fine grooves on a smooth swell, as the Spine set-piece
+    /// draws on a 4096 map, is neither steep nor spread enough at a barony's scale to be walled;
+    /// the height ranking left it passable too.
     /// </summary>
     private static bool[] SlopeWalls(float[] elevation, byte[] land, long landTotal, int width, int height,
         int radius, int close, MapConfig cfg, double share, float ceiling,
@@ -446,12 +486,22 @@ public static class ImpassableAutoCut
     {
         int n = width * height;
         float sea = cfg.Limits.SeaLevelUpper;
-        var terrain = smooth = Gaussian(elevation, null, null, width, height, radius / 4.0, floorAt: sea);
-        var rugged = BoxMean(FeatureSlope(terrain, width, height), width, height, Math.Max(1, radius / 2));
+        // Measured over a fixed stretch of terrain, not a fixed number of pixels: 9 and 18 vanilla
+        // pixels, a quarter and a half of an 8192 map's barony radius. The same pangaea at 8192 and
+        // 4096 then reads the same once the slope is put at vanilla's scale (99th percentile 3.76
+        // and 3.69); with a kernel fixed in pixels, the 4096 map's was smoothed over twice the
+        // terrain, read 2.66, and walled a third as much.
+        var terrain = smooth = Gaussian(elevation, null, null, width, height, Math.Max(1.0, cfg.Scaled(9)), floorAt: sea);
+        var rugged = BoxMean(FeatureSlope(terrain, width, height), width, height,
+            Math.Max(1, (int)Math.Round(cfg.Scaled(18))));
         double liftScale = Math.Max(0, cfg.ImpassableLiftScale) * cfg.ReliefScale;
         var floor = liftScale > 0 ? LocalFloor(terrain, width, height, 6 * radius) : null;
         float inverseLift = liftScale > 0 ? (float)(1 / liftScale) : 0f;
         float minSlope = (float)Math.Max(0, cfg.ImpassableMinSlope);
+
+        // The slope is then read at vanilla's scale, so the line and the floor mean the same on
+        // every map size: on a 4096 map the same landforms stand twice as steep per pixel.
+        float toVanilla = (float)cfg.MapScale;
 
         // A set-piece's barrier is that map's mountains, so it spends the share like any wall; the
         // ceiling is outside it, as it is when ranking by height. On the wall world, the Wall's body
@@ -467,37 +517,60 @@ public static class ImpassableAutoCut
                 if (land[i] == 0) continue;
                 if (terrain[i] >= ceiling) { forced[i] = true; count++; continue; }
                 if (barrier is not null && barrier[i]) { forced[i] = true; continue; }
-                if (rugged[i] < minSlope || rugged[i] <= 0) continue;
-                score[i] = floor is null ? rugged[i] : rugged[i] * (1 + MathF.Max(0, terrain[i] - floor[i]) * inverseLift);
+                float steep = rugged[i] * toVanilla;
+                if (steep < minSlope || steep <= 0) continue;
+                score[i] = floor is null ? steep : steep * (1 + MathF.Max(0, terrain[i] - floor[i]) * inverseLift);
             }
             return count;
         });
 
+        long aboveCeiling = outside;
         int scored = 0;
         for (int i = 0; i < n; i++) if (score[i] > 0) scored++;
         var values = new float[scored];
         for (int i = 0, k = 0; i < n; i++) if (score[i] > 0) values[k++] = score[i];
 
-        // The share is of walls as they stand after the clean, which drops the specks and hairlines
-        // a threshold leaves and every wall under ImpassableMinWallBaronies. The count taken is
-        // corrected twice by what the clean kept of it; on the three worlds above, the first guess
-        // kept about four-fifths.
         var raw = new bool[n];
-        double goal = share * landTotal;
         double minWall = Math.Max(0.5, cfg.ImpassableMinWallBaronies) * cfg.BaronyPixels;
         int open = Math.Max(Math.Max(1, close / 2), radius / 4);
-        long want = (long)goal;
-        cut = float.PositiveInfinity;
-        for (int pass = 0; pass < 3 && scored > 0 && goal >= 1; pass++)
-        {
-            long take = Math.Clamp(want, 1, scored);
-            float line = cut = Provinces.Select(values, scored - (int)take);
-            Parallel.For(0, height, y =>
-            {
-                for (int i = y * width, end = i + width; i < end; i++) raw[i] = forced[i] || score[i] >= line;
-            });
-            if (pass == 2) break;
 
+        // Everything at or above the line is wall, however much or little of the map that is; the
+        // share only caps it. A fixed share gave a flat world and a rugged one the same walls: a
+        // lowland pangaea spent it on rolling hills (stopped only by the slope floor), and a rugged
+        // world had real ranges left over.
+        float slopeLine = (float)Math.Max(0, cfg.ImpassableSlopeLine);
+        cut = slopeLine;
+        Mark(slopeLine);
+        double goal = share * landTotal;
+        long kept = Kept();
+        if (kept <= goal || scored == 0 || goal < 1) return raw;
+
+        // Over the cap: the line rises until the walls, as they stand after the clean, fill it. The
+        // clean drops the specks and hairlines a threshold leaves and every wall under
+        // ImpassableMinWallBaronies, so the count taken is corrected twice by what the clean kept.
+        long take = 0;
+        for (int i = 0; i < n; i++) if (score[i] >= slopeLine) take++;
+        long want = (long)(take * goal / kept);
+        for (int pass = 0; pass < 3; pass++)
+        {
+            take = Math.Clamp(want, 1, scored);
+            float line = cut = MathF.Max(slopeLine, Provinces.Select(values, scored - (int)take));
+            Mark(line);
+            if (pass == 2) break;
+            kept = Kept();
+            if (kept <= 0) break;
+            want = (long)(take * goal / kept);
+        }
+        return raw;
+
+        void Mark(float line) => Parallel.For(0, height, y =>
+        {
+            for (int i = y * width, end = i + width; i < end; i++) raw[i] = forced[i] || score[i] >= line;
+        });
+
+        // The walls the current raw mask would leave after the clean, less those above the ceiling.
+        long Kept()
+        {
             var trial = Erode(Dilate(raw, width, height, close), width, height, close);
             Parallel.For(0, height, y =>
             {
@@ -505,13 +578,208 @@ public static class ImpassableAutoCut
             });
             trial = Dilate(Erode(trial, width, height, open), width, height, open);
             var (_, sizes) = Label(trial, width, height);
-            long kept = -outside;
-            foreach (int size in sizes) if (size >= minWall) kept += size;
-            if (kept <= 0) break;
-            want = (long)(take * goal / kept);
+            long total = -aboveCeiling;
+            foreach (int size in sizes) if (size >= minWall) total += size;
+            return total;
         }
-        if (float.IsPositiveInfinity(cut)) Array.Copy(forced, raw, n);
-        return raw;
+    }
+
+    /// <summary>
+    /// Drops the small walls that block nothing: under <paramref name="maxBaronies"/>, and making
+    /// no trip past them longer by <see cref="MinDetourBaronies"/> barony widths or more. A wall
+    /// matters for what it keeps apart. A round wall on a lone steep hill keeps nothing apart and
+    /// armies walk round it; the same wall in a neck between the sea and another range closes it;
+    /// a thin strip along a coast is long but nothing needs to cross it. Their shapes do not tell
+    /// these apart (a rule on size and roundness dropped walls closing necks and kept coastal
+    /// strips); how far round they send a traveller does. A wall holding ground above
+    /// <paramref name="ceiling"/> stays, since nothing up there is left passable. Returns how many
+    /// were dropped.
+    ///
+    /// The detour is the barrier measure of connectivity mapping (cost distance with and without
+    /// the barrier), cut down to what a small wall needs: <see cref="DetourSamples"/> points just
+    /// outside it, evenly round its centre; from each, distances through passable land, the sea
+    /// and every other wall in the way, on a grid of four-pixel cells in a window as wide
+    /// again as the wall on each side; and the largest excess over the straight line. A pair cut
+    /// off from each other inside the window counts as blocked outright.
+    /// </summary>
+    private static int DropIdleWalls(bool[] mask, byte[] land, float[] smooth, int width, int height,
+        double barony, int radius, double maxBaronies, float ceiling)
+    {
+        var (labels, sizes) = Label(mask, width, height);
+        int count = sizes.Count;
+        if (count == 0) return 0;
+
+        var x0 = new int[count]; var y0 = new int[count]; var x1 = new int[count]; var y1 = new int[count];
+        Array.Fill(x0, int.MaxValue); Array.Fill(y0, int.MaxValue); Array.Fill(x1, -1); Array.Fill(y1, -1);
+        var high = new bool[count];
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                int i = y * width + x, p = labels[i] - 1;
+                if (p < 0) continue;
+                if (x < x0[p]) x0[p] = x;
+                if (x > x1[p]) x1[p] = x;
+                if (y < y0[p]) y0[p] = y;
+                if (y > y1[p]) y1[p] = y;
+                if (smooth[i] >= ceiling) high[p] = true;
+            }
+
+        const int q = 4;
+        double limit = MinDetourBaronies * 2 * radius;
+        var drop = new bool[count];
+        Parallel.For(0, count, p =>
+        {
+            if (high[p] || sizes[p] >= maxBaronies * barony) return;
+            drop[p] = Detour(labels, p + 1, mask, land, width, height, x0[p], y0[p], x1[p], y1[p], q, barony / 2) < limit;
+        });
+
+        int dropped = 0;
+        foreach (bool d in drop) if (d) dropped++;
+        if (dropped > 0)
+            Parallel.For(0, height, y =>
+            {
+                for (int i = y * width, end = i + width; i < end; i++)
+                    if (labels[i] > 0 && drop[labels[i] - 1]) mask[i] = false;
+            });
+        return dropped;
+    }
+
+    /// <summary>
+    /// The most one wall lengthens a trip between two points just outside it, in pixels; see
+    /// <see cref="DropIdleWalls"/>. Cells are <paramref name="q"/> pixels square: land if most of
+    /// the block is land, wall if more than 30% of it is wall.
+    /// </summary>
+    private static double Detour(int[] labels, int id, bool[] mask, byte[] land, int width, int height,
+        int bx0, int by0, int bx1, int by1, int q, double minPocketPixels)
+    {
+        int pad = Math.Max(bx1 - bx0, by1 - by0) + 1;
+        int wx0 = Math.Max(0, bx0 - pad) / q, wy0 = Math.Max(0, by0 - pad) / q;
+        int wx1 = Math.Min(width - 1, bx1 + pad) / q, wy1 = Math.Min(height - 1, by1 + pad) / q;
+        int cw = wx1 - wx0 + 1, ch = wy1 - wy0 + 1, cells = cw * ch;
+
+        // 0 blocked, 1 open, 2 this wall.
+        var grid = new byte[cells];
+        double cx = 0, cy = 0;
+        int own = 0;
+        for (int gy = 0; gy < ch; gy++)
+            for (int gx = 0; gx < cw; gx++)
+            {
+                int landCount = 0, total = 0, walls = 0, mine = 0;
+                for (int y = (wy0 + gy) * q, ye = Math.Min(height, y + q); y < ye; y++)
+                    for (int x = (wx0 + gx) * q, xe = Math.Min(width, x + q); x < xe; x++)
+                    {
+                        int i = y * width + x;
+                        total++;
+                        if (land[i] != 0) landCount++;
+                        if (mask[i]) { walls++; if (labels[i] == id) mine++; }
+                    }
+                // A cell is wall when nearly a third of it is: marking it on any wall pixel closed
+                // the strip of land between a coastal wall and the sea, and the wall read as blocking.
+                int c = gy * cw + gx;
+                if (walls * 10 > total * 3)
+                {
+                    if (mine * 2 >= walls) { grid[c] = 2; cx += gx; cy += gy; own++; }
+                }
+                else if (landCount * 2 > total) grid[c] = 1;
+            }
+        if (own == 0) return 0;
+        cx /= own; cy /= own;
+
+        // Open pockets smaller than half a barony are no one's way through: on the grid, the strip
+        // between a coastal wall and the sea breaks into such scraps, and a sample in one read as
+        // cut off from the rest, so the wall as blocking everything.
+        var pocket = new int[cells];
+        var pocketSize = new List<int> { 0 };
+        var stack = new Stack<int>();
+        for (int start = 0; start < cells; start++)
+        {
+            if (grid[start] != 1 || pocket[start] != 0) continue;
+            int label = pocketSize.Count, size = 0;
+            pocket[start] = label;
+            stack.Push(start);
+            while (stack.Count > 0)
+            {
+                int c = stack.Pop();
+                size++;
+                int gx = c % cw, gy = c / cw;
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int nx = gx + dx, ny = gy + dy;
+                        if (nx < 0 || ny < 0 || nx >= cw || ny >= ch) continue;
+                        int nc = ny * cw + nx;
+                        if (grid[nc] == 1 && pocket[nc] == 0) { pocket[nc] = label; stack.Push(nc); }
+                    }
+            }
+            pocketSize.Add(size);
+        }
+        int minPocket = (int)Math.Ceiling(minPocketPixels / (q * q));
+
+        // The ring: open cells beside the wall, one taken nearest each of the sample directions.
+        var ring = new List<int>();
+        for (int c = 0; c < cells; c++)
+        {
+            if (grid[c] != 1 || pocketSize[pocket[c]] < minPocket) continue;
+            int gx = c % cw, gy = c / cw;
+            bool touches = false;
+            for (int dy = -1; dy <= 1 && !touches; dy++)
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int nx = gx + dx, ny = gy + dy;
+                    if (nx >= 0 && ny >= 0 && nx < cw && ny < ch && grid[ny * cw + nx] == 2) { touches = true; break; }
+                }
+            if (touches) ring.Add(c);
+        }
+        if (ring.Count < 2) return 0;
+        var samples = new List<int>();
+        for (int k = 0; k < DetourSamples; k++)
+        {
+            double angle = -Math.PI + 2 * Math.PI * k / DetourSamples;
+            int best = -1;
+            double bestGap = double.MaxValue;
+            foreach (int c in ring)
+            {
+                double gap = Math.Abs(Math.IEEERemainder(Math.Atan2(c / cw - cy, c % cw - cx) - angle, 2 * Math.PI));
+                if (gap < bestGap) { bestGap = gap; best = c; }
+            }
+            if (!samples.Contains(best)) samples.Add(best);
+        }
+
+        // Dijkstra over open cells, eight-connected, from each sample in turn.
+        double worst = 0;
+        var dist = new double[cells];
+        var queue = new PriorityQueue<int, double>();
+        foreach (int from in samples)
+        {
+            Array.Fill(dist, double.PositiveInfinity);
+            dist[from] = 0;
+            queue.Enqueue(from, 0);
+            while (queue.TryDequeue(out int c, out double d))
+            {
+                if (d > dist[c]) continue;
+                int gx = c % cw, gy = c / cw;
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        if (dx == 0 && dy == 0) continue;
+                        int nx = gx + dx, ny = gy + dy;
+                        if (nx < 0 || ny < 0 || nx >= cw || ny >= ch) continue;
+                        int nc = ny * cw + nx;
+                        if (grid[nc] != 1) continue;
+                        double nd = d + (dx != 0 && dy != 0 ? Math.Sqrt(2) : 1);
+                        if (nd < dist[nc]) { dist[nc] = nd; queue.Enqueue(nc, nd); }
+                    }
+            }
+            foreach (int to in samples)
+            {
+                if (to == from) continue;
+                double straight = Math.Sqrt(Math.Pow(to % cw - from % cw, 2) + Math.Pow(to / cw - from / cw, 2));
+                double excess = double.IsPositiveInfinity(dist[to]) ? double.MaxValue : dist[to] - straight;
+                worst = Math.Max(worst, excess);
+            }
+            if (worst == double.MaxValue) break;
+        }
+        return worst == double.MaxValue ? double.MaxValue : worst * q;
     }
 
     /// <summary>

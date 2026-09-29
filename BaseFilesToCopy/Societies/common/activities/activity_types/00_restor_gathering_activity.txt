@@ -55,6 +55,8 @@ activity_restor_gathering = {
 	# call one.
 	can_always_plan = no
 
+	# The society panel's light for this activity mirrors these gates and is_shown's:
+	# restor_can_host_gathering_trigger in 00_restor_triggers.txt. Change them together.
 	can_start_showing_failures_only = {
 		is_available_adult = yes
 		NOT = { is_activity_type_on_cooldown = activity_restor_gathering }
@@ -279,11 +281,7 @@ activity_restor_gathering = {
 		if = {
 			limit = { this = scope:host }
 			restor_favour_gain_effect = { VALUE = 25 }
-			add_trait_xp = {
-				trait = restor_member
-				track = restor_rank
-				value = 5
-			}
+			restor_rank_gain_effect = { VALUE = 5 }
 		}
 	}
 

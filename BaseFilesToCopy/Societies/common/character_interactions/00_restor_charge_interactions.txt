@@ -145,3 +145,53 @@ restor_give_charge_interaction = {
 
 	ai_will_do = { base = 0 }
 }
+
+# Demote: a player Keeper's hand on the ladder. One rung down (restor_rank_loss_effect, 25), and the
+# member resents it. An AI Keeper demotes through restor_charge_failed_standing_effect instead: a
+# second charge run out within ten years. Five years between demotions of the same member.
+restor_demote_interaction = {
+	category = interaction_category_restor
+	icon = icon_force_to_step_down
+	interface_priority = 44
+	common_interaction = no
+
+	desc = restor_demote_interaction_desc
+
+	use_diplomatic_range = no
+	auto_accept = yes
+	cooldown_against_recipient = { years = 5 }
+
+	is_shown = {
+		restor_underground_trigger = yes
+		scope:actor = {
+			is_ai = no
+			restor_is_keeper_trigger = yes
+		}
+		scope:recipient != scope:actor
+		scope:recipient = { has_trait = restor_member }
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = restor_demote_bottom_tt
+			scope:recipient = { restor_rank_at_least_trigger = { RANK = 25 } }
+		}
+		custom_tooltip = {
+			text = restor_give_charge_heir_tt
+			scope:recipient = { NOT = { restor_is_pretender_trigger = yes } }
+		}
+	}
+
+	on_accept = {
+		scope:recipient = {
+			restor_rank_loss_effect = { VALUE = 25 }
+			add_opinion = {
+				target = scope:actor
+				modifier = angry_opinion
+				opinion = -20
+			}
+		}
+	}
+
+	ai_will_do = { base = 0 }
+}

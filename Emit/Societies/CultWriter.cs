@@ -197,6 +197,16 @@ internal static class CultWriter
         Write(modDir, Owned[2], o.ToString());
     }
 
+    /// <summary>The cult's clergy keys: the host religion's tag each points at, and the English fallback.</summary>
+    private static readonly (string Key, string Tag, string English)[] ClergyWords =
+    [
+        ("cult_priest", "PriestNeuter", "priest"),
+        ("cult_priests", "PriestNeuterPlural", "priests"),
+        ("cult_priest_male", "PriestMale", "priest"),
+        ("cult_priest_female", "PriestFemale", "priestess"),
+        ("cult_bishop", "BishopNeuter", "bishop"),
+    ];
+
     private static void WriteLocalisation(string modDir, CultPlan? plan)
     {
         var loc = new LocFile();
@@ -205,12 +215,25 @@ internal static class CultWriter
             loc.Add("cult_society_name", "The Cult");
             loc.Add("cult_unveil_list", "");
             loc.Add("cult_unveil_nothing_tt", "The faith's doctrines are unchanged.");
+            foreach (var (key, _, english) in ClergyWords) loc.Add(key, english);
             loc.Write(Path.Combine(modDir, Owned[3]));
             return;
         }
 
         string devil = $"${plan.DevilKey}$";
         string faith = $"${plan.Host.Key}$";
+
+        // The host's own words for its clergy, by loc key like the devil's, so the prose says "Twaitru"
+        // where it means priest and carries the religion's hover gloss (Emit/ReligionGlossary.cs)
+        // anywhere it is printed: events, decisions, interactions and the cult panel alike.
+        foreach (var (key, tag, english) in ClergyWords)
+        {
+            string? word = plan.Host.Religion.Localization.FirstOrDefault(t => t.Tag == tag).Value;
+            if (word is { Length: > 0 } && plan.Host.Religion.LocalizationText.ContainsKey(word))
+                loc.AddBuilt(key, $"${word}$");
+            else
+                loc.Add(key, english);
+        }
 
         loc.AddBuilt("cult_society_name", plan.NamePattern switch
         {

@@ -28,7 +28,7 @@
 
  cult.0201.t:0 "The Holy Day"
  cult.0201.desc:0 "It is a holy day of $cult_host_name$, and the whole court has come to the [cult_faith.HouseOfWorship] to take the sacrament. Your place is at the front. Everyone will see you kneel, and everyone will see you take it.\n\n"
- cult.0201.desc_sworn_priest:0 "The [cult_faith.PriestNeuter] at the rail is [cult_life_chaplain.GetTitledFirstName], your own chaplain. You last saw [cult_life_chaplain.GetHerHim] at a gathering of the circle, three nights ago, saying the prayers backwards. [cult_life_chaplain.GetSheHe|U] will not meet your eye."
+ cult.0201.desc_sworn_priest:0 "The [cult_faith.PriestNeuter] at the rail is [cult_life_chaplain.GetTitledFirstName], who hears your own confessions. You last saw [cult_life_chaplain.GetHerHim] at a gathering of the circle, three nights ago, saying the prayers backwards. [cult_life_chaplain.GetSheHe|U] will not meet your eye."
  cult.0201.desc_priest:0 "The [cult_faith.PriestNeuter] at the rail is old and kind, and has known you since you were a child. [cult_faith.HighGodNamePossessive|U] blessing will be said over you by someone who means every word of it."
  cult.0201.a:0 "Kneel, take it, and think of nothing."
  cult.0201.b:0 "Take it, and say the circle's words under my breath."
@@ -51,7 +51,7 @@
  cult.0202.b:0 "Confess a smaller sin, and let that be the answer."
  cult.0202.c:0 "Tell [cult_life_confessor.GetHerHim] the truth, and ask [cult_life_confessor.GetHerHim] to join us."
  cult.0202.c.sworn:0 "[cult_life_confessor.GetFirstNameNoTooltip] Takes the Oath"
- cult.0202.c.sworn.tt:0 "A sworn court chaplain adds to the #high rot#! in $cult_host_name$"
+ cult.0202.c.sworn.tt:0 "A sworn [Concept('court_chaplain','court chaplain')|E] adds to the #high rot#! in $cult_host_name$"
  cult.0202.c.refused:0 "[cult_life_confessor.GetFirstNameNoTooltip] Is Horrified"
 
  # ---- cult.0203 ---------------------------------------------------------------------------------
@@ -118,7 +118,7 @@
  cult.0208.a.silent:0 "[cult_life_leaver.GetFirstNameNoTooltip] Keeps [cult_life_leaver.GetHerHis] Word"
  cult.0208.a.silent.tt:0 "Whatever [cult_life_leaver.GetFirstNameNoTooltip] tells [cult_life_leaver.GetHerHis] confessor, your name is not part of it"
  cult.0208.a.confesses:0 "[cult_life_leaver.GetFirstNameNoTooltip] Says Too Much"
- cult.0208.b:0 "Stay. After all these years, what would you even say to a priest?"
+ cult.0208.b:0 "Stay. After all these years, what would you even say to a $cult_priest$?"
  cult.0208.b.stays:0 "[cult_life_leaver.GetFirstNameNoTooltip] Stays"
  cult.0208.b.stays.tt:0 "[cult_life_leaver.GetFirstNameNoTooltip] goes home, and comes to the next gathering as if nothing had happened"
  cult.0208.b.leaves:0 "[cult_life_leaver.GetFirstNameNoTooltip] Leaves Anyway"
@@ -189,7 +189,7 @@
  cult.0213.desc:0 "Your reeve in [cult_life_county.GetNameNoTier] mentioned it as a small thing. The village [cult_faith.PriestNeuter] has stopped saying some of the old prayers. The shrine at the crossroads has not been swept since spring. Fewer people come to the [cult_faith.HouseOfWorship] every week, and nobody seems to know why.\n\nYou know why. The rot in $cult_host_name$ is spreading on its own now, and it has reached a parish of yours."
  cult.0213.a:0 "Send the circle's people to help it along."
  cult.0213.b:0 "Leave it alone. It's doing well enough."
- cult.0213.c:0 "Send a new priest, and let everyone see me do it."
+ cult.0213.c:0 "Send a new $cult_priest$, and let everyone see me do it."
 
  # ---- cult.0214 ---------------------------------------------------------------------------------
 
@@ -235,7 +235,7 @@
  # ---- cult.0252 ---------------------------------------------------------------------------------
 
  cult.0252.t:0 "Was It Worth It?"
- cult.0252.desc:0 "$cult_host_name$ is what the circle always said it would be. The prayers go to $cult_devil_name$ now, openly, and nobody has to hide. You have what you swore for.\n\nYour sister has not written in a year. The old priest who taught you your letters would not stay under your roof. People who used to laugh at your table cross themselves when you pass. You are feared, which is not the same thing as loved, and tonight you are not sure which you wanted."
+ cult.0252.desc:0 "$cult_host_name$ is what the circle always said it would be. The prayers go to $cult_devil_name$ now, openly, and nobody has to hide. You have what you swore for.\n\nYour sister has not written in a year. The old $cult_priest$ who taught you your letters would not stay under your roof. People who used to laugh at your table cross themselves when you pass. You are feared, which is not the same thing as loved, and tonight you are not sure which you wanted."
  cult.0252.a:0 "Every bit of it."
  cult.0252.b:0 "I don't know any more."
  cult.0252.c:0 "Light a candle to [cult_faith.HighGodName], the old way. Just one."

@@ -519,15 +519,16 @@ public static partial class ContentWriter
 
         // The traced courses go in so each river can be named along its length rather than by the
         // latitude of its provinces — see WaterNaming.GroupRiverProvinces.
+        var seaBodies = new List<(string Name, List<int> Zones)>();
         var waterNames = Core.Stage.Time("water naming", () => WaterNaming.Generate(
             provinces, order, landCount, riverCount, cultures, empires,
-            new Rng(cfg.Seed ^ 0x5EAE), terra.MajorRiversList, azgaar));
+            new Rng(cfg.Seed ^ 0x5EAE), terra.MajorRiversList, azgaar, seaBodies));
         Core.Showcase.Publish(() => ShowcaseItems.Waters(waterNames, new(provinces, order)));
 
         // After the water, because a drowned crater renames the sea inside its rim after itself;
         // its own stream, so naming a landmark moves no other name. See MapGen/Landmarks.cs.
         var landmarks = MapGen.Landmarks.Build(cfg, provinces, order, baronyCount, riverCount,
-            empires, cultures, waterNames, new Rng(cfg.Seed ^ 0x1A4D));
+            empires, cultures, waterNames, new Rng(cfg.Seed ^ 0x1A4D), seaBodies);
         foreach (var landmark in landmarks)
             Console.WriteLine($"  landmark: {landmark.Name} ({landmark.Kind}, {landmark.Baronies.Length} baronies)");
 

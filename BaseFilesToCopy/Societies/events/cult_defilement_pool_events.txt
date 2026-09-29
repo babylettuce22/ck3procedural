@@ -986,11 +986,7 @@ cult.1113 = {
 		if = {
 			limit = { exists = scope:cult_defilement_contact }
 			scope:cult_defilement_contact = {
-				add_trait_xp = {
-					trait = cult_member
-					track = cult_rank
-					value = 3
-				}
+				cult_rank_gain_effect = { VALUE = 3 }
 			}
 			cult_defilement_their_exposure_effect = { WHO = scope:cult_defilement_contact VALUE = 2 }
 		}
@@ -1264,11 +1260,7 @@ cult.1116 = {
 				opinion = -15
 			}
 			add_stress = minor_stress_gain
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = 3
-			}
+			cult_rank_gain_effect = { VALUE = 3 }
 		}
 		stress_impact = {
 			compassionate = minor_stress_impact_gain
@@ -1288,22 +1280,14 @@ cult.1116 = {
 			NOT = { scope:cult_hierophant = scope:cult_defilement_guest }
 		}
 		scope:cult_defilement_guest = {
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = -5
-			}
+			cult_rank_loss_effect = { VALUE = 5 }
 			add_opinion = {
 				target = root
 				modifier = angry_opinion
 				opinion = -20
 			}
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 3
-		}
+		cult_rank_gain_effect = { VALUE = 3 }
 		stress_impact = {
 			compassionate = minor_stress_impact_gain
 		}
@@ -1591,11 +1575,7 @@ cult.1120 = {
 			custom_tooltip = cult.0914.rot_tt
 			hidden_effect = { cult_rot_refresh_effect = yes }
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 2
-		}
+		cult_rank_gain_effect = { VALUE = 2 }
 		cult_corrupt_soul_effect = yes
 		cult_exposure_gain_effect = { VALUE = 2 }
 		ai_chance = { base = 60 }

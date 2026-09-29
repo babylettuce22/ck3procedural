@@ -41,12 +41,21 @@ cult_defilement_pool_open_effect = {
 # cult_their_exposure_gain_effect is worded for the hunter, and colours a rise as good news).
 # $WHO$ must be a member; the member still gets the core effect's own toast.
 cult_defilement_their_exposure_effect = {
-	$WHO$ = { save_scope_as = cult_defilement_exposed }
+	$WHO$ = {
+		save_scope_as = cult_defilement_exposed
+		save_scope_as = cult_exposure_veiled
+	}
 	save_scope_value_as = {
 		name = cult_defilement_their_delta
 		value = $VALUE$
 	}
-	custom_tooltip = cult_defilement_their_exposure_tt
+	if = {
+		limit = { scope:cult_defilement_exposed = { cult_membership_known_to_root_trigger = yes } }
+		custom_tooltip = cult_defilement_their_exposure_tt
+	}
+	else = {
+		custom_tooltip = cult_their_exposure_gain_veiled_tt
+	}
 	hidden_effect = {
 		scope:cult_defilement_exposed = { cult_exposure_gain_effect = { VALUE = $VALUE$ } }
 	}

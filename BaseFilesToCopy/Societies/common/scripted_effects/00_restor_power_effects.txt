@@ -29,11 +29,7 @@ restor_power_letter_warm_effect = {
 	}
 	custom_tooltip = restor_power_letter_sympathetic_tt
 	scope:restor_letter_bearer = {
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 3
-		}
+		restor_rank_gain_effect = { VALUE = 3 }
 		hidden_effect = {
 			trigger_event = { id = restor.0401 days = 3 }
 		}

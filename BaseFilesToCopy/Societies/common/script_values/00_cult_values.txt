@@ -100,3 +100,21 @@ cult_rot_value = {
 
 # The Unveiling needs the church captured and this much rot.
 cult_unveiling_rot_value = 60
+
+# THIS member's rung as a number, 0-3 (the thresholds 25/50/75 on the cult_rank track). Read by
+# cult_rank_loss_effect to tell whether a loss of standing cost a rung.
+cult_rung_value = {
+	value = 0
+	if = {
+		limit = { cult_rank_at_least_trigger = { RANK = 25 } }
+		value = 1
+	}
+	if = {
+		limit = { cult_rank_at_least_trigger = { RANK = 50 } }
+		value = 2
+	}
+	if = {
+		limit = { cult_rank_at_least_trigger = { RANK = 75 } }
+		value = 3
+	}
+}

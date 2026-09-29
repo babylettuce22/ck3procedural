@@ -15,7 +15,12 @@
 society_panel_window = {
 	scope = character
 	is_shown = { has_variable = society_panel_open }
-	effect = { remove_variable = society_panel_open }
+	effect = {
+		remove_variable = society_panel_open
+		# Closing lets the next opening rebuild "Within reach" at once rather than wait for its tick.
+		remove_variable = restor_panel_reach_built
+		remove_variable = cult_panel_reach_built
+	}
 }
 
 # The tab. Shown only to a member of a society, so a non-member has no tab at all -- no society's
@@ -126,8 +131,51 @@ restor_panel_gather = {
 					}
 				}
 			}
+
+			# "Within reach" is the expensive part (it walks every ruler), so it is built once here on
+			# opening and then only by restor_panel_reach_tick, not every second.
+			if = {
+				limit = {
+					has_trait = restor_member
+					NOT = { has_variable = restor_panel_reach_built }
+				}
+				restor_panel_gather_reach_effect = yes
+			}
 		}
 	}
+}
+
+# The fifteen-second refresh of "Within reach" (restor_panel_reach_tick). Nothing unless open.
+restor_panel_gather_reach = {
+	scope = character
+	is_shown = { restor_active_trigger = yes }
+	effect = {
+		if = {
+			limit = {
+				has_variable = society_panel_open
+				has_trait = restor_member
+			}
+			restor_panel_gather_reach_effect = yes
+		}
+	}
+}
+
+# ---- A row of "Within reach" -- asked of the candidate -------------------------------------------
+# Only what the order has learned by asking, and what anyone knows. Never how they would answer.
+
+restor_panel_reach_sympathetic = {
+	scope = character
+	is_shown = { has_character_flag = restor_sounded_sympathetic }
+}
+
+restor_panel_reach_refused = {
+	scope = character
+	is_shown = { has_character_flag = restor_refused_recently }
+}
+
+restor_panel_reach_blood = {
+	scope = character
+	is_shown = { restor_of_the_blood_trigger = yes }
 }
 
 # This window is the Restorationists'. The cult has its own (gen_cult_panel.gui) behind the same tab.
@@ -234,46 +282,34 @@ restor_panel_very_suspect = {
 }
 
 # ---- What the viewer can do next ----------------------------------------------------------------
+#
+# A light that is a decision asks the engine whether the decision can be taken
+# (can_execute_decision), so it counts every requirement and the cost, and can never drift from the
+# decision again -- the old hand-copied checks missed the prestige and piety costs, war and prison.
 
 restor_panel_can_give = {
 	scope = character
-	is_shown = {
-		restor_underground_trigger = yes
-		NOT = { restor_is_pretender_trigger = yes }
-		gold >= 100
-		NOT = { has_character_flag = restor_gave_recently }
-	}
+	is_shown = { can_execute_decision = restor_give_to_the_cause_decision }
 }
 
 restor_panel_can_gather = {
 	scope = character
-	is_shown = {
-		restor_underground_trigger = yes
-		OR = {
-			restor_rank_at_least_trigger = { RANK = 50 }
-			restor_is_keeper_trigger = yes
-		}
-	}
+	is_shown = { restor_can_host_gathering_trigger = yes }
+}
+
+restor_panel_can_errand = {
+	scope = character
+	is_shown = { restor_can_host_errand_trigger = yes }
 }
 
 restor_panel_can_raise = {
 	scope = character
-	is_shown = {
-		restor_underground_trigger = yes
-		restor_is_pretender_trigger = yes
-		is_landed = yes
-		NOT = { exists = global_var:restor_standard_raised }
-		global_var:restor_support >= restor_rising_support_value
-	}
+	is_shown = { can_execute_decision = restor_raise_the_standard_decision }
 }
 
 restor_panel_can_crown = {
 	scope = character
-	is_shown = {
-		restor_pretender_can_be_crowned_trigger = yes
-		restor_pretender_share_value >= restor_crowning_share_value
-		global_var:restor_support >= restor_rising_support_value
-	}
+	is_shown = { can_execute_decision = restor_restore_the_crown_decision }
 }
 
 restor_panel_viewer_is_pretender = {

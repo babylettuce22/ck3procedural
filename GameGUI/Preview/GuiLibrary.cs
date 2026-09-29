@@ -301,6 +301,14 @@ public sealed class GuiLibrary
 
         chain.Add(typeName);
 
+        // A type may fill its base's holes: vanilla's `progressbar_red = progressbar_standard {
+        // blockoverride "progress_textures" {…} }`. Gathered before walking to the base, and only
+        // where nothing nearer (the instance, a more derived type) already filled that hole. Missed
+        // until 2026-09-29, so every derived bar drew with its base's textures.
+        foreach (var child in declaration.Body.Children)
+            if (child is { IsBlock: true, Key: "blockoverride" } && child.Head.Count >= 2)
+                overrides.TryAdd(GuiNode.Unquote(child.Head[^1]), child);
+
         // A self-referential declaration is the files' way of naming an engine primitive. It is the
         // base case, and following it would be an infinite loop.
         if (!declaration.Base.Equals(typeName, StringComparison.OrdinalIgnoreCase) && chain.Count < 40)

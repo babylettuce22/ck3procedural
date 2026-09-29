@@ -44,3 +44,22 @@ cult_recruit_public_candidate_trigger = {
 	is_landed = yes
 	cult_recruitable_trigger = yes
 }
+
+# THIS belongs on the panel's "Within reach" list for scope:cult_viewer: someone the viewer could
+# sound out today, from the pool the AI draws on (a lord of the host faith, or a court chaplain).
+# Gates only -- the same ones the interactions check. Nothing here reads pull or push, and a recent
+# refusal does not hide anyone: the row says so instead, so the list itself never hints at fit.
+cult_panel_candidate_trigger = {
+	is_adult = yes
+	is_imprisoned = no
+	NOT = { this = scope:cult_viewer }
+	cult_of_the_host_trigger = yes
+	NOT = { has_trait = cult_member }
+	NOT = { has_trait = restor_member }
+	NOT = { cult_is_hunter_trigger = yes }
+	OR = {
+		is_landed = yes
+		cult_recruit_is_chaplain_trigger = yes
+	}
+	in_diplomatic_range = scope:cult_viewer
+}

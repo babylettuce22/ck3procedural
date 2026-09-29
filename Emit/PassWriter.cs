@@ -76,6 +76,8 @@ public static class PassWriter
     /// </summary>
     public static void WriteLandmarks(string modDir, IReadOnlyList<Landmark> landmarks)
     {
+        // A landmark with no land — a sea named only on the flat map — has nothing to mark here.
+        landmarks = landmarks.Where(l => l.Baronies.Length > 0).ToList();
         if (landmarks.Count == 0) return;
 
         var modifiers = new JominiBuilder();

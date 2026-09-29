@@ -21,8 +21,12 @@ namespace Ck3MapGen.GameGui.Preview;
 /// </summary>
 public static class GuiText
 {
-    /// <summary>The text as the preview should draw it.</summary>
-    public static string Display(string content)
+    /// <summary>
+    /// The text as the preview should draw it. <paramref name="sample"/> maps a datafunction's inner
+    /// expression to a stand-in value (a name, a number); one it does not know is drawn as its last
+    /// call, as before.
+    /// </summary>
+    public static string Display(string content, Func<string, string?>? sample = null)
     {
         if (content.Length == 0) return content;
 
@@ -37,7 +41,12 @@ public static class GuiText
                 int close = content.IndexOf(']', i);
                 if (close < 0) { sb.Append(content[i..]); break; }
 
-                sb.Append('⟨').Append(LastCall(content[(i + 1)..close])).Append('⟩');
+                string expression = content[(i + 1)..close];
+
+                if (sample?.Invoke(expression.Trim()) is { } value)
+                    sb.Append(value);
+                else
+                    sb.Append('⟨').Append(LastCall(expression)).Append('⟩');
                 i = close;
                 continue;
             }
@@ -62,6 +71,18 @@ public static class GuiText
 
     /// <summary>How many characters <see cref="Display"/> will actually draw.</summary>
     public static int Length(string content) => Display(content).Length;
+
+    /// <summary>
+    /// The width of drawn text in average glyphs. Capitals count 1.35: the 0.5em average was fitted
+    /// on title-case text, and an all-caps label ("THE KEEPER", "SUPPORT") measured a third short and
+    /// clipped.
+    /// </summary>
+    public static double Advance(string shown)
+    {
+        double advance = 0;
+        foreach (char c in shown) advance += char.IsUpper(c) ? 1.35 : 1;
+        return advance;
+    }
 
     /// <summary>
     /// The last call in a datafunction chain, with its arguments dropped.

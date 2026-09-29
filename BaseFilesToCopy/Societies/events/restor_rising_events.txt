@@ -169,11 +169,7 @@ restor.0610 = {
 			allied_through_target = scope:restor_pretender
 		}
 		restor_favour_gain_effect = { VALUE = 40 }
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 10
-		}
+		restor_rank_gain_effect = { VALUE = 10 }
 		restor_exposure_gain_effect = { VALUE = 10 }
 		ai_chance = {
 			base = 40

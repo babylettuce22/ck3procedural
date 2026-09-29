@@ -17,10 +17,10 @@
 
  cult_power_gain_tt:0 "Gain #P [cult_power_delta|0]#! dark power"
  cult_power_spend_tt:0 "Spend #N [cult_power_delta|0]#! dark power"
- cult_power_toast:0 "Dark power: #bold [ROOT.Char.MakeScope.Var('cult_power').GetValue|0]#!"
+ cult_power_toast:0 "Dark power: #bold [cult_meter_owner.MakeScope.Var('cult_power').GetValue|0]#!"
  cult_exposure_gain_tt:0 "Your exposure rises by #N [cult_exposure_delta|0]#!"
  cult_exposure_loss_tt:0 "Your exposure falls by #P [cult_exposure_delta|0]#!"
- cult_exposure_toast:0 "Exposure: #bold [ROOT.Char.MakeScope.Var('cult_exposure').GetValue|0]#!"
+ cult_exposure_toast:0 "Exposure: #bold [cult_meter_owner.MakeScope.Var('cult_exposure').GetValue|0]#!"
  cult_corruption_tt:0 "The cult may take something from you: a virtue lost, or a vice gained"
 
  cult_under_suspicion_modifier:0 "Whispered About"
@@ -32,7 +32,7 @@
  cult_unveiler_modifier:0 "The Unveiler"
  cult_unveiler_modifier_desc:0 "Turned a whole faith inside out."
  cult_county_tainted:0 "Tainted"
- cult_county_tainted_desc:0 "The shrines here have been defiled, and the local priest looks the other way."
+ cult_county_tainted_desc:0 "The shrines here have been defiled, and the local $cult_priest$ looks the other way."
 
  cult_refused_the_offer_opinion:0 "Tried to lead me into damnation"
  cult_brought_me_in_opinion:0 "Brought me into the circle"
@@ -73,15 +73,15 @@
  # ---- Introductions -----------------------------------------------------------------------------
 
  cult.0010.t:0 "$cult_society_name$"
- cult.0010.desc:0 "You pray with the rest of the faithful of $cult_host_name$, and you mean none of it. You belong to $cult_society_name$, who worship $cult_devil_name$, the enemy the priests warn against.\n\nThe cult does not want to fight the church. It wants to hollow it out: priests turned, holy places defiled, and in the end the head of the faith sworn to the cult without the faithful ever knowing. [cult_hierophant.GetTitledFirstName] leads the circle. If the church is ever truly the cult's, it can be turned inside out."
- cult.0010.desc_hierophant:0 "You pray with the rest of the faithful of $cult_host_name$, and you mean none of it. You lead $cult_society_name$, who worship $cult_devil_name$, the enemy the priests warn against.\n\nThe cult does not want to fight the church. It wants to hollow it out: priests turned, holy places defiled, and in the end the head of the faith sworn to you without the faithful ever knowing. When that is done, the faith can be turned inside out."
+ cult.0010.desc:0 "You pray with the rest of the faithful of $cult_host_name$, and you mean none of it. You belong to $cult_society_name$, who worship $cult_devil_name$, the enemy the $cult_priests$ warn against.\n\nThe cult does not want to fight the church. It wants to hollow it out: $cult_priests$ turned, holy places defiled, and in the end the head of the faith sworn to the cult without the faithful ever knowing. [cult_hierophant.GetTitledFirstName] leads the circle. If the church is ever truly the cult's, it can be turned inside out."
+ cult.0010.desc_hierophant:0 "You pray with the rest of the faithful of $cult_host_name$, and you mean none of it. You lead $cult_society_name$, who worship $cult_devil_name$, the enemy the $cult_priests$ warn against.\n\nThe cult does not want to fight the church. It wants to hollow it out: $cult_priests$ turned, holy places defiled, and in the end the head of the faith sworn to you without the faithful ever knowing. When that is done, the faith can be turned inside out."
  cult.0010.a:0 "Let the faithful keep praying."
  cult.0010.a.tt:0 "The society tab beside Intrigue shows the cult: the rot in the church, the hunter, your standing and what you can do next."
 
  cult.0011.t:0 "Rot in the Church"
- cult.0011.desc:0 "Your confessors have heard the same thing too often to ignore it. Inside $cult_host_name$ there is a circle of the faithless who call themselves $cult_society_name$ and pray to $cult_devil_name$.\n\nNobody can name a member. But if they exist, they are inside the church, among the people you trust to guard it. Keeping the faith pure falls to you."
+ cult.0011.desc:0 "Your $cult_priests$ have heard the same thing in confession too often to ignore it. Inside $cult_host_name$ there is a circle of the faithless who call themselves $cult_society_name$ and pray to $cult_devil_name$.\n\nNobody can name a member. But if they exist, they are inside the church, among the people you trust to guard it. Keeping the faith pure falls to you."
  cult.0011.a:0 "Let them show themselves. They will."
- cult.0011.b:0 "Have my confessors listen for names."
+ cult.0011.b:0 "Have my $cult_priests$ listen for names."
  cult.0011.b.tt:0 "Every member of the cult becomes a little easier to find."
 
  # ---- cult.0050 ---------------------------------------------------------------------------------
@@ -93,7 +93,7 @@
  # ---- The rot -----------------------------------------------------------------------------------
 
  cult.0601.t:0 "Cracks in the Church"
- cult.0601.desc:0 "The circle's work is starting to show. A priest here says the prayers wrong on purpose. A shrine there has been left to rot. In a few courts the chaplain belongs to the cult.\n\nThe faithful of $cult_host_name$ have not noticed yet."
+ cult.0601.desc:0 "The circle's work is starting to show. A $cult_priest$ here says the prayers wrong on purpose. A shrine there has been left to rot. In a few courts the $cult_priest$ who hears the ruler's confession belongs to the cult.\n\nThe faithful of $cult_host_name$ have not noticed yet."
  cult.0601.a:0 "Good. Keep going."
  cult.0601.a.tt:0 "The rot stands at #high 25#!. The church is captured when its head is sworn, or when the Faithless hold half its holy sites."
 
@@ -101,9 +101,12 @@
  cult.0602.desc:0 "Half the church is rotten now. The cult's people hold holy places, sit in the councils of the faithful, and hear their confessions.\n\nWhat remains is the head of the faith. Turn [cult_head.GetTitledFirstName], and $cult_host_name$ belongs to $cult_devil_name$."
  cult.0602.a:0 "Then we go after the head."
  cult.0602.a.tt:0 "Swear the head of $cult_host_name$ into the cult to capture the church. At #high 60#! rot, a captured church can be unveiled."
+ cult.0602.desc_headless:0 "Half the church is rotten now. The cult's people hold holy places, sit in the councils of the faithful, and hear their confessions.\n\n$cult_host_name$ has no single head to turn. It answers to its holy places, and the circle already holds some of them. Hold half, and the church belongs to $cult_devil_name$."
+ cult.0602.b:0 "Then we take the rest of the holy places."
+ cult.0602.b.tt:0 "Hold at least half the holy sites of $cult_host_name$ through sworn lords to capture the church. At #high 60#! rot, a captured church can be unveiled."
 
  cult.0603.t:0 "The Church Is Ours in All but Name"
- cult.0603.desc:0 "There is hardly a part of $cult_host_name$ left that the cult has not reached. Its priests, its holy places and its courts are riddled with the Faithless.\n\nThe faithful still pray to [cult_faith.HighGodName]. They have no idea who hears them."
+ cult.0603.desc:0 "There is hardly a part of $cult_host_name$ left that the cult has not reached. Its $cult_priests$, its holy places and its courts are riddled with the Faithless.\n\nThe faithful still pray to [cult_faith.HighGodName]. They have no idea who hears them."
  cult.0603.a:0 "Soon they will."
 
  # ---- The church captured -----------------------------------------------------------------------
@@ -128,7 +131,7 @@
  cult.0712.desc:0 "[cult_unveiler.GetTitledFirstName] has stood before the faithful of $cult_host_name$ and declared that the faith has served $cult_devil_name$ all along. The doctrines have been rewritten. $cult_unveil_list$\n\nThe church you knew is gone. It will not return by itself."
  cult.0712.a:0 "I will not follow the faith into damnation."
  cult.0712.a.tt:0 "If no loyal head of the faith is left to do it, #high Purify the Faith#! is open to you in the decisions panel."
- cult.0712.b:0 "This is a matter for the priests."
+ cult.0712.b:0 "This is a matter for the $cult_priests$."
  cult.0712.b.tt:0 "Nothing changes for now."
  cult.0712.c:0 "Perhaps they have a point."
 
@@ -159,3 +162,21 @@
  cult.0820.desc:0 "The circle has a new Hierophant: [cult_hierophant.GetTitledFirstName]. From now on, [cult_hierophant.GetSheHe] decides who is trusted, who is sent where, and when the Faithless meet."
  cult.0820.desc_you:0 "The circle has chosen you as its Hierophant. From now on, every charge the cult gives comes from you, and every one of the Faithless answers to you."
  cult.0820.a:0 "So be it."
+
+ # ---- Standing that falls (cult_rank_loss_effect and friends) ------------------------------------
+ cult_rank_loss_tt:0 "Standing in the circle #N falls by [cult_rank_delta|0]#!"
+ cult_rung_lost_toast:0 "Standing Lost"
+ cult_rung_lost_0_tt:0 "You are an Initiate again, and the circle tells you only what an Initiate needs to know."
+ cult_rung_lost_1_tt:0 "You are an Adept now, and no higher."
+ cult_rung_lost_2_tt:0 "You are a Magister now. The Hierarchs no longer ask your opinion."
+ cult_idle_toast:0 "Your Standing Slips"
+ cult_idle_tt:0 "The circle has seen nothing from you in years. Earn dark power to keep your place."
+ cult_demoted_for_failure_tt:0 "A second charge left undone: the Hierophant takes a rung from you"
+ cult_demote_interaction:0 "Demote"
+ cult_demote_interaction_desc:0 "Tell [recipient.GetTitledFirstName] that [recipient.GetSheHe] has not earned [recipient.GetHerHis] place in the circle."
+ cult_demote_bottom_tt:0 "[recipient.GetFirstNameNoTooltip] is already on the lowest rung"
+ cult_rank_gain_tt:0 "Standing in the circle #P rises by [cult_rank_delta|0]#!"
+ cult_rung_gained_toast:0 "Standing Gained"
+ cult_rung_gained_1_tt:0 "You are an Adept now. The circle trusts you with more than it did."
+ cult_rung_gained_2_tt:0 "You are a Magister now. You know every face in the circle, and you may say the Black Mass."
+ cult_rung_gained_3_tt:0 "You are a Hierarch now. When the Hierophant is gone, the circle will look to you."

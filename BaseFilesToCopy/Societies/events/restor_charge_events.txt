@@ -94,6 +94,7 @@ restor.0501 = {
 	option = {
 		name = restor.0501.b
 		restor_charge_penalty_effect = { FAVOUR = 10 }
+		restor_rank_loss_effect = { VALUE = 5 }
 		custom_tooltip = restor.0501.b.tt
 		hidden_effect = {
 			if = {
@@ -313,6 +314,7 @@ restor.0520 = {
 	option = {
 		name = restor.0520.a
 		restor_charge_penalty_effect = { FAVOUR = 15 }
+		restor_charge_failed_standing_effect = yes
 		custom_tooltip = restor.0520.a.tt
 	}
 }
@@ -701,11 +703,16 @@ restor.0540 = {
 		restor_save_scopes_effect = yes
 		save_scope_as = restor_charge_member
 		var:restor_charge_giver = { save_scope_as = restor_charge_giver }
-		save_scope_value_as = {
-			name = restor_charge_asked
-			value = var:restor_charge_order
-		}
 		restor_charge_order_effect = yes
+		# Did the kind asked for come up empty, so the usual draw gave something else? Compared as
+		# variables: save_scope_value_as cannot hold a flag copied out of one.
+		if = {
+			limit = {
+				NOT = { var:restor_charge_order = flag:any }
+				NOT = { var:restor_charge_order = var:restor_charge }
+			}
+			save_scope_value_as = { name = restor_charge_fell_back value = yes }
+		}
 		remove_variable = restor_charge_order
 		restor_charge_save_state_effect = yes
 
@@ -734,10 +741,7 @@ restor.0540 = {
 					custom_tooltip = restor_charge_given_recruit_tt
 				}
 				if = {
-					limit = {
-						NOT = { scope:restor_charge_asked = flag:any }
-						NOT = { scope:restor_charge_asked = scope:restor_charge_kind }
-					}
+					limit = { exists = scope:restor_charge_fell_back }
 					custom_tooltip = restor_charge_given_fallback_tt
 				}
 			}

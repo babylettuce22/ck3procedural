@@ -151,3 +151,47 @@ cult_panel_knows_trigger = {
 		is_close_or_extended_family_of = scope:cult_viewer
 	}
 }
+
+# THIS is a member; does ROOT -- whoever is reading the tooltip -- already know it? A fellow member
+# does (a rite shared); so does anyone who holds THIS's membership secret, and anyone at all once the
+# church is unveiled. Everyone else must not learn it from a tooltip: only a member has exposure, so
+# "X's exposure rises" would confirm what the event only suspects. See cult_their_exposure_gain_effect.
+cult_membership_known_to_root_trigger = {
+	OR = {
+		cult_unveiled_trigger = yes
+		this = root
+		root = { has_trait = cult_member }
+		any_secret = {
+			secret_type = secret_cult_member
+			is_known_by = root
+		}
+	}
+}
+
+# ---- Could THIS host the cult's rites right now? -----------------------------------------------
+#
+# The panel's action lights, each mirroring its activity's is_shown and can_start gates (the parts a
+# player meets). No engine trigger asks an activity directly, so CHANGE THESE WITH THE ACTIVITY:
+# common/activities/activity_types/00_cult_mass_activity.txt / 00_cult_defilement_activity.txt.
+
+cult_can_host_mass_trigger = {
+	cult_active_trigger = yes
+	has_trait = cult_member
+	is_playable_character = yes
+	highest_held_title_tier > tier_barony
+	is_available_adult = yes
+	NOT = { is_activity_type_on_cooldown = activity_cult_mass }
+	OR = {
+		cult_is_hierophant_trigger = yes
+		cult_rank_at_least_trigger = { RANK = 50 }
+	}
+}
+
+cult_can_host_defilement_trigger = {
+	cult_secret_phase_trigger = yes
+	has_trait = cult_member
+	is_playable_character = yes
+	is_available_adult = yes
+	NOT = { is_activity_type_on_cooldown = activity_cult_defilement }
+	cult_of_the_host_trigger = yes
+}

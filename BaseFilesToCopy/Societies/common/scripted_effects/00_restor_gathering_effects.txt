@@ -125,21 +125,13 @@ restor_gathering_reward_hall_effect = {
 		scope:activity = {
 			every_attending_character = {
 				limit = { has_trait = restor_member }
-				add_trait_xp = {
-					trait = restor_member
-					track = restor_rank
-					value = $XP$
-				}
+				restor_rank_gain_effect = { VALUE = $XP$ }
 				restor_favour_gain_effect = { VALUE = $FAVOUR$ }
 			}
 		}
 	}
 	else = {
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = $XP$
-		}
+		restor_rank_gain_effect = { VALUE = $XP$ }
 		restor_favour_gain_effect = { VALUE = $FAVOUR$ }
 	}
 }

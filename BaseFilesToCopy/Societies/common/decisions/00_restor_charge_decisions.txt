@@ -11,6 +11,7 @@
 # charge the recruitment interactions.
 
 restor_stir_the_county_decision = {
+	decision_group_type = society
 	picture = {
 		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
 	}
@@ -64,6 +65,7 @@ restor_stir_the_county_decision = {
 }
 
 restor_speak_for_the_heir_decision = {
+	decision_group_type = society
 	picture = {
 		reference = "gfx/interface/illustrations/decisions/decision_realm.dds"
 	}
@@ -130,6 +132,7 @@ restor_speak_for_the_heir_decision = {
 }
 
 restor_send_for_the_heir_decision = {
+	decision_group_type = society
 	picture = {
 		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
 	}

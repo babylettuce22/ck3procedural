@@ -36,6 +36,9 @@ WHAT IS IN IT
   events/society_events.txt                                        the approach, and the rite
   localization/english/society_l_english.yml                       every string the above needs
 
+The tab icon is the same bronze clasped-hands asset as ../Societies; see that README's SIDEBAR ICON
+section for its vanilla source and sizing.
+
 THE PANEL
 ---------
 CK2's society screen showed four things at once: which society you were in, what rank you held,

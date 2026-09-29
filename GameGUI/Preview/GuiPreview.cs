@@ -39,6 +39,13 @@ public sealed class GuiPreview
     /// </summary>
     public Func<string, string?>? Localise { get; init; }
 
+    /// <summary>
+    /// A stand-in value for a datafunction, keyed by its inner expression as written (without the
+    /// brackets). Returns null when there is none, and the call is drawn as <c>⟨LastCall⟩</c>.
+    /// Placeholder names and numbers are what let a panel full of live values read as a panel.
+    /// </summary>
+    public Func<string, string?>? Sample { get; init; }
+
     /// <summary>Width of the simulated screen the window is laid out inside.</summary>
     public int ViewportWidth { get; init; } = 1920;
 
@@ -56,6 +63,7 @@ public sealed class GuiPreview
 
     public string Render(ResolvedWidget root)
     {
+        Fill(root);
         GuiLayout.Run(root, ViewportWidth, ViewportHeight);
 
         // Drawn relative to the tree's own bounding box rather than to the viewport, so a window
@@ -123,7 +131,76 @@ public sealed class GuiPreview
     /// and what the browser draws cannot disagree.
     /// </summary>
     private static bool Clips(ResolvedWidget widget)
-        => !widget.Children.Any(c => c.Flag("allow_outside"));
+        => !widget.Children.Any(c => c.Flag("allow_outside")) && !ContentSized(widget);
+
+    /// <summary>
+    /// A stacking box with no stated size, not stretched by its parent: in game it is exactly as big
+    /// as what it holds, so it never cuts anything off. Here its size is the glyph model's estimate,
+    /// and clipping at it cut "Favour" to "Favou" — a clip the game does not have.
+    /// </summary>
+    private static bool ContentSized(ResolvedWidget widget)
+        => GuiLayout.KindOf(widget) is GuiLayout.Kind.Vertical or GuiLayout.Kind.Horizontal
+           && widget.Pair("size") is null
+           && widget.Text("layoutpolicy_horizontal") is not ("expanding" or "growing")
+           && widget.Text("layoutpolicy_vertical") is not ("expanding" or "growing");
+
+    /// <summary>
+    /// A progressbar's two halves: <c>noprogresstexture</c> across the whole bar and
+    /// <c>progresstexture</c> over the filled fraction. The value is a number, a sampled datafunction
+    /// (tried as written, then with the <c>|0</c> a text field would carry), or, failing both, half —
+    /// drawn hatched so an unknown value is not mistaken for a real one.
+    /// </summary>
+    private string ProgressFill(ResolvedWidget widget)
+    {
+        double min = widget.Number("min", 0);
+        double max = widget.Number("max", 100);
+
+        double? value = null;
+        if (widget.Text("value") is { } raw)
+        {
+            string expression = raw.Trim().TrimStart('[').TrimEnd(']').Trim();
+
+            string? sampled = raw.TrimStart().StartsWith('[')
+                ? Sample?.Invoke(expression) ?? Sample?.Invoke(expression + "|0")
+                : expression;
+
+            if (double.TryParse(sampled, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out double v))
+                value = v;
+        }
+
+        double fraction = max > min ? Math.Clamp(((value ?? (min + max) / 2) - min) / (max - min), 0, 1) : 0;
+
+        string Layer(string? path, string fallback) =>
+            path is not null && Textures?.Invoke(path) is { } uri
+                ? $"background-image:url({uri});background-size:100% 100%"
+                : $"background:{fallback}";
+
+        string empty = Layer(widget.Text("noprogresstexture"), "#151518");
+        string full = value is null
+            ? "background:repeating-linear-gradient(45deg,#6a6a7a,#6a6a7a 4px,#4a4a5a 4px,#4a4a5a 8px)"
+            : Layer(widget.Text("progresstexture"), "#c8a860");
+
+        return $"<div style=\"position:absolute;inset:0;{empty}\"></div>"
+            + $"<div style=\"position:absolute;left:0;top:0;bottom:0;width:{F(fraction * 100)}%;{full}\"></div>";
+    }
+
+    /// <summary>
+    /// A single-line label whose width is its text's. In game such a box is exactly as wide as the
+    /// string, so it never clips; here the width is the glyph model's estimate, and a browser font a
+    /// few percent wider than the model cut "ROT" to "RO" and wrapped "THE HIEROPHANT" onto a hidden
+    /// second line. These draw unclipped and unwrapped, so a clip in the preview means a real one.
+    /// </summary>
+    private static bool SizedToContent(ResolvedWidget widget)
+    {
+        bool single = widget.TypeChain.Append(widget.WrittenType)
+            .Any(n => n.Contains("single", StringComparison.OrdinalIgnoreCase));
+
+        if (!single || widget.Number("max_width") > 0) return false;
+        if (widget.Text("layoutpolicy_horizontal") is "expanding" or "growing") return false;
+
+        return widget.Pair("size") is not { } size || size.X.Value == 0 || widget.Flag("autoresize");
+    }
 
     private static LayoutBox Intersect(LayoutBox a, LayoutBox b)
     {
@@ -208,11 +285,21 @@ public sealed class GuiPreview
         // a .gui says "draw me past my parent's edge", and it is used deliberately — the lore panel
         // and the debug widgets are all children of a window they hang outside of.
         if (Clips(widget)) classes.Add("clip");
+        if (kind == GuiLayout.Kind.Text && SizedToContent(widget))
+        {
+            classes.Add("fit");
+
+            // Anchored or aligned right: any overspill goes LEFT, as the real box would be
+            // measured wider and placed with its right edge on the anchor.
+            if ((widget.Text("parentanchor") ?? widget.Text("align") ?? "").Contains("right"))
+                classes.Add("fitR");
+        }
 
         _body.Append($"<div class=\"{string.Join(' ', classes)}\" data-id=\"{id}\" "
             + $"style=\"{style}\">");
 
         if (kind == GuiLayout.Kind.Text) _body.Append(TextSpan(widget));
+        if (widget.Primitive == "progressbar") _body.Append(ProgressFill(widget));
 
         Row(widget, id, depth, kind, visible);
 
@@ -234,10 +321,7 @@ public sealed class GuiPreview
     /// </summary>
     private string TextSpan(ResolvedWidget widget)
     {
-        // raw_text is literal by definition and is never looked up; `text` is a key unless it is
-        // plainly something else.
-        string? raw = widget.Text("raw_text");
-        string content = raw ?? Localised(widget.Text("text") ?? "");
+        string content = Content(widget);
         double fontSize = widget.Number("fontsize", 15);
 
         string format = widget.Text("default_format") ?? "";
@@ -256,7 +340,7 @@ public sealed class GuiPreview
         if (widget.Text("align")?.Contains("center") == true) style.Append(";text-align:center");
         if (format.Contains("bold")) style.Append(";font-weight:600");
 
-        string shown = GuiText.Display(content);
+        string shown = widget.Shown ?? GuiText.Display(content, Sample);
 
         // The full expression stays reachable on hover, and in the inspector, because knowing which
         // datafunction feeds a box is most of what you want from a preview of one.
@@ -278,6 +362,109 @@ public sealed class GuiPreview
 
         return Localise(value) ?? value;
     }
+
+    // raw_text is literal by definition and is never looked up; `text` is a key unless it is
+    // plainly something else.
+    private string Content(ResolvedWidget widget)
+        => widget.Text("raw_text") ?? Localised(widget.Text("text") ?? "");
+
+    /// <summary>
+    /// Gives every text widget the string the page will draw, before layout measures it. Without
+    /// this the layout measured the loc KEY — RESTOR_PANEL_AIM, sixteen characters — for a paragraph
+    /// of two hundred, so paragraphs never wrapped and their boxes were a line tall.
+    /// </summary>
+    private void Fill(ResolvedWidget widget)
+    {
+        if (GuiLayout.KindOf(widget) == GuiLayout.Kind.Text)
+            widget.Shown = GuiText.Display(Content(widget), Sample);
+
+        // A sampled state: children whose condition the samples settle as hidden are dropped before
+        // layout, so the page shows one state the game can actually be in rather than every branch
+        // stacked at once (the heir AND the king, the lit AND the dimmed half of every chip).
+        Hidden += widget.Children.RemoveAll(c => c.Text("visible") is { } v && Shows(v) == false);
+
+        foreach (var child in widget.Children) Fill(child);
+    }
+
+    /// <summary>How many widgets the sampled state removed, for the report.</summary>
+    public int Hidden { get; private set; }
+
+    /// <summary>
+    /// A <c>visible</c> condition settled from the samples, or null when they do not settle it.
+    /// Reads <c>And</c>/<c>Or</c>/<c>Not</c> over <c>GetScriptedGui('name').IsShown(…)</c> calls,
+    /// each looked up as <c>visible:name</c>; anything else is unknown. Three-valued, so an And with
+    /// one known-false arm is false even when the other arm is unknown.
+    /// </summary>
+    private bool? Shows(string visible)
+    {
+        if (Sample is null) return null;
+
+        string e = visible.Trim();
+        if (e.StartsWith('[') && e.EndsWith(']')) e = e[1..^1].Trim();
+
+        if (Call(e, "Not") is { } not)
+            return Shows(not) is { } inner ? !inner : null;
+
+        if (Call(e, "And") is { } and)
+        {
+            var arms = Arguments(and).Select(Shows).ToList();
+            return arms.Contains(false) ? false : arms.All(a => a == true) ? true : null;
+        }
+
+        if (Call(e, "Or") is { } or)
+        {
+            var arms = Arguments(or).Select(Shows).ToList();
+            return arms.Contains(true) ? true : arms.All(a => a == false) ? false : null;
+        }
+
+        var names = ScriptedGuiName.Matches(e);
+        if (names.Count != 1 || !e.StartsWith("GetScriptedGui", StringComparison.Ordinal)) return null;
+
+        return Sample("visible:" + names[0].Groups[1].Value) is { } value ? value == "yes" : null;
+    }
+
+    /// <summary>The argument text of <c>Name( … )</c> when the whole expression is that one call.</summary>
+    private static string? Call(string expression, string name)
+    {
+        if (!expression.StartsWith(name + "(", StringComparison.Ordinal) || !expression.EndsWith(')'))
+            return null;
+
+        // The opening paren must close at the very end, or this is `Not( a ).Something( b )`.
+        int depth = 0;
+        for (int i = name.Length; i < expression.Length; i++)
+        {
+            if (expression[i] == '(') depth++;
+            else if (expression[i] == ')' && --depth == 0 && i != expression.Length - 1) return null;
+        }
+
+        return expression[(name.Length + 1)..^1];
+    }
+
+    /// <summary>Top-level comma-separated arguments, ignoring commas inside parens and quotes.</summary>
+    private static IEnumerable<string> Arguments(string text)
+    {
+        int depth = 0, start = 0;
+        bool quoted = false;
+
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (c == '\'') quoted = !quoted;
+            else if (quoted) continue;
+            else if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (c == ',' && depth == 0)
+            {
+                yield return text[start..i].Trim();
+                start = i + 1;
+            }
+        }
+
+        yield return text[start..].Trim();
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex ScriptedGuiName =
+        new(@"GetScriptedGui\(\s*'([^']+)'\s*\)");
 
     private void Row(ResolvedWidget widget, int id, int depth, GuiLayout.Kind kind, string? visible)
     {
@@ -343,6 +530,9 @@ public sealed class GuiPreview
             .t{display:block;padding:0 1px;white-space:pre-wrap;overflow:hidden;
                font-family:Georgia,"Times New Roman",serif}
             .k-text{overflow:hidden}
+            body.clip .fit{overflow:visible}
+            .fit>.t{white-space:pre;overflow:visible}
+            .fitR>.t{position:absolute;right:0;top:0}
             aside{width:430px;flex:none;border-left:1px solid #2c2c36;height:calc(100vh - 40px);
                   overflow:auto;padding:10px 12px}
             ul{list-style:none;margin:0;padding:0}

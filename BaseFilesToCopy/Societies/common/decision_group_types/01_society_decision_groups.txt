@@ -1,0 +1,18 @@
+﻿# The societies' own heading in the decisions panel: "Society Decisions". Every decision a MEMBER
+# takes -- the charges' work, giving to the cause, raising the standard, the crowning, the unveiling
+# -- goes here with `decision_group_type = society`.
+#
+# Deliberately NOT here: the decisions for the societies' enemies (restor_root_out_the_sworn,
+# cult_root_out_heresy, cult_purify). A non-member must never see a heading that says a society
+# exists; theirs stay in vanilla's groups. The heading draws only when something in it is shown, and
+# everything in it is shown only to members.
+#
+# Same mechanism as Core's gen_world group (00_gen_decision_groups.txt): no GUI work, the panel
+# draws groups from a datamodel. Loc by convention: decision_group_type_society.
+
+society = {
+	# Under vanilla's `major` (200), above `realm` (100): the rising and the unveiling are
+	# world-changing, but they belong to a secret, not to the realm.
+	sort_order = 150
+	gui_tags = { big_button }
+}

@@ -4,6 +4,9 @@
 
  restor_their_exposure_gain_tt:0 "[restor_exposure_target.GetTitledFirstName]'s exposure rises by #P [restor_their_delta|0]#!"
  restor_their_exposure_loss_tt:0 "[restor_exposure_target.GetTitledFirstName]'s exposure falls by #N [restor_their_delta|0]#!"
+ # For a reader who does not know they are sworn: true of anyone, so it confirms nothing.
+ restor_their_exposure_gain_veiled_tt:0 "If [restor_exposure_target.GetTitledFirstName] has anything to hide, it will be harder to hide now"
+ restor_their_exposure_loss_veiled_tt:0 "If [restor_exposure_target.GetTitledFirstName] has anything to hide, it will be easier to hide now"
  restor_name_others_tt:0 "The three most careless of the Sworn are named: each gains #N 10#! exposure"
  restor_named_by_informant_toast:0 "[restor_informant.GetFirstNameNoTooltip] Has Named You"
  restor_secret_revealed_tt:0 "If [restor_exposure_target.GetFirstNameNoTooltip] is already under suspicion, you learn [restor_exposure_target.GetHerHis] secret and can expose it or use it"
@@ -35,13 +38,13 @@
  restor.0300.a:0 "I'll keep my head down."
  restor.0300.a.tt:0 "Exposure falls a little every year on its own, faster if you are #high patient#!, #high deceitful#! or #high paranoid#!, or good at #high intrigue#!.\nAt #N 25#! you are highly suspect, and [restor_usurper.GetFirstNameNoTooltip] will be told your name."
  restor.0300.a.tt_nousurper:0 "Exposure falls a little every year on its own, faster if you are #high patient#!, #high deceitful#! or #high paranoid#!, or good at #high intrigue#!.\nAt #N 25#! you are highly suspect, and whoever rules the old kingdom's land will be told your name."
- restor.0300.b:0"Burn every letter the Keeper ever sent me."
+ restor.0300.b:0 "Burn every letter the Keeper ever sent me."
 
  # ---- restor.0302 -------------------------------------------------------------------------------
 
  restor.0302.t:0 "A Suspected Traitor"
- restor.0302.desc:0 "It is no longer just talk in the kitchens. People at your own table are careful what they say in front of you, and a friend has quietly warned you that your name has been written down.\n\nIt will reach [restor_usurper.GetTitledFirstName] within days. What [restor_usurper.GetSheHe] does about it is up to [restor_usurper.GetHerHim]: watch you, send for you, or wait for proof."
- restor.0302.desc_nousurper:0 "It is no longer just talk in the kitchens. People at your own table are careful what they say in front of you, and a friend has quietly warned you that your name has been written down.\n\nNobody holds the crown of $restor_crown_name$ to act on it yet. Whoever does next will have your name waiting for them."
+ restor.0302.desc:0 "It is no longer just talk in the kitchens. People at your own table are careful what they say in front of you, and a friend has quietly warned you that your name has been written down.\n\nIt will reach [restor_usurper.GetTitledFirstName] within days. What [restor_usurper.GetSheHe] does about it is up to [restor_usurper.GetHerHim]: watch you, send for you, or wait for proof.\n\nThe Sworn have heard it too. They keep a little more distance now, and your standing among them has fallen."
+ restor.0302.desc_nousurper:0 "It is no longer just talk in the kitchens. People at your own table are careful what they say in front of you, and a friend has quietly warned you that your name has been written down.\n\nNobody holds the crown of $restor_crown_name$ to act on it yet. Whoever does next will have your name waiting for them.\n\nThe Sworn have heard it too. They keep a little more distance now, and your standing among them has fallen."
  restor.0302.a:0 "No more letters. No more meetings."
  restor.0302.a.tt:0 "Nothing changes now, but nothing new is added either. Exposure falls a little each year on its own."
  restor.0302.b:0 "Pay the ones who talk the most to stop. (50 gold)"

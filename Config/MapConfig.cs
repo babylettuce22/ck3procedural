@@ -890,7 +890,7 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     /// <summary>
     /// Ships the society system — see <see cref="Emit.StaticFileWriter.Societies"/> — and generates
-    /// this world's Restorationists and inversion cult. Enabled by default, but hidden in the
+    /// this world's Restorationists and inversion cult. Off by default for now, and hidden in the
     /// generator settings while in development. Includes static society content, generated setup,
     /// and shared GUI integration for the society panels.
     /// </summary>
@@ -899,12 +899,13 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("02 World State")]
     [DisplayName("Societies")]
     [Description("Generate Restorationist and inversion-cult societies. See BaseFilesToCopy/Societies/README.txt.")]
-    public bool EnableSocieties { get; set; } = true;
+    public bool EnableSocieties { get; set; } = false;
 
     /// <summary>
     /// Ships the hand-written prototype the society system grew out of — see
     /// <see cref="Emit.StaticFileWriter.SocietyPrototype"/>. Ignored when <see cref="EnableSocieties"/>
-    /// is on: the two define the same panel hooks. CLI flag: <c>--society-prototype</c>; also requires EnableSocieties to be false.
+    /// is on: the two define the same panel hooks. CLI flag: <c>--society-prototype</c>, which also
+    /// turns EnableSocieties off (<c>--no-societies</c> turns it off alone).
     /// </summary>
     [HideInGenerator]
     [Category("02 World State")]
@@ -1300,14 +1301,17 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// world (seed 630583, 8192), 81% of land between 238 and 316 was walled against 20% of
     /// vanilla's, including fans and shoulders as gentle as a typical vanilla barony, while only 20%
     /// of the steep ground below 238 was. <see cref="Config.ImpassableRanking.Slope"/> ranks by
-    /// steepness at a barony's scale instead. On that world and a scar world (seed 288855), smooth
-    /// high ground walled (238–400, gentler than 1.2) fell from 60% and 66% to under 2%, and steep
-    /// ground below 238 walled (3 or steeper) rose from 20% and 39% to 71%; on a wall world
-    /// (115886) it rose from 7% to 35%, with the Wall itself still walled. Walled land fell from
-    /// 10.6% and 10.2% to 9.0% and 8.5%. Valleys between a range's ridges stay passable, as Alpine
-    /// valleys are in vanilla, and some steep coastal bluffs are walled (5% of the walls stood below
-    /// 119, against 0.2%). Ground above <see cref="ImpassableCeilingHeight"/> is walled either way,
-    /// and a Wall set-piece's own body is always wall.
+    /// steepness at a barony's scale instead, walls everything past
+    /// <see cref="ImpassableSlopeLine"/> up to <see cref="ImpassableMaxShareOfLand"/>, and drops
+    /// lone round walls (<see cref="ImpassableKnobBaronies"/>). On that world and a scar world (seed
+    /// 288855), smooth high ground walled (238–400, gentler than 1.2) fell from 60% and 66% to 1.2%
+    /// and 0.6%, and steep ground below 238 walled (3 or steeper) rose from 20% and 39% to 50% and
+    /// 61%. Over nine worlds the walls follow the terrain: 0.7% of land on a lowland pangaea, 5.5–9.6%
+    /// on the rest, 15% on a wall world. Valleys between a range's ridges stay passable, as Alpine
+    /// valleys are in vanilla, and 2–6% of the walls stand below 119, against 0.2–1.4%, most of it
+    /// steep inland hills. Ground above <see cref="ImpassableCeilingHeight"/> is walled either way,
+    /// and a Wall set-piece's own body is always wall. Reads
+    /// <see cref="ImpassableMaxShareOfLand"/> in place of <see cref="ImpassableShareOfLand"/>.
     /// Recommended: Slope.
     /// </summary>
     [Category("03 Provinces")]
@@ -1315,20 +1319,66 @@ public sealed class MapConfig : CustomTypeDescriptor
     public ImpassableRanking ImpassableRanking { get; set; } = ImpassableRanking.Slope;
 
     /// <summary>
-    /// The gentlest ground the slope-ranked cut may wall, in elevation units per world unit (sea
-    /// level 36, heightmap maximum 520): the slope of the terrain smoothed to a quarter of a
-    /// barony's radius, averaged over half a barony. The share is taken from the most rugged ground
-    /// down, and this stops it where a gentle map's ruggedness runs out, rather than walling rolling
-    /// hills to fill it. The default, 1.5, is steeper than four-fifths of the ground vanilla's
-    /// passable provinces stand on (its median is 0.87). Not scaled by <see cref="ReliefScale"/>: it
-    /// is steepness in world units, which is what the game shows. Only read with
-    /// <see cref="ImpassableRanking"/> Slope. 0 turns it off.
+    /// The gentlest ground the slope-ranked cut may wall, in elevation units (sea level 36, heightmap
+    /// maximum 520) per vanilla world unit: the slope of the terrain smoothed over 9 vanilla
+    /// pixels, averaged over 18, as vanilla's own ground was measured. It keeps the lift from
+    /// walling gentle ground that merely stands high above its floor. The default, 1.5, is steeper
+    /// than four-fifths of the ground vanilla's passable provinces stand on (its median is 0.87).
+    /// Not scaled by <see cref="ReliefScale"/>. Only read with <see cref="ImpassableRanking"/>
+    /// Slope. 0 turns it off.
     /// Recommended: 1.5.
     /// </summary>
     [AdvancedSetting]
     [Category("03 Provinces")]
     [Description("The gentlest ground a slope-ranked wall may stand on, in elevation units per world unit at a barony's scale. Stops a gentle map walling rolling hills to fill its share. 1.5 is steeper than 80% of vanilla's passable ground. 0 turns it off.")]
     public double ImpassableMinSlope { get; set; } = 1.5;
+
+    /// <summary>
+    /// The slope score at which ground becomes wall, with <see cref="ImpassableRanking"/> Slope:
+    /// ruggedness at a barony's scale, read at vanilla's map scale, times the lift of
+    /// <see cref="ImpassableLiftScale"/>. Everything at or above it is walled, however much or little
+    /// of the map that is, up to <see cref="ImpassableMaxShareOfLand"/>.
+    ///
+    /// A fixed share walled every world alike: a lowland world spent 8% on rolling hills and a
+    /// rugged one left ranges passable. With a line, the terrain decides. 3.5 reproduces about the
+    /// 8% the share gave on typical worlds (Rift, scar and inland-sea 8192 worlds: 7–8%), while a
+    /// lowland pangaea walls well under 1%, and an archipelago or a 4096 continents world about 10%.
+    /// Measured over a fixed stretch of terrain and read at vanilla's scale, so one line serves
+    /// every map size: the same pangaea seed at 8192 and 4096 reads alike (99th percentile 3.76 and
+    /// 3.69). A kernel fixed in pixels smoothed a 4096 map over twice the terrain, and scaling that
+    /// walled Small pangaea worlds a third as much as their 8192 twins.
+    /// Recommended: 3.5.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("How steep ground must be to become impassable in the slope-ranked cut, as a score at vanilla's map scale. Everything steeper is walled, up to ImpassableMaxShareOfLand, so flat worlds get few walls and rugged ones many. Lower walls more.")]
+    public double ImpassableSlopeLine { get; set; } = 3.5;
+
+    /// <summary>
+    /// The most land the slope-ranked cut may wall, before the ceiling; past it the line rises
+    /// until the walls fit. Only read with <see cref="ImpassableRanking"/> Slope, which reads this
+    /// instead of <see cref="ImpassableShareOfLand"/>. Measured on nine worlds, the line alone
+    /// walled 0.6–12.4%, so 15% binds only on an unusually rugged map.
+    /// Recommended: 0.15.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("The most land the slope-ranked cut may make impassable (ground above the ceiling aside). Only binds on unusually rugged maps.")]
+    public double ImpassableMaxShareOfLand { get; set; } = 0.15;
+
+    /// <summary>
+    /// Slope-ranked walls smaller than this, in baronies, must block something to stay: some trip
+    /// between two points just outside the wall has to be at least two barony widths longer for
+    /// it. A wall around a lone steep hill keeps nothing apart, and armies walk round it; the same
+    /// wall in a neck between the sea and another range closes it. Walls holding ground above
+    /// <see cref="ImpassableCeilingHeight"/> are kept, and larger walls are ranges whatever they
+    /// block. Only read with <see cref="ImpassableRanking"/> Slope. 0 keeps them all.
+    /// Recommended: 4.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("Impassable walls smaller than this many baronies are dropped unless they block something, i.e. make some way past them at least two baronies longer. Clears lone steep hills walled for nothing. 0 keeps them all.")]
+    public double ImpassableKnobBaronies { get; set; } = 4;
 
     /// <summary>
     /// How much standing high above the country around counts for, in the slope-ranked cut: ground

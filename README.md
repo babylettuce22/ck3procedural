@@ -175,10 +175,10 @@ Output depends on the settings, available game data, and generated world. The ma
 
 Many systems combine generated files with hand-maintained file sets in `BaseFilesToCopy/`.
 Wilderness, ruins, and fantasy content are gated by their settings; ruins also require
-wilderness. Fantasy ethnicities are off by default. Societies combine generated world state with the static `Societies` file set. They are enabled
-by default but hidden in the normal settings; `--societies` explicitly enables them. The older
-`SocietyPrototype` set is a separate reference implementation and requires `EnableSocieties`
-to be false before `--society-prototype` can select it. The presence of
+wilderness. Fantasy ethnicities are off by default. Societies combine generated world state with the static `Societies` file set. They are off
+by default for now and hidden in the normal settings; `--societies` turns them on. The older
+`SocietyPrototype` set is a separate reference implementation; `--society-prototype` ships it
+in place of the generated societies. The presence of
 a magic setting does not represent a completed procedural magic system.
 
 ### Azgaar imports

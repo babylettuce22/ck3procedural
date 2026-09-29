@@ -5,9 +5,25 @@ exist. Each combines generated world state with this static set. The Restoration
 a fallen crown back on its house; the cult inverts its host religion. Both have a fixed LOYALTY
 and AIMS that change with the state of the world.
 
-The hand-written prototype this grew out of is in ../SocietyPrototype and can be selected with
---society-prototype only when EnableSocieties is false; the generated set takes precedence. It is the reference for the CK3 mechanisms it proved; nothing here depends on it.
+Societies are off by default for now (EnableSocieties, hidden in the generator); --societies turns
+them on. The hand-written prototype this grew out of is in ../SocietyPrototype and ships instead
+with --society-prototype, which turns the generated set off. It is the reference for the CK3
+mechanisms it proved; nothing here depends on it.
 
+
+SIDEBAR ICON
+------------
+gfx/interface/skinned/hud_maintab/maintab_gen_society.dds uses vanilla's painted clasped hands
+from gfx/interface/icons/scheme_types/icon_scheme_befriend.dds: membership and sworn loyalty,
+distinct from the Factions fist. Cropped to alpha >= 24 bounds, fitted to a 64-pixel footprint
+with premultiplied-alpha Lanczos resampling, and centered in a transparent 90x90 RGBA DDS.
+The painted art was then flattened to match the other tab icons, which are single-hue emblems:
+luminance (2nd-98th percentile stretch) mapped onto a bronze ramp (70,40,22) -> (160,105,60) ->
+(225,180,125), with a dark (22,16,12) outline from a 5-pixel alpha dilation. Bronze is the one
+warm hue no vanilla tab uses (factions is gold, council teal, court blue). Stored uncompressed
+32-bit BGRA, no mipmaps, like the painted version before it.
+The SocietyPrototype copy is identical. Like other base assets, it ships on full generation;
+--gui-only does not re-copy it.
 
 WHAT IS GENERATED AND WHAT IS NOT
 ---------------------------------
@@ -130,6 +146,29 @@ remembers its giver (var:restor_charge_giver), and keeping it pays the giver 10 
 The yearly draw goes on regardless. Neither the Keeper nor the heir holds a charge: becoming either
 sets one aside (restor_charge_set_aside_for_office_effect, in the make effects).
 
+RISES go through <prefix>_rank_gain_effect = { VALUE = n } -- never a bare add_trait_xp outside the
+core file's swear-in climb -- which shows "standing rises by n" and toasts a player who earns a rung.
+
+THE PANEL AGREES WITH THE BUTTONS. A panel light that is a decision asks can_execute_decision, so it
+counts every requirement and cost. A light that is an activity asks <prefix>_can_host_<activity>_trigger,
+which mirrors the activity's gates (there is no engine trigger for activities) -- change them together.
+The member decisions read the LIVE support / rot (restor_support_value, cult_rot_value), the number the
+panel shows; the stored globals are refreshed only yearly and on map changes.
+
+STANDING FALLS AS WELL AS RISES (both societies, as in CK2). Every loss goes through
+<prefix>_rank_loss_effect = { VALUE = n }, never a bare negative add_trait_xp: it exempts the leader (and
+the heir), shows "standing falls" in tooltips, and toasts a player who drops a rung. Sources:
+  failing   a charge run out -10, turned down -5 (<prefix>_charge_failed_standing_effect)
+  leader    a second charge run out within ten years: an AI leader takes 15 more; a player leader
+            uses Demote (<prefix>_demote_interaction, one rung, five-year cooldown per member)
+  idleness  rung 1+ with nothing earned in four years slips 5 a year (<prefix>_idle_effect; earning
+            favour / dark power refreshes the <prefix>_served flag, as does swearing in)
+  disgrace  becoming highly suspect -10 (exposure check; the 0302 event says so)
+  events    the one-off penalties in the rites and their pools (naming an absentee, and so on)
+
+LEADERS ARE MEMBERS. <prefix>_leave_effect runs succession at once for a departing Keeper, heir or
+Hierophant, and the yearly repair replaces any leader who is dead OR no longer sworn.
+
 
 FILES AND NAMESPACES
 --------------------
@@ -155,6 +194,11 @@ Right-click interactions go in the society's own menu section: `category = inter
 common/character_interaction_categories/01_society_interaction_category.txt. Never friendly/hostile:
 the section is how a member finds the society's powers, and it only draws for members.
 
+Decisions a MEMBER takes go under the "Society Decisions" heading: `decision_group_type = society`
+(common/decision_group_types/01_society_decision_groups.txt). Decisions for the societies' enemies
+(root out the Sworn, root out heresy, purify the church) stay in vanilla's groups, so a non-member
+never sees a heading that says a society exists.
+
 
 VOICE
 -----
@@ -173,7 +217,7 @@ a variable) gets a custom_tooltip.
 
 HOW TO TEST
 -----------
-  Societies are enabled by default; --societies explicitly enables them. Generate a world; the run log prints the crown, the fall, the pretender and the sworn.
+  Societies are off by default; generate with --societies. Generate a world; the run log prints the crown, the fall, the pretender and the sworn.
   In game (console):
     event restor.0001    swear yourself in at Captain, with 100 favour
     event restor.0002    stir every crown county for ten years, then recompute support

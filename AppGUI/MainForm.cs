@@ -3454,6 +3454,7 @@ public sealed partial class MainForm : ChromeForm
         RunLog.Begin();
         ConsoleFork.Install();
         Stage.Cancellation = _cancellation.Token;
+        if (_options.QuickSummary is { } quick) Console.WriteLine(quick);
 
         var clock = Stopwatch.StartNew();
         try

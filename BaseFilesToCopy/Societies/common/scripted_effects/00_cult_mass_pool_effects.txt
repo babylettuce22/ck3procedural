@@ -100,11 +100,7 @@ cult_mass_pool_circle_rank_effect = {
 					NOT = { this = root }
 					has_trait = cult_member
 				}
-				add_trait_xp = {
-					trait = cult_member
-					track = cult_rank
-					value = $XP$
-				}
+				cult_rank_gain_effect = { VALUE = $XP$ }
 			}
 		}
 	}

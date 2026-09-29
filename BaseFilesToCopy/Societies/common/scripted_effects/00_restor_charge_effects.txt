@@ -29,16 +29,22 @@ restor_charge_pulse_effect = {
 			}
 			else = {
 				random = {
-					chance = 50
+					chance = 30
 					restor_charge_opportunity_effect = yes
 				}
 			}
 		}
 	}
+	# A year's rest after a charge ends (restor_charge_rest, set by restor_charge_clear_effect), so a
+	# new letter never lands on top of the last charge's ending. A player Keeper's Give a Charge is
+	# deliberate and ignores it.
 	else_if = {
-		limit = { restor_charge_can_be_offered_trigger = yes }
+		limit = {
+			restor_charge_can_be_offered_trigger = yes
+			NOT = { has_character_flag = restor_charge_rest }
+		}
 		random = {
-			chance = 50
+			chance = 35
 			restor_charge_offer_effect = yes
 		}
 	}
@@ -282,12 +288,29 @@ restor_charge_give_recruit_effect = {
 # For event loc: scope:restor_charge_target (a character) or scope:restor_charge_county (a title),
 # and scope:restor_charge_kind (the flag). Call before clearing, so the event still has them.
 restor_charge_save_state_effect = {
+	# One literal flag per kind. save_scope_value_as cannot copy a flag out of a variable -- the
+	# engine rejects `value = var:restor_charge` as a value of the wrong type, and every
+	# `scope:restor_charge_kind ?= flag:x` then fails, so no event branched on the kind (in-game
+	# error.log, 2026-09-29: 5,700 errors). Vanilla only ever saves a literal flag:x.
 	if = {
-		limit = { has_variable = restor_charge }
-		save_scope_value_as = {
-			name = restor_charge_kind
-			value = var:restor_charge
-		}
+		limit = { var:restor_charge ?= flag:win_over }
+		save_scope_value_as = { name = restor_charge_kind value = flag:win_over }
+	}
+	else_if = {
+		limit = { var:restor_charge ?= flag:stir }
+		save_scope_value_as = { name = restor_charge_kind value = flag:stir }
+	}
+	else_if = {
+		limit = { var:restor_charge ?= flag:war_chest }
+		save_scope_value_as = { name = restor_charge_kind value = flag:war_chest }
+	}
+	else_if = {
+		limit = { var:restor_charge ?= flag:shelter }
+		save_scope_value_as = { name = restor_charge_kind value = flag:shelter }
+	}
+	else_if = {
+		limit = { var:restor_charge ?= flag:recruit }
+		save_scope_value_as = { name = restor_charge_kind value = flag:recruit }
 	}
 	if = {
 		limit = {
@@ -326,6 +349,10 @@ restor_charge_clear_effect = {
 	remove_variable = restor_charge_goal
 	remove_variable = restor_charge_giver
 	clear_variable_list = restor_charge_old_recruits
+	add_character_flag = {
+		flag = restor_charge_rest
+		years = 1
+	}
 }
 
 # =====================================================================================
@@ -336,11 +363,7 @@ restor_charge_clear_effect = {
 # directly for the AI.
 restor_charge_reward_effect = {
 	restor_favour_gain_effect = { VALUE = $FAVOUR$ }
-	add_trait_xp = {
-		trait = restor_member
-		track = restor_rank
-		value = $XP$
-	}
+	restor_rank_gain_effect = { VALUE = $XP$ }
 	if = {
 		limit = {
 			exists = global_var:restor_keeper
@@ -464,6 +487,7 @@ restor_charge_expire_effect = {
 	}
 	else = {
 		restor_charge_penalty_effect = { FAVOUR = 15 }
+		restor_charge_failed_standing_effect = yes
 	}
 	restor_charge_clear_effect = yes
 }

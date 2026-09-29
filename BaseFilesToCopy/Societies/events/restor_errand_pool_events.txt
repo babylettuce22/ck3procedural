@@ -252,11 +252,7 @@ restor.1102 = {
 					restor_exposure_gain_effect = { VALUE = 2 }
 					if = {
 						limit = { restor_errand_for_soldiers_trigger = yes }
-						add_trait_xp = {
-							trait = restor_member
-							track = restor_rank
-							value = 3
-						}
+						restor_rank_gain_effect = { VALUE = 3 }
 					}
 				}
 			}
@@ -643,11 +639,7 @@ restor.1106 = {
 	# Hear the story.
 	option = {
 		name = restor.1106.b
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 3
-		}
+		restor_rank_gain_effect = { VALUE = 3 }
 		stress_impact = {
 			base = minor_stress_impact_loss
 		}
@@ -818,11 +810,7 @@ restor.1110 = {
 		restor_exposure_gain_effect = { VALUE = 2 }
 		if = {
 			limit = { restor_errand_for_stir_trigger = yes }
-			add_trait_xp = {
-				trait = restor_member
-				track = restor_rank
-				value = 3
-			}
+			restor_rank_gain_effect = { VALUE = 3 }
 		}
 		ai_chance = {
 			base = 40
@@ -988,11 +976,7 @@ restor.1112 = {
 					title = restor.1112.a.success
 					left_icon = root
 					restor_favour_gain_effect = { VALUE = 10 }
-					add_trait_xp = {
-						trait = restor_member
-						track = restor_rank
-						value = 3
-					}
+					restor_rank_gain_effect = { VALUE = 3 }
 				}
 			}
 			50 = {
@@ -1396,11 +1380,7 @@ restor.1116 = {
 		name = restor.1116.a
 		trigger = { exists = scope:restor_errand_second_county }
 		restor_errand_pool_stir_effect = { COUNTY = scope:restor_errand_second_county }
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 5
-		}
+		restor_rank_gain_effect = { VALUE = 5 }
 		restor_exposure_gain_effect = { VALUE = 4 }
 		stress_impact = {
 			lazy = minor_stress_impact_gain
@@ -1420,11 +1400,7 @@ restor.1116 = {
 		}
 		restor_errand_pool_stir_effect = { COUNTY = scope:restor_errand_second_county }
 		scope:restor_errand_companion = {
-			add_trait_xp = {
-				trait = restor_member
-				track = restor_rank
-				value = 5
-			}
+			restor_rank_gain_effect = { VALUE = 5 }
 			add_opinion = {
 				target = root
 				modifier = restor_life_trusted_me_opinion
@@ -1916,11 +1892,7 @@ restor.1121 = {
 					title = restor.1121.c.success
 					left_icon = root
 					restor_favour_gain_effect = { VALUE = 10 }
-					add_trait_xp = {
-						trait = restor_member
-						track = restor_rank
-						value = 3
-					}
+					restor_rank_gain_effect = { VALUE = 3 }
 				}
 			}
 			50 = {

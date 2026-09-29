@@ -20,6 +20,12 @@ namespace Ck3MapGen.Emit;
 ///   common/decisions/00_gen_debug_panel_decision.txt            the way in; debug_only
 ///   common/scripted_guis/00_gen_debug_panel_guis.txt            open state, gather, and the tools
 ///   localization/english/gen_debug_panel_l_english.yml          the prose
+///   gui/gen_debug_events.gui                                    the Events tab, as a type (WriteEventsTab)
+///   localization/english/gen_debug_events_l_english.yml         its labels
+///
+/// And, from GuiWriter so --gui-only reaches them (see AddLauncher):
+///   the "Gen" row in hud.gui's debug map-mode stack, 00_gen_debug_launcher_guis.txt,
+///   gen_debug_launcher_l_english.yml
 /// </code>
 ///
 /// **The two columns are the whole point.** A generated fact and a live count sitting on the same
@@ -159,7 +165,7 @@ public static class DebugPanel
     // Entry point
     // ===========================================================================================
 
-    public static void Write(string modDir, Facts facts)
+    public static void Write(string modDir, string gameDir, Facts facts)
     {
         // The labels are collected while the window is built rather than listed separately, so a
         // row cannot be added without its localisation key coming with it.
@@ -175,7 +181,44 @@ public static class DebugPanel
         WriteWindow(modDir, facts, labels, events);
         WriteScriptedGuis(modDir, facts, events);
         WriteDecision(modDir);
-        WriteLocalisation(modDir, labels, events);
+        WriteLocalisation(modDir, labels);
+        WriteEventsTab(modDir, gameDir, events);
+    }
+
+    /// <summary>
+    /// Everything the Events tab is: its <c>.gui</c> type and its words. Public for
+    /// <c>--gui-only</c>, which has no world facts and so cannot rewrite the rest of the panel, and
+    /// does not need to. Pass <paramref name="events"/> when the caller already scanned.
+    /// </summary>
+    public static void WriteEventsTab(string modDir, string gameDir,
+        List<ShippedEvents.Entry>? events = null)
+    {
+        events ??= ShippedEvents.Scan(modDir);
+
+        WriteEventsGui(modDir, events);
+        WriteEventLoc(modDir, gameDir, events);
+        MigrateInlineEventsTab(modDir);
+    }
+
+    /// <summary>
+    /// Swaps the inline Events tab of a panel generated before the tab became a type for an
+    /// instance of that type. Only <c>--gui-only</c> ever finds one: a full run writes the panel
+    /// fresh. Without this the old tab and the new would both answer to the Events button.
+    /// </summary>
+    private static void MigrateInlineEventsTab(string modDir)
+    {
+        var doc = GuiDocument.Open(modDir, "debug panel", "gui", "gen_debug_panel.gui");
+        if (doc is null || doc.Nodes().Any(n => n.Key == EventsTabType)) return;
+
+        string gate = GuiExpr.VariableHasValue(TabVariable, EventsTab).Inner;
+        var inline = doc.Find("inline events tab", n => n.IsBlock && n.Key == "vbox"
+            && n.Field("visible") is { } v && GuiNode.Unquote(v).Contains(gate, StringComparison.Ordinal));
+
+        if (inline.Node is not { } old) return;
+
+        old.InsertBefore(GuiBuilder.Of(EventsTabType).Node);
+        old.Parent!.Children.Remove(old);
+        doc.Ship(modDir);
     }
 
     /// <summary>
@@ -303,27 +346,12 @@ public static class DebugPanel
                                 .Gap().Add(WorldPanel(facts, labels))
                                 .Gap().Add(RealmPanel(facts, labels))
                                 .Gap().Add(ToolsPanel(facts))
-                                .Gap().Add(EventsPanel(events))))))));
+                                .Gap().Add(GuiBuilder.Of(EventsTabType))))))));
 
         // The bare instantiation the registry resolves. Without it the file loads clean and then
         // "Could not find widget 'gen_debug_panel_host'", with nothing else to distinguish that
         // from a visibility gate that is simply false.
         doc.Add(GuiBuilder.Of("gen_debug_panel_host"));
-        doc.Add(GuiBuilder.Of("window")
-            .Name("gen_debug_panel_launcher")
-            .ParentAnchor("bottom|hcenter")
-            .Position(0, -20)
-            .Size(140, 30)
-            .Visible(GuiExpr.And(
-                GuiExpr.Raw("InDebugMode"),
-                GuiExpr.Raw("GetPlayer.IsValid"),
-                GuiExpr.Raw("Not( IsPauseMenuShown )"),
-                GuiExpr.Raw("IsDefaultGUIMode")))
-            .Add(GuiBuilder.Of("button_standard")
-                .Size(140, 30)
-                .Text("GEN_DEBUG_PANEL_LAUNCHER")
-                .Tooltip("GEN_DEBUG_PANEL_LAUNCHER_TT")
-                .Runs(new ScriptedGui("gen_debug_panel_toggle", player))));
         doc.Ship(modDir);
 
         string registry = Path.Combine(modDir, "gui", "scripted_widgets");
@@ -335,8 +363,83 @@ public static class DebugPanel
             + "#\n"
             + "# Names the HOST type, not the window itself, for the reason spelled out in\n"
             + "# gui/scripted_widgets/gen_artifact_index.txt.\n"
-            + "gui/gen_debug_panel.gui = gen_debug_panel_host\n"
-            + "gui/gen_debug_panel.gui = gen_debug_panel_launcher\n");
+            + "gui/gen_debug_panel.gui = gen_debug_panel_host\n");
+    }
+
+    /// <summary>
+    /// The HUD button that opens the panel: one more row in vanilla's debug map-mode stack.
+    ///
+    /// <c>map_modes_debug</c> is the column of round, three-letter buttons ("Srlm", "Ter", "Bar")
+    /// hud.gui shows bottom-right in debug mode only, so a debug window's door belongs in it. As a
+    /// child of that instance the row inherits everything the stack is gated on (debug mode, the
+    /// default GUI mode, no right-hand window open, the map-mode list not expanded) and its
+    /// flowcontainer places it, so there is no geometry here to collide with anything.
+    ///
+    /// Called from <see cref="GuiWriter"/>, not from <see cref="Write"/>, because the HUD is
+    /// patched there and because that is the path <c>--gui-only</c> runs. For the same reason
+    /// this writes its own scripted_gui and loc rather than riding on the panel's files: a
+    /// <c>--gui-only</c> run against a mod generated before this existed still gets a working
+    /// button, since the only thing it needs from the panel is the <c>gen_debug_panel_open</c>
+    /// variable the decision has always set.
+    /// </summary>
+    internal static void AddLauncher(string modDir, GuiDocument hud)
+    {
+        var player = GuiScope.Root("GetPlayer");
+        var toggle = new ScriptedGui("gen_debug_panel_toggle", player);
+        var window = new ScriptedGui("gen_debug_panel_window", player);
+
+        // Hidden parent, because `down` asks a scripted_gui rooted on the player every frame and
+        // the stack itself shows in observer mode. See GuiWriter.AddColonyCounter for what an
+        // unguarded one costs: `And` does not short-circuit, a hidden parent does.
+        hud.Unique("debug map modes", n => n.IsBlock && n.Key == "map_modes_debug")
+            .Append(GuiBuilder.FlowContainer()
+                .Visible(GuiExpr.Raw("GetPlayer.IsValid"))
+                .IgnoreInvisible()
+                .Add(GuiBuilder.Of("button_round")
+                    .Text("GEN_DEBUG_LAUNCHER")
+                    .Tooltip("GEN_DEBUG_LAUNCHER_TT")
+                    .Down(window.IsShown())
+                    .Runs(toggle))
+                .Node);
+
+        string guis = Path.Combine(modDir, "common", "scripted_guis");
+        Directory.CreateDirectory(guis);
+
+        ParadoxText.WriteBom(Path.Combine(guis, "00_gen_debug_launcher_guis.txt"),
+            """
+            # The debug panel's HUD button. Written by Emit/GuiWindows/DebugPanel.cs (AddLauncher).
+            #
+            # Flips the same character variable the decision sets and the panel's close button
+            # clears, so the three can never disagree about whether the panel is open.
+            gen_debug_panel_toggle = {
+            	scope = character
+
+            	is_shown = { always = yes }
+
+            	effect = {
+            		if = {
+            			limit = { has_variable = gen_debug_panel_open }
+            			remove_variable = gen_debug_panel_open
+            		}
+            		else = {
+            			set_variable = {
+            				name = gen_debug_panel_open
+            				value = yes
+            			}
+            		}
+            	}
+            }
+
+            """);
+
+        // "Gen" in the house style of its neighbours, which are all three- or four-letter
+        // abbreviations. A loc key rather than raw_text, for the reason LabelSet gives.
+        var loc = new LocFile();
+        loc.Add("GEN_DEBUG_LAUNCHER", "Gen");
+        loc.Add("GEN_DEBUG_LAUNCHER_TT",
+            "Generated World: open or close the debug panel (generation details, live counts, "
+            + "tools, and event launch buttons).");
+        loc.Write(Path.Combine(modDir, "localization", "english", "gen_debug_launcher_l_english.yml"));
     }
 
     /// <summary>
@@ -567,35 +670,101 @@ public static class DebugPanel
     /// Both are called out in the note and in each button's tooltip, because otherwise the first
     /// silent button reads as a bug in this panel.
     /// </summary>
-    private static GuiBuilder EventsPanel(List<ShippedEvents.Entry> events)
+    ///
+    /// <b>Each file is a collapsible group</b>, closed by default: a header row with vanilla's
+    /// expand arrow, the file's name and its event count, over a box of buttons shown only while
+    /// the header's GUI variable exists. That is the outliner's own pattern
+    /// (<c>GetVariableSystem.Toggle</c> on the header, <c>Exists</c> on the arrow's frame and the
+    /// content), and at 460 events it is the difference between a list and a wall.
+    ///
+    /// Declared as a TYPE in <c>gui/gen_debug_events.gui</c> rather than inline in the panel,
+    /// because nothing in it depends on world facts, and a file of its own is one
+    /// <c>--gui-only</c> can rewrite. The panel just instantiates <see cref="EventsTabType"/>.
+    /// </summary>
+    private const string EventsTabType = "gen_debug_events_tab";
+
+    private static void WriteEventsGui(string modDir, List<ShippedEvents.Entry> events)
+    {
+        var doc = GuiDocument.Create("debug panel events", "gui", "gen_debug_events.gui");
+
+        doc.Add(GuiBuilder.Types("gen_debug_events").Add(
+            GuiBuilder.Type(EventsTabType, "vbox")
+                .ExpandingH()
+                .Spacing(2)
+                // Collapsed groups must cost no height, or the open one sits under a column of
+                // empty space where the closed ones would have been.
+                .IgnoreInvisible()
+                .Visible(GuiExpr.VariableHasValue(TabVariable, EventsTab))
+                .Add(EventsContent(events))));
+
+        doc.Ship(modDir);
+    }
+
+    private static GuiBuilder[] EventsContent(List<ShippedEvents.Entry> events)
     {
         var player = GuiScope.Root("GetPlayer");
-        var panel = Panel(EventsTab);
 
         if (events.Count == 0)
-        {
             // A map generated with every optional system switched off really does ship no events.
             // An empty tab with a line saying so beats an empty tab.
-            panel.Gap().Add(Note("GEN_DEBUG_PANEL_EVENTS_NONE"));
-            return panel;
-        }
+            return [Note("GEN_DEBUG_PANEL_EVENTS_NONE")];
 
-        panel.Gap().Add(Note("GEN_DEBUG_PANEL_EVENTS_NOTE"));
+        var content = new List<GuiBuilder> { Note("GEN_DEBUG_PANEL_EVENTS_NOTE") };
 
         // Grouped by file, in the order the scan found them, which is the order they sit in on
         // disk. Feature by feature, in other words -- all the colonisation events together.
         foreach (var group in events.GroupBy(e => e.File))
         {
-            panel.Gap().Add(Heading(FileHeadingKey(group.Key)));
+            string open = GroupVariable(group.Key);
 
-            foreach (var entry in group)
-                panel.Add(entry.CanFire
+            content.Add(GroupHeader(group.Key, group.Count(), open));
+            content.Add(GuiBuilder.VBox()
+                .ExpandingH()
+                .Spacing(2)
+                .MarginLeft(24)
+                .MarginBottom(6)
+                .Visible(GuiExpr.VariableExists(open))
+                .Add([.. group.Select(entry => entry.CanFire
                     ? FireButton(entry, player)
-                    : UnfirableEvent(entry));
+                    : UnfirableEvent(entry))]));
         }
 
-        return panel;
+        return [.. content];
     }
+
+    /// <summary>
+    /// One group's header: vanilla's outliner header, which is a <c>button_tab</c> with an arrow,
+    /// a name and a count laid over it. The arrow is display only (<c>alwaystransparent</c>), so
+    /// the whole row is one click target.
+    /// </summary>
+    private static GuiBuilder GroupHeader(string file, int count, string open)
+        => GuiBuilder.Of("button_tab")
+            .ExpandingH()
+            .Size(0, 31)
+            .OnClick(GuiExpr.VariableToggle(open))
+            .Add(GuiBuilder.HBox()
+                .ExpandingH()
+                .Margin(15, 0)
+                .Spacing(5)
+                .Add(GuiBuilder.Of("button_expand")
+                        .Size(22, 22)
+                        .AlwaysTransparent()
+                        // Frame 2 is the open arrow. Vanilla's hooks list spells it this way.
+                        .Quoted("frame", $"[Select_int32( {GuiExpr.VariableExists(open).Inner}, "
+                            + "'(int32)2', '(int32)1' )]"),
+                     GuiBuilder.TextSingle()
+                        .ExpandingH()
+                        .Align("nobaseline")
+                        .Format("#high")
+                        .Text(FileHeadingKey(file)),
+                     GuiBuilder.TextSingle()
+                        .Align("nobaseline")
+                        .Format("#weak")
+                        .RawText($"{count}")));
+
+    /// <summary>The GUI variable that holds one group open. Named off the file, so it cannot collide.</summary>
+    private static string GroupVariable(string file)
+        => "gen_debug_evgrp_" + FileHeadingKey(file)["GEN_DEBUG_EVFILE_".Length..].ToLowerInvariant();
 
     /// <summary>
     /// One event's button.
@@ -879,20 +1048,6 @@ public static class DebugPanel
             # Every entry here is named by gui/gen_debug_panel.gui, and neither side fails loudly:
             # a .gui naming a scripted_gui that does not exist logs nothing and evaluates false, so
             # a rename on either side produces a button that silently does nothing.
-
-            # Direct debug-mode HUD access; shares the decision's open state.
-            gen_debug_panel_toggle = {
-                scope = character
-                is_shown = { always = yes }
-                effect = {
-                    if = {
-                        limit = { has_variable = gen_debug_panel_open }
-                        remove_variable = gen_debug_panel_open
-                    }
-                    else = { set_variable = { name = gen_debug_panel_open value = yes } }
-                }
-            }
-
 
             # Is the panel open for this character, and close it.
             #
@@ -1320,17 +1475,11 @@ public static class DebugPanel
     /// The prose. Only what a person reads — every baked number goes in as <c>raw_text</c> and
     /// needs no key here.
     /// </summary>
-    private static void WriteLocalisation(string modDir, LabelSet labels,
-        List<ShippedEvents.Entry> events)
+    private static void WriteLocalisation(string modDir, LabelSet labels)
     {
         var loc = new LocFile();
 
         labels.WriteInto(loc);
-
-        // A heading per event file, titled from the filename with the noise trimmed. Derived rather
-        // than tabulated, so a new events file needs no entry here.
-        foreach (string file in events.Select(e => e.File).Distinct(StringComparer.Ordinal))
-            loc.Add(FileHeadingKey(file), FileHeading(file));
         loc.Blank();
 
         loc.Add("gen_debug_panel_decision", "Generated World (debug)");
@@ -1340,9 +1489,6 @@ public static class DebugPanel
         loc.Add("gen_debug_panel_decision_tooltip",
             "Debug only. Shows how this map was generated and what the running game made of it.");
         loc.Add("gen_debug_panel_decision_confirm", "Open the panel");
-        loc.Add("GEN_DEBUG_PANEL_LAUNCHER", "World Debug");
-        loc.Add("GEN_DEBUG_PANEL_LAUNCHER_TT",
-            "Open or close the world debug menu: generation details, live counts, tools, and event launch buttons.");
 
         loc.Add("GEN_DEBUG_PANEL_TITLE", "Generated World");
 
@@ -1368,32 +1514,6 @@ public static class DebugPanel
             + "wants a colony underway, a war, or a scope it has not been given will decline "
             + "silently. Events marked #EMP hidden#! run their effects without ever showing a "
             + "window.");
-
-        // One label and one tooltip per event. Written from the same scan the window was built
-        // from, so a button can never name a key this loop did not write.
-        foreach (var entry in events)
-        {
-            loc.Add(EventLabelKey(entry), entry.Id
-                + (entry.Hidden ? "  (hidden)" : "")
-                + (entry.CanFire ? "" : $"  — {entry.Scope} scope"));
-
-            // AddBuilt, not Add: LocFile.Add runs ParadoxText.Loc, which collapses a real newline
-            // to a space. A tooltip wants the two-character \n that CK3 reads as a line break, and
-            // that is precisely what Loc would flatten.
-            loc.AddBuilt(EventTooltipKey(entry),
-                (entry.TitleKey is { } title
-                    ? $"#high ${title}$#! — {entry.Id}\\n"
-                    : $"#high {entry.Id}#!\\n")
-                + $"#weak {entry.Type} · {entry.File}#!\\n\\n"
-                + (entry.Hidden
-                    ? "This event is #EMP hidden#! — it runs its effects and shows no window, so "
-                      + "look for what it changed rather than for a popup.\\n\\n"
-                    : "")
-                + (entry.CanFire
-                    ? "Fires it on you now. If nothing happens, the event's own trigger said no."
-                    : $"#EMP Cannot be fired from here.#! It runs in a {entry.Scope} scope, and this "
-                      + "panel can only produce you and your capital. Listed so you know it ships."));
-        }
 
         loc.Add("GEN_DEBUG_PANEL_TITLES_NOTE",
             "These four should agree. The live figures skip the ~1,450 vanilla titular shims in "
@@ -1448,5 +1568,127 @@ public static class DebugPanel
             "Closes this panel and opens the great works this map placed.");
 
         loc.Write(Path.Combine(modDir, "localization", "english", "gen_debug_panel_l_english.yml"));
+    }
+
+    // ===========================================================================================
+    // The Events tab's words
+    // ===========================================================================================
+
+    private const string EventLocFile = "gen_debug_events_l_english.yml";
+
+    /// <summary>
+    /// Every Events-tab string: a heading per file, and a label and tooltip per event.
+    ///
+    /// A file of its own, and public, because every one of these is loc and nothing else. The
+    /// <c>.gui</c> names the keys, not the words, so <c>--gui-only</c> can rewrite them against an
+    /// already-generated mod without the world facts the rest of the panel needs. Pass
+    /// <paramref name="events"/> when the caller already scanned; otherwise this scans.
+    ///
+    /// <b>The label is the event's own title</b>, not its id, which moves to the tooltip. Two
+    /// forms, decided per title by reading its text (the game's loc first, then the mod's):
+    /// <list type="bullet">
+    /// <item>Plain titles go in as <c>$key$</c>, so the button follows any rewording of the event.</item>
+    /// <item>Titles with a <c>[datafunction]</c> are baked with each one swapped for a placeholder.
+    /// A button has no event scope, so <c>[gen_ruin_target.GetName] Is Failing</c> would render as
+    /// " Is Failing" and log an error. It reads "‹ruin target› Is Failing" instead.</item>
+    /// </list>
+    /// Events with no single title (a <c>first_valid</c> block) fall back to the id.
+    /// </summary>
+    private static void WriteEventLoc(string modDir, string gameDir, List<ShippedEvents.Entry> events)
+    {
+        var titles = LocLibrary.Load(gameDir, modDir);
+        var loc = new LocFile();
+
+        // A heading per event file, titled from the filename with the noise trimmed. Derived rather
+        // than tabulated, so a new events file needs no entry here.
+        foreach (string file in events.Select(e => e.File).Distinct(StringComparer.Ordinal))
+            loc.Add(FileHeadingKey(file), FileHeading(file));
+        loc.Blank();
+
+        // One label and one tooltip per event. Written from the same scan the window was built
+        // from, so a button can never name a key this loop did not write.
+        foreach (var entry in events)
+        {
+            string title = EventTitle(entry, titles);
+
+            // AddBuilt, not Add: LocFile.Add runs ParadoxText.Loc, which collapses a real newline
+            // to a space. A tooltip wants the two-character \n that CK3 reads as a line break, and
+            // that is precisely what Loc would flatten. The label takes it too, so a `$key$` goes
+            // through untouched.
+            loc.AddBuilt(EventLabelKey(entry), title
+                + (entry.Hidden ? "  (hidden)" : "")
+                + (entry.CanFire ? "" : $"  — {entry.Scope} scope"));
+
+            loc.AddBuilt(EventTooltipKey(entry),
+                $"#high {title}#!\\n"
+                + $"#weak {entry.Id} · {entry.Type} · {entry.File}#!\\n\\n"
+                + (entry.Hidden
+                    ? "This event is #EMP hidden#! — it runs its effects and shows no window, so "
+                      + "look for what it changed rather than for a popup.\\n\\n"
+                    : "")
+                + (entry.CanFire
+                    ? "Fires it on you now. If nothing happens, the event's own trigger said no."
+                    : $"#EMP Cannot be fired from here.#! It runs in a {entry.Scope} scope, and this "
+                      + "panel can only produce you and your capital. Listed so you know it ships."));
+        }
+
+        loc.Write(Path.Combine(modDir, "localization", "english", EventLocFile));
+
+        StripLegacyEventLoc(modDir);
+    }
+
+    /// <summary>
+    /// What a button calls an event: <c>$key$</c>, a baked title with placeholders, or the id.
+    /// </summary>
+    private static string EventTitle(ShippedEvents.Entry entry, LocLibrary titles)
+    {
+        if (entry.TitleKey is not { } key || titles.Text(key) is not { } text)
+            return entry.Id;
+
+        // One level of $KEY$ has been substituted already, which is enough to see a nested
+        // name that carries a datafunction of its own (restor.0010.t is `$restor_society_name$`).
+        if (!text.Contains('['))
+            return $"${key}$";
+
+        // `[gen_ruin_target.GetName]` -> `‹ruin target›`: the scope, not the call. Quotes go too,
+        // since a baked value sits inside the loc line's own.
+        string baked = System.Text.RegularExpressions.Regex.Replace(text, @"\[([^\]]*)\]",
+            m => "‹" + Placeholder(m.Groups[1].Value) + "›");
+
+        return baked.Replace("\"", "");
+    }
+
+    /// <summary><c>scope:gen_ruin_target.GetName|U</c> reads as <c>ruin target</c>.</summary>
+    private static string Placeholder(string call)
+    {
+        string head = call.Split('.', '|')[0];
+
+        if (head.StartsWith("scope:", StringComparison.Ordinal)) head = head["scope:".Length..];
+        if (head.StartsWith("gen_", StringComparison.Ordinal)) head = head["gen_".Length..];
+
+        head = head.Replace('_', ' ').Trim();
+        return head.Length == 0 ? "…" : head;
+    }
+
+    /// <summary>
+    /// Drops the event keys from <c>gen_debug_panel_l_english.yml</c> on a mod generated before
+    /// they moved to their own file. Only reached by <c>--gui-only</c>, since a full run writes that
+    /// file fresh without them. Left in, every key would be defined twice and the game logs each.
+    /// </summary>
+    private static void StripLegacyEventLoc(string modDir)
+    {
+        string path = Path.Combine(modDir, "localization", "english", "gen_debug_panel_l_english.yml");
+        if (!File.Exists(path)) return;
+
+        var lines = File.ReadAllLines(path);
+        var kept = lines.Where(l => !l.TrimStart().StartsWith("GEN_DEBUG_EV", StringComparison.Ordinal))
+            .ToArray();
+
+        if (kept.Length == lines.Length) return;
+
+        // UTF-8 with BOM, which is what CK3 requires of a .yml and what LocFile writes.
+        File.WriteAllLines(path, kept, new System.Text.UTF8Encoding(true));
+        Console.WriteLine($"  debug panel: moved {lines.Length - kept.Length} event key(s) out of "
+            + "gen_debug_panel_l_english.yml");
     }
 }

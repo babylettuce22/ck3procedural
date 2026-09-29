@@ -142,6 +142,7 @@ public static class RunLog
         text.AppendLine($"Game folder:   {options.GameDir}");
         text.AppendLine($"Seed:          {cfg.Seed}");
         text.AppendLine($"Heightmap:     {DescribeHeightmap(options)}");
+        text.AppendLine($"Quick:         {options.QuickSummary?.Split('\n')[0].Replace("Quick world: ", "") ?? "(not a Quick world)"}");
         text.AppendLine($"Azgaar:        {options.AzgaarJsonPath ?? "(none)"}");
         text.AppendLine($"History:       {(options.WriteHistory ? "written" : "skipped")}");
         text.AppendLine($"Packed map:    {(options.WritePacked ? "written" : "skipped")}");

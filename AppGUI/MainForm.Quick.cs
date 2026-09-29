@@ -128,11 +128,23 @@ public sealed partial class MainForm
 
         _quick.ShowRunning();
 
-        Console.WriteLine($"Quick world: {choices.MapType}, seed {choices.Seed}, {choices.Pixels.Width}x{choices.Pixels.Height}");
-        foreach (string stage in switchedOff)
-            Console.WriteLine($"  {stage} switched off: it needs a Direct3D 12 GPU, and none was found.");
+        // Printed by the run itself (RunLog.Begin clears whatever is printed before it), and kept for
+        // the history re-write, which is the same world.
+        _quickSummary = choices.Summary()
+            + string.Concat(switchedOff.Select(stage =>
+                $"\n  {stage} switched off: it needs a Direct3D 12 GPU, and none was found."));
 
-        var (completed, took) = await RunFromLauncherAsync(_quick.Run, modDir);
+        _options.QuickSummary = _quickSummary;
+        bool completed;
+        TimeSpan took;
+        try
+        {
+            (completed, took) = await RunFromLauncherAsync(_quick.Run, modDir);
+        }
+        finally
+        {
+            _options.QuickSummary = null;
+        }
 
         if (completed)
         {
@@ -323,6 +335,9 @@ public sealed partial class MainForm
     /// <summary>The history of the world just made, running on from its start date. See <see cref="QuickHistory"/>.</summary>
     private QuickHistory? _quickHistory;
 
+    /// <summary>The Quick world's choices as the log states them; see <see cref="GenerationOptions.QuickSummary"/>.</summary>
+    private string? _quickSummary;
+
     /// <summary>
     /// True once the world has been written again from <see cref="_quickHistory"/>: continuing then
     /// picks the history up from the world as written — the History workspace's chaining — rather
@@ -410,12 +425,14 @@ public sealed partial class MainForm
             _quick.Run.SetHistoryState(false, _historyFast, $"Writing the world as it stands in {applied.Year}…");
             _quick.SetWriting(true);
             bool written;
+            _options.QuickSummary = _quickSummary;
             try
             {
                 written = await ReemitHistoryAsync(target, applied);
             }
             finally
             {
+                _options.QuickSummary = null;
                 _quick.SetWriting(false);
             }
 

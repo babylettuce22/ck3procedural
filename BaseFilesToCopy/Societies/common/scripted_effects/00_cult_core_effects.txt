@@ -8,9 +8,15 @@
 # =====================================================================================
 
 cult_swear_in_effect = {
+	# One society per character: see restor_swear_in_effect. The newer oath replaces the older.
+	if = {
+		limit = { has_trait = restor_member }
+		restor_leave_effect = yes
+	}
 	if = {
 		limit = { NOT = { has_trait = cult_member } }
 		add_trait = cult_member
+		cult_mark_service_effect = yes
 	}
 	while = {
 		limit = {
@@ -107,6 +113,14 @@ cult_leave_effect = {
 	if = {
 		limit = { has_character_modifier = cult_unveiled_member_modifier }
 		remove_character_modifier = cult_unveiled_member_modifier
+	}
+	remove_variable = cult_charge_giver
+
+	# Nobody outside the circle leads it: a departing Hierophant is replaced now, from a roster they
+	# have already left. The yearly repair (cult_yearly_effect) backs it up.
+	if = {
+		limit = { cult_is_hierophant_trigger = yes }
+		cult_hierophant_succession_effect = yes
 	}
 }
 
@@ -263,13 +277,15 @@ cult_power_gain_effect = {
 		add = $VALUE$
 	}
 	custom_tooltip = cult_power_gain_tt
+	hidden_effect = { cult_mark_service_effect = yes }
 	hidden_effect = {
 		if = {
 			limit = { is_ai = no }
+			save_scope_as = cult_meter_owner
 			send_interface_toast = {
 				type = event_toast_effect_good
 				title = cult_power_toast
-				left_icon = root
+				left_icon = scope:cult_meter_owner
 			}
 		}
 	}
@@ -316,10 +332,11 @@ cult_exposure_gain_effect = {
 		hidden_effect = {
 			if = {
 				limit = { is_ai = no }
+				save_scope_as = cult_meter_owner
 				send_interface_toast = {
 					type = event_toast_effect_bad
 					title = cult_exposure_toast
-					left_icon = root
+					left_icon = scope:cult_meter_owner
 				}
 			}
 			cult_exposure_check_effect = yes
@@ -362,6 +379,8 @@ cult_exposure_check_effect = {
 		if = {
 			limit = { NOT = { has_character_modifier = cult_highly_suspect_modifier } }
 			add_character_modifier = cult_highly_suspect_modifier
+			# Disgrace: the circle keeps its distance from someone the church is watching.
+			cult_rank_loss_effect = { VALUE = 10 }
 			trigger_event = { id = cult.0302 days = 1 }
 			if = {
 				limit = {
@@ -750,6 +769,7 @@ cult_yearly_effect = {
 				OR = {
 					NOT = { exists = global_var:cult_hierophant }
 					global_var:cult_hierophant = { is_alive = no }
+					global_var:cult_hierophant = { NOT = { has_trait = cult_member } }
 				}
 			}
 			cult_hierophant_succession_effect = yes
@@ -773,6 +793,177 @@ cult_yearly_effect = {
 				}
 			}
 			global_var:cult_host_faith.religious_head = { trigger_event = { id = cult.0720 days = 10 } }
+		}
+	}
+}
+
+# =====================================================================================
+#  Standing that falls
+# =====================================================================================
+#
+# CK2's societies let rank slide as well as climb, and so do these. Every way down goes through
+# cult_rank_loss_effect, so a player is always told when a loss costs them a rung:
+#
+#   failing    a charge run out (-10) or turned down (-5): cult_charge_failed_standing_effect
+#   the Hierophant a second charge run out within ten years costs a rung more (-15), unless the Hierophant
+#              is a player -- a player Hierophant demotes by hand instead (cult_demote_interaction)
+#   idleness   Rung 1 and up with no dark power earned in four years slip 5 a year (cult_idle_effect);
+#              earning any keeps the flag cult_served fresh (cult_mark_service_effect)
+#   disgrace   becoming highly suspect (-10, cult_exposure_check_effect)
+#
+# The Hierophant is exempt: office sets standing (cult_make_*_effect raises it to its floor).
+
+cult_rank_loss_effect = {
+	if = {
+		limit = {
+			has_trait = cult_member
+			NOT = { cult_is_hierophant_trigger = yes }
+		}
+		save_scope_value_as = {
+			name = cult_rung_before
+			value = cult_rung_value
+		}
+		save_scope_value_as = {
+			name = cult_rank_delta
+			value = $VALUE$
+		}
+		custom_tooltip = cult_rank_loss_tt
+		hidden_effect = {
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = -$VALUE$
+			}
+			if = {
+				limit = {
+					is_ai = no
+					cult_rung_value < scope:cult_rung_before
+				}
+				save_scope_as = cult_rung_loser
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult_rung_lost_toast
+					left_icon = scope:cult_rung_loser
+					if = {
+						limit = { cult_rung_value = 0 }
+						custom_tooltip = cult_rung_lost_0_tt
+					}
+					else_if = {
+						limit = { cult_rung_value = 1 }
+						custom_tooltip = cult_rung_lost_1_tt
+					}
+					else = {
+						custom_tooltip = cult_rung_lost_2_tt
+					}
+				}
+			}
+		}
+	}
+}
+
+# Earning dark power is service: it keeps standing from slipping for four years. Called by the dark power
+# gain effect and by swearing in, so a new member starts with a clean slate.
+cult_mark_service_effect = {
+	if = {
+		limit = { has_character_flag = cult_served }
+		remove_character_flag = cult_served
+	}
+	add_character_flag = {
+		flag = cult_served
+		years = 4
+	}
+}
+
+# Yearly, from the member pulse. Rung 1 and up, and nothing earned in four years: standing slips.
+cult_idle_effect = {
+	if = {
+		limit = {
+			cult_rank_at_least_trigger = { RANK = 25 }
+			NOT = { has_character_flag = cult_served }
+		}
+		if = {
+			limit = { is_ai = no }
+			save_scope_as = cult_idler
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = cult_idle_toast
+				left_icon = scope:cult_idler
+				custom_tooltip = cult_idle_tt
+				cult_rank_loss_effect = { VALUE = 5 }
+			}
+		}
+		else = {
+			cult_rank_loss_effect = { VALUE = 5 }
+		}
+	}
+}
+
+# A charge run out. A second within ten years and an AI Hierophant takes a rung more.
+cult_charge_failed_standing_effect = {
+	cult_rank_loss_effect = { VALUE = 10 }
+	if = {
+		limit = {
+			has_character_flag = cult_failed_charge_recently
+			exists = global_var:cult_hierophant
+			global_var:cult_hierophant = { is_ai = yes }
+		}
+		custom_tooltip = cult_demoted_for_failure_tt
+		cult_rank_loss_effect = { VALUE = 15 }
+	}
+	if = {
+		limit = { has_character_flag = cult_failed_charge_recently }
+		remove_character_flag = cult_failed_charge_recently
+	}
+	add_character_flag = {
+		flag = cult_failed_charge_recently
+		years = 10
+	}
+}
+
+# THIS gains $VALUE$ standing (rank track XP). Every rise outside swearing in goes through here -- the
+# mirror of cult_rank_loss_effect -- so a player is told when a rise earns a rung. Swearing in and
+# the office floors (cult_swear_in_effect's climb) stay silent: those come with their own events.
+cult_rank_gain_effect = {
+	if = {
+		limit = { has_trait = cult_member }
+		save_scope_value_as = {
+			name = cult_rung_before
+			value = cult_rung_value
+		}
+		save_scope_value_as = {
+			name = cult_rank_delta
+			value = $VALUE$
+		}
+		custom_tooltip = cult_rank_gain_tt
+		hidden_effect = {
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = $VALUE$
+			}
+			if = {
+				limit = {
+					is_ai = no
+					cult_rung_value > scope:cult_rung_before
+				}
+				save_scope_as = cult_rung_gainer
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult_rung_gained_toast
+					left_icon = scope:cult_rung_gainer
+					if = {
+						limit = { cult_rung_value = 3 }
+						custom_tooltip = cult_rung_gained_3_tt
+					}
+					else_if = {
+						limit = { cult_rung_value = 2 }
+						custom_tooltip = cult_rung_gained_2_tt
+					}
+					else = {
+						custom_tooltip = cult_rung_gained_1_tt
+					}
+				}
+			}
 		}
 	}
 }

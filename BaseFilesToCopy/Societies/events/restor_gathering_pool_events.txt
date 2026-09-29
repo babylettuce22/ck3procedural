@@ -238,11 +238,7 @@ restor.1002 = {
 				target = root
 				modifier = restor_life_took_my_side_opinion
 			}
-			add_trait_xp = {
-				trait = restor_member
-				track = restor_rank
-				value = 3
-			}
+			restor_rank_gain_effect = { VALUE = 3 }
 		}
 		scope:restor_dove = {
 			add_opinion = {
@@ -474,11 +470,7 @@ restor.1003 = {
 					custom_tooltip = restor.1003.a.loose.tt
 					restor_their_exposure_gain_effect = { WHO = scope:restor_suspect VALUE = 5 }
 					scope:restor_suspect = {
-						add_trait_xp = {
-							trait = restor_member
-							track = restor_rank
-							value = -10
-						}
+						restor_rank_loss_effect = { VALUE = 10 }
 					}
 					restor_exposure_loss_effect = { VALUE = 2 }
 				}
@@ -595,11 +587,7 @@ restor.1004 = {
 					modifier = respect_opinion
 					opinion = 10
 				}
-				add_trait_xp = {
-					trait = restor_member
-					track = restor_rank
-					value = 3
-				}
+				restor_rank_gain_effect = { VALUE = 3 }
 			}
 		}
 		scope:restor_pretender = { add_prestige = minor_prestige_gain }
@@ -638,11 +626,7 @@ restor.1004 = {
 				modifier = restor_life_served_the_house_opinion
 			}
 		}
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 5
-		}
+		restor_rank_gain_effect = { VALUE = 5 }
 		restor_exposure_gain_effect = { VALUE = 3 }
 		stress_impact = {
 			arrogant = medium_stress_impact_gain
@@ -817,11 +801,7 @@ restor.1006 = {
 				add_stress = minor_stress_loss
 			}
 		}
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 2
-		}
+		restor_rank_gain_effect = { VALUE = 2 }
 		restor_exposure_gain_effect = { VALUE = 1 }
 		ai_chance = {
 			base = 40
@@ -914,11 +894,7 @@ restor.1007 = {
 	option = {
 		name = restor.1007.b
 		restor_favour_gain_effect = { VALUE = 5 }
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 2
-		}
+		restor_rank_gain_effect = { VALUE = 2 }
 		ai_chance = {
 			base = 35
 			modifier = { add = 25 has_trait = paranoid }
@@ -1077,17 +1053,9 @@ restor.1008 = {
 				target = root
 				modifier = restor_life_scolded_me_opinion
 			}
-			add_trait_xp = {
-				trait = restor_member
-				track = restor_rank
-				value = -5
-			}
+			restor_rank_loss_effect = { VALUE = 5 }
 		}
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 3
-		}
+		restor_rank_gain_effect = { VALUE = 3 }
 		restor_exposure_gain_effect = { VALUE = 1 }
 		ai_chance = {
 			base = 25
@@ -1230,11 +1198,7 @@ restor.1009 = {
 	# It changes nothing.
 	option = {
 		name = restor.1009.c
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 2
-		}
+		restor_rank_gain_effect = { VALUE = 2 }
 		stress_impact = {
 			impatient = minor_stress_impact_gain
 			ambitious = minor_stress_impact_gain
@@ -1318,11 +1282,7 @@ restor.1010 = {
 					has_trait = restor_member
 					is_landed = yes
 				}
-				add_trait_xp = {
-					trait = restor_member
-					track = restor_rank
-					value = 3
-				}
+				restor_rank_gain_effect = { VALUE = 3 }
 			}
 		}
 		restor_favour_gain_effect = { VALUE = 10 }
@@ -1345,11 +1305,7 @@ restor.1010 = {
 					has_trait = restor_member
 					is_landed = yes
 				}
-				add_trait_xp = {
-					trait = restor_member
-					track = restor_rank
-					value = 1
-				}
+				restor_rank_gain_effect = { VALUE = 1 }
 			}
 		}
 		add_diplomacy_lifestyle_xp = minor_lifestyle_xp
@@ -1639,11 +1595,7 @@ restor.1012 = {
 					title = restor.1012.b.stays
 					left_icon = scope:restor_leaver
 					scope:restor_leaver = {
-						add_trait_xp = {
-							trait = restor_member
-							track = restor_rank
-							value = 5
-						}
+						restor_rank_gain_effect = { VALUE = 5 }
 						add_stress = minor_stress_gain
 					}
 				}
@@ -1803,11 +1755,7 @@ restor.1014 = {
 	# The truth, no more.
 	option = {
 		name = restor.1014.a
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 3
-		}
+		restor_rank_gain_effect = { VALUE = 3 }
 		scope:restor_keeper = {
 			add_opinion = {
 				target = root
@@ -1874,11 +1822,7 @@ restor.1014 = {
 	# Ask for more to do.
 	option = {
 		name = restor.1014.c
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 2
-		}
+		restor_rank_gain_effect = { VALUE = 2 }
 		scope:restor_keeper = {
 			add_opinion = {
 				target = root
@@ -2175,11 +2119,7 @@ restor.1022 = {
 					type = event_toast_effect_good
 					title = restor.1022.a.good
 					left_icon = scope:restor_elder
-					add_trait_xp = {
-						trait = restor_member
-						track = restor_rank
-						value = 5
-					}
+					restor_rank_gain_effect = { VALUE = 5 }
 					scope:restor_elder = {
 						add_opinion = {
 							target = root
@@ -2522,11 +2462,7 @@ restor.1030 = {
 		trigger = { scope:restor_watch_result ?= flag:loose }
 		restor_their_exposure_gain_effect = { WHO = scope:restor_suspect VALUE = 5 }
 		scope:restor_suspect = {
-			add_trait_xp = {
-				trait = restor_member
-				track = restor_rank
-				value = -10
-			}
+			restor_rank_loss_effect = { VALUE = 10 }
 		}
 		restor_exposure_loss_effect = { VALUE = 3 }
 		add_intrigue_lifestyle_xp = minor_lifestyle_xp
@@ -2536,11 +2472,7 @@ restor.1030 = {
 	option = {
 		name = restor.1030.b
 		trigger = { scope:restor_watch_result ?= flag:clean }
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 2
-		}
+		restor_rank_gain_effect = { VALUE = 2 }
 		stress_impact = {
 			paranoid = minor_stress_impact_loss
 		}

@@ -50,7 +50,7 @@
  cult.1002.a:0 "Go to [cult_mass_initiate.GetHerHim] myself, and talk [cult_mass_initiate.GetHerHim] back to [cult_mass_initiate.GetHerHis] knees."
  cult.1002.a.kneels:0 "[cult_mass_initiate.GetFirstNameNoTooltip] Kneels Again"
  cult.1002.a.leaves:0 "[cult_mass_initiate.GetFirstNameNoTooltip] Leaves"
- cult.1002.b:0 "Remind [cult_mass_initiate.GetHerHim], quietly, what the priests do to people who were here."
+ cult.1002.b:0 "Remind [cult_mass_initiate.GetHerHim], quietly, what the $cult_priests$ do to people who were here."
  cult.1002.b.tt:0 "[cult_mass_initiate.GetFirstNameNoTooltip] goes back to [cult_mass_initiate.GetHerHis] place, and does not look at you again tonight"
  cult.1002.c:0 "Let [cult_mass_initiate.GetHerHim] go. A frightened member is worse than none."
  cult.1002.c.quiet:0 "[cult_mass_initiate.GetFirstNameNoTooltip] Keeps Quiet"
@@ -58,9 +58,9 @@
 
  # ---- cult.1003 ---------------------------------------------------------------------------------
 
- cult.1003.t:0 "The Chaplain"
- cult.1003.desc_yours:0 "The [cult_faith.PriestNeuter] kneeling in the second row, hood up, saying the turned responses without a single mistake, is [cult_mass_chaplain.GetTitledFirstName]: your own chaplain. Last week [cult_mass_chaplain.GetSheHe] heard your confession and gave you your penance."
- cult.1003.desc_theirs:0 "The [cult_faith.PriestNeuter] kneeling in the second row, hood up, saying the turned responses without a single mistake, is [cult_mass_chaplain.GetTitledFirstName], chaplain to [cult_mass_chaplain_lord.GetTitledFirstName]. [cult_mass_chaplain_lord.GetFirstNameNoTooltip] is here too, three places along, and has not looked at [cult_mass_chaplain.GetHerHim] once. Every month [cult_mass_chaplain_lord.GetFirstNameNoTooltip] kneels in [cult_mass_chaplain_lord.GetHerHis] own chapel and tells [cult_mass_chaplain.GetFirstNameNoTooltip] [cult_mass_chaplain_lord.GetHerHis] sins."
+ cult.1003.t:0 "The $cult_priest$ in the Second Row"
+ cult.1003.desc_yours:0 "The [cult_faith.PriestNeuter] kneeling in the second row, hood up, saying the turned responses without a single mistake, is [cult_mass_chaplain.GetTitledFirstName], the $cult_priest$ of your own court. Last week [cult_mass_chaplain.GetSheHe] heard your confession and gave you your penance."
+ cult.1003.desc_theirs:0 "The [cult_faith.PriestNeuter] kneeling in the second row, hood up, saying the turned responses without a single mistake, is [cult_mass_chaplain.GetTitledFirstName], who hears the confessions of [cult_mass_chaplain_lord.GetTitledFirstName]. [cult_mass_chaplain_lord.GetFirstNameNoTooltip] is here too, three places along, and has not looked at [cult_mass_chaplain.GetHerHim] once. Every month [cult_mass_chaplain_lord.GetFirstNameNoTooltip] kneels in [cult_mass_chaplain_lord.GetHerHis] own chapel and tells [cult_mass_chaplain.GetFirstNameNoTooltip] [cult_mass_chaplain_lord.GetHerHis] sins."
  cult.1003.desc_end:0 "\n\n[cult_mass_chaplain.GetSheHe|U] knows the words of this service better than anyone in the chapel. [cult_mass_chaplain.GetSheHe|U] has said the right ones every morning for twenty years."
  cult.1003.a:0 "[cult_mass_chaplain.GetFirstNameNoTooltip], come up. Say it with me at the altar."
  cult.1003.b:0 "Ask [cult_mass_chaplain.GetFirstNameNoTooltip], afterwards, what [cult_mass_chaplain_lord.GetFirstNameNoTooltip] confesses."
@@ -96,16 +96,16 @@
  cult.1005.clerk_b:0 "Give him a coin, and a reason to forget."
  cult.1005.clerk_b.tt:0 "The clerk will say nothing about tonight"
  cult.1005.priest_a:0 "Pay him. From tonight his parish answers to me."
- cult.1005.priest_a.paid:0 "The Priest Is Paid"
+ cult.1005.priest_a.paid:0 "The $cult_priest_male$ Is Paid"
  cult.1005.priest_a.paid.tt:0 "He takes the money and goes home, and his parish is the cult's now"
  cult.1005.priest_b:0 "Tell him it is a vigil for the dead."
- cult.1005.priest_b.believed:0 "The Priest Believes You"
+ cult.1005.priest_b.believed:0 "The $cult_priest_male$ Believes You"
  cult.1005.priest_b.believed.tt:0 "He offers to pray with you, is refused kindly, and goes home"
- cult.1005.priest_b.questions:0 "The Priest Asks Questions in the Village"
- cult.1005.priest_c:0 "Tell him what happens to priests who talk."
- cult.1005.priest_c.silent:0 "The Priest Says Nothing"
+ cult.1005.priest_b.questions:0 "The $cult_priest_male$ Asks Questions in the Village"
+ cult.1005.priest_c:0 "Tell him what happens to $cult_priests$ who talk."
+ cult.1005.priest_c.silent:0 "The $cult_priest_male$ Says Nothing"
  cult.1005.priest_c.silent.tt:0 "He goes home, and says nothing to anyone"
- cult.1005.priest_c.writes:0 "The Priest Writes to His Bishop"
+ cult.1005.priest_c.writes:0 "The $cult_priest_male$ Writes to His $cult_bishop$"
  cult.1005.rider_a:0 "Take the letter, and tell him it is a vigil."
  cult.1005.rider_a.satisfied:0 "The Rider Is Satisfied"
  cult.1005.rider_a.satisfied.tt:0 "He takes your reply and rides home in the morning"
@@ -228,7 +228,7 @@
 
  # ---- cult.1021 ---------------------------------------------------------------------------------
 
- cult.1021.t:0 "The Old Priest"
+ cult.1021.t:0 "The Old $cult_priest_male$"
  cult.1021.desc:0 "An old [cult_faith.PriestNeuter] of the old way has come to the door of your chapel in the vestments he was ordained in, and is saying the true Mass to [cult_faith.HighGodName] on the step, in a voice that carries, while your Mass goes on inside.\n\nHalf your guests have stopped to listen. He does not look at any of them. He is not asking for anything."
  cult.1021.a:0 "Leave him. He is an old man."
  cult.1021.b:0 "Have him carried off the step."
@@ -274,7 +274,7 @@
  # ---- cult.1032 ---------------------------------------------------------------------------------
 
  cult.1032.opening:0 "My dear [ROOT.Char.GetFirstNameNoTooltip],"
- cult.1032.desc:0 "Our chaplain asked after you at Mass on the holy day, and I did not know what to tell him, so I said you were unwell. I hope the business that keeps you away is going well.\n\nAre you sleeping? I dreamt of you last night, in a cellar full of candles, and could not see your face.\n\nCome home soon."
+ cult.1032.desc:0 "Our $cult_priest_male$ asked after you at Mass on the holy day, and I did not know what to tell him, so I said you were unwell. I hope the business that keeps you away is going well.\n\nAre you sleeping? I dreamt of you last night, in a cellar full of candles, and could not see your face.\n\nCome home soon."
  cult.1032.a:0 "Write back a good lie."
  cult.1032.a.believed:0 "[cult_mass_spouse.GetFirstNameNoTooltip] Is Reassured"
  cult.1032.a.believed.tt:0 "[cult_mass_spouse.GetSheHe|U] writes back that [cult_mass_spouse.GetSheHe] feels foolish for asking"

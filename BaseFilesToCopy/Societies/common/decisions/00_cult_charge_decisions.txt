@@ -12,6 +12,7 @@
 # guests' counties and those beside them; the Pilgrimage goes only to holy sites.
 
 cult_taint_the_county_decision = {
+	decision_group_type = society
 	picture = {
 		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
 	}
@@ -65,6 +66,7 @@ cult_taint_the_county_decision = {
 }
 
 cult_work_on_the_priest_decision = {
+	decision_group_type = society
 	picture = {
 		reference = "gfx/interface/illustrations/decisions/decision_personal_religious.dds"
 	}

@@ -443,7 +443,7 @@ public static partial class ContentWriter
             retinues, result.Azgaar, written.Calendar, flatmap, wilds.Wilds, cultureAssets: false, lineage,
             pastRulers, diplomacy, seatParents, past));
 
-        Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, DebugFacts(
+        Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, gameDir, DebugFacts(
             modDir, cfg, provinces, empires, counties, cultures, faiths, wilderness, worldCenters,
             retinues, result.LandCount, result.RiverCount, result.BaronyCount, layer.ArtifactCount,
             layer.StruggleCount, writeHistory: true, result.Azgaar, runStarted)));

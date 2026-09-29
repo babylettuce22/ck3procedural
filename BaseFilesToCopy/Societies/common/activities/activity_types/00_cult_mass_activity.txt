@@ -53,6 +53,8 @@ activity_cult_mass = {
 	# A Magister or the Hierophant. An Initiate can be invited long before they can say the Mass.
 	can_always_plan = no
 
+	# The society panel's light for this activity mirrors these gates and is_shown's:
+	# cult_can_host_mass_trigger in 00_cult_triggers.txt. Change them together.
 	can_start_showing_failures_only = {
 		is_available_adult = yes
 		NOT = { is_activity_type_on_cooldown = activity_cult_mass }
@@ -272,11 +274,7 @@ activity_cult_mass = {
 		if = {
 			limit = { this = scope:host }
 			cult_power_gain_effect = { VALUE = 10 }
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = 5
-			}
+			cult_rank_gain_effect = { VALUE = 5 }
 		}
 	}
 

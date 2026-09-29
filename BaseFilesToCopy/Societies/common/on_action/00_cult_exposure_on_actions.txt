@@ -57,7 +57,7 @@ cult_exposure_member_pulse = {
 		var:cult_exposure >= 10
 	}
 	random_events = {
-		200 = 0
+		400 = 0	# one year in two (was 200: two in three)
 		100 = cult.0330
 		100 = cult.0331
 		100 = cult.0332

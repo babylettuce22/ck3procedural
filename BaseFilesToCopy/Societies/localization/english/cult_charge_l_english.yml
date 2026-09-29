@@ -20,16 +20,16 @@
  # ---- Decisions ---------------------------------------------------------------------------------
 
  cult_taint_the_county_decision:0 "Taint the County"
- cult_taint_the_county_decision_desc:0 "The Hierophant has asked you to taint [ROOT.Char.MakeScope.Var('cult_charge_county').Title.GetNameNoTier]. Pay its priests to let the shrines go untended and the holy days pass unmarked, and give the Faithless a place there to meet."
+ cult_taint_the_county_decision_desc:0 "The Hierophant has asked you to taint [ROOT.Char.MakeScope.Var('cult_charge_county').Title.GetNameNoTier]. Pay its $cult_priests$ to let the shrines go untended and the holy days pass unmarked, and give the Faithless a place there to meet."
  cult_taint_the_county_decision_tooltip:0 "Taint [ROOT.Char.MakeScope.Var('cult_charge_county').Title.GetNameNoTier] for $cult_society_name$."
  cult_taint_the_county_decision_confirm:0 "Pay them"
  cult_taint_the_county_reach_tt:0 "You hold [ROOT.Char.MakeScope.Var('cult_charge_county').Title.GetNameNoTier], a county next to it, or a county of the same duchy"
  cult_taint_the_county_not_tainted_tt:0 "[ROOT.Char.MakeScope.Var('cult_charge_county').Title.GetNameNoTier] is not tainted already"
 
- cult_work_on_the_priest_decision:0 "Lead the Priest Astray"
+ cult_work_on_the_priest_decision:0 "Lead the $cult_priest$ Astray"
  cult_work_on_the_priest_decision_desc:0 "The Hierophant wants [ROOT.Char.MakeScope.Var('cult_charge_target').Char.GetTitledFirstName] sworn. Spend time with [ROOT.Char.MakeScope.Var('cult_charge_target').Char.GetHerHim]. Share a little of what $cult_devil_name$ has given you, and see whether [ROOT.Char.MakeScope.Var('cult_charge_target').Char.GetSheHe] wants more."
  cult_work_on_the_priest_decision_tooltip:0 "Bring [ROOT.Char.MakeScope.Var('cult_charge_target').Char.GetTitledFirstName] closer to the oath. Once a year."
- cult_work_on_the_priest_decision_confirm:0 "Lead the priest on"
+ cult_work_on_the_priest_decision_confirm:0 "Lead the $cult_priest$ on"
  cult_work_on_the_priest_power_tt:0 "You have at least #high 25#! dark power"
  cult_work_on_the_priest_success:0 "[cult_charge_target.GetFirstNameNoTooltip] Takes the Oath"
  cult_work_on_the_priest_not_yet:0 "[cult_charge_target.GetFirstNameNoTooltip] Is Not Ready"
@@ -38,12 +38,12 @@
  # ---- cult.0501 ---------------------------------------------------------------------------------
 
  cult.0501.t:0 "A Charge from the Hierophant"
- cult.0501.desc_chaplain:0 "After the service, a folded note is waiting in your prayer book. It is from [cult_hierophant.GetTitledFirstName], and it names a priest: [cult_charge_target.GetTitledFirstName], chaplain to [cult_charge_court.GetTitledFirstName].\n\nA chaplain hears a ruler's confessions and speaks for [cult_faith.HighGodName] in council. The Hierophant wants this one speaking for $cult_devil_name$ instead. It is done when [cult_charge_target.GetSheHe] swears the oath. Use #high Turn a Priest#!, or #high Sound Out#! [cult_charge_target.GetHerHim] and #high Offer the Oath#! yourself. With gold and dark power to spare, #high Lead the Priest Astray#! is in the decisions panel.\n\nYou have three years."
- cult.0501.desc_theocrat:0 "After the service, a folded note is waiting in your prayer book. It is from [cult_hierophant.GetTitledFirstName], and it names [cult_charge_target.GetTitledFirstName], who rules [cult_charge_target.GetHerHis] lands in the name of [cult_faith.HighGodName].\n\nA prince of the church who prays to $cult_devil_name$ is worth a dozen village priests. It is done when [cult_charge_target.GetSheHe] swears the oath. Use #high Turn a Priest#!, or #high Sound Out#! [cult_charge_target.GetHerHim] and #high Offer the Oath#! yourself. With gold and dark power to spare, #high Lead the Priest Astray#! is in the decisions panel.\n\nYou have three years."
- cult.0501.desc_taint:0 "After the service, a folded note is waiting in your prayer book. It is from [cult_hierophant.GetTitledFirstName], and it names a county: [cult_charge_county.GetNameNoTier]. Its people are faithful and its priests are honest, and the Hierophant wants neither to stay that way.\n\nIt is done when [cult_charge_county.GetNameNoTier] is #high Tainted#!. If you hold the county, a county next to it or a county of its duchy, use #high Taint the County#! in the decisions panel. A #high Black Mass#! said to profane the land also taints the counties its guests hold, and those beside them.\n\nYou have three years."
+ cult.0501.desc_chaplain:0 "After the service, a folded note is waiting in your prayer book. It is from [cult_hierophant.GetTitledFirstName], and it names a $cult_priest$: [cult_charge_target.GetTitledFirstName], [Concept('court_chaplain','court chaplain')|E] to [cult_charge_court.GetTitledFirstName].\n\nA court chaplain hears a ruler's confessions and speaks for [cult_faith.HighGodName] in council. The Hierophant wants this one speaking for $cult_devil_name$ instead. It is done when [cult_charge_target.GetSheHe] swears the oath. Use #high Turn a $cult_priest$#!, or #high Sound Out#! [cult_charge_target.GetHerHim] and #high Offer the Oath#! yourself. With gold and dark power to spare, #high Lead the $cult_priest$ Astray#! is in the decisions panel.\n\nYou have three years."
+ cult.0501.desc_theocrat:0 "After the service, a folded note is waiting in your prayer book. It is from [cult_hierophant.GetTitledFirstName], and it names [cult_charge_target.GetTitledFirstName], who rules [cult_charge_target.GetHerHis] lands in the name of [cult_faith.HighGodName].\n\nA prince of the church who prays to $cult_devil_name$ is worth a dozen village $cult_priests$. It is done when [cult_charge_target.GetSheHe] swears the oath. Use #high Turn a $cult_priest$#!, or #high Sound Out#! [cult_charge_target.GetHerHim] and #high Offer the Oath#! yourself. With gold and dark power to spare, #high Lead the $cult_priest$ Astray#! is in the decisions panel.\n\nYou have three years."
+ cult.0501.desc_taint:0 "After the service, a folded note is waiting in your prayer book. It is from [cult_hierophant.GetTitledFirstName], and it names a county: [cult_charge_county.GetNameNoTier]. Its people are faithful and its $cult_priests$ are honest, and the Hierophant wants neither to stay that way.\n\nIt is done when [cult_charge_county.GetNameNoTier] is #high Tainted#!. If you hold the county, a county next to it or a county of its duchy, use #high Taint the County#! in the decisions panel. A #high Black Mass#! said to profane the land also taints the counties its guests hold, and those beside them.\n\nYou have three years."
  cult.0501.desc_defile_site:0 "After the service, a folded note is waiting in your prayer book. It is from [cult_hierophant.GetTitledFirstName], and it names [cult_charge_county.GetNameNoTier], one of the holy places of $cult_host_name$. Pilgrims walk for weeks to pray there.\n\nThe Hierophant wants its shrine defiled, quietly, so that the pilgrims keep coming and never learn who listens now. It is done when [cult_charge_county.GetNameNoTier] is #high Tainted#!. The #high Pilgrimage of Defilement#! is the surest way in.\n\nYou have three years."
  cult.0501.desc_offering:0 "After the service, a folded note is waiting in your prayer book. It is from [cult_hierophant.GetTitledFirstName], and it asks for nothing in particular. Only more. $cult_devil_name$ has been generous with the circle, and the circle is expected to give back.\n\nIt is done when you hold #high [cult_charge_goal_value|0]#! dark power, 60 more than you hold now. #high An Offering in the Dark#! in the decisions panel is one way to gather it. A sacrifice is another.\n\nYou have three years."
- cult.0501.desc_recruit:0 "After the service, a folded note is waiting in your prayer book. It is from [cult_hierophant.GetTitledFirstName]: $cult_society_name$ is too small, and the Hierophant thinks you know someone whose piety is only for show.\n\nIt is done when someone you bring in swears the oath. #high Sound Out#! the likely ones among your vassals and courtiers first. Those the priests call sinners are the easiest to bring in. You have three years."
+ cult.0501.desc_recruit:0 "After the service, a folded note is waiting in your prayer book. It is from [cult_hierophant.GetTitledFirstName]: $cult_society_name$ is too small, and the Hierophant thinks you know someone whose piety is only for show.\n\nIt is done when someone you bring in swears the oath. #high Sound Out#! the likely ones among your vassals and courtiers first. Those the $cult_priests$ call sinners are the easiest to bring in. You have three years."
  cult.0501.a:0 "It will be done."
  cult.0501.a.turn_priest_tt:0 "If you do it in time: #P 50#! dark power, higher standing in the circle, and the Hierophant's good opinion"
  cult.0501.a.taint_tt:0 "If you do it in time: #P 35#! dark power, higher standing in the circle, and the Hierophant's good opinion"
@@ -55,14 +55,14 @@
 
  # ---- cult.0510-0514 ----------------------------------------------------------------------------
 
- cult.0510.t:0 "A Priest Turned"
- cult.0510.desc_chaplain:0 "[cult_charge_target.GetTitledFirstName] has sworn the oath to $cult_devil_name$. [cult_charge_target.GetSheHe|U] is still chaplain to [cult_charge_court.GetTitledFirstName], still hears [cult_charge_court.GetHerHis] confessions and still blesses [cult_charge_court.GetHerHis] table. Whatever [cult_charge_court.GetSheHe] confesses from now on, the circle will hear too.\n\n[cult_hierophant.GetTitledFirstName] sends no letter. At the next service, [cult_hierophant.GetSheHe] only nods to you."
+ cult.0510.t:0 "A $cult_priest$ Turned"
+ cult.0510.desc_chaplain:0 "[cult_charge_target.GetTitledFirstName] has sworn the oath to $cult_devil_name$. [cult_charge_target.GetSheHe|U] is still the $cult_priest$ of [cult_charge_court.GetTitledFirstName]'s court, still hears [cult_charge_court.GetHerHis] confessions and still blesses [cult_charge_court.GetHerHis] table. Whatever [cult_charge_court.GetSheHe] confesses from now on, the circle will hear too.\n\n[cult_hierophant.GetTitledFirstName] sends no letter. At the next service, [cult_hierophant.GetSheHe] only nods to you."
  cult.0510.desc:0 "[cult_charge_target.GetTitledFirstName] has sworn the oath to $cult_devil_name$. [cult_charge_target.GetSheHe|U] still rules in the name of [cult_faith.HighGodName] and still leads the prayers. The faithful who kneel before [cult_charge_target.GetHerHim] have no idea where those prayers go now.\n\n[cult_hierophant.GetTitledFirstName] sends no letter. At the next service, [cult_hierophant.GetSheHe] only nods to you."
- cult.0510.desc_fallback:0 "The priest the Hierophant asked you to turn has sworn the oath to $cult_devil_name$.\n\n[cult_hierophant.GetTitledFirstName] sends no letter. At the next service, [cult_hierophant.GetSheHe] only nods to you."
+ cult.0510.desc_fallback:0 "The $cult_priest$ the Hierophant asked you to turn has sworn the oath to $cult_devil_name$.\n\n[cult_hierophant.GetTitledFirstName] sends no letter. At the next service, [cult_hierophant.GetSheHe] only nods to you."
  cult.0510.a:0 "Another of ours in the church."
 
  cult.0511.t:0 "The Taint Takes Hold"
- cult.0511.desc:0 "In [cult_charge_county.GetNameNoTier] the shrines are going untended. The priest skips the prayers that matter, the holy days pass without a feast, and people have started staying home.\n\nNobody there can say when it began. [cult_hierophant.GetTitledFirstName] knows, and sends word that [cult_hierophant.GetSheHe] is pleased."
+ cult.0511.desc:0 "In [cult_charge_county.GetNameNoTier] the shrines are going untended. The $cult_priest$ skips the prayers that matter, the holy days pass without a feast, and people have started staying home.\n\nNobody there can say when it began. [cult_hierophant.GetTitledFirstName] knows, and sends word that [cult_hierophant.GetSheHe] is pleased."
  cult.0511.desc_fallback:0 "The county the Hierophant asked you to taint has gone quietly rotten.\n\nNobody there can say when it began. [cult_hierophant.GetTitledFirstName] knows, and sends word that [cult_hierophant.GetSheHe] is pleased."
  cult.0511.a:0 "Let it spread."
 
@@ -83,7 +83,7 @@
 
  cult.0520.t:0 "The Hierophant Is Displeased"
  cult.0520.desc_turn_priest:0 "Three years ago [cult_hierophant.GetTitledFirstName] asked you to turn [cult_charge_target.GetTitledFirstName]. [cult_charge_target.GetSheHe|U] still prays to [cult_faith.HighGodName], and means it.\n\nThe Hierophant does not scold you. [cult_hierophant.GetSheHe|U] simply stops looking at you during the rites. The charge has gone to someone else."
- cult.0520.desc_taint:0 "Three years ago [cult_hierophant.GetTitledFirstName] asked you to taint [cult_charge_county.GetNameNoTier]. Its shrines are swept, its priests are honest, and its people are as faithful as ever.\n\nThe Hierophant does not scold you. [cult_hierophant.GetSheHe|U] simply stops looking at you during the rites. The charge has gone to someone else."
+ cult.0520.desc_taint:0 "Three years ago [cult_hierophant.GetTitledFirstName] asked you to taint [cult_charge_county.GetNameNoTier]. Its shrines are swept, its $cult_priests$ are honest, and its people are as faithful as ever.\n\nThe Hierophant does not scold you. [cult_hierophant.GetSheHe|U] simply stops looking at you during the rites. The charge has gone to someone else."
  cult.0520.desc_defile_site:0 "Three years ago [cult_hierophant.GetTitledFirstName] asked you to defile the holy place at [cult_charge_county.GetNameNoTier]. The pilgrims still pray there to [cult_faith.HighGodName], and nothing in the shrine has changed.\n\nThe Hierophant does not scold you. [cult_hierophant.GetSheHe|U] simply stops looking at you during the rites. The charge has gone to someone else."
  cult.0520.desc_offering:0 "Three years ago [cult_hierophant.GetTitledFirstName] asked you for an offering to $cult_devil_name$. You never gathered it.\n\nThe Hierophant does not scold you. [cult_hierophant.GetSheHe|U] simply stops looking at you during the rites. The charge has gone to someone else."
  cult.0520.desc_recruit:0 "Three years ago [cult_hierophant.GetTitledFirstName] asked you to bring someone new into $cult_society_name$. Nobody has taken the oath at your hand.\n\nThe Hierophant does not scold you. [cult_hierophant.GetSheHe|U] simply stops looking at you during the rites. The charge has gone to someone else."
@@ -94,7 +94,7 @@
  # ---- cult.0530 ---------------------------------------------------------------------------------
 
  cult.0530.t:0 "Questions after Prayers"
- cult.0530.desc:0 "[cult_charge_target.GetTitledFirstName] stayed behind tonight after the evening prayers, long after the others had gone. The priest has been asking you odd questions lately. Why [cult_faith.HighGodName] lets the wicked prosper. Whether a prayer said without faith still counts.\n\nThe Hierophant wants this priest. [cult_charge_target.GetSheHe|U] may be ready to hear who you really pray to. Or [cult_charge_target.GetSheHe] may be testing you."
+ cult.0530.desc:0 "[cult_charge_target.GetTitledFirstName] stayed behind tonight after the evening prayers, long after the others had gone. The $cult_priest$ has been asking you odd questions lately. Why [cult_faith.HighGodName] lets the wicked prosper. Whether a prayer said without faith still counts.\n\nThe Hierophant wants this $cult_priest$. [cult_charge_target.GetSheHe|U] may be ready to hear who you really pray to. Or [cult_charge_target.GetSheHe] may be testing you."
  cult.0530.a:0 "I'll tell [cult_charge_target.GetHerHim] the truth."
  cult.0530.b:0 "I'll show [cult_charge_target.GetHerHim] what $cult_devil_name$ can give."
  cult.0530.c:0 "Not tonight."
@@ -104,11 +104,11 @@
 
  # ---- cult.0531 ---------------------------------------------------------------------------------
 
- cult.0531.t:0 "The Priest of [cult_charge_county.GetNameNoTier]"
- cult.0531.desc:0 "One of the circle has been to [cult_charge_county.GetNameNoTier] and come back with news. The parish priest there drinks, owes money to half the village, and stopped believing most of the sermons years ago.\n\nFor a purse, the priest will let the shrines go untended, skip the prayers that matter, and leave the doors open when the Faithless want somewhere to meet. That would taint the county, as the Hierophant asked."
- cult.0531.a:0 "Pay the priest's debts."
- cult.0531.b:0 "Send $cult_devil_name$ into the priest's dreams."
- cult.0531.c:0 "Too many people know that priest."
+ cult.0531.t:0 "The $cult_priest$ of [cult_charge_county.GetNameNoTier]"
+ cult.0531.desc:0 "One of the circle has been to [cult_charge_county.GetNameNoTier] and come back with news. The parish $cult_priest$ there drinks, owes money to half the village, and stopped believing most of the sermons years ago.\n\nFor a purse, the $cult_priest$ will let the shrines go untended, skip the prayers that matter, and leave the doors open when the Faithless want somewhere to meet. That would taint the county, as the Hierophant asked."
+ cult.0531.a:0 "Pay the $cult_priest$'s debts."
+ cult.0531.b:0 "Send $cult_devil_name$ into the $cult_priest$'s dreams."
+ cult.0531.c:0 "Too many people know that $cult_priest$."
  cult.0531.c.tt:0 "The Hierophant's charge stays open"
 
  # ---- cult.0532 ---------------------------------------------------------------------------------
@@ -126,7 +126,7 @@
  # ---- cult.0533 ---------------------------------------------------------------------------------
 
  cult.0533.t:0 "The Chapel Silver"
- cult.0533.desc:0 "Your household chapel keeps a silver cup, a pair of silver candlesticks and an old silver reliquary, all given to [cult_faith.HighGodName] by your ancestors.\n\nMelted on $cult_devil_name$'s altar, they would go a long way toward the offering the Hierophant asked of you. The chaplain would notice them gone, of course. Unless there was something to put in their place."
+ cult.0533.desc:0 "Your household chapel keeps a silver cup, a pair of silver candlesticks and an old silver reliquary, all given to [cult_faith.HighGodName] by your ancestors.\n\nMelted on $cult_devil_name$'s altar, they would go a long way toward the offering the Hierophant asked of you. Your $cult_priest$ would notice them gone, of course. Unless there was something to put in their place."
  cult.0533.a:0 "Melt them down."
  cult.0533.b:0 "Have copies made in tin first."
  cult.0533.c:0 "Not my family's silver."
@@ -135,8 +135,8 @@
  # ---- cult.0534 ---------------------------------------------------------------------------------
 
  cult.0534.t:0 "Someone to Bring In"
- cult.0534.desc:0 "The Hierophant wants you to bring someone new into $cult_society_name$, and you have been watching [cult_charge_recruit.GetTitledFirstName]. [cult_charge_recruit.GetSheHe|U] goes to every service and seems to hear none of it.\n\nThat might mean [cult_charge_recruit.GetSheHe] is ready. Or it might only mean [cult_charge_recruit.GetSheHe] is bored, and will run to the priests the moment you say too much."
- cult.0534.desc_sinner:0 "The Hierophant wants you to bring someone new into $cult_society_name$, and you have been watching [cult_charge_recruit.GetTitledFirstName]. The priests of $cult_host_name$ call what [cult_charge_recruit.GetSheHe] does a sin, and [cult_charge_recruit.GetSheHe] has never stopped doing it. To the circle, that is a recommendation.\n\nIt might be enough. Or [cult_charge_recruit.GetSheHe] might be looking for a way back into the church's good graces, and you would do nicely."
+ cult.0534.desc:0 "The Hierophant wants you to bring someone new into $cult_society_name$, and you have been watching [cult_charge_recruit.GetTitledFirstName]. [cult_charge_recruit.GetSheHe|U] goes to every service and seems to hear none of it.\n\nThat might mean [cult_charge_recruit.GetSheHe] is ready. Or it might only mean [cult_charge_recruit.GetSheHe] is bored, and will run to the $cult_priests$ the moment you say too much."
+ cult.0534.desc_sinner:0 "The Hierophant wants you to bring someone new into $cult_society_name$, and you have been watching [cult_charge_recruit.GetTitledFirstName]. The $cult_priests$ of $cult_host_name$ call what [cult_charge_recruit.GetSheHe] does a sin, and [cult_charge_recruit.GetSheHe] has never stopped doing it. To the circle, that is a recommendation.\n\nIt might be enough. Or [cult_charge_recruit.GetSheHe] might be looking for a way back into the church's good graces, and you would do nicely."
  cult.0534.a:0 "I'll sound [cult_charge_recruit.GetHerHim] out."
  cult.0534.a.success:0 "[cult_charge_recruit.GetFirstNameNoTooltip] Takes the Oath"
  cult.0534.a.failure:0 "[cult_charge_recruit.GetFirstNameNoTooltip] Refuses"
@@ -149,7 +149,7 @@
  cult_give_charge_interaction_tt:0 "[recipient.GetTitledFirstName] is given a charge, with three years to keep it"
  cult_give_charge_options_heading:0 "What should [recipient.GetSheHe] do?"
  cult_give_charge_any:0 "Whatever the circle needs most"
- cult_give_charge_turn_priest:0 "Turn a priest"
+ cult_give_charge_turn_priest:0 "Turn a $cult_priest$"
  cult_give_charge_taint:0 "Taint a county"
  cult_give_charge_defile_site:0 "Defile a holy site"
  cult_give_charge_offering:0 "Gather dark power"

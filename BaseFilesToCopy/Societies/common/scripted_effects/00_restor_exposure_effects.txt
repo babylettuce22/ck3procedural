@@ -12,7 +12,15 @@ restor_their_exposure_gain_effect = {
 		name = restor_their_delta
 		value = $VALUE$
 	}
-	custom_tooltip = restor_their_exposure_gain_tt
+	# Named only to a reader who already knows they are sworn; to anyone else, a line that reads the
+	# same whether or not they are (restor_membership_known_to_root_trigger).
+	if = {
+		limit = { scope:restor_exposure_target = { restor_membership_known_to_root_trigger = yes } }
+		custom_tooltip = restor_their_exposure_gain_tt
+	}
+	else = {
+		custom_tooltip = restor_their_exposure_gain_veiled_tt
+	}
 	hidden_effect = {
 		scope:restor_exposure_target = { restor_exposure_gain_effect = { VALUE = $VALUE$ } }
 	}
@@ -24,7 +32,13 @@ restor_their_exposure_loss_effect = {
 		name = restor_their_delta
 		value = $VALUE$
 	}
-	custom_tooltip = restor_their_exposure_loss_tt
+	if = {
+		limit = { scope:restor_exposure_target = { restor_membership_known_to_root_trigger = yes } }
+		custom_tooltip = restor_their_exposure_loss_tt
+	}
+	else = {
+		custom_tooltip = restor_their_exposure_loss_veiled_tt
+	}
 	hidden_effect = {
 		scope:restor_exposure_target = { restor_exposure_loss_effect = { VALUE = $VALUE$ } }
 	}

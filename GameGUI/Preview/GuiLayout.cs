@@ -113,6 +113,10 @@ public static class GuiLayout
 
         if (m.Against(available) is not { } value) return null;
 
+        // Autoresized text sizes to its content whatever the type states. Vanilla's text_multi says
+        // `size = { 45 45 }`, and honouring that folded every autoresize paragraph into a 45px column.
+        if (kind == Kind.Text && widget.Flag("autoresize")) return null;
+
         bool auto = value == 0 && (kind == Kind.Text || widget.Flag("autoresize"));
 
         return auto ? null : value;
@@ -230,13 +234,14 @@ public static class GuiLayout
         // sized. Without this the artifact index drew its list in the top third and left two-thirds
         // of the window empty.
         //
-        // Only a box that has not been placed deliberately. A row carrying a `parentanchor` or a
-        // `position` is being put somewhere specific by whoever wrote it — vanilla's window control
-        // buttons are an hbox anchored top|right — and filling the parent throws that away, which
-        // moved every window's close button to the far left.
+        // A vbox/hbox fills even when anchored: seen in game 2026-09-29, a vbox anchored top|left in
+        // a 510-wide widget filled it and centred its labels. The exception is a flowcontainer, which
+        // keeps its content size — vanilla's window control buttons are one, anchored top|right, and
+        // filling it moved every window's close button to the far left. (That case was once read as
+        // "an anchored box does not fill"; it was the flowcontainer, not the anchor.)
         if (constraint.Parent == Kind.Absolute
             && kind is Kind.Vertical or Kind.Horizontal
-            && widget.Text("parentanchor") is null
+            && !IsFlow(widget)
             && widget.Pair("position") is null)
         {
             if (constraint.DefiniteW && availWidth > 0) width ??= availWidth;
@@ -566,20 +571,27 @@ public static class GuiLayout
     }
 
     /// <summary>Where a child sits across the axis its box runs along.</summary>
+    private static bool IsFlow(ResolvedWidget widget)
+        => widget.TypeChain.Append(widget.WrittenType).Append(widget.Primitive ?? "")
+            .Any(n => n.Contains("flowcontainer", StringComparison.OrdinalIgnoreCase));
+
     private static double CrossOffset(ResolvedWidget child, double available, double size, bool vertical)
     {
         string anchor = child.Text("parentanchor") ?? "";
 
+        // Centred unless told otherwise. In game a box centres a narrower child across itself — a
+        // bare text_multi in a vbox sat ~20px in from its neighbours, and on 2026-09-29 a favour
+        // vbox anchored top|left drew centred over the meter beside it. Starting at 0 hid both.
         if (vertical)
         {
-            if (anchor.Contains("hcenter") || anchor.Contains("center")) return (available - size) / 2;
             if (anchor.Contains("right")) return available - size;
-            return 0;
+            if (anchor.Contains("left")) return 0;
+            return (available - size) / 2;
         }
 
-        if (anchor.Contains("vcenter") || anchor.Contains("center")) return (available - size) / 2;
         if (anchor.Contains("bottom")) return available - size;
-        return 0;
+        if (anchor.Contains("top")) return 0;
+        return (available - size) / 2;
     }
 
     /// <summary>
@@ -611,8 +623,13 @@ public static class GuiLayout
 
         var offset = child.Pair("position");
 
-        return (x + (offset?.X.Against(innerWidth) ?? 0),
-                y + (offset?.Y.Against(innerHeight) ?? 0));
+        // Literal, not Against(): a negative number is "auto" only in a SIZE (-1). In a position it
+        // is an inset — `parentanchor = right position = { -60 0 }` is 60px in from the right edge —
+        // and treating it as auto dropped every such inset to zero.
+        static double Offset(Measure m, double extent) => m.IsPercent ? extent * m.Value / 100 : m.Value;
+
+        return (x + (offset is { } o ? Offset(o.X, innerWidth) : 0),
+                y + (offset is { } p ? Offset(p.Y, innerHeight) : 0));
     }
 
     private static bool Expands(ResolvedWidget widget, bool horizontal)
@@ -633,10 +650,15 @@ public static class GuiLayout
     private static (double Width, double Height) MeasureText(ResolvedWidget widget, double available)
     {
         double fontSize = widget.Number("fontsize", 15);
-        double lineHeight = widget.Pair("size")?.Y.Value is > 0 and var stated ? stated : fontSize + 8;
+        // Line height is the font template's `size = { 0 h }`. A size with a width is a box, not a
+        // line — text_multi's `{ 45 45 }` overrides Font_Size_Small's `{ 0 23 }` and read as a 45px
+        // line, drawing every paragraph twice its height — so that falls back to the font's own.
+        double lineHeight = widget.Pair("size") is ({ Value: 0 }, { Value: > 0 } h) ? h.Value
+            : fontSize switch { 13 => 18, 15 => 23, 18 => 26, 23 => 33, _ => fontSize + 8 };
 
-        string content = widget.Text("raw_text") ?? widget.Text("text") ?? "";
-        double natural = GuiText.Length(content) * GlyphWidth(fontSize);
+        double length = GuiText.Advance(widget.Shown
+            ?? GuiText.Display(widget.Text("raw_text") ?? widget.Text("text") ?? ""));
+        double natural = length * GlyphWidth(fontSize);
 
         // `max_width` is what this project writes; `maximumsize` is what vanilla's own types use,
         // and a header that ignores it overflows its bar instead of eliding inside it.

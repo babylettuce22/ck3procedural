@@ -30,16 +30,22 @@ cult_charge_pulse_effect = {
 			}
 			else = {
 				random = {
-					chance = 50
+					chance = 30
 					cult_charge_opportunity_effect = yes
 				}
 			}
 		}
 	}
+	# A year's rest after a charge ends (cult_charge_rest, set by cult_charge_clear_effect), so a new
+	# note never lands on top of the last charge's ending. A player Hierophant's Give a Charge is
+	# deliberate and ignores it.
 	else_if = {
-		limit = { cult_charge_can_be_offered_trigger = yes }
+		limit = {
+			cult_charge_can_be_offered_trigger = yes
+			NOT = { has_character_flag = cult_charge_rest }
+		}
 		random = {
-			chance = 50
+			chance = 35
 			cult_charge_offer_effect = yes
 		}
 	}
@@ -317,12 +323,27 @@ cult_charge_give_recruit_effect = {
 # scope:cult_charge_kind (the flag), and for a chaplain, scope:cult_charge_court (the ruler the
 # chaplain serves). Call before clearing, so the event still has them.
 cult_charge_save_state_effect = {
+	# One literal flag per kind: save_scope_value_as cannot copy a flag out of a variable (see
+	# restor_charge_save_state_effect).
 	if = {
-		limit = { has_variable = cult_charge }
-		save_scope_value_as = {
-			name = cult_charge_kind
-			value = var:cult_charge
-		}
+		limit = { var:cult_charge ?= flag:turn_priest }
+		save_scope_value_as = { name = cult_charge_kind value = flag:turn_priest }
+	}
+	else_if = {
+		limit = { var:cult_charge ?= flag:taint }
+		save_scope_value_as = { name = cult_charge_kind value = flag:taint }
+	}
+	else_if = {
+		limit = { var:cult_charge ?= flag:defile_site }
+		save_scope_value_as = { name = cult_charge_kind value = flag:defile_site }
+	}
+	else_if = {
+		limit = { var:cult_charge ?= flag:offering }
+		save_scope_value_as = { name = cult_charge_kind value = flag:offering }
+	}
+	else_if = {
+		limit = { var:cult_charge ?= flag:recruit }
+		save_scope_value_as = { name = cult_charge_kind value = flag:recruit }
 	}
 	if = {
 		limit = {
@@ -378,6 +399,10 @@ cult_charge_clear_effect = {
 	remove_variable = cult_charge_goal
 	remove_variable = cult_charge_giver
 	clear_variable_list = cult_charge_old_recruits
+	add_character_flag = {
+		flag = cult_charge_rest
+		years = 1
+	}
 }
 
 # =====================================================================================
@@ -388,11 +413,7 @@ cult_charge_clear_effect = {
 # directly for the AI. The rot is recomputed: most charges changed the map.
 cult_charge_reward_effect = {
 	cult_power_gain_effect = { VALUE = $POWER$ }
-	add_trait_xp = {
-		trait = cult_member
-		track = cult_rank
-		value = $XP$
-	}
+	cult_rank_gain_effect = { VALUE = $XP$ }
 	if = {
 		limit = {
 			exists = global_var:cult_hierophant
@@ -515,6 +536,7 @@ cult_charge_expire_effect = {
 	}
 	else = {
 		cult_charge_penalty_effect = { POWER = 15 }
+		cult_charge_failed_standing_effect = yes
 	}
 	cult_charge_clear_effect = yes
 }

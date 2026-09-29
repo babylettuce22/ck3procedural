@@ -1,4 +1,4 @@
-// Emit/FlatmapInk.cs
+﻿// Emit/FlatmapInk.cs
 namespace Ck3MapGen.Emit;
 
 using System;
@@ -109,7 +109,7 @@ public static class FlatmapInk
         // Over the hachures and roads, which the paper lifted round each name keeps clear of it.
         if (flourishes && landmarks is { Count: > 0 })
         {
-            int lettered = LetterLandmarks(cv, landmarks, gameDir, k);
+            int lettered = LetterLandmarks(cv, landmarks, gameDir, k, Occluded);
             if (lettered > 0) notes.Add($"lettered {lettered} landmark(s)");
         }
 
@@ -137,7 +137,8 @@ public static class FlatmapInk
     /// set a little larger than a line's, which has more length to spread along. A name that would
     /// come out too small to read is left off rather than squeezed.
     /// </summary>
-    private static int LetterLandmarks(Canvas cv, IReadOnlyList<Landmark> landmarks, string? gameDir, double k)
+    private static int LetterLandmarks(Canvas cv, IReadOnlyList<Landmark> landmarks, string? gameDir, double k,
+        Func<Pt, bool> occluded)
     {
         if (LetteringFont(gameDir) is not { } family) return 0;
         const float tracking = 0.28f;
@@ -148,6 +149,10 @@ public static class FlatmapInk
             var line = landmark.Label.Select(p => (Pt)(p.X * cv.W, p.Y * cv.H)).ToList();
             if (line.Count < 2) continue;
             if (line[^1].X < line[0].X) line.Reverse();
+
+            // A sea name is placed without knowing where the rose went; one that would run into it
+            // is left off rather than printed over it.
+            if (line.Any(occluded)) continue;
             double length = 0;
             for (int i = 1; i < line.Count; i++) length += Dist(line[i - 1], line[i]);
 
@@ -183,12 +188,18 @@ public static class FlatmapInk
                 .ToList();
             if (glyphs.Count == 0) continue;
 
-            foreach (var rings in glyphs)
+            // The paper lifted round the letters keeps a name legible over hachures and roads. Open
+            // water has nothing under it to fight, and on the sea glaze the lift read as a pale
+            // outline round every letter, so a sea's name is plain ink.
+            if (landmark.Baronies.Length > 0)
             {
-                cv.FillEvenOdd(rings);
-                foreach (var ring in rings) cv.Stroke([.. ring, ring[0]], 2.4 * k);
+                foreach (var rings in glyphs)
+                {
+                    cv.FillEvenOdd(rings);
+                    foreach (var ring in rings) cv.Stroke([.. ring, ring[0]], 2.4 * k);
+                }
+                cv.Lift(0.3);
             }
-            cv.Lift(0.3);
             foreach (var rings in glyphs) cv.FillEvenOdd(rings);
             cv.Ink(Sepia, 0.78);
             lettered++;

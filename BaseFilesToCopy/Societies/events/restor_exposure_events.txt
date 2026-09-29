@@ -368,11 +368,7 @@ restor.0301 = {
 		name = restor.0301.d
 		add_prestige = medium_prestige_gain
 		restor_favour_gain_effect = { VALUE = 20 }
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 5
-		}
+		restor_rank_gain_effect = { VALUE = 5 }
 		if = {
 			limit = {
 				exists = scope:restor_usurper

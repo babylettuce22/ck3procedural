@@ -55,7 +55,7 @@ restor_exposure_member_pulse = {
 		var:restor_exposure >= 10
 	}
 	random_events = {
-		200 = 0
+		400 = 0	# one year in two (was 200: two in three)
 		100 = restor.0330
 		100 = restor.0331
 		100 = restor.0332

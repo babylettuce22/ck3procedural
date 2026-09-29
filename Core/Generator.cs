@@ -50,6 +50,14 @@ public sealed class GenerationOptions
     /// must carry the applied year — see <see cref="MapConfig.AtStartYear"/>.
     /// </summary>
     public MapGen.AppliedHistory? AppliedHistory { get; set; }
+
+    /// <summary>
+    /// What the Quick page chose for this run (map type, relief, mountains, size, ...), one line per
+    /// fact, printed at the top of the log and in the record's header; null for any other run. Set
+    /// only for the length of a Quick-page write, so a later Complex run never inherits it.
+    /// </summary>
+    public string? QuickSummary { get; set; }
+
     public string ModName { get; set; } = DefaultModName;
 
     public const string DefaultModName = "Procedural Map";

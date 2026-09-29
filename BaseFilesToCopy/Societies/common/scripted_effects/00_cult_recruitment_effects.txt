@@ -313,20 +313,12 @@ cult_recruiter_reward_effect = {
 			scope:cult_recruit = { cult_recruit_is_chaplain_trigger = yes }
 		}
 		cult_power_gain_effect = { VALUE = 40 }
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 12
-		}
+		cult_rank_gain_effect = { VALUE = 12 }
 		cult_exposure_gain_effect = { VALUE = 8 }
 	}
 	else = {
 		cult_power_gain_effect = { VALUE = 25 }
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 8
-		}
+		cult_rank_gain_effect = { VALUE = 8 }
 		cult_exposure_gain_effect = { VALUE = 5 }
 	}
 	# A count of everyone this member has sworn in, for the recruit charge and anything else that
@@ -404,4 +396,77 @@ cult_recruit_join_church_effect = {
 		remove_character_flag = cult_sounded_sympathetic
 	}
 	cult_recruit_sworn_chaplain_effect = yes
+}
+
+# =====================================================================================
+#  The panel's "Within reach" list -- THIS is the viewing player
+# =====================================================================================
+#
+# Fills the variable list cult_panel_candidates with the lords of the host faith within reach,
+# greatest first, each followed by their court chaplain. Never ordered or filtered by fit (see
+# cult_panel_candidate_trigger). Run on the panel's first gather after opening and then every
+# fifteen seconds by cult_panel_reach_tick; cult_panel_reach_built marks it done until the panel
+# closes. Like the roster, the list is rebuilt only when its members changed, so it does not lose
+# its hover or scroll; the row's chips are asked live.
+cult_panel_gather_reach_effect = {
+	set_variable = { name = cult_panel_reach_built value = yes }
+	save_scope_as = cult_viewer
+	if = {
+		limit = { cult_secret_phase_trigger = yes }
+		ordered_ruler = {
+			limit = {
+				faith = global_var:cult_host_faith
+				in_diplomatic_range = scope:cult_viewer
+			}
+			order_by = highest_held_title_tier
+			max = 40
+			check_range_bounds = no
+			if = {
+				limit = {
+					NOT = { is_in_list = cult_panel_fresh }	# a landed chaplain, already listed under their lord
+					cult_panel_candidate_trigger = yes
+				}
+				add_to_temporary_list = cult_panel_fresh
+			}
+			if = {
+				limit = {
+					exists = cp:councillor_court_chaplain
+					cp:councillor_court_chaplain = {
+						NOT = { is_in_list = cult_panel_fresh }
+						cult_panel_candidate_trigger = yes
+					}
+				}
+				cp:councillor_court_chaplain = { add_to_temporary_list = cult_panel_fresh }
+			}
+		}
+	}
+	if = {
+		limit = {
+			OR = {
+				any_in_list = {
+					list = cult_panel_fresh
+					NOT = {
+						scope:cult_viewer = {
+							is_target_in_variable_list = { name = cult_panel_candidates target = prev }
+						}
+					}
+				}
+				any_in_list = {
+					variable = cult_panel_candidates
+					NOT = { is_in_list = cult_panel_fresh }
+				}
+			}
+		}
+		clear_variable_list = cult_panel_candidates
+		every_in_list = {
+			list = cult_panel_fresh
+			save_scope_as = cult_panel_listed
+			scope:cult_viewer = {
+				add_to_variable_list = {
+					name = cult_panel_candidates
+					target = scope:cult_panel_listed
+				}
+			}
+		}
+	}
 }

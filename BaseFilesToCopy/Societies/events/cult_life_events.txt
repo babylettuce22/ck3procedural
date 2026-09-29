@@ -242,11 +242,7 @@ cult.0202 = {
 							modifier = cult_brought_me_in_opinion
 						}
 					}
-					add_trait_xp = {
-						trait = cult_member
-						track = cult_rank
-						value = 3
-					}
+					cult_rank_gain_effect = { VALUE = 3 }
 					custom_tooltip = cult.0202.c.sworn.tt
 					hidden_effect = { cult_rot_refresh_effect = yes }
 				}
@@ -463,11 +459,7 @@ cult.0204 = {
 					title = cult.0204.c.delivered
 					left_icon = root
 					right_icon = scope:cult_life_site
-					add_trait_xp = {
-						trait = cult_member
-						track = cult_rank
-						value = 3
-					}
+					cult_rank_gain_effect = { VALUE = 3 }
 				}
 			}
 			20 = {
@@ -896,11 +888,7 @@ cult.0208 = {
 		}
 		custom_tooltip = cult.0208.c.tt
 		add_dread = minor_dread_gain
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 3
-		}
+		cult_rank_gain_effect = { VALUE = 3 }
 		cult_corrupt_soul_effect = yes
 		stress_impact = {
 			compassionate = medium_stress_impact_gain
@@ -1127,11 +1115,7 @@ cult.0209 = {
 				}
 			}
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 2
-		}
+		cult_rank_gain_effect = { VALUE = 2 }
 	}
 }
 
@@ -1569,11 +1553,7 @@ cult.0214 = {
 	# It was worth it.
 	option = {
 		name = cult.0214.a
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 5
-		}
+		cult_rank_gain_effect = { VALUE = 5 }
 		cult_corrupt_soul_effect = yes
 		stress_impact = {
 			compassionate = minor_stress_impact_gain
@@ -1704,11 +1684,7 @@ cult.0215 = {
 				modifier = cult_life_praised_the_sermon_opinion
 			}
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 3
-		}
+		cult_rank_gain_effect = { VALUE = 3 }
 		cult_exposure_gain_effect = { VALUE = 1 }
 	}
 }
@@ -2004,11 +1980,7 @@ cult.0252 = {
 	# Every bit of it.
 	option = {
 		name = cult.0252.a
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 5
-		}
+		cult_rank_gain_effect = { VALUE = 5 }
 		stress_impact = {
 			compassionate = minor_stress_impact_gain
 			honest = minor_stress_impact_gain

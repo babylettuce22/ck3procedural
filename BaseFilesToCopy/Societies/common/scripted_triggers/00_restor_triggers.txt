@@ -54,6 +54,9 @@ restor_of_the_blood_trigger = {
 # so without this they were chosen to succeed themselves.
 restor_can_succeed_trigger = {
 	is_alive = yes
+	# One society per character. The Sworn will not put one of the Faithless on the throne: a
+	# cultist of the house is passed over, and if nobody else is left the line counts as ended.
+	NOT = { has_trait = cult_member }
 	NOT = { has_character_flag = about_to_die_but_not_dead_yet_flag }
 	trigger_if = {
 		limit = { exists = scope:restor_old_pretender }
@@ -108,7 +111,10 @@ restor_crown_county_trigger = {
 	restor_active_trigger = yes
 	tier = tier_county
 	exists = global_var:restor_crown
-	kingdom ?= { this = global_var:restor_crown }
+	# Not `kingdom ?= { this = ... }`: with no kingdom that logged an unset scope and an invalid
+	# comparison on every county it was asked of.
+	exists = kingdom
+	kingdom = global_var:restor_crown
 }
 
 # Inside the pretender's realm, for a county title.
@@ -174,4 +180,50 @@ restor_can_afford_favour_trigger = {
 		has_variable = restor_favour
 		var:restor_favour >= $VALUE$
 	}
+}
+
+# THIS is a member; does ROOT -- whoever is reading the tooltip -- already know it? A fellow Sworn
+# does (a rite or errand shared); so does anyone who holds THIS's membership secret, and anyone at all
+# once the order is public in the restored realm. Everyone else must not learn it from a tooltip:
+# only a member has exposure, so "X's exposure rises" would confirm what the event only suspects.
+# See restor_their_exposure_gain_effect.
+restor_membership_known_to_root_trigger = {
+	OR = {
+		restor_restored_trigger = yes
+		this = root
+		root = { has_trait = restor_member }
+		any_secret = {
+			secret_type = secret_restor_member
+			is_known_by = root
+		}
+	}
+}
+
+# ---- Could THIS host the society's activities right now? ---------------------------------------
+#
+# The panel's action lights. Each mirrors its activity's is_shown and can_start gates (the parts a
+# player meets; the AI-only war/conqueror guards are left out), because a light that says "you can"
+# while the activity says "you can't" is worse than no light. There is no engine trigger that asks an
+# activity directly, as can_execute_decision does for decisions -- so CHANGE THESE WITH THE ACTIVITY:
+# common/activities/activity_types/00_restor_gathering_activity.txt / 00_restor_errand_activity.txt.
+
+restor_can_host_gathering_trigger = {
+	restor_underground_trigger = yes
+	has_trait = restor_member
+	is_playable_character = yes
+	highest_held_title_tier > tier_barony
+	is_available_adult = yes
+	NOT = { is_activity_type_on_cooldown = activity_restor_gathering }
+	OR = {
+		restor_is_keeper_trigger = yes
+		restor_rank_at_least_trigger = { RANK = 50 }
+	}
+}
+
+restor_can_host_errand_trigger = {
+	restor_underground_trigger = yes
+	has_trait = restor_member
+	is_playable_character = yes
+	is_available_adult = yes
+	NOT = { is_activity_type_on_cooldown = activity_restor_errand }
 }

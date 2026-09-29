@@ -22,8 +22,17 @@ public static class GuiPreviewCommand
     /// Renders one widget to HTML. <paramref name="target"/> is a widget name, or a path to a
     /// <c>.gui</c> file whose last top-level widget is taken.
     /// </summary>
-    public static int Run(string target, string gameDir, string? modDir, string outPath, int rows = 1)
+    /// <remarks>
+    /// <paramref name="extraLoc"/> are further roots read after the mod, so their keys win: the
+    /// source folder of a set whose loc is not in a generated mod yet, and a placeholder folder that
+    /// stands in for the nouns a real generation would write. A placeholder folder may also hold a
+    /// <c>samples.txt</c> of <c>expression = value</c> lines, which give datafunctions stand-in
+    /// values — a name, a number — instead of <c>⟨GetValue⟩</c>.
+    /// </remarks>
+    public static int Run(string target, string gameDir, string? modDir, string outPath, int rows = 1,
+        IReadOnlyList<string>? extraLoc = null)
     {
+        extraLoc ??= [];
         string gameGui = Path.Combine(gameDir, "gui");
 
         if (!Directory.Exists(gameGui))
@@ -67,13 +76,17 @@ public static class GuiPreviewCommand
         var loc = LocLibrary.Load([
             gameDir,
             .. modDir is not null ? new[] { modDir } : [],
+            .. extraLoc,
         ]);
+
+        var samples = LoadSamples(extraLoc);
 
         var preview = new GuiPreview
         {
             Title = $"{resolved.Label} — {source}",
             Textures = textures.DataUri,
             Localise = loc.Text,
+            Sample = samples.Count > 0 ? e => samples.GetValueOrDefault(e) : null,
         };
 
         string html = preview.Render(resolved);
@@ -84,6 +97,9 @@ public static class GuiPreviewCommand
         preview.Report.Add($"resolved: {library.TypeCount} types, {library.TemplateCount} templates indexed");
         preview.Report.Add($"textures: {textures.Loaded} drawn, {textures.Missing.Count} unavailable");
         preview.Report.Add($"localisation: {loc.Count} keys");
+
+        if (samples.Count > 0) preview.Report.Add($"datafunction samples: {samples.Count}");
+        if (preview.Hidden > 0) preview.Report.Add($"hidden by sampled state: {preview.Hidden}");
 
         if (rows > 1) preview.Report.Add($"datamodel rows simulated: {rows}");
 
@@ -147,6 +163,35 @@ public static class GuiPreviewCommand
 
         var named = library.Instance(target);
         return (named, "library", named is null ? [] : [named]);
+    }
+
+    /// <summary>
+    /// <c>samples.txt</c> under each root: one <c>expression = value</c> per line, the expression
+    /// written as it appears inside the brackets, <c>#</c> for comments. Split on the LAST
+    /// <c> = </c>, since expressions carry their own spaces and quotes.
+    /// </summary>
+    private static Dictionary<string, string> LoadSamples(IEnumerable<string> roots)
+    {
+        var samples = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (string root in roots)
+        {
+            string path = Path.Combine(root, "samples.txt");
+            if (!File.Exists(path)) continue;
+
+            foreach (string line in File.ReadLines(path))
+            {
+                string trimmed = line.Trim();
+                if (trimmed.Length == 0 || trimmed.StartsWith('#')) continue;
+
+                int split = trimmed.LastIndexOf(" = ", StringComparison.Ordinal);
+                if (split < 0) continue;
+
+                samples[trimmed[..split].Trim()] = GuiNode.Unquote(trimmed[(split + 3)..].Trim());
+            }
+        }
+
+        return samples;
     }
 
     private static int Count(ResolvedWidget widget)

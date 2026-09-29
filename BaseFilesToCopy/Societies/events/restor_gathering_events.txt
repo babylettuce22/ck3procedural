@@ -287,11 +287,7 @@ restor.0902 = {
 	# Not yet.
 	option = {
 		name = restor.0902.c
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 2
-		}
+		restor_rank_gain_effect = { VALUE = 2 }
 		hidden_effect = {
 			restor_gathering_tell_guests_effect = { PURPOSE = quiet }
 		}
@@ -340,11 +336,7 @@ restor.0903 = {
 		name = restor.0903.a
 		trigger = { exists = scope:restor_absentee }
 		scope:restor_absentee = {
-			add_trait_xp = {
-				trait = restor_member
-				track = restor_rank
-				value = -15
-			}
+			restor_rank_loss_effect = { VALUE = 15 }
 			add_opinion = {
 				target = root
 				modifier = restor_named_before_the_sworn_opinion
@@ -362,11 +354,7 @@ restor.0903 = {
 						NOT = { this = root }
 						has_trait = restor_member
 					}
-					add_trait_xp = {
-						trait = restor_member
-						track = restor_rank
-						value = 3
-					}
+					restor_rank_gain_effect = { VALUE = 3 }
 				}
 			}
 		}
@@ -468,11 +456,7 @@ restor.0904 = {
 		name = restor.0904.a
 		trigger = { exists = scope:restor_candidate }
 		scope:restor_candidate = {
-			add_trait_xp = {
-				trait = restor_member
-				track = restor_rank
-				value = 15
-			}
+			restor_rank_gain_effect = { VALUE = 15 }
 			add_opinion = {
 				target = root
 				modifier = restor_raised_before_the_sworn_opinion
@@ -486,11 +470,7 @@ restor.0904 = {
 				}
 			}
 		}
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 3
-		}
+		restor_rank_gain_effect = { VALUE = 3 }
 		ai_chance = {
 			base = 55
 			modifier = { add = 30 has_trait = generous }
@@ -502,11 +482,7 @@ restor.0904 = {
 	# Raise yourself.
 	option = {
 		name = restor.0904.b
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 15
-		}
+		restor_rank_gain_effect = { VALUE = 15 }
 		if = {
 			limit = { exists = scope:activity }
 			scope:activity = {
@@ -627,11 +603,7 @@ restor.0905 = {
 	# Speak up.
 	option = {
 		name = restor.0905.a
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 3
-		}
+		restor_rank_gain_effect = { VALUE = 3 }
 		restor_exposure_gain_effect = { VALUE = 1 }
 		ai_chance = {
 			base = 50
@@ -755,18 +727,17 @@ restor.0907 = {
 	# Apologise.
 	option = {
 		name = restor.0907.a
-		show_as_unavailable = { always = yes }
+		show_as_unavailable = {
+			exists = scope:restor_judged_harshly
+			exists = scope:host
+		}
 		trigger = {
 			restor_can_afford_favour_trigger = { VALUE = 10 }
 			exists = scope:restor_judged_harshly
 			exists = scope:host
 		}
 		restor_favour_spend_effect = { VALUE = 10 }
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 5
-		}
+		restor_rank_gain_effect = { VALUE = 5 }
 		ai_chance = {
 			base = 50
 			modifier = { add = 30 has_trait = humble }
@@ -1419,11 +1390,7 @@ restor.0914 = {
 		custom_tooltip = restor.0914.support_tt
 		hidden_effect = { restor_support_refresh_effect = yes }
 		restor_favour_gain_effect = { VALUE = 20 }
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 8
-		}
+		restor_rank_gain_effect = { VALUE = 8 }
 		restor_exposure_gain_effect = { VALUE = 4 }
 		restor_errand_consequences_effect = yes
 	}
@@ -1450,11 +1417,7 @@ restor.0914 = {
 			}
 		}
 		restor_favour_gain_effect = { VALUE = 25 }
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 8
-		}
+		restor_rank_gain_effect = { VALUE = 8 }
 		restor_exposure_gain_effect = { VALUE = 2 }
 		restor_errand_consequences_effect = yes
 	}
@@ -1486,11 +1449,7 @@ restor.0914 = {
 			}
 		}
 		restor_favour_gain_effect = { VALUE = 15 }
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 8
-		}
+		restor_rank_gain_effect = { VALUE = 8 }
 		restor_exposure_gain_effect = { VALUE = 3 }
 		restor_errand_consequences_effect = yes
 	}
@@ -1554,11 +1513,7 @@ restor.0915 = {
 				restor_swear_in_effect = { RANK = 0 }
 			}
 		}
-		add_trait_xp = {
-			trait = restor_member
-			track = restor_rank
-			value = 2
-		}
+		restor_rank_gain_effect = { VALUE = 2 }
 		restor_exposure_gain_effect = { VALUE = 1 }
 		ai_chance = {
 			base = 80

@@ -37,6 +37,14 @@ public sealed class ResolvedWidget(string writtenType)
     /// <summary>Where the layout writes the box it computed.</summary>
     public LayoutBox Box { get; set; }
 
+    /// <summary>
+    /// A text widget's content as it will be drawn — localised, samples substituted, format markers
+    /// stripped. Filled in by the preview before layout, so the box is measured from the same string
+    /// the page draws rather than from the loc key, which is a third the length of the paragraph it
+    /// stands for. Null means nobody filled it in and the layout falls back to the raw value.
+    /// </summary>
+    public string? Shown { get; set; }
+
     public void Set(string key, string value) => Props[key] = value;
 
     public void SetInline(string key, string[] tokens) => Props[key] = string.Join(' ', tokens);

@@ -237,11 +237,7 @@ cult.1002 = {
 					left_icon = root
 					right_icon = scope:cult_mass_initiate
 					scope:cult_mass_initiate = {
-						add_trait_xp = {
-							trait = cult_member
-							track = cult_rank
-							value = 5
-						}
+						cult_rank_gain_effect = { VALUE = 5 }
 						add_opinion = {
 							target = root
 							modifier = grateful_opinion
@@ -257,11 +253,7 @@ cult.1002 = {
 					left_icon = root
 					right_icon = scope:cult_mass_initiate
 					scope:cult_mass_initiate = {
-						add_trait_xp = {
-							trait = cult_member
-							track = cult_rank
-							value = -10
-						}
+						cult_rank_loss_effect = { VALUE = 10 }
 					}
 					cult_exposure_gain_effect = { VALUE = 2 }
 				}
@@ -415,11 +407,7 @@ cult.1003 = {
 		cult_power_gain_effect = { VALUE = 10 }
 		cult_corrupt_soul_effect = yes
 		scope:cult_mass_chaplain = {
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = 10
-			}
+			cult_rank_gain_effect = { VALUE = 10 }
 		}
 		cult_their_exposure_gain_effect = { WHO = scope:cult_mass_chaplain VALUE = 2 }
 		ai_chance = {
@@ -964,11 +952,7 @@ cult.1006 = {
 	# Stop them, and start again.
 	option = {
 		name = cult.1006.a
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 2
-		}
+		cult_rank_gain_effect = { VALUE = 2 }
 		cult_mass_pool_circle_rank_effect = { XP = 1 }
 		ai_chance = {
 			base = 40
@@ -981,11 +965,7 @@ cult.1006 = {
 		name = cult.1006.b
 		add_piety = minor_piety_gain
 		add_stress = minor_stress_loss
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = -3
-		}
+		cult_rank_loss_effect = { VALUE = 3 }
 		ai_chance = {
 			base = 20
 			modifier = { add = 30 has_trait = content }
@@ -1004,11 +984,7 @@ cult.1006 = {
 					title = cult.1006.c.believes
 					left_icon = scope:cult_mass_singer
 					scope:cult_mass_singer = {
-						add_trait_xp = {
-							trait = cult_member
-							track = cult_rank
-							value = -10
-						}
+						cult_rank_loss_effect = { VALUE = 10 }
 					}
 					add_opinion = {
 						target = scope:cult_mass_singer
@@ -1242,11 +1218,7 @@ cult.1008 = {
 				target = root
 				modifier = cult_life_took_my_side_opinion
 			}
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = 3
-			}
+			cult_rank_gain_effect = { VALUE = 3 }
 		}
 		scope:cult_mass_book_b = {
 			add_opinion = {
@@ -1271,11 +1243,7 @@ cult.1008 = {
 				target = root
 				modifier = cult_life_took_my_side_opinion
 			}
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = 3
-			}
+			cult_rank_gain_effect = { VALUE = 3 }
 		}
 		scope:cult_mass_book_a = {
 			add_opinion = {
@@ -1304,11 +1272,7 @@ cult.1008 = {
 					type = event_toast_effect_good
 					title = cult.1008.c.perfect
 					left_icon = root
-					add_trait_xp = {
-						trait = cult_member
-						track = cult_rank
-						value = 3
-					}
+					cult_rank_gain_effect = { VALUE = 3 }
 					scope:cult_mass_book_a = {
 						add_opinion = {
 							target = root
@@ -1446,11 +1410,7 @@ cult.1009 = {
 	option = {
 		name = cult.1009.a
 		scope:cult_mass_giver = {
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = 5
-			}
+			cult_rank_gain_effect = { VALUE = 5 }
 			add_opinion = {
 				target = root
 				modifier = grateful_opinion
@@ -2061,11 +2021,7 @@ cult.1020 = {
 	# Close the doors.
 	option = {
 		name = cult.1020.c
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 2
-		}
+		cult_rank_gain_effect = { VALUE = 2 }
 		cult_mass_pool_circle_opinion_effect = { MODIFIER = pleased_opinion OPINION = 5 }
 		ai_chance = {
 			base = 30
@@ -2147,11 +2103,7 @@ cult.1021 = {
 					custom_tooltip = cult.1021.c.comes.tt
 					cult_power_gain_effect = { VALUE = 10 }
 					cult_corrupt_soul_effect = yes
-					add_trait_xp = {
-						trait = cult_member
-						track = cult_rank
-						value = 3
-					}
+					cult_rank_gain_effect = { VALUE = 3 }
 				}
 			}
 			60 = {
@@ -2228,11 +2180,7 @@ cult.1022 = {
 				modifier = cult_brought_me_in_opinion
 			}
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 3
-		}
+		cult_rank_gain_effect = { VALUE = 3 }
 		cult_mass_pool_circle_opinion_effect = { MODIFIER = annoyed_opinion OPINION = -5 }
 		ai_chance = {
 			base = 50
@@ -2467,11 +2415,7 @@ cult.1031 = {
 					type = event_toast_effect_good
 					title = cult.1031.a.pleased
 					left_icon = scope:cult_hierophant
-					add_trait_xp = {
-						trait = cult_member
-						track = cult_rank
-						value = 10
-					}
+					cult_rank_gain_effect = { VALUE = 10 }
 					scope:cult_hierophant = {
 						add_opinion = {
 							target = root
@@ -2720,11 +2664,7 @@ cult.1033 = {
 							modifier = grateful_opinion
 							opinion = 10
 						}
-						add_trait_xp = {
-							trait = cult_member
-							track = cult_rank
-							value = 3
-						}
+						cult_rank_gain_effect = { VALUE = 3 }
 					}
 				}
 			}
@@ -2752,22 +2692,14 @@ cult.1033 = {
 			}
 		}
 		scope:cult_mass_doubter = {
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = -10
-			}
+			cult_rank_loss_effect = { VALUE = 10 }
 			add_opinion = {
 				target = root
 				modifier = angry_opinion
 				opinion = -20
 			}
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 3
-		}
+		cult_rank_gain_effect = { VALUE = 3 }
 		stress_impact = {
 			honest = minor_stress_impact_gain
 			compassionate = minor_stress_impact_gain
@@ -2846,11 +2778,7 @@ cult.1034 = {
 	# Every word, backwards.
 	option = {
 		name = cult.1034.a
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 3
-		}
+		cult_rank_gain_effect = { VALUE = 3 }
 		cult_power_gain_effect = { VALUE = 5 }
 		cult_corrupt_soul_effect = yes
 		scope:host = {
@@ -2875,11 +2803,7 @@ cult.1034 = {
 		name = cult.1034.c
 		add_piety = minor_piety_gain
 		add_stress = minor_stress_loss
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = -5
-		}
+		cult_rank_loss_effect = { VALUE = 5 }
 		scope:host = {
 			add_opinion = {
 				target = root

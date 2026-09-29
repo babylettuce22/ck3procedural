@@ -4,6 +4,11 @@
 
  cult_their_exposure_gain_tt:0 "[cult_exposure_target.GetTitledFirstName]'s exposure rises by #P [cult_their_delta|0]#!"
  cult_their_exposure_loss_tt:0 "[cult_exposure_target.GetTitledFirstName]'s exposure falls by #N [cult_their_delta|0]#!"
+ # For a reader who does not know they are sworn: true of anyone, so it confirms nothing. The gain
+ # line is shared with cult_defilement_their_exposure_effect, whose target scope differs -- hence
+ # the neutral scope name set by both wrappers (cult_exposure_veiled).
+ cult_their_exposure_gain_veiled_tt:0 "If [cult_exposure_veiled.GetTitledFirstName] has anything to hide, it will be harder to hide now"
+ cult_their_exposure_loss_veiled_tt:0 "If [cult_exposure_veiled.GetTitledFirstName] has anything to hide, it will be easier to hide now"
  cult_secret_revealed_tt:0 "If [cult_exposure_target.GetFirstNameNoTooltip] is already whispered about, you learn [cult_exposure_target.GetHerHis] secret and can expose it or use it"
  cult_name_others_tt:0 "The three most careless of the Faithless are named: each gains #N 10#! exposure"
  cult_named_by_informant_toast:0 "[cult_informant.GetFirstNameNoTooltip] Has Named You to the Church"
@@ -11,7 +16,7 @@
  cult_confessed_to_you_toast:0 "[cult_penitent.GetFirstNameNoTooltip] Confesses and Names Names"
 
  cult_examine_caught_toast:0 "[cult_examined.GetFirstNameNoTooltip] Stumbles on Points of Doctrine"
- cult_examine_cleared_toast:0 "[cult_examined.GetFirstNameNoTooltip] Answers Like a Priest"
+ cult_examine_cleared_toast:0 "[cult_examined.GetFirstNameNoTooltip] Answers Like a $cult_priest$"
  cult_examined_badly_toast:0 "Your Answers Did Not Satisfy [cult_examiner.GetFirstNameNoTooltip]"
  cult_examined_well_toast:0 "[cult_examiner.GetFirstNameNoTooltip] Found No Fault in You"
 
@@ -28,7 +33,7 @@
  # ---- The decision ------------------------------------------------------------------------------
 
  cult_root_out_heresy_decision:0 "Root Out Heresy"
- cult_root_out_heresy_decision_desc:0 "Somewhere in your realm are people who kneel beside you at the altar and pray to $cult_devil_name$. Send the priests out to question the faithful, open the confessionals to your clerks, and search the chapels of your lords. The careless will be found first."
+ cult_root_out_heresy_decision_desc:0 "Somewhere in your realm are people who kneel beside you at the altar and pray to $cult_devil_name$. Send the $cult_priests$ out to question the faithful, open the confessionals to your clerks, and search the chapels of your lords. The careless will be found first."
  cult_root_out_heresy_decision_tooltip:0 "Search your realm for members of $cult_society_name$."
  cult_root_out_heresy_decision_confirm:0 "Begin the inquiry"
  cult_root_out_heresy_effect_tt:0 "Every member of $cult_society_name$ in your realm gains #P 10#! exposure\nThe most exposed of them is #high named to you#!, and you choose what to do about them\nIf nobody sworn is in your realm, the search finds nothing"
@@ -36,7 +41,7 @@
  # ---- cult.0300 ---------------------------------------------------------------------------------
 
  cult.0300.t:0 "Whispers"
- cult.0300.desc:0 "Twice this month you were seen leaving the [cult_faith.HouseOfWorship] before the blessing. A servant has told the kitchens that you keep a room nobody else may enter, and your priest has started to watch your lips during the prayers.\n\nNobody has said the word heretic yet. But there is now something to find, if anyone looks for it. "
+ cult.0300.desc:0 "Twice this month you were seen leaving the [cult_faith.HouseOfWorship] before the blessing. A servant has told the kitchens that you keep a room nobody else may enter, and your $cult_priest$ has started to watch your lips during the prayers.\n\nNobody has said the word heretic yet. But there is now something to find, if anyone looks for it. "
  cult.0300.desc_crime:0 "Under the laws of $cult_host_name$, worshipping $cult_devil_name$ is a crime. If you are found out, you can be imprisoned for it, or worse."
  cult.0300.desc_shunned:0 "$cult_host_name$ does not punish every witch, but a worshipper of $cult_devil_name$ is another matter. If you are found out, the faithful will shun you."
  cult.0300.a:0 "I'll be the first at every service."
@@ -47,8 +52,8 @@
  # ---- cult.0302 ---------------------------------------------------------------------------------
 
  cult.0302.t:0 "A Suspected Heretic"
- cult.0302.desc:0 "It is no longer only servants' talk. At the [cult_faith.HouseOfWorship] the faithful leave a space around you on the bench, and a friend has warned you that a priest has written your name in a letter.\n\nThe letter is going to [cult_hunter.GetTitledFirstName], who hunts heresy in $cult_host_name$. What [cult_hunter.GetSheHe] does about it is up to [cult_hunter.GetHerHim]: watch you, question you, or wait for proof."
- cult.0302.desc_nohunter:0 "It is no longer only servants' talk. At the [cult_faith.HouseOfWorship] the faithful leave a space around you on the bench, and a friend has warned you that a priest has written your name in a letter.\n\nFor now nobody in $cult_host_name$ is hunting the Faithless. Whoever takes it up next will find your name waiting."
+ cult.0302.desc:0 "It is no longer only servants' talk. At the [cult_faith.HouseOfWorship] the faithful leave a space around you on the bench, and a friend has warned you that a $cult_priest$ has written your name in a letter.\n\nThe letter is going to [cult_hunter.GetTitledFirstName], who hunts heresy in $cult_host_name$. What [cult_hunter.GetSheHe] does about it is up to [cult_hunter.GetHerHim]: watch you, question you, or wait for proof.\n\nThe circle has heard it too. They keep a little more distance now, and your standing among them has fallen."
+ cult.0302.desc_nohunter:0 "It is no longer only servants' talk. At the [cult_faith.HouseOfWorship] the faithful leave a space around you on the bench, and a friend has warned you that a $cult_priest$ has written your name in a letter.\n\nFor now nobody in $cult_host_name$ is hunting the Faithless. Whoever takes it up next will find your name waiting.\n\nThe circle has heard it too. They keep a little more distance now, and your standing among them has fallen."
  cult.0302.a:0 "No more rites. Not until this passes."
  cult.0302.a.tt:0 "Nothing changes now, but nothing new is added either. Exposure falls a little each year on its own."
  cult.0302.b:0 "Pay the ones who talk the most to stop. (50 gold)"
@@ -59,7 +64,7 @@
 
  cult.0301.t:0 "Heretic"
  cult.0301.desc_inside:0 "It is out. By the end of the week half the realm knows that you are sworn to $cult_society_name$, and that the prayers you say in the [cult_faith.HouseOfWorship] go to $cult_devil_name$.\n\nYou live under [cult_hunter.GetTitledFirstName], who hunts heresy in $cult_host_name$. [cult_hunter.GetSheHe|U] can have you arrested and tried, and [cult_hunter.GetSheHe] knows it.\n\nYou have days, not weeks, to decide what to do."
- cult.0301.desc_outside:0 "It is out. By the end of the week everyone who matters knows that you are sworn to $cult_society_name$, and that the prayers you say in the [cult_faith.HouseOfWorship] go to $cult_devil_name$.\n\nYou do not live under [cult_hunter.GetTitledFirstName]'s rule, so [cult_hunter.GetSheHe] cannot simply have you arrested. But [cult_hunter.GetSheHe] knows your name now, and so does every priest who would like to please [cult_hunter.GetHerHim]."
+ cult.0301.desc_outside:0 "It is out. By the end of the week everyone who matters knows that you are sworn to $cult_society_name$, and that the prayers you say in the [cult_faith.HouseOfWorship] go to $cult_devil_name$.\n\nYou do not live under [cult_hunter.GetTitledFirstName]'s rule, so [cult_hunter.GetSheHe] cannot simply have you arrested. But [cult_hunter.GetSheHe] knows your name now, and so does every $cult_priest$ who would like to please [cult_hunter.GetHerHim]."
  cult.0301.desc_nohunter:0 "It is out. By the end of the week everyone who matters knows that you are sworn to $cult_society_name$, and that the prayers you say in the [cult_faith.HouseOfWorship] go to $cult_devil_name$.\n\nNobody in $cult_host_name$ is hunting the Faithless just now. But people will remember, and so will whoever takes it up next."
  cult.0301.a:0 "It's a lie spread by my enemies."
  cult.0301.a.success:0 "Half the Court Believes You"
@@ -73,13 +78,13 @@
  # ---- cult.0303 ---------------------------------------------------------------------------------
 
  cult.0303.t:0 "A Name"
- cult.0303.desc_inside:0 "Your priests have been listening for the Faithless for a long time. This time what they heard has a name in it: [cult_suspect.GetTitledFirstName].\n\n[cult_suspect.GetSheHe|U] leaves before the blessing, never takes the sacrament, and keeps a room in [cult_suspect.GetHerHis] house that no servant may enter. There is no proof. [cult_suspect.GetSheHe|U] lives in your realm, so you could send for [cult_suspect.GetHerHim] tomorrow and examine [cult_suspect.GetHerHim] on the faith yourself."
- cult.0303.desc_outside:0 "Your priests have been listening for the Faithless for a long time. This time what they heard has a name in it: [cult_suspect.GetTitledFirstName].\n\n[cult_suspect.GetSheHe|U] leaves before the blessing and never takes the sacrament. There is no proof, and [cult_suspect.GetSheHe] lives outside your realm, beyond the reach of your guards. But not beyond the reach of the church."
+ cult.0303.desc_inside:0 "Your $cult_priests$ have been listening for the Faithless for a long time. This time what they heard has a name in it: [cult_suspect.GetTitledFirstName].\n\n[cult_suspect.GetSheHe|U] leaves before the blessing, never takes the sacrament, and keeps a room in [cult_suspect.GetHerHis] house that no servant may enter. There is no proof. [cult_suspect.GetSheHe|U] lives in your realm, so you could send for [cult_suspect.GetHerHim] tomorrow and examine [cult_suspect.GetHerHim] on the faith yourself."
+ cult.0303.desc_outside:0 "Your $cult_priests$ have been listening for the Faithless for a long time. This time what they heard has a name in it: [cult_suspect.GetTitledFirstName].\n\n[cult_suspect.GetSheHe|U] leaves before the blessing and never takes the sacrament. There is no proof, and [cult_suspect.GetSheHe] lives outside your realm, beyond the reach of your guards. But not beyond the reach of the church."
  cult.0303.a:0 "Have [cult_suspect.GetHerHim] watched."
  cult.0303.b:0 "Send for [cult_suspect.GetHerHim]. I'll examine [cult_suspect.GetHerHim] on the faith myself."
  cult.0303.c:0 "Order [cult_suspect.GetHerHim] to make a full confession."
  cult.0303.c.tt:0 "[cult_suspect.GetFirstNameNoTooltip] must answer you: confess and name the others, swear [cult_suspect.GetSheHe] is innocent, or refuse to answer at all."
- cult.0303.d:0 "Priests gossip. Ignore it."
+ cult.0303.d:0 "$cult_priests$ gossip. Ignore it."
 
  # ---- cult.0305 ---------------------------------------------------------------------------------
 
@@ -105,14 +110,14 @@
  cult.0306.c:0 "I cast [cult_exposed_member.GetHerHim] out of the faith."
  cult.0306.d:0 "[cult_exposed_member.GetSheHe|U] will do public penance, and pay for it."
  cult.0306.e:0 "Condemn [cult_exposed_member.GetHerHim] from every pulpit."
- cult.0306.e.tt:0 "Your priests search the houses of everyone who knew [cult_exposed_member.GetFirstNameNoTooltip]: every other member of $cult_society_name$ in your realm gains #P 5#! exposure."
+ cult.0306.e.tt:0 "Your $cult_priests$ search the houses of everyone who knew [cult_exposed_member.GetFirstNameNoTooltip]: every other member of $cult_society_name$ in your realm gains #P 5#! exposure."
  cult.0306.f:0 "Offer [cult_exposed_member.GetHerHim] absolution for the names of the others."
  cult.0306.f.tt:0 "[cult_exposed_member.GetFirstNameNoTooltip] decides. If [cult_exposed_member.GetSheHe] accepts, [cult_exposed_member.GetSheHe] leaves $cult_society_name$ and names the three most careless of the Faithless. If not, you have a reason to imprison [cult_exposed_member.GetHerHim]."
 
  # ---- cult.0307 ---------------------------------------------------------------------------------
 
  cult.0307.t:0 "Absolution for Names"
- cult.0307.desc:0 "A priest in [cult_inquisitor.GetTitledFirstName]'s service came to see you alone, which was not an accident. What he says is short. [cult_inquisitor.GetSheHe|U] knows what you are and can prove it.\n\nGive [cult_inquisitor.GetHerHim] the names of the others in $cult_society_name$, and you will be absolved, your sins forgiven before [cult_faith.HighGodName], and nobody need ever know. Refuse, and [cult_inquisitor.GetSheHe] will treat you as the heretic [cult_inquisitor.GetSheHe] knows you are."
+ cult.0307.desc:0 "A $cult_priest_male$ in [cult_inquisitor.GetTitledFirstName]'s service came to see you alone, which was not an accident. What he says is short. [cult_inquisitor.GetSheHe|U] knows what you are and can prove it.\n\nGive [cult_inquisitor.GetHerHim] the names of the others in $cult_society_name$, and you will be absolved, your sins forgiven before [cult_faith.HighGodName], and nobody need ever know. Refuse, and [cult_inquisitor.GetSheHe] will treat you as the heretic [cult_inquisitor.GetSheHe] knows you are."
  cult.0307.a:0 "I'll give [cult_inquisitor.GetHerHim] the names."
  cult.0307.b:0 "Tell [cult_inquisitor.GetHerHim] I have nothing to confess."
  cult.0307.b.toast:0 "[cult_absolved.GetFirstNameNoTooltip] Refuses Your Absolution"
@@ -120,20 +125,20 @@
  # ---- cult.0308 ---------------------------------------------------------------------------------
 
  cult.0308.t:0 "A Summons to Confess"
- cult.0308.desc:0 "[cult_inquisitor.GetTitledFirstName] has written to you, in front of witnesses. The letter says that grave things are said about your faith, and that you will make a full confession of your sins before a priest of $cult_host_name$, in public, before the month is out.\n\nThe relics will be brought out. Whatever you say will be said on them."
+ cult.0308.desc:0 "[cult_inquisitor.GetTitledFirstName] has written to you, in front of witnesses. The letter says that grave things are said about your faith, and that you will make a full confession of your sins before a $cult_priest$ of $cult_host_name$, in public, before the month is out.\n\nThe relics will be brought out. Whatever you say will be said on them."
  cult.0308.a:0 "I'll confess everything, and give them the others."
  cult.0308.b:0 "I'll swear on the relics that it is all lies."
  cult.0308.b.success:0 "The Faithful Believe Your Oath"
  cult.0308.b.success_them:0 "[cult_questioned.GetFirstNameNoTooltip] Swears Innocence, and Is Believed"
  cult.0308.b.failure:0 "Your Oath Rings False"
  cult.0308.b.failure_them:0 "[cult_questioned.GetFirstNameNoTooltip] Perjures [cult_questioned.GetHerselfHimself] on the Relics"
- cult.0308.c:0 "I answer to no priest. I will not come."
+ cult.0308.c:0 "I answer to no $cult_priest$. I will not come."
  cult.0308.c.toast:0 "[cult_questioned.GetFirstNameNoTooltip] Refuses to Confess"
 
  # ---- cult.0309 ---------------------------------------------------------------------------------
 
  cult.0309.t:0 "The Trial"
- cult.0309.desc:0 "[cult_accused.GetTitledFirstName] was brought up from the cells in chains and made to stand before the priests of $cult_host_name$. The book of backwards prayers was read aloud. Witnesses spoke of the locked room, the missed sacraments, the black candles.\n\n[cult_accused.GetSheHe|U] said very little. The priests have found [cult_accused.GetHerHim] guilty of heresy. What happens to [cult_accused.GetHerHim] now is your decision."
+ cult.0309.desc:0 "[cult_accused.GetTitledFirstName] was brought up from the cells in chains and made to stand before the $cult_priests$ of $cult_host_name$. The book of backwards prayers was read aloud. Witnesses spoke of the locked room, the missed sacraments, the black candles.\n\n[cult_accused.GetSheHe|U] said very little. The $cult_priests$ have found [cult_accused.GetHerHim] guilty of heresy. What happens to [cult_accused.GetHerHim] now is your decision."
  cult.0309.a:0 "The sentence for heresy is death."
  cult.0309.a.tt:0 "Every other member of $cult_society_name$ in your realm is frightened: each gains #P 5#! exposure."
  cult.0309.b:0 "Let [cult_accused.GetHerHim] do penance in public, pay the church, and go."
@@ -145,7 +150,7 @@
  # ---- cult.0310 ---------------------------------------------------------------------------------
 
  cult.0310.t:0 "The Inquiry Turns Up a Name"
- cult.0310.desc:0 "Your priests have spent weeks among the faithful of your realm: confessions heard twice over, chapels searched, servants asked what their masters do at night. Most of the Faithless were careful. One was not.\n\n[cult_named.GetTitledFirstName] is the name that keeps coming back. The others have been frightened, which is worth something. [cult_named.GetSheHe|U] is the one you can actually do something about."
+ cult.0310.desc:0 "Your $cult_priests$ have spent weeks among the faithful of your realm: confessions heard twice over, chapels searched, servants asked what their masters do at night. Most of the Faithless were careful. One was not.\n\n[cult_named.GetTitledFirstName] is the name that keeps coming back. The others have been frightened, which is worth something. [cult_named.GetSheHe|U] is the one you can actually do something about."
  cult.0310.a:0 "Bring [cult_named.GetHerHim] in. I'll examine [cult_named.GetHerHim] on the faith myself."
  cult.0310.b:0 "Tell the faithful what [cult_named.GetSheHe] is."
  cult.0310.c:0 "Order [cult_named.GetHerHim] to make a full confession."
@@ -157,26 +162,26 @@
  # ---- cult.0312 ---------------------------------------------------------------------------------
 
  cult.0312.t:0 "The Inquiry"
- cult.0312.desc:0 "[cult_seeker.GetTitledFirstName] has sent [cult_seeker.GetHerHis] priests out among the faithful to look for $cult_society_name$. They are hearing confessions twice over and searching private chapels. A friend's house was turned over two nights ago, and your own servants are being asked where you go after dark.\n\nNobody has come for you yet. You can stop everything and go quiet until it passes, but the circle will have to manage without you for a while."
+ cult.0312.desc:0 "[cult_seeker.GetTitledFirstName] has sent [cult_seeker.GetHerHis] $cult_priests$ out among the faithful to look for $cult_society_name$. They are hearing confessions twice over and searching private chapels. A friend's house was turned over two nights ago, and your own servants are being asked where you go after dark.\n\nNobody has come for you yet. You can stop everything and go quiet until it passes, but the circle will have to manage without you for a while."
  cult.0312.a:0 "Go quiet. No rites, no meetings, until this is over."
  cult.0312.b:0 "Carry on. They're guessing."
 
  # ---- cult.0320 ---------------------------------------------------------------------------------
 
  cult.0320.t:0 "The Confessor's Report"
- cult.0320.desc:0 "A priest has come to you in some distress. Weeks ago a penitent told him, under the seal of confession, that they had prayed to $cult_devil_name$ and would do it again. He has not slept well since.\n\nHe will tell you who it was, if you promise to answer for the broken seal before [cult_faith.HighGodName]. Or he can keep his silence, and simply keep his eyes open."
+ cult.0320.desc:0 "A $cult_priest_male$ has come to you in some distress. Weeks ago a penitent told him, under the seal of confession, that they had prayed to $cult_devil_name$ and would do it again. He has not slept well since.\n\nHe will tell you who it was, if you promise to answer for the broken seal before [cult_faith.HighGodName]. Or he can keep his silence, and simply keep his eyes open."
  cult.0320.a:0 "Tell me the name. I will answer for the seal."
- cult.0320.a.success:0 "The Priest Names [cult_mark.GetFirstNameNoTooltip]"
+ cult.0320.a.success:0 "The $cult_priest_male$ Names [cult_mark.GetFirstNameNoTooltip]"
  cult.0320.a.failure:0 "The Penitent Was a Madman"
  cult.0320.b:0 "Keep the seal, but watch who takes the sacrament."
- cult.0320.b.success:0 "The Priest Recognises [cult_mark.GetFirstNameNoTooltip]"
+ cult.0320.b.success:0 "The $cult_priest_male$ Recognises [cult_mark.GetFirstNameNoTooltip]"
  cult.0320.b.failure:0 "The Penitent Never Comes Back"
  cult.0320.c:0 "The seal is sacred. Go home."
 
  # ---- cult.0321 ---------------------------------------------------------------------------------
 
  cult.0321.t:0 "A Desecrated Shrine"
- cult.0321.desc:0 "The shrine at [cult_shrine_county.GetNameNoTier] has been defiled. The altar was overturned in the night, the holy images turned to face the wall, and the candles left burning were black.\n\nThe villagers are frightened. The priest says it is not the first time, only the first time anyone has dared to report it."
+ cult.0321.desc:0 "The shrine at [cult_shrine_county.GetNameNoTier] has been defiled. The altar was overturned in the night, the holy images turned to face the wall, and the candles left burning were black.\n\nThe villagers are frightened. The $cult_priest$ says it is not the first time, only the first time anyone has dared to report it."
  cult.0321.a:0 "Have it cleansed and consecrated again. (50 gold)"
  cult.0321.a.tt:0 "Any taint of the cult on [cult_shrine_county.GetNameNoTier] is removed."
  cult.0321.b:0 "Find out who did it."
@@ -186,20 +191,20 @@
 
  # ---- cult.0322 ---------------------------------------------------------------------------------
 
- cult.0322.t:0 "The Priest Who Prays Wrongly"
- cult.0322.desc:0 "In [cult_priest_county.GetNameNoTier], the priest has been saying the prayers wrong. Not badly, but wrong: certain words left out, certain verses said in the wrong order, and the name of [cult_faith.HighGodName] spoken where the faithful should curse and cursed where they should praise.\n\nMost of his flock have not noticed. The few who have are too frightened to say what they think it means."
- cult.0322.a:0 "Take away his robes and send a new priest. (25 gold)"
+ cult.0322.t:0 "The $cult_priest_male$ Who Prays Wrongly"
+ cult.0322.desc:0 "In [cult_priest_county.GetNameNoTier], the $cult_priest_male$ has been saying the prayers wrong. Not badly, but wrong: certain words left out, certain verses said in the wrong order, and the name of [cult_faith.HighGodName] spoken where the faithful should curse and cursed where they should praise.\n\nMost of his flock have not noticed. The few who have are too frightened to say what they think it means."
+ cult.0322.a:0 "Take away his robes and send a new $cult_priest$. (25 gold)"
  cult.0322.a.tt:0 "Any taint of the cult on [cult_priest_county.GetNameNoTier] is removed."
  cult.0322.b:0 "Ask him who taught him the words."
- cult.0322.b.success:0 "The Priest Names [cult_mark.GetFirstNameNoTooltip]"
- cult.0322.b.failure:0 "The Priest Says Nothing"
- cult.0322.c:0 "This is for his bishop to deal with."
- cult.0322.c.tt:0 "The bishop does nothing. [cult_priest_county.GetNameNoTier] becomes #N Tainted#! for five years."
+ cult.0322.b.success:0 "The $cult_priest_male$ Names [cult_mark.GetFirstNameNoTooltip]"
+ cult.0322.b.failure:0 "The $cult_priest_male$ Says Nothing"
+ cult.0322.c:0 "This is for his $cult_bishop$ to deal with."
+ cult.0322.c.tt:0 "The $cult_bishop$ does nothing. [cult_priest_county.GetNameNoTier] becomes #N Tainted#! for five years."
 
  # ---- cult.0323 ---------------------------------------------------------------------------------
 
  cult.0323.t:0 "A Witch Accused"
- cult.0323.desc:0 "A crowd from [cult_witch_county.GetNameNoTier] has come to your gate with a woman they say is a witch. She lives alone at the edge of the village, sells herbs, and was seen at a crossroads at midnight. A cow has died, and the well has gone sour.\n\nThe woman says she was gathering plants that only flower at night. The villagers want her burned. The priest who came with them wants her questioned first."
+ cult.0323.desc:0 "A crowd from [cult_witch_county.GetNameNoTier] has come to your gate with a woman they say is a witch. She lives alone at the edge of the village, sells herbs, and was seen at a crossroads at midnight. A cow has died, and the well has gone sour.\n\nThe woman says she was gathering plants that only flower at night. The villagers want her burned. The $cult_priest$ who came with them wants her questioned first."
  cult.0323.a:0 "She will be tried by the church, properly."
  cult.0323.a.lead:0 "Her Answers Lead to [cult_mark.GetFirstNameNoTooltip]"
  cult.0323.a.innocent:0 "She Was Only a Herbwoman"
@@ -220,35 +225,35 @@
  # ---- cult.0330 ---------------------------------------------------------------------------------
 
  cult.0330.t:0 "Public Penance"
- cult.0330.desc:0 "The talk about you has reached your priest. He does not believe it, he says, but he thinks a public penance would put an end to it: a walk barefoot to the altar of the [cult_faith.HouseOfWorship] on a feast day, with the whole town watching.\n\nYou would be kneeling to [cult_faith.HighGodName] in front of everyone, and meaning none of it. That is rather the point."
+ cult.0330.desc:0 "The talk about you has reached your $cult_priest_male$. He does not believe it, he says, but he thinks a public penance would put an end to it: a walk barefoot to the altar of the [cult_faith.HouseOfWorship] on a feast day, with the whole town watching.\n\nYou would be kneeling to [cult_faith.HighGodName] in front of everyone, and meaning none of it. That is rather the point."
  cult.0330.a:0 "I'll walk barefoot to the altar."
  cult.0330.b:0 "I'll confess some lesser sin to him, privately."
- cult.0330.b.success:0 "The Priest Is Satisfied"
- cult.0330.b.failure:0 "The Priest Expected a Different Sin"
+ cult.0330.b.success:0 "The $cult_priest_male$ Is Satisfied"
+ cult.0330.b.failure:0 "The $cult_priest_male$ Expected a Different Sin"
  cult.0330.c:0 "I have nothing to repent."
 
  # ---- cult.0331 ---------------------------------------------------------------------------------
 
  cult.0331.t:0 "A Donation to the Church"
  cult.0331.desc:0 "[cult_head.GetTitledFirstName] is raising money for a new [cult_faith.HouseOfWorship], and the names of the donors will be read out at its consecration. Nobody who gave generously will be called a heretic afterwards.\n\nIt would mean paying for a house of [cult_faith.HighGodName] with the gold of a servant of $cult_devil_name$. The circle would find that amusing."
- cult.0331.desc_nohead:0 "The priests of $cult_host_name$ are raising money for a new [cult_faith.HouseOfWorship], and the names of the donors will be read out at its consecration. Nobody who gave generously will be called a heretic afterwards.\n\nIt would mean paying for a house of [cult_faith.HighGodName] with the gold of a servant of $cult_devil_name$. The circle would find that amusing."
+ cult.0331.desc_nohead:0 "The $cult_priests$ of $cult_host_name$ are raising money for a new [cult_faith.HouseOfWorship], and the names of the donors will be read out at its consecration. Nobody who gave generously will be called a heretic afterwards.\n\nIt would mean paying for a house of [cult_faith.HighGodName] with the gold of a servant of $cult_devil_name$. The circle would find that amusing."
  cult.0331.a:0 "Give generously, and make sure everyone hears. (100 gold)"
- cult.0331.b:0 "Give something to the local priest. (30 gold)"
+ cult.0331.b:0 "Give something to the local $cult_priest$. (30 gold)"
  cult.0331.c:0 "Not one coin for the church."
 
  # ---- cult.0332 ---------------------------------------------------------------------------------
 
  cult.0332.t:0 "A Scapegoat"
- cult.0332.desc:0 "The whispers about you are not going away. But whispers can be moved. People want a heretic, and they are not particular about which one.\n\nA word to the right priest about somebody else, some odd habit or missed prayers, and the eyes on you would turn elsewhere. Whoever they turn to would have to live with it."
- cult.0332.a:0 "[cult_scapegoat.GetFirstNameNoTooltip] never takes the sacrament either. Let the priest hear it."
+ cult.0332.desc:0 "The whispers about you are not going away. But whispers can be moved. People want a heretic, and they are not particular about which one.\n\nA word to the right $cult_priest$ about somebody else, some odd habit or missed prayers, and the eyes on you would turn elsewhere. Whoever they turn to would have to live with it."
+ cult.0332.a:0 "[cult_scapegoat.GetFirstNameNoTooltip] never takes the sacrament either. Let the $cult_priest$ hear it."
  cult.0332.b:0 "Point the village at the herbwoman by the river."
  cult.0332.b.tt:0 "Somebody in the village will pay for your safety."
  cult.0332.c:0 "No. I'll carry this myself."
 
  # ---- cult.0333 ---------------------------------------------------------------------------------
 
- cult.0333.t:0 "The Chaplain Notices"
- cult.0333.desc:0 "[cult_chaplain.GetTitledFirstName], your own chaplain, asked to speak to you privately today. [cult_chaplain.GetSheHe|U] has noticed that you have not taken the sacrament since the spring, and that you look away when it is lifted.\n\n[cult_chaplain.GetSheHe|U] is worried for your soul, [cult_chaplain.GetSheHe] says. For now [cult_chaplain.GetSheHe] is only worried."
+ cult.0333.t:0 "The $cult_priest$ Notices"
+ cult.0333.desc:0 "[cult_chaplain.GetTitledFirstName], the $cult_priest$ of your own court, asked to speak to you privately today. [cult_chaplain.GetSheHe|U] has noticed that you have not taken the sacrament since the spring, and that you look away when it is lifted.\n\n[cult_chaplain.GetSheHe|U] is worried for your soul, [cult_chaplain.GetSheHe] says. For now [cult_chaplain.GetSheHe] is only worried."
  cult.0333.a:0 "Take the sacrament from [cult_chaplain.GetHerHis] hands tomorrow."
  cult.0333.b:0 "Confess some lesser sin to [cult_chaplain.GetHerHim] instead."
  cult.0333.b.success:0 "[cult_chaplain.GetFirstNameNoTooltip] Is Reassured"

@@ -301,11 +301,7 @@ cult.0902 = {
 	# Not yet.
 	option = {
 		name = cult.0902.c
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 2
-		}
+		cult_rank_gain_effect = { VALUE = 2 }
 		hidden_effect = {
 			cult_mass_tell_guests_effect = { PURPOSE = quiet }
 		}
@@ -374,11 +370,7 @@ cult.0903 = {
 			scope:cult_mass_candidate = { is_alive = yes }
 		}
 		scope:cult_mass_candidate = {
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = 15
-			}
+			cult_rank_gain_effect = { VALUE = 15 }
 			add_opinion = {
 				target = root
 				modifier = cult_raised_before_the_circle_opinion
@@ -392,11 +384,7 @@ cult.0903 = {
 				}
 			}
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 3
-		}
+		cult_rank_gain_effect = { VALUE = 3 }
 		hidden_effect = {
 			cult_mass_tell_guests_effect = { PURPOSE = raised }
 		}
@@ -424,11 +412,7 @@ cult.0903 = {
 				modifier = cult_brought_me_in_opinion
 			}
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 5
-		}
+		cult_rank_gain_effect = { VALUE = 5 }
 		cult_exposure_gain_effect = { VALUE = 2 }
 		hidden_effect = {
 			cult_mass_tell_guests_effect = { PURPOSE = sworn }
@@ -446,11 +430,7 @@ cult.0903 = {
 	# Raise yourself.
 	option = {
 		name = cult.0903.c
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 15
-		}
+		cult_rank_gain_effect = { VALUE = 15 }
 		if = {
 			limit = { exists = scope:activity }
 			scope:activity = {
@@ -534,11 +514,7 @@ cult.0904 = {
 			scope:cult_absentee = { is_alive = yes }
 		}
 		scope:cult_absentee = {
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = -15
-			}
+			cult_rank_loss_effect = { VALUE = 15 }
 			add_opinion = {
 				target = root
 				modifier = cult_shamed_before_the_circle_opinion
@@ -556,11 +532,7 @@ cult.0904 = {
 						NOT = { this = root }
 						has_trait = cult_member
 					}
-					add_trait_xp = {
-						trait = cult_member
-						track = cult_rank
-						value = 3
-					}
+					cult_rank_gain_effect = { VALUE = 3 }
 				}
 			}
 		}
@@ -710,11 +682,7 @@ cult.0905 = {
 	# Say the responses loudest of all.
 	option = {
 		name = cult.0905.a
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 3
-		}
+		cult_rank_gain_effect = { VALUE = 3 }
 		cult_exposure_gain_effect = { VALUE = 1 }
 		ai_chance = {
 			base = 50
@@ -744,11 +712,7 @@ cult.0905 = {
 			exists = scope:host
 			cult_rank_at_least_trigger = { RANK = 50 }
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 5
-		}
+		cult_rank_gain_effect = { VALUE = 5 }
 		cult_exposure_gain_effect = { VALUE = 2 }
 		scope:host = {
 			add_opinion = {
@@ -885,11 +849,7 @@ cult.0907 = {
 			target = scope:host
 			gold = 25
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 5
-		}
+		cult_rank_gain_effect = { VALUE = 5 }
 		ai_chance = {
 			base = 50
 			modifier = { add = 30 has_trait = humble }
@@ -1205,11 +1165,7 @@ cult.0912 = {
 		}
 		custom_tooltip = cult.0912.c.tt
 		scope:cult_defilement_guest = {
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = 3
-			}
+			cult_rank_gain_effect = { VALUE = 3 }
 		}
 		cult_defilement_their_exposure_effect = { WHO = scope:cult_defilement_guest VALUE = 3 }
 		ai_chance = {
@@ -1632,11 +1588,7 @@ cult.0914 = {
 		custom_tooltip = cult.0914.rot_tt
 		hidden_effect = { cult_rot_refresh_effect = yes }
 		cult_power_gain_effect = { VALUE = 15 }
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 8
-		}
+		cult_rank_gain_effect = { VALUE = 8 }
 		cult_corrupt_soul_effect = yes
 		cult_exposure_gain_effect = { VALUE = 4 }
 		cult_defilement_consequences_effect = yes
@@ -1676,11 +1628,7 @@ cult.0914 = {
 				}
 			}
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 8
-		}
+		cult_rank_gain_effect = { VALUE = 8 }
 		cult_corrupt_soul_effect = yes
 		cult_exposure_gain_effect = { VALUE = 3 }
 		cult_defilement_consequences_effect = yes
@@ -1706,11 +1654,7 @@ cult.0914 = {
 		else = {
 			cult_power_gain_effect = { VALUE = 10 }
 		}
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 6
-		}
+		cult_rank_gain_effect = { VALUE = 6 }
 		cult_exposure_gain_effect = { VALUE = 1 }
 		cult_defilement_consequences_effect = yes
 	}

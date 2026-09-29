@@ -314,11 +314,7 @@ cult_offer_sacrifice_interaction = {
 		# ---- 2. What it gives, and what it costs ----
 		scope:actor = {
 			cult_power_gain_effect = { VALUE = scope:cult_offering_worth }
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = 5
-			}
+			cult_rank_gain_effect = { VALUE = 5 }
 			cult_exposure_gain_effect = { VALUE = 3 }
 			cult_corrupt_soul_effect = yes
 			stress_impact = {
@@ -348,11 +344,7 @@ cult_offer_sacrifice_interaction = {
 					scope:recipient = { has_trait = zealous }
 				}
 				scope:actor = {
-					add_trait_xp = {
-						trait = cult_member
-						track = cult_rank
-						value = 10
-					}
+					cult_rank_gain_effect = { VALUE = 10 }
 					hidden_effect = {
 						trigger_event = { id = cult.0411 days = 3 }
 					}
@@ -795,11 +787,7 @@ cult_defile_relic_interaction = {
 				cult_power_defile_county_effect = yes
 				scope:recipient = { add_piety = medium_piety_loss }
 				scope:actor = {
-					add_trait_xp = {
-						trait = cult_member
-						track = cult_rank
-						value = 3
-					}
+					cult_rank_gain_effect = { VALUE = 3 }
 					hidden_effect = {
 						trigger_event = { id = cult.0430 days = 5 }
 					}
@@ -817,11 +805,7 @@ cult_defile_relic_interaction = {
 					add_prestige = minor_prestige_loss
 				}
 				scope:actor = {
-					add_trait_xp = {
-						trait = cult_member
-						track = cult_rank
-						value = 5
-					}
+					cult_rank_gain_effect = { VALUE = 5 }
 					hidden_effect = {
 						trigger_event = { id = cult.0431 days = 5 }
 					}

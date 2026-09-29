@@ -54,11 +54,7 @@ cult_mass_word_perfect = {
 			tags = { pulse_action }
 			character = scope:first
 			scope:first = {
-				add_trait_xp = {
-					trait = cult_member
-					track = cult_rank
-					value = 2
-				}
+				cult_rank_gain_effect = { VALUE = 2 }
 			}
 		}
 	}

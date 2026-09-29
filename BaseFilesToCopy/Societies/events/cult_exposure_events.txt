@@ -343,11 +343,7 @@ cult.0301 = {
 		name = cult.0301.d
 		add_dread = medium_dread_gain
 		cult_power_gain_effect = { VALUE = 20 }
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 5
-		}
+		cult_rank_gain_effect = { VALUE = 5 }
 		if = {
 			limit = {
 				exists = scope:cult_hunter

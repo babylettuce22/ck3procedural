@@ -63,6 +63,8 @@ activity_cult_defilement = {
 
 	can_always_plan = no
 
+	# The society panel's light for this activity mirrors these gates and is_shown's:
+	# cult_can_host_defilement_trigger in 00_cult_triggers.txt. Change them together.
 	can_start_showing_failures_only = {
 		is_available_adult = yes
 		NOT = { is_activity_type_on_cooldown = activity_cult_defilement }
@@ -165,15 +167,11 @@ activity_cult_defilement = {
 			exists = global_var:cult_host_faith
 			barony ?= { is_holy_site_of = global_var:cult_host_faith }
 		}
-		trigger_if = {
-			limit = {
-				scope:host = { is_landless_adventurer = no }
-			}
-			custom_tooltip = {
-				text = cult_defilement_location_not_capital_tt
-				scope:host.capital_province != root
-			}
-		}
+		# No "not your own capital" rule, although vanilla's pilgrimage has one. The defile_site charge
+		# names the NEAREST untainted holy site (cult_charge_give_defile_site_effect), which is often the
+		# member's own seat, and this rite is the only way to keep that charge -- so the rule made such
+		# a charge impossible. Defiling the shrine at home is still secret sacrilege; the road pool
+		# simply has no road to draw on.
 	}
 
 	# An untainted site is the better target, and the one the host's charge names the best.
@@ -181,7 +179,8 @@ activity_cult_defilement = {
 		value = 10
 		if = {
 			limit = {
-				county ?= {
+				exists = county
+				county = {
 					NOT = { has_county_modifier = cult_county_tainted }
 				}
 			}
@@ -197,7 +196,8 @@ activity_cult_defilement = {
 					}
 					has_variable = cult_charge_county
 				}
-				county ?= { this = scope:host.var:cult_charge_county }
+				exists = county
+				county = scope:host.var:cult_charge_county
 			}
 			add = 100
 		}
@@ -329,11 +329,7 @@ activity_cult_defilement = {
 	on_complete = {
 		if = {
 			limit = { NOT = { this = scope:host } }
-			add_trait_xp = {
-				trait = cult_member
-				track = cult_rank
-				value = 4
-			}
+			cult_rank_gain_effect = { VALUE = 4 }
 			cult_exposure_gain_effect = { VALUE = 1 }
 		}
 	}

@@ -17,10 +17,10 @@
 
  restor_favour_gain_tt:0 "Gain #P [restor_favour_delta|0]#! favour with $restor_society_name$"
  restor_favour_spend_tt:0 "Spend #N [restor_favour_delta|0]#! favour with $restor_society_name$"
- restor_favour_toast:0 "Favour: #bold [ROOT.Char.MakeScope.Var('restor_favour').GetValue|0]#!"
+ restor_favour_toast:0 "Favour: #bold [restor_meter_owner.MakeScope.Var('restor_favour').GetValue|0]#!"
  restor_exposure_gain_tt:0 "Your exposure rises by #N [restor_exposure_delta|0]#!"
  restor_exposure_loss_tt:0 "Your exposure falls by #P [restor_exposure_delta|0]#!"
- restor_exposure_toast:0 "Exposure: #bold [ROOT.Char.MakeScope.Var('restor_exposure').GetValue|0]#!"
+ restor_exposure_toast:0 "Exposure: #bold [restor_meter_owner.MakeScope.Var('restor_exposure').GetValue|0]#!"
 
  restor_under_suspicion_modifier:0 "Under Suspicion"
  restor_under_suspicion_modifier_desc:0 "People have started asking where this character goes and who they meet."
@@ -88,3 +88,24 @@
  restor_can_afford_favour_5_tt:0 "You have at least #high 5#! favour"
  restor_can_afford_favour_10_tt:0 "You have at least #high 10#! favour"
  restor_can_afford_favour_15_tt:0 "You have at least #high 15#! favour"
+
+ # ---- The decisions panel heading (common/decision_group_types/01_society_decision_groups.txt) ----
+ decision_group_type_society:0 "Society Decisions"
+
+ # ---- Standing that falls (restor_rank_loss_effect and friends) ----------------------------------
+ restor_rank_loss_tt:0 "Standing among the Sworn #N falls by [restor_rank_delta|0]#!"
+ restor_rung_lost_toast:0 "Standing Lost"
+ restor_rung_lost_0_tt:0 "You are only one of the Sworn now. Nobody looks to you for anything."
+ restor_rung_lost_1_tt:0 "You are counted among the Trusted now, and no higher."
+ restor_rung_lost_2_tt:0 "You are a Captain now. The Elders no longer ask your opinion."
+ restor_idle_toast:0 "Your Standing Slips"
+ restor_idle_tt:0 "The Sworn have seen nothing from you in years. Earn favour to keep your place."
+ restor_demoted_for_failure_tt:0 "A second charge left undone: the Keeper takes a rung from you"
+ restor_demote_interaction:0 "Demote"
+ restor_demote_interaction_desc:0 "Tell [recipient.GetTitledFirstName] that [recipient.GetSheHe] has not earned [recipient.GetHerHis] place among the Sworn."
+ restor_demote_bottom_tt:0 "[recipient.GetFirstNameNoTooltip] is already on the lowest rung"
+ restor_rank_gain_tt:0 "Standing among the Sworn #P rises by [restor_rank_delta|0]#!"
+ restor_rung_gained_toast:0 "Standing Gained"
+ restor_rung_gained_1_tt:0 "You are counted among the Trusted now. The Sworn tell you more than they did."
+ restor_rung_gained_2_tt:0 "You are a Captain now. You know every name on the roll, and you may call a Gathering."
+ restor_rung_gained_3_tt:0 "You are an Elder now. When the Keeper is gone, the Sworn will look to you."

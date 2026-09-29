@@ -81,7 +81,8 @@ public static class GuiWriter
     /// <summary>
     /// Adds our tabs to the column of buttons down the right of the HUD, under Intrigue: the
     /// chronicle when it ships (on by default), and the society beneath it when either society set
-    /// ships. With neither, hud.gui and the two files that follow it are not patched at all.
+    /// ships. With neither, the two files that follow hud.gui are not patched; hud.gui itself
+    /// always is, for the debug panel's launcher (see <see cref="DebugPanel.AddLauncher"/>).
     ///
     /// <code>
     /// Related base files:
@@ -133,11 +134,8 @@ public static class GuiWriter
     private static void PatchHud(string modDir, string gameDir, bool societies, bool chronicle,
         bool wilderness)
     {
-        // Nothing of ours to put in the column and no colony counter to add, so nothing to widen
-        // either: vanilla's hud.gui, outliner and notification feed stay vanilla's, rather than
-        // shipping as unchanged copies.
-        if (!societies && !chronicle && !wilderness) return;
-
+        // Always opened now: the debug panel's launcher rides in hud.gui on every map. The outliner
+        // and notification feed are still only touched when a tab of ours needs them widened.
         var doc = GuiDocument.Open(gameDir, "gui", "gui", "hud.gui");
         if (doc is null) return;
 
@@ -145,6 +143,7 @@ public static class GuiWriter
         // features both want, and opening it twice would silently mean the second writer shipping
         // over the first — both read from gameDir, so the loser's edits simply are not in the file.
         if (wilderness) AddColonyCounter(doc);
+        DebugPanel.AddLauncher(modDir, doc);
 
         // The rest is the tab column, which the wilderness has no part in.
         if (societies || chronicle)

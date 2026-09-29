@@ -7,10 +7,10 @@
 #   cult_offer_to_the_dark_decision  any member: gold for dark power, at a cost to the soul
 
 cult_unveil_decision = {
+	decision_group_type = society
 	picture = {
 		reference = "gfx/interface/illustrations/decisions/decision_major_religion.dds"
 	}
-	decision_group_type = major
 	ai_check_interval = 12
 
 	desc = cult_unveil_decision_desc
@@ -40,7 +40,9 @@ cult_unveil_decision = {
 		}
 		custom_tooltip = {
 			text = cult_unveil_rot_tt
-			global_var:cult_rot >= cult_unveiling_rot_value
+			# The live value, the same number the panel shows (the global is only refreshed yearly and
+			# on map changes, so the two used to disagree).
+			cult_rot_value >= cult_unveiling_rot_value
 		}
 	}
 
@@ -132,6 +134,7 @@ cult_purify_decision = {
 }
 
 cult_offer_to_the_dark_decision = {
+	decision_group_type = society
 	picture = {
 		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
 	}
@@ -156,11 +159,7 @@ cult_offer_to_the_dark_decision = {
 
 	effect = {
 		cult_power_gain_effect = { VALUE = 40 }
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 3
-		}
+		cult_rank_gain_effect = { VALUE = 3 }
 		cult_exposure_gain_effect = { VALUE = 2 }
 		cult_corrupt_soul_effect = yes
 		hidden_effect = {

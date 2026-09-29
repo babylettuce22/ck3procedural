@@ -53,6 +53,7 @@ restor_member_yearly = {
 	}
 	effect = {
 		restor_exposure_decay_effect = yes
+		restor_idle_effect = yes
 	}
 	on_actions = {
 		restor_life_pulse

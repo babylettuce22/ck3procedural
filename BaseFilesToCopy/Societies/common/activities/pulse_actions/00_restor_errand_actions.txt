@@ -162,11 +162,7 @@ restor_errand_apa_child_asked = {
 			tags = { pulse_action }
 			character = scope:first
 			scope:first = {
-				add_trait_xp = {
-					trait = restor_member
-					track = restor_rank
-					value = 1
-				}
+				restor_rank_gain_effect = { VALUE = 1 }
 			}
 		}
 	}

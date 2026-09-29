@@ -411,11 +411,7 @@ restor_gathering_pa_praised = {
 			character = scope:first
 			target = scope:second
 			scope:first = {
-				add_trait_xp = {
-					trait = restor_member
-					track = restor_rank
-					value = 2
-				}
+				restor_rank_gain_effect = { VALUE = 2 }
 			}
 		}
 	}

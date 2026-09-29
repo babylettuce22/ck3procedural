@@ -9,8 +9,8 @@
 
  cult.0910.desc_charged:0 "\n\nThis is the shrine the circle named when it gave you your charge."
  cult.0910.desc_suspected:0 "\n\nPeople at home already whisper about you. They take the pilgrimage for penance, and some of them are relieved."
- cult.0912.c:0 "[cult_defilement_guest.GetFirstName] keeps the priests talking while I work."
- cult.0912.c.tt:0 "Careful and quick at once: the bigger result when you come home, and any trouble at the shrine can still be dealt with quietly. It is [cult_defilement_guest.GetFirstNameNoTooltip] the priests will remember"
+ cult.0912.c:0 "[cult_defilement_guest.GetFirstName] keeps the $cult_priests$ talking while I work."
+ cult.0912.c.tt:0 "Careful and quick at once: the bigger result when you come home, and any trouble at the shrine can still be dealt with quietly. It is [cult_defilement_guest.GetFirstNameNoTooltip] the $cult_priests$ will remember"
  cult.0913.desc_covered:0 "\n\nBut one of the circle serves at this shrine, and has promised that whatever anyone sees here will not be followed up."
  cult.0913.e:0 "Leave it to our friend at the shrine."
  cult.0913.f:0 "Let the blame fall on another pilgrim."
@@ -20,7 +20,7 @@
  cult.1101.t:0 "A Companion on the Road"
  cult.1101.desc:0 "A pilgrim fell in beside you at first light and has not left your side since: [cult_defilement_pilgrim.GetFirstName], walking to [cult_defilement_county.GetNameNoTier] to give thanks for a harvest that did not fail. [cult_defilement_pilgrim.GetSheHe|U] has shared [cult_defilement_pilgrim.GetHerHis] bread with you twice, asked you nothing about yourself, and talks of [cult_faith.HighGodName] the way other people talk about the weather.\n\nNobody on this road looks twice at two pilgrims walking together."
  cult.1101.a:0 "Walk with [cult_defilement_pilgrim.GetHerHim]. I could not ask for a better disguise."
- cult.1101.b:0 "Tell [cult_defilement_pilgrim.GetHerHim] what the priests at the shrine are really like."
+ cult.1101.b:0 "Tell [cult_defilement_pilgrim.GetHerHim] what the $cult_priests$ at the shrine are really like."
  cult.1101.b.doubts:0 "[cult_defilement_pilgrim.GetFirstNameNoTooltip] Goes Quiet"
  cult.1101.b.shocked:0 "[cult_defilement_pilgrim.GetFirstNameNoTooltip] Tells the Others"
  cult.1101.c:0 "Send [cult_defilement_pilgrim.GetHerHim] on ahead. I walk alone."
@@ -91,7 +91,7 @@
 
  cult.1110.t:0 "The Keeper's Vigil"
  cult.1110.desc_named:0 "[cult_defilement_keeper.GetTitledFirstName], who keeps the [cult_faith.HouseOfWorship] at [cult_defilement_county.GetNameNoTier] for [cult_defilement_county.GetHolder.GetTitledFirstName], has begun a vigil at the altar: nine nights on [cult_defilement_keeper.GetHerHis] knees, in thanks for the pilgrim season."
- cult.1110.desc_unnamed:0 "The old priest who keeps the [cult_faith.HouseOfWorship] at [cult_defilement_county.GetNameNoTier] has begun a vigil at the altar: nine nights on his knees, in thanks for the pilgrim season."
+ cult.1110.desc_unnamed:0 "The old $cult_priest_male$ who keeps the [cult_faith.HouseOfWorship] at [cult_defilement_county.GetNameNoTier] has begun a vigil at the altar: nine nights on his knees, in thanks for the pilgrim season."
  cult.1110.desc_end:0 " Nothing happens in the shrine at night that the keeper does not see.\n\nThe circle's work is done at night."
  cult.1110.a:0 "Keep the vigil beside [cult_defilement_keeper.GetHerHim]."
  cult.1110.a_unnamed:0 "Keep the vigil beside him."
@@ -118,10 +118,10 @@
  cult.1112.t:0 "The Relic-Seller"
  cult.1112.desc:0 "Outside the gate of the shrine a man sells relics from a tray: a saint's tooth, a thread from a holy shroud, a splinter of the first altar at [cult_defilement_county.GetNameNoTier]. Every one of them is false, every pilgrim knows it, and he sells them all day.\n\nHe has noticed that you have been round the back of the shrine more than once. He has been looking at you since as though he knows why."
  cult.1112.a:0 "Buy a relic. Every pilgrim takes one home."
- cult.1112.b:0 "Denounce him to the priests as a fraud."
+ cult.1112.b:0 "Denounce him to the $cult_priests$ as a fraud."
  cult.1112.b.driven:0 "He Is Driven Off"
- cult.1112.b.driven.tt:0 "The priests chase the relic-seller from the gate, and thank you for it"
- cult.1112.b.talks:0 "He Tells the Priests About You"
+ cult.1112.b.driven.tt:0 "The $cult_priests$ chase the relic-seller from the gate, and thank you for it"
+ cult.1112.b.talks:0 "He Tells the $cult_priests$ About You"
  cult.1112.c:0 "Buy his silence, and his whole tray."
 
  # ---- cult.1113 ---------------------------------------------------------------------------------
@@ -172,7 +172,7 @@
  # ---- cult.1117 ---------------------------------------------------------------------------------
 
  cult.1117.t:0 "Loose Talk"
- cult.1117.desc:0 "[cult_defilement_guest.GetTitledFirstName] drank too much at the hostel last night and talked. Not about the circle, [cult_defilement_guest.GetSheHe] swears: only about how little [cult_defilement_guest.GetSheHe] thinks of the priests here and their shrine, loudly, in a room full of pilgrims who had come a long way to pray at it.\n\nOne of the lay brothers was sitting at the next table."
+ cult.1117.desc:0 "[cult_defilement_guest.GetTitledFirstName] drank too much at the hostel last night and talked. Not about the circle, [cult_defilement_guest.GetSheHe] swears: only about how little [cult_defilement_guest.GetSheHe] thinks of the $cult_priests$ here and their shrine, loudly, in a room full of pilgrims who had come a long way to pray at it.\n\nOne of the lay brothers was sitting at the next table."
  cult.1117.a:0 "Tell the brothers [cult_defilement_guest.GetSheHe] is my servant, and I answer for [cult_defilement_guest.GetHerHim]."
  cult.1117.b:0 "Let [cult_defilement_guest.GetHerHim] answer for [cult_defilement_guest.GetHerHis] own tongue."
  cult.1117.c:0 "Keep [cult_defilement_guest.GetHerHim] at the hostel until we leave."
@@ -180,7 +180,7 @@
  # ---- cult.1118 ---------------------------------------------------------------------------------
 
  cult.1118.t:0 "The Hunter's Men"
- cult.1118.desc:0 "Men wearing [cult_hunter.GetTitledFirstName]'s colours came to the shrine this morning. They stand at the gate and look at every pilgrim who goes in, and they ask the priests about anyone who has stayed longer than the rest.\n\nYou have stayed longer than the rest."
+ cult.1118.desc:0 "Men wearing [cult_hunter.GetTitledFirstName]'s colours came to the shrine this morning. They stand at the gate and look at every pilgrim who goes in, and they ask the $cult_priests$ about anyone who has stayed longer than the rest.\n\nYou have stayed longer than the rest."
  cult.1118.a:0 "Hide among the sick in the hospice until they go."
  cult.1118.a.gone:0 "They Go"
  cult.1118.a.gone.tt:0 "The hunter's men leave for the next shrine without looking in at the hospice"
@@ -199,7 +199,7 @@
  cult.1119.a.unseen:0 "Nobody Sees"
  cult.1119.a.unseen.tt:0 "The lay brother finds the box empty and blames the last band of pilgrims"
  cult.1119.a.seen:0 "A Pilgrim Sees You"
- cult.1119.b:0 "Fill it, generously, where the priests can see."
+ cult.1119.b:0 "Fill it, generously, where the $cult_priests$ can see."
  cult.1119.c:0 "Drop the circle's token in among the coins."
 
  # ---- cult.1120 ---------------------------------------------------------------------------------
@@ -214,9 +214,9 @@
  cult_defilement_apa_backwards_prayer_title:0 "[first.GetShortUIName|U] Said the Pilgrims' Prayer Backwards"
  cult_defilement_apa_kissed_the_step_title:0 "[first.GetShortUIName|U] Kissed the Worn Step with the Faithful"
  cult_defilement_apa_shared_bread_title:0 "[first.GetShortUIName|U] Shared Bread with the Pilgrims at [province.GetNameNoTooltip]"
- cult_defilement_apa_watched_the_priests_title:0 "[first.GetShortUIName|U] Learned the Hours the Priests Keep"
+ cult_defilement_apa_watched_the_priests_title:0 "[first.GetShortUIName|U] Learned the Hours the $cult_priests$ Keep"
  cult_defilement_apa_lay_brother_title:0 "A Lay Brother Watched [first.GetShortUIName] Too Long"
- cult_defilement_apa_devout_pilgrim_title:0 "The Priests at [province.GetNameNoTooltip] Remarked on [first.GetShortUIName]'s Devotion"
+ cult_defilement_apa_devout_pilgrim_title:0 "The $cult_priests$ at [province.GetNameNoTooltip] Remarked on [first.GetShortUIName]'s Devotion"
  cult_defilement_apa_old_mark_title:0 "[first.GetShortUIName|U] Found an Old Mark of the Circle Cut in the Stone"
  cult_defilement_apa_hymn_title:0 "[first.GetShortUIName|U] Sang the Pilgrim Hymns with Everyone Else"
  cult_defilement_apa_blistered_feet_title:0 "[first.GetShortUIName|U] Has Blistered Feet from the Road"

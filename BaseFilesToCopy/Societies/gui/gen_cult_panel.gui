@@ -14,9 +14,10 @@ types gen_cult_panel {
 		size = { 100% 100% }
 		alwaystransparent = yes
 		layer = windows_layer
-		visible = "[And( Not( IsPauseMenuShown ), And( Or( Not( IsObserver ), GetPlayer.IsValid ), IsDefaultGUIMode ) )]"
+		visible = "[And( Not( IsPauseMenuShown ), And( GetPlayer.IsValid, IsDefaultGUIMode ) )]"
 
 		gen_cult_panel_window = {}
+		gen_cult_people_window = {}
 	}
 
 	type gen_cult_panel_window = window {
@@ -26,7 +27,7 @@ types gen_cult_panel {
 		parentanchor = top|right
 		using = Window_Size_MainTab
 
-		visible = "[And( And( GetScriptedGui('society_panel_window').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), GetScriptedGui('cult_panel_viewer_member').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ), Not( IsRightWindowOpen ) )]"
+		visible = "[And( GetPlayer.IsValid, And( And( GetScriptedGui('society_panel_window').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), GetScriptedGui('cult_panel_viewer_member').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ), Not( IsRightWindowOpen ) ) )]"
 
 		state = {
 			name = _show
@@ -42,6 +43,7 @@ types gen_cult_panel {
 			using = Animation_FadeOut_Quick
 			using = Sound_WindowHide_Standard
 			on_start = "[GetScriptedGui('society_panel_window').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+			on_start = "[GetVariableSystem.Clear( 'cult_people' )]"
 		}
 
 		# The once-a-second refresh while open; see restor_panel_tick in gen_society_panel.gui.
@@ -61,6 +63,27 @@ types gen_cult_panel {
 				name = cult_panel_tick_b
 				duration = 0
 				next = cult_panel_tick_a
+			}
+		}
+
+		# The slow refresh of "Within reach": every fifteen seconds, since it walks the faith's rulers.
+		# The first build is the gather's, on opening.
+		widget = {
+			name = "cult_panel_reach_tick"
+			size = { 0 0 }
+
+			state = {
+				name = cult_panel_reach_tick_a
+				trigger_on_create = yes
+				duration = 15
+				next = cult_panel_reach_tick_b
+				on_finish = "[GetScriptedGui('cult_panel_gather_reach').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+			}
+
+			state = {
+				name = cult_panel_reach_tick_b
+				duration = 0
+				next = cult_panel_reach_tick_a
 			}
 		}
 
@@ -107,11 +130,8 @@ types gen_cult_panel {
 					hbox = {
 						layoutpolicy_horizontal = expanding
 						spacing = 8
-						margin = { 10 6 }
-						background = {
-							texture = "gfx/interface/component_masks/mask_brushed.dds"
-							color = { 0.2 0.2 0.31 0.45 }
-						}
+						margin = { 14 8 }
+						background = { using = Background_Area_Dark }
 
 						cult_person_slot = {
 							visible = "[GetScriptedGui('cult_panel_has_hierophant').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
@@ -131,114 +151,165 @@ types gen_cult_panel {
 						expand = {}
 					}
 
-					# ---- 3 & 4. Support, standing, meters -----------------------------------------------
+					# ---- 3. The rot: how near the church is to falling -----------------------------------
+					# Bars with marked thresholds, laid out as the society panel's (see its notes on the
+					# fixed 510 width and why the meters are anchored rectangles). While hidden only.
+
+					text_label_left = {
+						visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+						text = "CULT_PANEL_CAUSE_HEADER"
+					}
 
 					vbox = {
 						layoutpolicy_horizontal = expanding
-						margin = { 10 6 }
-						spacing = 4
-						background = {
-							texture = "gfx/interface/component_masks/mask_brushed.dds"
-							color = { 0.2 0.2 0.31 0.45 }
-						}
+						margin = { 0 10 }
+						visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+						background = { using = Background_Area_Dark }
 
-						hbox = {
-							layoutpolicy_horizontal = expanding
-							spacing = 6
-							visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-							text_single = {
-								default_format = "#weak"
-								text = "CULT_PANEL_SUPPORT_LABEL"
-							}
-							text_single = {
-								default_format = "#high"
-								text = "[GetPlayer.MakeScope.Var('cult_panel_rot').GetValue|0] / 100"
-							}
-							expand = {}
-							text_single = {
-								default_format = "#weak"
-								text = "CULT_PANEL_LAND_LABEL"
-							}
-							text_single = {
-								default_format = "#high"
-								text = "[GetPlayer.MakeScope.Var('cult_panel_sites').GetValue|0]%"
-							}
-						}
-						cult_para = {
-							visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-							blockoverride "para" { default_format = "#weak" text = "CULT_PANEL_SUPPORT_NEXT" }
-						}
+						vbox = {
+							spacing = 10
 
-						hbox = {
-							layoutpolicy_horizontal = expanding
-							spacing = 14
-							text_single = {
-								default_format = "#weak"
-								text = "CULT_PANEL_STANDING_LABEL"
+							cult_meter = {
+								blockoverride "meter_label" { text = "CULT_PANEL_SUPPORT_LABEL" }
+								blockoverride "meter_value" { raw_text = "[GetPlayer.MakeScope.Var('cult_panel_rot').GetValue|0] / 100" }
+								blockoverride "meter_tt" { tooltip = "CULT_PANEL_SUPPORT_NEXT" }
+								blockoverride "meter_bar" {
+									cult_bar = { value = "[GetPlayer.MakeScope.Var('cult_panel_rot').GetValue]" }
+								}
+								blockoverride "meter_marks" {
+									cult_mark = { position = { 304 -3 } tooltip = "CULT_PANEL_MARK_ROT" }
+								}
 							}
-							cult_rung_chip = {
-								blockoverride "chip_lit" { text = "CULT_RANK_0" visible = "[GetScriptedGui('cult_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
-								blockoverride "chip_dim" { text = "CULT_RANK_0" visible = "[Not( GetScriptedGui('cult_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
-							}
-							cult_rung_chip = {
-								blockoverride "chip_lit" { text = "CULT_RANK_1" visible = "[GetScriptedGui('cult_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
-								blockoverride "chip_dim" { text = "CULT_RANK_1" visible = "[Not( GetScriptedGui('cult_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
-							}
-							cult_rung_chip = {
-								blockoverride "chip_lit" { text = "CULT_RANK_2" visible = "[GetScriptedGui('cult_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
-								blockoverride "chip_dim" { text = "CULT_RANK_2" visible = "[Not( GetScriptedGui('cult_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
-							}
-							cult_rung_chip = {
-								blockoverride "chip_lit" { text = "CULT_RANK_3" visible = "[GetScriptedGui('cult_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
-								blockoverride "chip_dim" { text = "CULT_RANK_3" visible = "[Not( GetScriptedGui('cult_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
-							}
-							expand = {}
-						}
 
-						hbox = {
-							layoutpolicy_horizontal = expanding
-							spacing = 6
-							text_single = {
-								default_format = "#weak"
-								text = "CULT_PANEL_FAVOUR_LABEL"
+							cult_meter = {
+								blockoverride "meter_label" { text = "CULT_PANEL_LAND_LABEL" }
+								blockoverride "meter_value" { raw_text = "[GetPlayer.MakeScope.Var('cult_panel_sites').GetValue|0]%" }
+								blockoverride "meter_tt" { tooltip = "CULT_PANEL_LAND_TT" }
+								blockoverride "meter_bar" {
+									cult_bar = { value = "[GetPlayer.MakeScope.Var('cult_panel_sites').GetValue]" }
+								}
+								blockoverride "meter_marks" {
+									cult_mark = { position = { 253 -3 } tooltip = "CULT_PANEL_MARK_SITES" }
+								}
 							}
-							text_single = {
-								default_format = "#high"
-								text = "[GetPlayer.MakeScope.Var('cult_power').GetValue|0]"
+						}
+					}
+
+					# ---- 4. Your place: rung, dark power, exposure ---------------------------------
+
+					text_label_left = {
+						text = "CULT_PANEL_PLACE_HEADER"
+					}
+
+					vbox = {
+						layoutpolicy_horizontal = expanding
+						margin = { 0 10 }
+						background = { using = Background_Area_Dark }
+
+						vbox = {
+							spacing = 10
+
+							hbox = {
+								spacing = 3
+								tooltip = "CULT_PANEL_STANDING_TT"
+								cult_rung = {
+									blockoverride "rung_text" { text = "CULT_RANK_0" }
+									blockoverride "rung_on" { visible = "[GetScriptedGui('cult_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+									blockoverride "rung_off" { visible = "[Not( GetScriptedGui('cult_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+								}
+								cult_rung = {
+									blockoverride "rung_text" { text = "CULT_RANK_1" }
+									blockoverride "rung_on" { visible = "[GetScriptedGui('cult_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+									blockoverride "rung_off" { visible = "[Not( GetScriptedGui('cult_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+								}
+								cult_rung = {
+									blockoverride "rung_text" { text = "CULT_RANK_2" }
+									blockoverride "rung_on" { visible = "[GetScriptedGui('cult_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+									blockoverride "rung_off" { visible = "[Not( GetScriptedGui('cult_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+								}
+								cult_rung = {
+									blockoverride "rung_text" { text = "CULT_RANK_3" }
+									blockoverride "rung_on" { visible = "[GetScriptedGui('cult_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+									blockoverride "rung_off" { visible = "[Not( GetScriptedGui('cult_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+								}
 							}
-							expand = {}
-							text_single = {
-								default_format = "#weak"
-								text = "CULT_PANEL_EXPOSURE_LABEL"
-								visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-							}
-							text_single = {
-								default_format = "#high"
-								text = "[GetPlayer.MakeScope.Var('cult_exposure').GetValue|0]"
-								visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+
+							widget = {
+								size = { 510 62 }
+
+								# Anchored labels, not a vbox (see the society panel: an anchored vbox fills the
+								# widget in game and centres itself).
+								text_single = {
+									parentanchor = top|left
+									default_format = "#weak"
+									text = "CULT_PANEL_FAVOUR_LABEL"
+									tooltip = "CULT_PANEL_FAVOUR_TT"
+								}
+								text_single = {
+									parentanchor = top|left
+									position = { 0 24 }
+									using = Font_Size_Big
+									default_format = "#high"
+									raw_text = "[GetPlayer.MakeScope.Var('cult_power').GetValue|0]"
+									tooltip = "CULT_PANEL_FAVOUR_TT"
+								}
+
+								# Exposure: 0-40, marked at 15 (whispered about) and 25 (suspected heretic,
+								# the hunter is told). 300 wide, so the marks sit at 111 and 186.
+								cult_meter = {
+									parentanchor = top|right
+									visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+									blockoverride "meter_label" { text = "CULT_PANEL_EXPOSURE_LABEL" }
+									blockoverride "meter_value" { raw_text = "[GetPlayer.MakeScope.Var('cult_exposure').GetValue|0]" }
+									blockoverride "meter_tt" { tooltip = "CULT_PANEL_EXPOSURE_TT" }
+									blockoverride "meter_size" { size = { 300 62 } }
+									blockoverride "meter_bar" {
+										cult_bar_red = {
+											max = 40
+											value = "[GetPlayer.MakeScope.Var('cult_exposure').GetValue]"
+										}
+									}
+									blockoverride "meter_marks" {
+										cult_mark = { position = { 111 -3 } tooltip = "CULT_PANEL_MARK_SUSPECT" }
+										cult_mark = { position = { 186 -3 } tooltip = "CULT_PANEL_MARK_HIGHLY_SUSPECT" }
+									}
+									blockoverride "meter_note" {
+										text_single = {
+											parentanchor = bottom|right
+											default_format = "#weak"
+											text = "CULT_PANEL_EXPOSURE_CALM"
+											visible = "[Not( Or( GetScriptedGui('cult_panel_suspect').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), GetScriptedGui('cult_panel_very_suspect').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ) )]"
+										}
+										text_single = {
+											parentanchor = bottom|right
+											default_format = "#V"
+											text = "CULT_PANEL_EXPOSURE_SUSPECT"
+											visible = "[And( GetScriptedGui('cult_panel_suspect').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), Not( GetScriptedGui('cult_panel_very_suspect').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ) )]"
+										}
+										text_single = {
+											parentanchor = bottom|right
+											default_format = "#X"
+											text = "CULT_PANEL_EXPOSURE_HIGH"
+											visible = "[GetScriptedGui('cult_panel_very_suspect').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+										}
+									}
+								}
 							}
 						}
 					}
 
 					# ---- 5. What to do next --------------------------------------------------------
 
-					text_single = {
-						layoutpolicy_horizontal = expanding
-						margin_top = 4
-						margin_left = 10
-						align = left
-						default_format = "#weak"
+					text_label_left = {
 						text = "CULT_PANEL_NEXT_HEADER"
+						tooltip = "CULT_PANEL_POWERS_HINT"
 					}
 
 					vbox = {
 						layoutpolicy_horizontal = expanding
-						margin = { 10 6 }
-						spacing = 3
-						background = {
-							texture = "gfx/interface/component_masks/mask_brushed.dds"
-							color = { 0.2 0.2 0.31 0.45 }
-						}
+						margin = { 14 8 }
+						spacing = 4
+						background = { using = Background_Area_Dark }
 
 						cult_para = {
 							visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
@@ -247,28 +318,230 @@ types gen_cult_panel {
 
 						cult_action_row = {
 							visible = "[GetScriptedGui('cult_panel_hollow').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							blockoverride "action_tt" { tooltip = "CULT_PANEL_ACTION_UNVEIL_TT" }
 							blockoverride "action_lit" { text = "CULT_PANEL_ACTION_UNVEIL" visible = "[GetScriptedGui('cult_panel_can_unveil').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
 							blockoverride "action_dim" { text = "CULT_PANEL_ACTION_UNVEIL" visible = "[Not( GetScriptedGui('cult_panel_can_unveil').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
 						}
 						cult_action_row = {
 							visible = "[GetScriptedGui('cult_panel_viewer_member').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							blockoverride "action_tt" { tooltip = "CULT_PANEL_ACTION_OFFER_TT" }
 							blockoverride "action_lit" { text = "CULT_PANEL_ACTION_OFFER" visible = "[GetScriptedGui('cult_panel_can_offer').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
 							blockoverride "action_dim" { text = "CULT_PANEL_ACTION_OFFER" visible = "[Not( GetScriptedGui('cult_panel_can_offer').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
 						}
 						cult_action_row = {
+							blockoverride "action_tt" { tooltip = "CULT_PANEL_ACTION_MASS_TT" }
 							blockoverride "action_lit" { text = "CULT_PANEL_ACTION_MASS" visible = "[GetScriptedGui('cult_panel_can_mass').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
 							blockoverride "action_dim" { text = "CULT_PANEL_ACTION_MASS" visible = "[Not( GetScriptedGui('cult_panel_can_mass').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
 						}
 						cult_action_row = {
-							blockoverride "action_lit" { text = "CULT_PANEL_ACTION_DESECRATE" visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
-							blockoverride "action_dim" { text = "CULT_PANEL_ACTION_DESECRATE" visible = "[Not( GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
-						}
-						cult_para = {
-							blockoverride "para" { default_format = "#weak" text = "CULT_PANEL_POWERS_HINT" }
+							blockoverride "action_tt" { tooltip = "CULT_PANEL_ACTION_DESECRATE_TT" }
+							blockoverride "action_lit" { text = "CULT_PANEL_ACTION_DESECRATE" visible = "[GetScriptedGui('cult_panel_can_defile').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+							blockoverride "action_dim" { text = "CULT_PANEL_ACTION_DESECRATE" visible = "[Not( GetScriptedGui('cult_panel_can_defile').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
 						}
 					}
 
-					# ---- 6. The roster --------------------------------------------------------------
+					# ---- 6. People: the lists live in gen_cult_people_window beside the panel ----------
+
+					hbox = {
+						layoutpolicy_horizontal = expanding
+						margin = { 10 4 }
+						spacing = 10
+
+						button_standard = {
+							size = { 200 32 }
+							text = "CULT_PEOPLE_BUTTON_MEMBERS"
+							down = "[GetVariableSystem.HasValue( 'cult_people', 'members' )]"
+							onclick = "[GetVariableSystem.Set( 'cult_people', 'members' )]"
+						}
+						button_standard = {
+							size = { 200 32 }
+							visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							text = "CULT_PEOPLE_BUTTON_REACH"
+							down = "[GetVariableSystem.HasValue( 'cult_people', 'reach' )]"
+							onclick = "[GetVariableSystem.Set( 'cult_people', 'reach' )]"
+						}
+						expand = {}
+					}
+
+					expand = {}
+				}
+			}
+		}
+	}
+
+	# The people window: the circle you know, or those within reach, one at a time. Opens to the left
+	# of the panel from its two buttons; the choice is a GetVariableSystem key (cult_people =
+	# members / reach), cleared by the X, Escape, and the panel closing. The lists themselves are
+	# filled by the panel's gathers, as before.
+	type gen_cult_people_window = window {
+		name = "gen_cult_people_window"
+		movable = no
+		parentanchor = top|right
+		position = { -660 110 }
+		size = { 560 720 }
+		using = Window_Background_Popup
+		using = Window_Decoration
+
+		visible = "[And( GetPlayer.IsValid, And( And( GetVariableSystem.Exists( 'cult_people' ), GetScriptedGui('society_panel_window').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ), And( GetScriptedGui('cult_panel_viewer_member').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), Not( IsRightWindowOpen ) ) ) )]"
+
+		state = {
+			name = _show
+			using = Animation_FadeIn_Quick
+		}
+
+		state = {
+			name = _hide
+			using = Animation_FadeOut_Quick
+		}
+
+		margin_widget = {
+			size = { 100% 100% }
+			margin_top = 10
+			margin_bottom = 15
+
+			widget = {
+				size = { 100% 100% }
+
+				vbox = {
+					using = Window_Margins
+					spacing = 6
+
+					header_standard = {
+						layoutpolicy_horizontal = expanding
+						blockoverride "header_text" {
+							text = "CULT_PEOPLE_TITLE"
+						}
+						blockoverride "button_close" {
+							onclick = "[GetVariableSystem.Clear( 'cult_people' )]"
+							shortcut = "close_window"
+						}
+					}
+
+					hbox = {
+						layoutpolicy_horizontal = expanding
+						margin = { 10 0 }
+						spacing = 10
+						visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+
+						button_standard_small = {
+							text = "CULT_PEOPLE_BUTTON_MEMBERS"
+							down = "[GetVariableSystem.HasValue( 'cult_people', 'members' )]"
+							onclick = "[GetVariableSystem.Set( 'cult_people', 'members' )]"
+						}
+						button_standard_small = {
+							text = "CULT_PEOPLE_BUTTON_REACH"
+							down = "[GetVariableSystem.HasValue( 'cult_people', 'reach' )]"
+							onclick = "[GetVariableSystem.Set( 'cult_people', 'reach' )]"
+						}
+						expand = {}
+					}
+
+					# ---- Within reach -----------------------------------------------------------------
+					# Who the viewer could approach, and what the circle has learned of them -- never
+					# how they would answer. The button opens the real interactions (filter_tags =
+					# cult_recruitment), so their cooldowns and failures are the interactions' own.
+
+					vbox = {
+						layoutpolicy_horizontal = expanding
+						layoutpolicy_vertical = expanding
+						visible = "[And( GetVariableSystem.HasValue( 'cult_people', 'reach' ), GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
+
+						text_single = {
+							layoutpolicy_horizontal = expanding
+							margin_top = 4
+							margin_left = 10
+							align = left
+							default_format = "#weak"
+							text = "CULT_PANEL_REACH_HEADER"
+							tooltip = "CULT_PANEL_REACH_HINT"
+						}
+
+						scrollbox = {
+							layoutpolicy_horizontal = expanding
+							layoutpolicy_vertical = expanding
+
+							blockoverride "scrollbox_content" {
+								vbox = {
+									layoutpolicy_horizontal = expanding
+									spacing = 4
+									datamodel = "[GetPlayer.MakeScope.GetList( 'cult_panel_candidates' )]"
+
+									item = {
+										hbox = {
+											datacontext = "[Scope.Char]"
+											layoutpolicy_horizontal = expanding
+											spacing = 10
+											margin_right = 12
+											background = {
+												texture = "gfx/interface/component_masks/mask_brushed.dds"
+												color = { 0.2 0.2 0.31 0.45 }
+											}
+
+											portrait_head_small = {}
+
+											vbox = {
+												layoutpolicy_horizontal = expanding
+												text_single = {
+													layoutpolicy_horizontal = expanding
+													align = left
+													default_format = "#high"
+													text = "[Character.GetName]"
+												}
+												text_single = {
+													layoutpolicy_horizontal = expanding
+													align = left
+													default_format = "#weak"
+													visible = "[Character.IsRuler]"
+													text = "[Character.GetPrimaryTitle.GetNameNoTooltip]"
+												}
+												text_single = {
+													layoutpolicy_horizontal = expanding
+													align = left
+													default_format = "#weak"
+													visible = "[GetScriptedGui('cult_panel_reach_chaplain').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+													text = "CULT_REACH_CHAPLAIN"
+												}
+											}
+
+											vbox = {
+												text_single = {
+													align = right
+													default_format = "#high"
+													text = "CULT_REACH_SYMPATHETIC"
+													visible = "[GetScriptedGui('cult_panel_reach_sympathetic').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+												}
+												text_single = {
+													align = right
+													default_format = "#weak"
+													text = "CULT_REACH_REFUSED"
+													visible = "[GetScriptedGui('cult_panel_reach_refused').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+												}
+											}
+
+											button_standard_small = {
+												size = { 90 25 }
+												text = "CULT_REACH_APPROACH"
+												tooltip = "CULT_REACH_APPROACH_TT"
+												onclick = "[ToggleFilteredCharacterInteractionMenu( Character.Self, 'cult_recruitment' )]"
+											}
+										}
+									}
+								}
+							}
+
+							blockoverride "scrollbox_empty" {
+								visible = "[IsDataModelEmpty( GetPlayer.MakeScope.GetList( 'cult_panel_candidates' ) )]"
+								text = "CULT_PANEL_REACH_EMPTY"
+							}
+						}
+					}
+
+					# ---- The roster -------------------------------------------------------------------
+
+					vbox = {
+						layoutpolicy_horizontal = expanding
+						layoutpolicy_vertical = expanding
+						visible = "[GetVariableSystem.HasValue( 'cult_people', 'members' )]"
 
 					text_single = {
 						layoutpolicy_horizontal = expanding
@@ -375,6 +648,7 @@ types gen_cult_panel {
 							text = "CULT_PANEL_ROSTER_EMPTY"
 						}
 					}
+					}
 				}
 			}
 		}
@@ -399,18 +673,72 @@ types gen_cult_panel {
 		}
 	}
 
-	# An hbox, not a widget: a widget's autoresize does not measure its text children, so every chip
-	# came out zero-wide and the four rungs printed on top of each other. ignoreinvisible so the hidden
-	# half does not hold a gap.
-	type cult_rung_chip = hbox {
-		ignoreinvisible = yes
+	# The meter, bars, marks and rung plates are the society panel's (gen_society_panel.gui explains
+	# the fixed rectangle and the mark arithmetic). Two differences: the cult's bars fill green, which
+	# reads as rot, and its lit rung is crimson rather than gold.
+	type cult_meter = widget {
+		block "meter_size" { size = { 510 40 } }
 		text_single = {
-			default_format = "#high"
-			block "chip_lit" {}
+			parentanchor = top|left
+			default_format = "#weak"
+			block "meter_label" {}
+			block "meter_tt" {}
 		}
 		text_single = {
+			parentanchor = top|right
+			default_format = "#high"
+			block "meter_value" {}
+			block "meter_tt" {}
+		}
+		widget = {
+			position = { 0 25 }
+			size = { 100% 14 }
+			block "meter_tt" {}
+			block "meter_bar" {}
+			block "meter_marks" {}
+		}
+		block "meter_note" {}
+	}
+
+	type cult_bar = progressbar_green {
+		size = { 100% 100% }
+		min = 0
+		max = 100
+	}
+
+	type cult_bar_red = progressbar_red {
+		size = { 100% 100% }
+		min = 0
+		max = 100
+	}
+
+	type cult_mark = progress_threshold {
+		size = { 4 20 }
+		alwaystransparent = no
+	}
+
+	type cult_rung = widget {
+		size = { 125 28 }
+		background = { using = Background_Area_Dark }
+		widget = {
+			size = { 100% 100% }
+			block "rung_on" {}
+			background = {
+				texture = "gfx/interface/colors/white.dds"
+				color = { 0.7 0.2 0.25 0.3 }
+			}
+		}
+		text_single = {
+			parentanchor = center
+			default_format = "#high"
+			block "rung_on" {}
+			block "rung_text" {}
+		}
+		text_single = {
+			parentanchor = center
 			default_format = "#weak"
-			block "chip_dim" {}
+			block "rung_off" {}
+			block "rung_text" {}
 		}
 	}
 
@@ -421,15 +749,19 @@ types gen_cult_panel {
 		ignoreinvisible = yes
 		text_single = {
 			layoutpolicy_horizontal = expanding
+			max_width = 520
 			align = left
 			default_format = "#high"
 			block "action_lit" {}
+			block "action_tt" {}
 		}
 		text_single = {
 			layoutpolicy_horizontal = expanding
+			max_width = 520
 			align = left
 			default_format = "#weak"
 			block "action_dim" {}
+			block "action_tt" {}
 		}
 	}
 

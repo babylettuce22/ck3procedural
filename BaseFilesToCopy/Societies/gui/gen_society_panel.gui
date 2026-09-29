@@ -29,9 +29,10 @@ types gen_society_panel {
 		size = { 100% 100% }
 		alwaystransparent = yes
 		layer = windows_layer
-		visible = "[And( Not( IsPauseMenuShown ), And( Or( Not( IsObserver ), GetPlayer.IsValid ), IsDefaultGUIMode ) )]"
+		visible = "[And( Not( IsPauseMenuShown ), And( GetPlayer.IsValid, IsDefaultGUIMode ) )]"
 
 		gen_society_panel_window = {}
+		gen_restor_people_window = {}
 	}
 
 	type gen_society_panel_window = window {
@@ -41,7 +42,7 @@ types gen_society_panel {
 		parentanchor = top|right
 		using = Window_Size_MainTab
 
-		visible = "[And( And( GetScriptedGui('society_panel_window').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), GetScriptedGui('restor_panel_viewer_member').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ), Not( IsRightWindowOpen ) )]"
+		visible = "[And( GetPlayer.IsValid, And( And( GetScriptedGui('society_panel_window').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), GetScriptedGui('restor_panel_viewer_member').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ), Not( IsRightWindowOpen ) ) )]"
 
 		state = {
 			name = _show
@@ -57,6 +58,7 @@ types gen_society_panel {
 			using = Animation_FadeOut_Quick
 			using = Sound_WindowHide_Standard
 			on_start = "[GetScriptedGui('society_panel_window').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+			on_start = "[GetVariableSystem.Clear( 'restor_people' )]"
 		}
 
 		# The refresh. The gather in _show runs once, on opening, so anything that changed while the
@@ -81,6 +83,27 @@ types gen_society_panel {
 				name = restor_panel_tick_b
 				duration = 0
 				next = restor_panel_tick_a
+			}
+		}
+
+		# The slow refresh of "Within reach": every fifteen seconds, since it walks every ruler. The
+		# first build is the gather's, on opening.
+		widget = {
+			name = "restor_panel_reach_tick"
+			size = { 0 0 }
+
+			state = {
+				name = restor_panel_reach_tick_a
+				trigger_on_create = yes
+				duration = 15
+				next = restor_panel_reach_tick_b
+				on_finish = "[GetScriptedGui('restor_panel_gather_reach').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+			}
+
+			state = {
+				name = restor_panel_reach_tick_b
+				duration = 0
+				next = restor_panel_reach_tick_a
 			}
 		}
 
@@ -132,11 +155,8 @@ types gen_society_panel {
 					hbox = {
 						layoutpolicy_horizontal = expanding
 						spacing = 8
-						margin = { 10 6 }
-						background = {
-							texture = "gfx/interface/component_masks/mask_brushed.dds"
-							color = { 0.2 0.2 0.31 0.45 }
-						}
+						margin = { 14 8 }
+						background = { using = Background_Area_Dark }
 
 						restor_person_slot = {
 							visible = "[GetScriptedGui('restor_panel_has_pretender').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
@@ -161,123 +181,198 @@ types gen_society_panel {
 						expand = {}
 					}
 
-					# ---- 3 & 4. Support, standing, meters -----------------------------------------------
+					# ---- 3. The cause: how near the crown is ---------------------------------------------
+					# Bars rather than "27 / 100". Each marker is where a door opens (its tooltip says
+					# which), so the distance is seen, not worked out. Underground only: once the crown is
+					# won, none of these numbers decide anything.
+					#
+					# The card is expanding; what is in it is not. It sits in a vbox as wide as its
+					# widest child (the 510 bars), which the card centres, so every bar, label and value
+					# lines up on the same two edges.
+
+					text_label_left = {
+						visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+						text = "RESTOR_PANEL_CAUSE_HEADER"
+					}
 
 					vbox = {
 						layoutpolicy_horizontal = expanding
-						margin = { 10 6 }
-						spacing = 4
-						background = {
-							texture = "gfx/interface/component_masks/mask_brushed.dds"
-							color = { 0.2 0.2 0.31 0.45 }
-						}
+						margin = { 0 10 }
+						visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+						background = { using = Background_Area_Dark }
 
-						hbox = {
-							layoutpolicy_horizontal = expanding
-							spacing = 6
-							visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-							text_single = {
-								default_format = "#weak"
-								text = "RESTOR_PANEL_SUPPORT_LABEL"
-							}
-							text_single = {
-								default_format = "#high"
-								text = "[GetPlayer.MakeScope.Var('restor_panel_support').GetValue|0] / 100"
-							}
-							expand = {}
-							text_single = {
-								default_format = "#weak"
-								text = "RESTOR_PANEL_LAND_LABEL"
-							}
-							text_single = {
-								default_format = "#high"
-								text = "[GetPlayer.MakeScope.Var('restor_panel_share').GetValue|0]%"
-							}
-							expand = {}
-							text_single = {
-								default_format = "#weak"
-								text = "RESTOR_PANEL_WAR_CHEST_LABEL"
-							}
-							text_single = {
-								default_format = "#high"
-								text = "[GetPlayer.MakeScope.Var('restor_panel_war_chest').GetValue|0]"
-							}
-						}
-						restor_para = {
-							visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
-							blockoverride "para" { default_format = "#weak" text = "RESTOR_PANEL_SUPPORT_NEXT" }
-						}
+						vbox = {
+							spacing = 10
 
-						hbox = {
-							layoutpolicy_horizontal = expanding
-							spacing = 14
-							text_single = {
-								default_format = "#weak"
-								text = "RESTOR_PANEL_STANDING_LABEL"
+							restor_meter = {
+								blockoverride "meter_label" { text = "RESTOR_PANEL_SUPPORT_LABEL" }
+								blockoverride "meter_value" { raw_text = "[GetPlayer.MakeScope.Var('restor_panel_support').GetValue|0] / 100" }
+								blockoverride "meter_tt" { tooltip = "RESTOR_PANEL_SUPPORT_NEXT" }
+								blockoverride "meter_bar" {
+									restor_bar = { value = "[GetPlayer.MakeScope.Var('restor_panel_support').GetValue]" }
+								}
+								blockoverride "meter_marks" {
+									restor_mark = { position = { 202 -3 } tooltip = "RESTOR_PANEL_MARK_SUPPORT" }
+								}
 							}
-							restor_rung_chip = {
-								blockoverride "chip_lit" { text = "RESTOR_RANK_0" visible = "[GetScriptedGui('restor_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
-								blockoverride "chip_dim" { text = "RESTOR_RANK_0" visible = "[Not( GetScriptedGui('restor_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
-							}
-							restor_rung_chip = {
-								blockoverride "chip_lit" { text = "RESTOR_RANK_1" visible = "[GetScriptedGui('restor_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
-								blockoverride "chip_dim" { text = "RESTOR_RANK_1" visible = "[Not( GetScriptedGui('restor_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
-							}
-							restor_rung_chip = {
-								blockoverride "chip_lit" { text = "RESTOR_RANK_2" visible = "[GetScriptedGui('restor_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
-								blockoverride "chip_dim" { text = "RESTOR_RANK_2" visible = "[Not( GetScriptedGui('restor_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
-							}
-							restor_rung_chip = {
-								blockoverride "chip_lit" { text = "RESTOR_RANK_3" visible = "[GetScriptedGui('restor_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
-								blockoverride "chip_dim" { text = "RESTOR_RANK_3" visible = "[Not( GetScriptedGui('restor_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
-							}
-							expand = {}
-						}
 
-						hbox = {
-							layoutpolicy_horizontal = expanding
-							spacing = 6
-							text_single = {
-								default_format = "#weak"
-								text = "RESTOR_PANEL_FAVOUR_LABEL"
+							restor_meter = {
+								blockoverride "meter_label" { text = "RESTOR_PANEL_LAND_LABEL" }
+								blockoverride "meter_value" { raw_text = "[GetPlayer.MakeScope.Var('restor_panel_share').GetValue|0]%" }
+								blockoverride "meter_tt" { tooltip = "RESTOR_PANEL_LAND_TT" }
+								blockoverride "meter_bar" {
+									restor_bar = { value = "[GetPlayer.MakeScope.Var('restor_panel_share').GetValue]" }
+								}
+								blockoverride "meter_marks" {
+									restor_mark = { position = { 126 -3 } tooltip = "RESTOR_PANEL_MARK_LAND" }
+								}
 							}
-							text_single = {
-								default_format = "#high"
-								text = "[GetPlayer.MakeScope.Var('restor_favour').GetValue|0]"
+
+							# Text and icon anchored straight onto the widget. An hbox anchored right|vcenter
+							# here ignored the anchor in game, filled the row and centred its contents, which
+							# put the gold icon on top of the label. The value's width is unknown, so the icon
+							# sits a fixed 60px in from the right, room for five digits.
+							widget = {
+								size = { 510 24 }
+								tooltip = "RESTOR_PANEL_WAR_CHEST_TT"
+								text_single = {
+									parentanchor = left|vcenter
+									default_format = "#weak"
+									text = "RESTOR_PANEL_WAR_CHEST_LABEL"
+								}
+								icon = {
+									parentanchor = right|vcenter
+									position = { -60 0 }
+									size = { 22 22 }
+									texture = "gfx/interface/icons/icon_gold.dds"
+								}
+								text_single = {
+									parentanchor = right|vcenter
+									default_format = "#high"
+									raw_text = "[GetPlayer.MakeScope.Var('restor_panel_war_chest').GetValue|0]"
+								}
 							}
-							expand = {}
-							text_single = {
-								default_format = "#weak"
-								text = "RESTOR_PANEL_EXPOSURE_LABEL"
-								visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+						}
+					}
+
+					# ---- 4. Your place: rung, favour, exposure -------------------------------------
+
+					text_label_left = {
+						text = "RESTOR_PANEL_PLACE_HEADER"
+					}
+
+					vbox = {
+						layoutpolicy_horizontal = expanding
+						margin = { 0 10 }
+						background = { using = Background_Area_Dark }
+
+						vbox = {
+							spacing = 10
+
+							# The ladder: four plates, the viewer's lit. Only the current rung has a
+							# scripted_gui, so rungs passed and rungs ahead look alike.
+							hbox = {
+								spacing = 3
+								tooltip = "RESTOR_PANEL_STANDING_TT"
+								restor_rung = {
+									blockoverride "rung_text" { text = "RESTOR_RANK_0" }
+									blockoverride "rung_on" { visible = "[GetScriptedGui('restor_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+									blockoverride "rung_off" { visible = "[Not( GetScriptedGui('restor_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+								}
+								restor_rung = {
+									blockoverride "rung_text" { text = "RESTOR_RANK_1" }
+									blockoverride "rung_on" { visible = "[GetScriptedGui('restor_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+									blockoverride "rung_off" { visible = "[Not( GetScriptedGui('restor_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+								}
+								restor_rung = {
+									blockoverride "rung_text" { text = "RESTOR_RANK_2" }
+									blockoverride "rung_on" { visible = "[GetScriptedGui('restor_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+									blockoverride "rung_off" { visible = "[Not( GetScriptedGui('restor_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+								}
+								restor_rung = {
+									blockoverride "rung_text" { text = "RESTOR_RANK_3" }
+									blockoverride "rung_on" { visible = "[GetScriptedGui('restor_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+									blockoverride "rung_off" { visible = "[Not( GetScriptedGui('restor_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+								}
 							}
-							text_single = {
-								default_format = "#high"
-								text = "[GetPlayer.MakeScope.Var('restor_exposure').GetValue|0]"
-								visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+
+							widget = {
+								size = { 510 62 }
+
+								# Favour is a currency with no ceiling, so it is a number, drawn large. Two
+								# anchored labels, not a vbox: an anchored vbox here filled the widget in game
+								# and centred itself over the exposure meter.
+								text_single = {
+									parentanchor = top|left
+									default_format = "#weak"
+									text = "RESTOR_PANEL_FAVOUR_LABEL"
+									tooltip = "RESTOR_PANEL_FAVOUR_TT"
+								}
+								text_single = {
+									parentanchor = top|left
+									position = { 0 24 }
+									using = Font_Size_Big
+									default_format = "#high"
+									raw_text = "[GetPlayer.MakeScope.Var('restor_favour').GetValue|0]"
+									tooltip = "RESTOR_PANEL_FAVOUR_TT"
+								}
+
+								# Exposure: 0-40, marked at 15 (under suspicion) and 25 (highly suspect,
+								# the usurper is told). 300 wide, so the marks sit at 111 and 186.
+								restor_meter = {
+									parentanchor = top|right
+									visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+									blockoverride "meter_label" { text = "RESTOR_PANEL_EXPOSURE_LABEL" }
+									blockoverride "meter_value" { raw_text = "[GetPlayer.MakeScope.Var('restor_exposure').GetValue|0]" }
+									blockoverride "meter_tt" { tooltip = "RESTOR_PANEL_EXPOSURE_TT" }
+									blockoverride "meter_size" { size = { 300 62 } }
+									blockoverride "meter_bar" {
+										restor_bar_red = {
+											max = 40
+											value = "[GetPlayer.MakeScope.Var('restor_exposure').GetValue]"
+										}
+									}
+									blockoverride "meter_marks" {
+										restor_mark = { position = { 111 -3 } tooltip = "RESTOR_PANEL_MARK_SUSPECT" }
+										restor_mark = { position = { 186 -3 } tooltip = "RESTOR_PANEL_MARK_HIGHLY_SUSPECT" }
+									}
+									blockoverride "meter_note" {
+										text_single = {
+											parentanchor = bottom|right
+											default_format = "#weak"
+											text = "RESTOR_PANEL_EXPOSURE_CALM"
+											visible = "[Not( Or( GetScriptedGui('restor_panel_suspect').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), GetScriptedGui('restor_panel_very_suspect').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ) )]"
+										}
+										text_single = {
+											parentanchor = bottom|right
+											default_format = "#V"
+											text = "RESTOR_PANEL_EXPOSURE_SUSPECT"
+											visible = "[And( GetScriptedGui('restor_panel_suspect').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), Not( GetScriptedGui('restor_panel_very_suspect').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ) )]"
+										}
+										text_single = {
+											parentanchor = bottom|right
+											default_format = "#X"
+											text = "RESTOR_PANEL_EXPOSURE_HIGH"
+											visible = "[GetScriptedGui('restor_panel_very_suspect').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+										}
+									}
+								}
 							}
 						}
 					}
 
 					# ---- 5. What to do next --------------------------------------------------------
 
-					text_single = {
-						layoutpolicy_horizontal = expanding
-						margin_top = 4
-						margin_left = 10
-						align = left
-						default_format = "#weak"
+					text_label_left = {
 						text = "RESTOR_PANEL_NEXT_HEADER"
+						tooltip = "RESTOR_PANEL_POWERS_HINT"
 					}
 
 					vbox = {
 						layoutpolicy_horizontal = expanding
-						margin = { 10 6 }
-						spacing = 3
-						background = {
-							texture = "gfx/interface/component_masks/mask_brushed.dds"
-							color = { 0.2 0.2 0.31 0.45 }
-						}
+						margin = { 14 8 }
+						spacing = 4
+						background = { using = Background_Area_Dark }
 
 						restor_para = {
 							visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
@@ -286,33 +381,236 @@ types gen_society_panel {
 
 						restor_action_row = {
 							visible = "[GetScriptedGui('restor_panel_viewer_is_pretender').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							blockoverride "action_tt" { tooltip = "RESTOR_PANEL_ACTION_CROWN_TT" }
 							blockoverride "action_lit" { text = "RESTOR_PANEL_ACTION_CROWN" visible = "[GetScriptedGui('restor_panel_can_crown').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
 							blockoverride "action_dim" { text = "RESTOR_PANEL_ACTION_CROWN" visible = "[Not( GetScriptedGui('restor_panel_can_crown').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
 						}
 						restor_action_row = {
 							visible = "[GetScriptedGui('restor_panel_viewer_is_pretender').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							blockoverride "action_tt" { tooltip = "RESTOR_PANEL_ACTION_RAISE_TT" }
 							blockoverride "action_lit" { text = "RESTOR_PANEL_ACTION_RAISE" visible = "[GetScriptedGui('restor_panel_can_raise').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
 							blockoverride "action_dim" { text = "RESTOR_PANEL_ACTION_RAISE" visible = "[Not( GetScriptedGui('restor_panel_can_raise').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
 						}
 						restor_action_row = {
 							visible = "[Not( GetScriptedGui('restor_panel_viewer_is_pretender').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
+							blockoverride "action_tt" { tooltip = "RESTOR_PANEL_ACTION_GIVE_TT" }
 							blockoverride "action_lit" { text = "RESTOR_PANEL_ACTION_GIVE" visible = "[GetScriptedGui('restor_panel_can_give').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
 							blockoverride "action_dim" { text = "RESTOR_PANEL_ACTION_GIVE" visible = "[Not( GetScriptedGui('restor_panel_can_give').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
 						}
 						restor_action_row = {
+							blockoverride "action_tt" { tooltip = "RESTOR_PANEL_ACTION_GATHER_TT" }
 							blockoverride "action_lit" { text = "RESTOR_PANEL_ACTION_GATHER" visible = "[GetScriptedGui('restor_panel_can_gather').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
 							blockoverride "action_dim" { text = "RESTOR_PANEL_ACTION_GATHER" visible = "[Not( GetScriptedGui('restor_panel_can_gather').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
 						}
 						restor_action_row = {
-							blockoverride "action_lit" { text = "RESTOR_PANEL_ACTION_ERRAND" visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
-							blockoverride "action_dim" { text = "RESTOR_PANEL_ACTION_ERRAND" visible = "[Not( GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
-						}
-						restor_para = {
-							blockoverride "para" { default_format = "#weak" text = "RESTOR_PANEL_POWERS_HINT" }
+							blockoverride "action_tt" { tooltip = "RESTOR_PANEL_ACTION_ERRAND_TT" }
+							blockoverride "action_lit" { text = "RESTOR_PANEL_ACTION_ERRAND" visible = "[GetScriptedGui('restor_panel_can_errand').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+							blockoverride "action_dim" { text = "RESTOR_PANEL_ACTION_ERRAND" visible = "[Not( GetScriptedGui('restor_panel_can_errand').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
 						}
 					}
 
-					# ---- 6. The roster --------------------------------------------------------------
+					# ---- 6. People: the lists live in gen_restor_people_window beside the panel --------
+
+					hbox = {
+						layoutpolicy_horizontal = expanding
+						margin = { 10 4 }
+						spacing = 10
+
+						button_standard = {
+							size = { 200 32 }
+							text = "RESTOR_PEOPLE_BUTTON_MEMBERS"
+							down = "[GetVariableSystem.HasValue( 'restor_people', 'members' )]"
+							onclick = "[GetVariableSystem.Set( 'restor_people', 'members' )]"
+						}
+						button_standard = {
+							size = { 200 32 }
+							visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							text = "RESTOR_PEOPLE_BUTTON_REACH"
+							down = "[GetVariableSystem.HasValue( 'restor_people', 'reach' )]"
+							onclick = "[GetVariableSystem.Set( 'restor_people', 'reach' )]"
+						}
+						expand = {}
+					}
+
+					expand = {}
+				}
+			}
+		}
+	}
+
+	# The people window: the sworn you know, or those within reach, one at a time. Opens to the left
+	# of the panel from its two buttons; the choice is a GetVariableSystem key (restor_people =
+	# members / reach), cleared by the X, Escape, and the panel closing. The lists themselves are
+	# filled by the panel's gathers, as before.
+	type gen_restor_people_window = window {
+		name = "gen_restor_people_window"
+		movable = no
+		parentanchor = top|right
+		position = { -660 110 }
+		size = { 560 720 }
+		using = Window_Background_Popup
+		using = Window_Decoration
+
+		visible = "[And( And( GetVariableSystem.Exists( 'restor_people' ), GetScriptedGui('society_panel_window').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ), And( GetScriptedGui('restor_panel_viewer_member').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), Not( IsRightWindowOpen ) ) )]"
+
+		state = {
+			name = _show
+			using = Animation_FadeIn_Quick
+		}
+
+		state = {
+			name = _hide
+			using = Animation_FadeOut_Quick
+		}
+
+		margin_widget = {
+			size = { 100% 100% }
+			margin_top = 10
+			margin_bottom = 15
+
+			widget = {
+				size = { 100% 100% }
+
+				vbox = {
+					using = Window_Margins
+					spacing = 6
+
+					header_standard = {
+						layoutpolicy_horizontal = expanding
+						blockoverride "header_text" {
+							text = "RESTOR_PEOPLE_TITLE"
+						}
+						blockoverride "button_close" {
+							onclick = "[GetVariableSystem.Clear( 'restor_people' )]"
+							shortcut = "close_window"
+						}
+					}
+
+					hbox = {
+						layoutpolicy_horizontal = expanding
+						margin = { 10 0 }
+						spacing = 10
+						visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+
+						button_standard_small = {
+							text = "RESTOR_PEOPLE_BUTTON_MEMBERS"
+							down = "[GetVariableSystem.HasValue( 'restor_people', 'members' )]"
+							onclick = "[GetVariableSystem.Set( 'restor_people', 'members' )]"
+						}
+						button_standard_small = {
+							text = "RESTOR_PEOPLE_BUTTON_REACH"
+							down = "[GetVariableSystem.HasValue( 'restor_people', 'reach' )]"
+							onclick = "[GetVariableSystem.Set( 'restor_people', 'reach' )]"
+						}
+						expand = {}
+					}
+
+					# ---- Within reach -----------------------------------------------------------------
+					# Who the viewer could approach, and what the order has learned of them -- never how
+					# they would answer. The button opens the real interactions (filter_tags =
+					# restor_recruitment), so their cooldowns and failures are the interactions' own.
+
+					vbox = {
+						layoutpolicy_horizontal = expanding
+						layoutpolicy_vertical = expanding
+						visible = "[And( GetVariableSystem.HasValue( 'restor_people', 'reach' ), GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]"
+
+						text_single = {
+							layoutpolicy_horizontal = expanding
+							margin_top = 4
+							margin_left = 10
+							align = left
+							default_format = "#weak"
+							text = "RESTOR_PANEL_REACH_HEADER"
+							tooltip = "RESTOR_PANEL_REACH_HINT"
+						}
+
+						scrollbox = {
+							layoutpolicy_horizontal = expanding
+							layoutpolicy_vertical = expanding
+
+							blockoverride "scrollbox_content" {
+								vbox = {
+									layoutpolicy_horizontal = expanding
+									spacing = 4
+									datamodel = "[GetPlayer.MakeScope.GetList( 'restor_panel_candidates' )]"
+
+									item = {
+										hbox = {
+											datacontext = "[Scope.Char]"
+											layoutpolicy_horizontal = expanding
+											spacing = 10
+											margin_right = 12
+											background = {
+												texture = "gfx/interface/component_masks/mask_brushed.dds"
+												color = { 0.2 0.2 0.31 0.45 }
+											}
+
+											portrait_head_small = {}
+
+											vbox = {
+												layoutpolicy_horizontal = expanding
+												text_single = {
+													layoutpolicy_horizontal = expanding
+													align = left
+													default_format = "#high"
+													text = "[Character.GetName]"
+												}
+												text_single = {
+													layoutpolicy_horizontal = expanding
+													align = left
+													default_format = "#weak"
+													visible = "[Character.IsRuler]"
+													text = "[Character.GetPrimaryTitle.GetNameNoTooltip]"
+												}
+												text_single = {
+													layoutpolicy_horizontal = expanding
+													align = left
+													default_format = "#weak"
+													visible = "[GetScriptedGui('restor_panel_reach_blood').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+													text = "RESTOR_REACH_BLOOD"
+												}
+											}
+
+											vbox = {
+												text_single = {
+													align = right
+													default_format = "#high"
+													text = "RESTOR_REACH_SYMPATHETIC"
+													visible = "[GetScriptedGui('restor_panel_reach_sympathetic').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+												}
+												text_single = {
+													align = right
+													default_format = "#weak"
+													text = "RESTOR_REACH_REFUSED"
+													visible = "[GetScriptedGui('restor_panel_reach_refused').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+												}
+											}
+
+											button_standard_small = {
+												size = { 90 25 }
+												text = "RESTOR_REACH_APPROACH"
+												tooltip = "RESTOR_REACH_APPROACH_TT"
+												onclick = "[ToggleFilteredCharacterInteractionMenu( Character.Self, 'restor_recruitment' )]"
+											}
+										}
+									}
+								}
+							}
+
+							blockoverride "scrollbox_empty" {
+								visible = "[IsDataModelEmpty( GetPlayer.MakeScope.GetList( 'restor_panel_candidates' ) )]"
+								text = "RESTOR_PANEL_REACH_EMPTY"
+							}
+						}
+					}
+
+					# ---- The roster -------------------------------------------------------------------
+
+					vbox = {
+						layoutpolicy_horizontal = expanding
+						layoutpolicy_vertical = expanding
+						visible = "[GetVariableSystem.HasValue( 'restor_people', 'members' )]"
 
 					text_single = {
 						layoutpolicy_horizontal = expanding
@@ -419,6 +717,7 @@ types gen_society_panel {
 							text = "RESTOR_PANEL_ROSTER_EMPTY"
 						}
 					}
+					}
 				}
 			}
 		}
@@ -443,37 +742,112 @@ types gen_society_panel {
 		}
 	}
 
-	# An hbox, not a widget: a widget's autoresize does not measure its text children, so every chip
-	# came out zero-wide and the four rungs printed on top of each other. ignoreinvisible so the hidden
-	# half does not hold a gap.
-	type restor_rung_chip = hbox {
-		ignoreinvisible = yes
+	# A labelled meter: label top-left, value top-right over the bar's end, the bar under them, and
+	# room at the bottom for an optional note (anchored bottom|right by the use site).
+	#
+	# A fixed rectangle with anchored children rather than stacked boxes, on purpose: the value has
+	# to sit exactly over the bar's right end, and an expanding row inside a box decides its width
+	# from the parent, which put the value at the card's edge instead. The threshold marks are
+	# placed in pixels for the same reason: a mark at value v on a bar w wide goes at
+	# x = w * v / max, less half the mark's 4px.
+	type restor_meter = widget {
+		block "meter_size" { size = { 510 40 } }
 		text_single = {
-			default_format = "#high"
-			block "chip_lit" {}
+			parentanchor = top|left
+			default_format = "#weak"
+			block "meter_label" {}
+			block "meter_tt" {}
 		}
 		text_single = {
-			default_format = "#weak"
-			block "chip_dim" {}
+			parentanchor = top|right
+			default_format = "#high"
+			block "meter_value" {}
+			block "meter_tt" {}
+		}
+		widget = {
+			position = { 0 25 }
+			size = { 100% 14 }
+			block "meter_tt" {}
+			block "meter_bar" {}
+			block "meter_marks" {}
+		}
+		block "meter_note" {}
+	}
+
+	# Vanilla's standard bar with a black empty half instead of its red one: red reads as "bad", and
+	# support not yet gathered is not bad, only not yet.
+	type restor_bar = progressbar_standard {
+		size = { 100% 100% }
+		min = 0
+		max = 100
+		blockoverride "progress_textures" {
+			progresstexture = "gfx/interface/progressbars/progress_standard.dds"
+			noprogresstexture = "gfx/interface/progressbars/progress_black.dds"
 		}
 	}
 
-	# An action the viewer can take, lit when they can take it now and dimmed with its requirement
-	# when they cannot. The text carries both halves; the colour says which applies.
+	# Exposure fills red: this one is bad.
+	type restor_bar_red = progressbar_red {
+		size = { 100% 100% }
+		min = 0
+		max = 100
+	}
+
+	# Vanilla's threshold tick (raids, sieges). Not alwaystransparent, so its tooltip can say what
+	# happens at that point.
+	type restor_mark = progress_threshold {
+		size = { 4 20 }
+		alwaystransparent = no
+	}
+
+	# One plate of the rung ladder. rung_on shows the lit plate and bright name; rung_off the dim name.
+	type restor_rung = widget {
+		size = { 125 28 }
+		background = { using = Background_Area_Dark }
+		widget = {
+			size = { 100% 100% }
+			block "rung_on" {}
+			background = {
+				texture = "gfx/interface/colors/white.dds"
+				color = { 0.85 0.7 0.4 0.28 }
+			}
+		}
+		text_single = {
+			parentanchor = center
+			default_format = "#high"
+			block "rung_on" {}
+			block "rung_text" {}
+		}
+		text_single = {
+			parentanchor = center
+			default_format = "#weak"
+			block "rung_off" {}
+			block "rung_text" {}
+		}
+	}
+
+	# An action the viewer can take, lit when they can take it now and dimmed when they cannot. The
+	# row is the action's name; what it needs is the tooltip ("action_tt"). max_width because a vbox
+	# grows to its widest child: a row with its requirement written out ran wider than the column and
+	# pushed every right-aligned value on the panel under the HUD's icon bar.
 	type restor_action_row = hbox {
 		layoutpolicy_horizontal = expanding
 		ignoreinvisible = yes
 		text_single = {
 			layoutpolicy_horizontal = expanding
+			max_width = 520
 			align = left
 			default_format = "#high"
 			block "action_lit" {}
+			block "action_tt" {}
 		}
 		text_single = {
 			layoutpolicy_horizontal = expanding
+			max_width = 520
 			align = left
 			default_format = "#weak"
 			block "action_dim" {}
+			block "action_tt" {}
 		}
 	}
 

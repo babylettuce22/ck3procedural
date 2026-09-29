@@ -169,22 +169,14 @@ cult_mass_invoke_effect = {
 			every_attending_character = {
 				limit = { has_trait = cult_member }
 				cult_power_gain_effect = { VALUE = $POWER$ }
-				add_trait_xp = {
-					trait = cult_member
-					track = cult_rank
-					value = $XP$
-				}
+				cult_rank_gain_effect = { VALUE = $XP$ }
 				cult_corrupt_soul_effect = yes
 			}
 		}
 	}
 	else = {
 		cult_power_gain_effect = { VALUE = $POWER$ }
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = $XP$
-		}
+		cult_rank_gain_effect = { VALUE = $XP$ }
 		cult_corrupt_soul_effect = yes
 	}
 }

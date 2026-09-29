@@ -261,7 +261,8 @@ restor_charge_can_reach_county_trigger = {
 				}
 			}
 		}
-		location.county ?= { this = root.var:restor_charge_county }
+		exists = location.county
+		location.county = root.var:restor_charge_county
 	}
 }
 

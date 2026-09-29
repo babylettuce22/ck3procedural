@@ -55,3 +55,30 @@ restor_recruit_public_candidate_trigger = {
 	NOT = { this = global_var:restor_crown.holder }
 	any_liege_or_above = { this = global_var:restor_crown.holder }
 }
+
+# THIS belongs on the panel's "Within reach" list for scope:restor_viewer: someone the viewer could
+# sound out today, from the pool the AI draws on (the old house's blood, or a lord of its people or
+# its lands). Gates only -- the same ones the interactions check. Nothing here reads pull or push,
+# and a recent refusal does not hide anyone: the row says so instead, so the list never hints at fit.
+restor_panel_candidate_trigger = {
+	is_adult = yes
+	is_imprisoned = no
+	NOT = { this = scope:restor_viewer }
+	NOT = { has_trait = restor_member }
+	NOT = { has_trait = cult_member }
+	NOT = { restor_is_usurper_trigger = yes }
+	OR = {
+		restor_of_the_blood_trigger = yes
+		AND = {
+			is_landed = yes
+			OR = {
+				AND = {
+					exists = global_var:restor_seat
+					culture = global_var:restor_seat.culture
+				}
+				restor_holds_crown_land_trigger = yes
+			}
+		}
+	}
+	in_diplomatic_range = scope:restor_viewer
+}

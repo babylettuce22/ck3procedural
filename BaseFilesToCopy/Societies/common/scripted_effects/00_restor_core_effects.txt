@@ -11,9 +11,17 @@
 # Safe to call on somebody already sworn: their standing is raised to at least $RANK$ and nothing
 # they have earned is wiped.
 restor_swear_in_effect = {
+	# One society per character, enforced here so no path can make a double member: recruitment and
+	# succession already refuse the Faithless, and anything that slips past them lets the old oath
+	# lapse when the new one is taken.
+	if = {
+		limit = { has_trait = cult_member }
+		cult_leave_effect = yes
+	}
 	if = {
 		limit = { NOT = { has_trait = restor_member } }
 		add_trait = restor_member
+		restor_mark_service_effect = yes
 	}
 
 	# Raise to AT LEAST $RANK$, never add it: this runs on people already sworn (a new Keeper, a new
@@ -103,6 +111,21 @@ restor_leave_effect = {
 	if = {
 		limit = { has_character_modifier = restor_order_member_modifier }
 		remove_character_modifier = restor_order_member_modifier
+	}
+	remove_variable = restor_charge_giver
+
+	# Nobody outside the order leads it. A departing Keeper is replaced now, from a roster they have
+	# already left; a departing heir hands the claim on down the house. Whatever the reason for
+	# leaving -- expulsion, another oath, an event -- this is the one place that settles it, and the
+	# yearly repair (restor_yearly_effect) backs it up.
+	if = {
+		limit = { restor_is_keeper_trigger = yes }
+		restor_keeper_succession_effect = yes
+	}
+	if = {
+		limit = { restor_is_pretender_trigger = yes }
+		save_scope_as = restor_old_pretender
+		restor_pretender_succession_effect = yes
 	}
 }
 
@@ -373,13 +396,15 @@ restor_favour_gain_effect = {
 		add = $VALUE$
 	}
 	custom_tooltip = restor_favour_gain_tt
+	hidden_effect = { restor_mark_service_effect = yes }
 	hidden_effect = {
 		if = {
 			limit = { is_ai = no }
+			save_scope_as = restor_meter_owner
 			send_interface_toast = {
 				type = event_toast_effect_good
 				title = restor_favour_toast
-				left_icon = root
+				left_icon = scope:restor_meter_owner
 			}
 		}
 	}
@@ -429,10 +454,11 @@ restor_exposure_gain_effect = {
 		hidden_effect = {
 			if = {
 				limit = { is_ai = no }
+				save_scope_as = restor_meter_owner
 				send_interface_toast = {
 					type = event_toast_effect_bad
 					title = restor_exposure_toast
-					left_icon = root
+					left_icon = scope:restor_meter_owner
 				}
 			}
 			restor_exposure_check_effect = yes
@@ -477,6 +503,8 @@ restor_exposure_check_effect = {
 		if = {
 			limit = { NOT = { has_character_modifier = restor_highly_suspect_modifier } }
 			add_character_modifier = restor_highly_suspect_modifier
+			# Disgrace: the Sworn keep their distance from someone the usurper is watching.
+			restor_rank_loss_effect = { VALUE = 10 }
 			trigger_event = { id = restor.0302 days = 1 }
 			if = {
 				limit = {
@@ -815,16 +843,23 @@ restor_yearly_effect = {
 				OR = {
 					NOT = { exists = global_var:restor_keeper }
 					global_var:restor_keeper = { is_alive = no }
+					global_var:restor_keeper = { NOT = { has_trait = restor_member } }
 				}
 			}
 			restor_keeper_succession_effect = yes
 		}
 
-		# The same repair for the pretender, should one ever die without on_death reaching us.
+		# The same repair for the pretender, should one ever die without on_death reaching us, or
+		# leave the order some way that skipped restor_leave_effect.
 		if = {
 			limit = {
 				exists = global_var:restor_pretender
-				global_var:restor_pretender = { is_alive = no }
+				global_var:restor_pretender = {
+					OR = {
+						is_alive = no
+						NOT = { has_trait = restor_member }
+					}
+				}
 			}
 			global_var:restor_pretender = { save_scope_as = restor_old_pretender }
 			restor_pretender_succession_effect = yes
@@ -846,6 +881,178 @@ restor_yearly_effect = {
 				}
 				set_global_variable = { name = restor_crown_whole value = yes }
 				global_var:restor_crown.holder = { trigger_event = { id = restor.0710 days = 1 } }
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  Standing that falls
+# =====================================================================================
+#
+# CK2's societies let rank slide as well as climb, and so do these. Every way down goes through
+# restor_rank_loss_effect, so a player is always told when a loss costs them a rung:
+#
+#   failing    a charge run out (-10) or turned down (-5): restor_charge_failed_standing_effect
+#   the Keeper a second charge run out within ten years costs a rung more (-15), unless the Keeper
+#              is a player -- a player Keeper demotes by hand instead (restor_demote_interaction)
+#   idleness   Rung 1 and up with no favour earned in four years slip 5 a year (restor_idle_effect);
+#              earning any keeps the flag restor_served fresh (restor_mark_service_effect)
+#   disgrace   becoming highly suspect (-10, restor_exposure_check_effect)
+#
+# The Keeper and the heir are exempt: office sets standing (restor_make_*_effect raises it to its floor).
+
+restor_rank_loss_effect = {
+	if = {
+		limit = {
+			has_trait = restor_member
+			NOT = { restor_is_keeper_trigger = yes }
+			NOT = { restor_is_pretender_trigger = yes }
+		}
+		save_scope_value_as = {
+			name = restor_rung_before
+			value = restor_rung_value
+		}
+		save_scope_value_as = {
+			name = restor_rank_delta
+			value = $VALUE$
+		}
+		custom_tooltip = restor_rank_loss_tt
+		hidden_effect = {
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = -$VALUE$
+			}
+			if = {
+				limit = {
+					is_ai = no
+					restor_rung_value < scope:restor_rung_before
+				}
+				save_scope_as = restor_rung_loser
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor_rung_lost_toast
+					left_icon = scope:restor_rung_loser
+					if = {
+						limit = { restor_rung_value = 0 }
+						custom_tooltip = restor_rung_lost_0_tt
+					}
+					else_if = {
+						limit = { restor_rung_value = 1 }
+						custom_tooltip = restor_rung_lost_1_tt
+					}
+					else = {
+						custom_tooltip = restor_rung_lost_2_tt
+					}
+				}
+			}
+		}
+	}
+}
+
+# Earning favour is service: it keeps standing from slipping for four years. Called by the favour
+# gain effect and by swearing in, so a new member starts with a clean slate.
+restor_mark_service_effect = {
+	if = {
+		limit = { has_character_flag = restor_served }
+		remove_character_flag = restor_served
+	}
+	add_character_flag = {
+		flag = restor_served
+		years = 4
+	}
+}
+
+# Yearly, from the member pulse. Rung 1 and up, and nothing earned in four years: standing slips.
+restor_idle_effect = {
+	if = {
+		limit = {
+			restor_rank_at_least_trigger = { RANK = 25 }
+			NOT = { has_character_flag = restor_served }
+		}
+		if = {
+			limit = { is_ai = no }
+			save_scope_as = restor_idler
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = restor_idle_toast
+				left_icon = scope:restor_idler
+				custom_tooltip = restor_idle_tt
+				restor_rank_loss_effect = { VALUE = 5 }
+			}
+		}
+		else = {
+			restor_rank_loss_effect = { VALUE = 5 }
+		}
+	}
+}
+
+# A charge run out. A second within ten years and an AI Keeper takes a rung more.
+restor_charge_failed_standing_effect = {
+	restor_rank_loss_effect = { VALUE = 10 }
+	if = {
+		limit = {
+			has_character_flag = restor_failed_charge_recently
+			exists = global_var:restor_keeper
+			global_var:restor_keeper = { is_ai = yes }
+		}
+		custom_tooltip = restor_demoted_for_failure_tt
+		restor_rank_loss_effect = { VALUE = 15 }
+	}
+	if = {
+		limit = { has_character_flag = restor_failed_charge_recently }
+		remove_character_flag = restor_failed_charge_recently
+	}
+	add_character_flag = {
+		flag = restor_failed_charge_recently
+		years = 10
+	}
+}
+
+# THIS gains $VALUE$ standing (rank track XP). Every rise outside swearing in goes through here -- the
+# mirror of restor_rank_loss_effect -- so a player is told when a rise earns a rung. Swearing in and
+# the office floors (restor_swear_in_effect's climb) stay silent: those come with their own events.
+restor_rank_gain_effect = {
+	if = {
+		limit = { has_trait = restor_member }
+		save_scope_value_as = {
+			name = restor_rung_before
+			value = restor_rung_value
+		}
+		save_scope_value_as = {
+			name = restor_rank_delta
+			value = $VALUE$
+		}
+		custom_tooltip = restor_rank_gain_tt
+		hidden_effect = {
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = $VALUE$
+			}
+			if = {
+				limit = {
+					is_ai = no
+					restor_rung_value > scope:restor_rung_before
+				}
+				save_scope_as = restor_rung_gainer
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor_rung_gained_toast
+					left_icon = scope:restor_rung_gainer
+					if = {
+						limit = { restor_rung_value = 3 }
+						custom_tooltip = restor_rung_gained_3_tt
+					}
+					else_if = {
+						limit = { restor_rung_value = 2 }
+						custom_tooltip = restor_rung_gained_2_tt
+					}
+					else = {
+						custom_tooltip = restor_rung_gained_1_tt
+					}
+				}
 			}
 		}
 	}

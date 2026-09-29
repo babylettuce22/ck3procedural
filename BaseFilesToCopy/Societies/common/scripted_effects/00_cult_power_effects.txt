@@ -23,11 +23,7 @@ cult_power_priest_sworn_effect = {
 		}
 	}
 	scope:cult_priest_turner = {
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 5
-		}
+		cult_rank_gain_effect = { VALUE = 5 }
 		hidden_effect = {
 			trigger_event = { id = cult.0401 days = 3 }
 		}
@@ -117,11 +113,7 @@ cult_power_see_sworn_effect = {
 	}
 	custom_tooltip = cult_power_see_captured_tt
 	scope:cult_whisperer = {
-		add_trait_xp = {
-			trait = cult_member
-			track = cult_rank
-			value = 15
-		}
+		cult_rank_gain_effect = { VALUE = 15 }
 		hidden_effect = {
 			trigger_event = { id = cult.0440 days = 3 }
 		}

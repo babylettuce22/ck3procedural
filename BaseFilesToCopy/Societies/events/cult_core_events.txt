@@ -183,7 +183,16 @@ cult.0601 = {
 cult.0602 = {
 	type = character_event
 	title = cult.0602.t
-	desc = cult.0602.desc
+	# A faith with no head is captured through its holy places instead (cult_church_captured_trigger).
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_head }
+				desc = cult.0602.desc
+			}
+			desc = cult.0602.desc_headless
+		}
+	}
 	theme = witchcraft
 	left_portrait = {
 		character = root
@@ -199,8 +208,14 @@ cult.0602 = {
 	}
 	immediate = { cult_save_scopes_effect = yes }
 	option = {
+		trigger = { exists = scope:cult_head }
 		name = cult.0602.a
 		custom_tooltip = cult.0602.a.tt
+	}
+	option = {
+		trigger = { NOT = { exists = scope:cult_head } }
+		name = cult.0602.b
+		custom_tooltip = cult.0602.b.tt
 	}
 }
 

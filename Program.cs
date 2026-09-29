@@ -33,6 +33,7 @@ public static class Program
         string? previewTarget = null;
         string previewOut = Path.Combine(AppContext.BaseDirectory, "gui-preview.html");
         int previewRows = 1;
+        var previewLoc = new List<string>();
         bool fitHeightmap = false;
         bool allowUnverifiedSize = false;
 
@@ -100,6 +101,13 @@ public static class Program
                 // every question worth asking about it.
                 case "--preview-rows" when i + 1 < args.Length:
                     previewRows = int.Parse(args[++i]);
+                    break;
+
+                // A further localisation root, read after the mod so its keys win; repeatable. For
+                // a set whose loc is not in a generated mod yet, or a placeholder folder standing
+                // in for generated nouns (with an optional samples.txt for datafunction values).
+                case "--preview-loc" when i + 1 < args.Length:
+                    previewLoc.Add(args[++i]);
                     break;
 
                 // Diagnostic, not a generation mode: checks that attach-composed weapons land where
@@ -484,16 +492,24 @@ public static class Program
                         args[++i], System.Globalization.CultureInfo.InvariantCulture);
                     break;
 
-                // Explicitly enables the generated Restorationists and inversion cult (already on by
+                // Explicitly enables the generated Restorationists and inversion cult (off by
                 // default). See BaseFilesToCopy/Societies/README.txt.
                 case "--societies":
                     cfg.EnableSocieties = true;
                     break;
 
+                // The only way to turn them off while the setting is hidden from the generator.
+                case "--no-societies":
+                    cfg.EnableSocieties = false;
+                    break;
+
                 // The hand-written prototype the society system grew out of, kept as a reference
-                // (BaseFilesToCopy/SocietyPrototype). Ignored whenever EnableSocieties is true, including its default value.
+                // (BaseFilesToCopy/SocietyPrototype). It ships only when the generated set does not,
+                // so asking for it turns the generated set off -- otherwise, with societies on by
+                // default, this flag could never do anything.
                 case "--society-prototype":
                     cfg.EnableSocietyPrototype = true;
+                    cfg.EnableSocieties = false;
                     break;
 
                 // Native rank titles and realm names (MapGen/NativeTitles.cs), both off by default.
@@ -808,7 +824,7 @@ public static class Program
             }
 
             return Core.GuiPreviewCommand.Run(previewTarget, options.GameDir, modDir, previewOut,
-                previewRows);
+                previewRows, previewLoc);
         }
 
         if (guiOnly)
@@ -834,6 +850,12 @@ public static class Program
             // of the things --gui-only exists to iterate on without regenerating a world.
             GuiWriter.WriteAll(modDir, options.GameDir, cfg.EnableSocieties || cfg.EnableSocietyPrototype, cfg.EnableWilderness,
                 cfg.EnableChronicle);
+
+            // 3. The debug panel's Events tab. The panel itself needs world facts and is not
+            //    rewritten here, but the tab is its own .gui type and loc, so it can be. Skipped on a
+            //    mod with no panel, which has nothing to put the tab in.
+            if (File.Exists(Path.Combine(modDir, "gui", "gen_debug_panel.gui")))
+                DebugPanel.WriteEventsTab(modDir, options.GameDir);
 
             return 0;
         }

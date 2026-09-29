@@ -19,6 +19,9 @@ restor_sound_out_interaction = {
 
 	desc = restor_sound_out_interaction_desc
 
+	# The society panel's "Within reach" list opens the interaction menu filtered to this tag.
+	filter_tags = { restor_recruitment }
+
 	use_diplomatic_range = yes
 	auto_accept = yes
 
@@ -140,6 +143,9 @@ restor_offer_oath_interaction = {
 	common_interaction = no
 
 	desc = restor_offer_oath_interaction_desc
+
+	# The society panel's "Within reach" list opens the interaction menu filtered to this tag.
+	filter_tags = { restor_recruitment }
 
 	use_diplomatic_range = yes
 	auto_accept = yes

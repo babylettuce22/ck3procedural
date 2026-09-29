@@ -14,24 +14,44 @@
 # effect's own toast.
 
 cult_their_exposure_gain_effect = {
-	$WHO$ = { save_scope_as = cult_exposure_target }
+	$WHO$ = {
+		save_scope_as = cult_exposure_target
+		save_scope_as = cult_exposure_veiled
+	}
 	save_scope_value_as = {
 		name = cult_their_delta
 		value = $VALUE$
 	}
-	custom_tooltip = cult_their_exposure_gain_tt
+	# Named only to a reader who already knows they are sworn; to anyone else, a line that reads the
+	# same whether or not they are (cult_membership_known_to_root_trigger).
+	if = {
+		limit = { scope:cult_exposure_target = { cult_membership_known_to_root_trigger = yes } }
+		custom_tooltip = cult_their_exposure_gain_tt
+	}
+	else = {
+		custom_tooltip = cult_their_exposure_gain_veiled_tt
+	}
 	hidden_effect = {
 		scope:cult_exposure_target = { cult_exposure_gain_effect = { VALUE = $VALUE$ } }
 	}
 }
 
 cult_their_exposure_loss_effect = {
-	$WHO$ = { save_scope_as = cult_exposure_target }
+	$WHO$ = {
+		save_scope_as = cult_exposure_target
+		save_scope_as = cult_exposure_veiled
+	}
 	save_scope_value_as = {
 		name = cult_their_delta
 		value = $VALUE$
 	}
-	custom_tooltip = cult_their_exposure_loss_tt
+	if = {
+		limit = { scope:cult_exposure_target = { cult_membership_known_to_root_trigger = yes } }
+		custom_tooltip = cult_their_exposure_loss_tt
+	}
+	else = {
+		custom_tooltip = cult_their_exposure_loss_veiled_tt
+	}
 	hidden_effect = {
 		scope:cult_exposure_target = { cult_exposure_loss_effect = { VALUE = $VALUE$ } }
 	}

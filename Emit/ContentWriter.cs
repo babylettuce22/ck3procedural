@@ -491,7 +491,7 @@ public static partial class ContentWriter
         // events live in BaseFilesToCopy and arrive on the line above. Moved back before it, the
         // scan finds only the generated handful and the tab quietly loses fifty buttons — no error,
         // no warning, just a shorter list than there should be. See Emit/GuiWindows/ShippedEvents.cs.
-        Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, DebugFacts(
+        Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, gameDir, DebugFacts(
             modDir, cfg, provinces, empires, counties, cultures, faiths, wilderness, worldCenters,
             retinues, landCount, riverCount, baronyCount, artifactCount, struggleCount,
             writeHistory, azgaar, runStarted)));

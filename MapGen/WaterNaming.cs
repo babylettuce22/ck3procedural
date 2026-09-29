@@ -15,7 +15,8 @@ public static class WaterNaming
         List<Title> empires,
         Rng rng,
         List<MajorRiverPath>? majorRivers = null,
-        AzgaarImport? azgaar = null)
+        AzgaarImport? azgaar = null,
+        List<(string Name, List<int> Zones)>? bodies = null)
     {
         var names = new Dictionary<int, string>();
         var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -32,7 +33,7 @@ public static class WaterNaming
             majorRivers, names, usedNames, rng, azgaar);
 
         // 2. Name Sea Zones by Agglomerative Clustering
-        NameSeaZones(provinces, riverCount, byId, adjacency, cultures, empires, names, usedNames, rng, azgaar);
+        NameSeaZones(provinces, riverCount, byId, adjacency, cultures, empires, names, usedNames, rng, azgaar, bodies);
 
         return names;
     }
@@ -231,7 +232,8 @@ public static class WaterNaming
         Dictionary<int, string> names,
         HashSet<string> usedNames,
         Rng rng,
-        AzgaarImport? azgaar)
+        AzgaarImport? azgaar,
+        List<(string Name, List<int> Zones)>? bodies = null)
     {
         int totalProvinces = provinces.Count;
         if (totalProvinces <= riverCount) return;
@@ -326,6 +328,9 @@ public static class WaterNaming
                     ? $"{bodyType} {word}"
                     : $"{word} {bodyType}";
             }
+
+            // Each body whole, under its own name before the qualifiers: what the flat map letters.
+            bodies?.Add((bodyFullName, cluster));
 
             if (cluster.Count == 1)
             {

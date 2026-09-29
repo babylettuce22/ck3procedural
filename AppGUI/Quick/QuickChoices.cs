@@ -76,6 +76,17 @@ public sealed class QuickChoices
 
     public QuickChoices Clone() => (QuickChoices)MemberwiseClone();
 
+    /// <summary>Every choice on one line, for the run log and the record's header.</summary>
+    public string Summary()
+    {
+        var (w, h) = Pixels;
+        return $"Quick world: {MapType}, seed {Seed}, relief {Relief}, mountains {Mountains}, "
+               + $"size {Size} ({w}x{h}), era {Era}, climate {Climate}, density {Density}, "
+               + $"people {People}, fantasy {FantasyInWorld}, politics {Politics}, rulers {Rulers}, "
+               + $"wilderness {(Wilderness ? "on" : "off")}, wars {(Wars ? "on" : "off")}, "
+               + $"native titles {(NativeTitles ? "on" : "off")}, native realms {(NativeRealms ? "on" : "off")}";
+    }
+
     /// <summary>
     /// The fantasy the world is actually made with. Vanilla's cultures are human by construction,
     /// and the generator refuses races on them (see Generator), so a world of real CK3 people is

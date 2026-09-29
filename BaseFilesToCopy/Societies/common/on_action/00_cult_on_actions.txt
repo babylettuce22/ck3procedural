@@ -43,6 +43,7 @@ cult_member_yearly = {
 	}
 	effect = {
 		cult_exposure_decay_effect = yes
+		cult_idle_effect = yes
 	}
 	on_actions = {
 		cult_life_pulse

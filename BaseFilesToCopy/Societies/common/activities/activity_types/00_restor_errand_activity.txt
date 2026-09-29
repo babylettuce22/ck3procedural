@@ -76,6 +76,8 @@ activity_restor_errand = {
 
 	can_always_plan = no
 
+	# The society panel's light for this activity mirrors these gates and is_shown's:
+	# restor_can_host_errand_trigger in 00_restor_triggers.txt. Change them together.
 	can_start_showing_failures_only = {
 		is_available_adult = yes
 		NOT = { is_activity_type_on_cooldown = activity_restor_errand }
@@ -171,7 +173,11 @@ activity_restor_errand = {
 
 	is_location_valid = {
 		has_province_owner = yes
-		county ?= {
+		# `exists` first, not `county ?=`: the filter is `all`, and some owned provinces have no
+		# county -- `?=` still logged "returned an unset scope" for each, ~350 lines every time the
+		# planner opened (error.log, 2026-09-29).
+		exists = county
+		county = {
 			restor_crown_county_trigger = yes
 			title_province = root
 		}
@@ -182,7 +188,8 @@ activity_restor_errand = {
 		value = 10
 		if = {
 			limit = {
-				county ?= {
+				exists = county
+				county = {
 					NOT = { has_county_modifier = restor_county_stirred }
 				}
 			}
@@ -195,7 +202,8 @@ activity_restor_errand = {
 					var:restor_charge = flag:stir
 					has_variable = restor_charge_county
 				}
-				county ?= { this = scope:host.var:restor_charge_county }
+				exists = county
+				county = scope:host.var:restor_charge_county
 			}
 			add = 100
 		}
@@ -315,11 +323,7 @@ activity_restor_errand = {
 	on_complete = {
 		if = {
 			limit = { NOT = { this = scope:host } }
-			add_trait_xp = {
-				trait = restor_member
-				track = restor_rank
-				value = 4
-			}
+			restor_rank_gain_effect = { VALUE = 4 }
 			restor_exposure_gain_effect = { VALUE = 1 }
 		}
 	}

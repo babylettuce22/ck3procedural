@@ -459,11 +459,7 @@ restor_shelter_heir_interaction = {
 			save_scope_as = restor_host
 			add_courtier = scope:recipient
 			restor_favour_gain_effect = { VALUE = 30 }
-			add_trait_xp = {
-				trait = restor_member
-				track = restor_rank
-				value = 5
-			}
+			restor_rank_gain_effect = { VALUE = 5 }
 		}
 		scope:recipient = {
 			add_opinion = {
@@ -624,11 +620,7 @@ restor_grant_heir_seat_interaction = {
 			}
 			resolve_title_and_vassal_change = scope:change
 			restor_favour_gain_effect = { VALUE = 80 }
-			add_trait_xp = {
-				trait = restor_member
-				track = restor_rank
-				value = 20
-			}
+			restor_rank_gain_effect = { VALUE = 20 }
 		}
 		scope:recipient = {
 			add_opinion = {
