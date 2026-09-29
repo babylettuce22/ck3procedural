@@ -669,11 +669,15 @@ public static class TerrainPalette
                     // farmland family. Both were previously unreachable: medi_dry_mud sat in the
                     // drylands accent list, which this case never consults, and plains_01_dry_mud
                     // only appeared under Floodplains, which nothing assigns.
+                    //
+                    // The third slot fades across its own cuts like the fourth: grassy, drylands_01
+                    // and cracked are far apart in colour, and swapped at full weight they were the
+                    // largest source of hard material swaps left in drylands (measured 2026-09-27).
                     return Mix(
                         lowA, (byte)((90 + nA * 40) * confA),
                         lowB, (byte)((75 + (1.0 - nA) * 40) * confB),
                         nB < 0.4 ? DrylandsGrassy : nB < 0.75 ? Drylands01 : DrylandsCracked,
-                            (byte)(50 + nB * 30),
+                            (byte)((50 + nB * 30) * CutConfidence(nB, 0.4, 0.75)),
                         nC < 0.3 ? DesertCracked : nC < 0.5 ? MediDryMud
                             : nC < 0.68 ? PlainsDryMud : dry.Hills,
                         (byte)((25 + nC * 25) * Math.Min(CutConfidence(nC, 0.3),

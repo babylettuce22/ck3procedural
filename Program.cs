@@ -137,7 +137,7 @@ public static class Program
                 // Reads CK3's debug.log and reports why counties ruined: cause mix at the fall, the
                 // same mix for streaks that recovered instead, and how close those got. Generates
                 // nothing and needs no heightmap. The lines it reads are written only under
-                // -debug_mode; see MapGen/RuinLogReport.cs and the Ruins mod's telemetry section.
+                // -debug_mode; see MapGen/History/RuinLogReport.cs and the Ruins mod's telemetry section.
                 case "--ruinlog":
                 {
                     if (i + 1 >= args.Length || args[i + 1].StartsWith("--"))
@@ -373,12 +373,12 @@ public static class Program
                         args[++i].Replace("-", "").Replace("_", ""), ignoreCase: true);
                     break;
 
-                // CK3's months and AD rather than the world's own. See MapGen/WorldCalendar.cs.
+                // CK3's months and AD rather than the world's own. See MapGen/History/WorldCalendar.cs.
                 case "--no-calendar":
                     cfg.CalendarEnabled = false;
                     break;
 
-                // Pen work on the parchment flat map, on by default. See Emit/FlatmapInk.cs.
+                // Pen work on the parchment flat map, on by default. See Emit/Map/FlatmapInk.cs.
                 case "--flatmap-roads":
                     cfg.FlatmapRoads = true;
                     break;
@@ -406,7 +406,7 @@ public static class Program
                     cfg.SurroundDepthTest = false;
                     break;
 
-                // Tucks table props under the paper map, on by default. See Emit/TablePropTucker.cs.
+                // Tucks table props under the paper map, on by default. See Emit/Map/TablePropTucker.cs.
                 case "--table-props-off-map":
                     cfg.MapTablePropsOffMap = true;
                     break;
@@ -432,7 +432,7 @@ public static class Program
 
                 // Where the world's peoples and faiths come from: generated (procedural, the
                 // default) or CK3's own settled onto the generated map (vanilla). See
-                // MapConfig.ContentSourceMode and MapGen/VanillaIdentities.cs.
+                // MapConfig.ContentSourceMode and MapGen/Vanilla/VanillaIdentities.cs.
                 case "--content" when i + 1 < args.Length:
                 {
                     string value = args[++i].Replace("-", "").Replace("_", "");
@@ -466,7 +466,7 @@ public static class Program
                     break;
 
                 // Leaves the Dynastic Cycle unstarted. Its whole effect is one history entry not
-                // being written (Emit/DynasticCycleWriter.cs), so it pairs with the flag above for
+                // being written (Emit/Gameplay/DynasticCycleWriter.cs), so it pairs with the flag above for
                 // the same reason: a diff of two runs shows exactly what the situation costs.
                 case "--no-dynastic-cycle":
                     cfg.DynasticCycle = false;
@@ -512,7 +512,7 @@ public static class Program
                     cfg.EnableSocieties = false;
                     break;
 
-                // Native rank titles and realm names (MapGen/NativeTitles.cs), both off by default.
+                // Native rank titles and realm names (MapGen/Titles/NativeTitles.cs), both off by default.
                 case "--native-titles":
                     cfg.NativeRankTitles = true;
                     break;

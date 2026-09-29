@@ -1,4 +1,4 @@
-// Emit/MusicWriter.cs
+// Emit/Culture/MusicWriter.cs
 namespace Ck3MapGen.Emit;
 
 using Ck3MapGen.Io;
@@ -9,9 +9,9 @@ using Ck3MapGen.Io;
 ///
 /// <code>
 /// Related:
-///   MapGen/ClothingClimate.cs     why a culture wears what it wears (climate fit, kin first)
-///   Emit/HegemonyFlavourWriter    the same token-rewrite technique, on the hegemony's art
-///   Emit/DynasticCycleWriter      the situation whose music branch this removes
+///   MapGen/Peoples/ClothingClimate.cs     why a culture wears what it wears (climate fit, kin first)
+///   Emit/Gameplay/HegemonyFlavourWriter   the same token-rewrite technique, on the hegemony's art
+///   Emit/Gameplay/DynasticCycleWriter     the situation whose music branch this removes
 /// </code>
 ///
 /// ---- How CK3 picks music ----

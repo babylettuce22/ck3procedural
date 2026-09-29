@@ -1,4 +1,4 @@
-// Emit/CoatOfArmsWriter.cs
+// Emit/Culture/CoatOfArmsWriter.cs
 namespace Ck3MapGen.Emit;
 
 using System.Globalization;

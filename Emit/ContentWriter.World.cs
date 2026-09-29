@@ -114,7 +114,7 @@ public sealed record WorldModel
     public required Dictionary<int, string> WaterNames { get; init; }
 
     /// <summary>The named places shaped by the land, for the modifiers, regions and flat-map
-    /// lettering. See MapGen/Landmarks.cs.</summary>
+    /// lettering. See MapGen/Terrain/Landmarks.cs.</summary>
     public IReadOnlyList<Landmark> Landmarks { get; init; } = [];
 }
 
@@ -161,7 +161,7 @@ public static partial class ContentWriter
 
         // Which barony is each county's seat. Before naming, because a seat may take its county's
         // name; after the binding, because on an imported map the seat is where the chief burg is.
-        // Everything downstream reads the seat as Children[0]. See MapGen/Capitals.cs.
+        // Everything downstream reads the seat as Children[0]. See MapGen/Titles/Capitals.cs.
         Core.Stage.Time("county seats", () =>
         {
             int moved = MapGen.Capitals.SeatCounties(empires, provinces, order, baronyCount,
@@ -232,7 +232,7 @@ public static partial class ContentWriter
 
             // A world of vanilla peoples keeps the cultural geography just grown and swaps who lives
             // in it. Here, before anything is named, so titles, rivers and houses come out in those
-            // peoples' own languages. See MapGen/VanillaIdentities.cs.
+            // peoples' own languages. See MapGen/Vanilla/VanillaIdentities.cs.
             var grown = map;
             if (cfg.ContentSource == MapConfig.ContentSourceMode.VanillaWorld)
                 map = VanillaIdentities.SettleCultures(map, VanillaCatalog.Read(gameDir),
@@ -269,7 +269,7 @@ public static partial class ContentWriter
             // Then the real world laid over it: every title becomes a vanilla title, and every
             // county takes the culture its vanilla county had at the start date. After naming,
             // because the generated names are only the fallback for a title vanilla ran out of.
-            // See MapGen/VanillaTitles.cs.
+            // See MapGen/Vanilla/VanillaTitles.cs.
             if (cfg.ContentSource == MapConfig.ContentSourceMode.VanillaWorld)
             {
                 var catalog = VanillaCatalog.Read(gameDir);
@@ -290,12 +290,12 @@ public static partial class ContentWriter
         });
 
         // A pass barony is named for its pass. After the names above and the real-world overlay,
-        // so it carries its final name and a vanilla title keeps its own. See MapGen/MountainPasses.cs.
+        // so it carries its final name and a vanilla title keeps its own. See MapGen/Terrain/MountainPasses.cs.
         int passesNamed = MapGen.MountainPasses.Name(empires, provinces, order, baronyCount, cfg);
         if (passesNamed > 0) Console.WriteLine($"  mountain passes: {passesNamed} barony(ies) named for their pass");
 
         // Humans are placed by the same climate the cultures were dressed for, and dressed over
-        // vanilla's own ethnicities — see MapGen/HumanLooks.cs.
+        // vanilla's own ethnicities — see MapGen/Peoples/HumanLooks.cs.
         var humanLooks = new MapGen.HumanLooks.Inputs(
             MapGen.ClothingClimate.ByProvince(classified.Field, provinces, order, landCount),
             CountyPosition(provinces, order, landCount),
@@ -346,7 +346,7 @@ public static partial class ContentWriter
 
         // Which county is each duchy's capital, and up the tiers from there. After the final
         // development pass so a world centre is its duchy's capital; nothing above county is
-        // named from its child order, so nothing is renamed by this. See MapGen/Capitals.cs.
+        // named from its child order, so nothing is renamed by this. See MapGen/Titles/Capitals.cs.
         Core.Stage.Time("realm capitals", () =>
         {
             int moved = MapGen.Capitals.SeatRealms(empires, development, provinces, order, baronyCount,
@@ -470,25 +470,25 @@ public static partial class ContentWriter
         // here, after every social layer has been decided, so nothing reads a terrain that only
         // exists *because* of the settlement: development, government, culture and faith all see
         // the pre-cultivation map. Both the pixel raster and the province vote are rewritten, so
-        // the painted ground and common/province_terrain cannot disagree. See MapGen/Cultivation.cs.
+        // the painted ground and common/province_terrain cannot disagree. See MapGen/Climate/Cultivation.cs.
         Core.Stage.Time("cultivation", () => MapGen.Cultivation.Apply(cfg, provinces, order,
             landCount, terrain, provinceTerrain, counties, governments, development, wilderness,
             drainage, provinceElevation, new Rng(cfg.Seed ^ 0x0FA2)));
 
         // Where the Great Steppe situation lives. After cultivation, so it reads the ground as it
         // will be painted; after governments, so every nomad is inside it whatever its ground —
-        // a nomad outside the situation cannot migrate. See MapGen/Steppe.cs.
+        // a nomad outside the situation cannot migrate. See MapGen/Situations/Steppe.cs.
         var steppe = Core.Stage.Time("great steppe", () => MapGen.Steppe.Build(counties, provinces,
             order, landCount, provinceTerrain, governments, new Rng(cfg.Seed ^ 0x57E9)));
 
         // Where the Wilds situation lives: one frontier per connected stretch of wilderness, plus
         // the settled counties one hop out. Deterministic from the wilderness map, no rng. See
-        // MapGen/Frontier.cs.
+        // MapGen/Titles/Frontier.cs.
         var frontier = Core.Stage.Time("frontier", () => MapGen.Frontier.Build(counties, provinces,
             order, landCount, provinceTerrain, wilderness));
 
         // Where an army can march across water: straits and major-river crossings, written into
-        // map_data/adjacencies.csv by WriteAll once map_data has joined. See MapGen/Crossings.cs.
+        // map_data/adjacencies.csv by WriteAll once map_data has joined. See MapGen/Provinces/Crossings.cs.
         Dictionary<int, string> crossingNames = [];
         var crossings = Core.Stage.Time("crossings", () =>
         {
@@ -507,13 +507,13 @@ public static partial class ContentWriter
 
         // The roads and sea lanes between markets. After cultivation and the capitals, since a
         // road runs over the ground as it will be painted and between the seats as they were
-        // just chosen; after the crossings, which it walks. See MapGen/Routes.cs.
+        // just chosen; after the crossings, which it walks. See MapGen/Provinces/Routes.cs.
         var routes = Core.Stage.Time("routes", () => MapGen.Routes.Build(empires, provinces, order,
             baronyCount, provinceTerrain, drainage, wilderness, crossings));
 
         // The Silk Road, laid along the network. Before the landed titles and localisation are
         // written, and it has to be: six bazaar counties take vanilla's county keys here, so
-        // that the base-game script naming them finds this map's markets. See MapGen/SilkRoad.cs.
+        // that the base-game script naming them finds this map's markets. See MapGen/Situations/SilkRoad.cs.
         var silkRoad = Core.Stage.Time("silk road", () => MapGen.SilkRoad.Build(empires, routes, crossings,
             development, worldCenters, governments, provinces, order, baronyCount));
 
@@ -526,7 +526,7 @@ public static partial class ContentWriter
         Core.Showcase.Publish(() => ShowcaseItems.Waters(waterNames, new(provinces, order)));
 
         // After the water, because a drowned crater renames the sea inside its rim after itself;
-        // its own stream, so naming a landmark moves no other name. See MapGen/Landmarks.cs.
+        // its own stream, so naming a landmark moves no other name. See MapGen/Terrain/Landmarks.cs.
         var landmarks = MapGen.Landmarks.Build(cfg, provinces, order, baronyCount, riverCount,
             empires, cultures, waterNames, new Rng(cfg.Seed ^ 0x1A4D), seaBodies);
         foreach (var landmark in landmarks)

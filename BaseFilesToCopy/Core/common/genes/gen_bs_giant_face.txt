@@ -1,0 +1,35 @@
+﻿# The giantkin face: a heavy brow shelf over hooded eyes and a squared, jutting jaw, as one head
+# blendshape, so it takes the skin shader like any face. Emit/RaceHeadWriter.cs builds the blendshape
+# from the installed game's head and maps this attribute on both heads; MapGen/GiantFace.cs is the
+# shape. The giantkin row of RaceMorphs (MapGen/Ethnicities.cs) puts it in their ethnicities and
+# Emit/RaceMorphWriter.cs forces it by trait.
+#
+# In Core beside the other race-feature genes: Emit/PortraitWriter.cs writes it into every persistent
+# DNA record on every map. Index 0 must stay the empty template.
+
+morph_genes = {
+	gen_bs_giant_face = {
+		inheritable = yes
+		group = head
+
+		gen_giant_face_none = {
+			index = 0
+			visible = no
+			male = {}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		gen_giant_face_on = {
+			index = 1
+			visible = no
+			male = {
+				setting = { attribute = "gen_bs_giant_face"  value = { min = 0.0 max = 1.0 }  age = age_preset_child_features_wide_range }
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+	}
+}

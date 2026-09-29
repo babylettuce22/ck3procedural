@@ -101,6 +101,45 @@ gen_resolve_half_race_effect = {
 	}
 }
 
+# Half-races for the HISTORY cast, once, at game start (gen_phenotype_game_start_on_action).
+#
+# History characters are never born in game, so gen_resolve_half_race_effect above never saw them:
+# a human whose father was a minority elf in a human culture carried the ears in DNA and no flag.
+# Same rule as at birth — a human with an elf (orc) parent is half-elf (half-orc) — but the parents
+# are read by genome as well as trait, because a parent dead before the bookmark was never
+# reconciled and still wears the culture's phenotype_human.
+#
+# Deliberately left out: the "both parents half" case. Dead parents are never flagged, and living
+# ones may not be flagged yet in the same sweep, so it would answer by iteration order. Births from
+# here on apply it as usual.
+gen_resolve_history_half_race_effect = {
+	if = {
+		limit = {
+			has_trait = phenotype_human
+			NOT = { has_character_flag = gen_half_elf }
+			NOT = { has_character_flag = gen_half_orc }
+		}
+		if = {
+			limit = {
+				OR = {
+					mother ?= { gen_is_elf_blooded_trigger = yes }
+					real_father ?= { gen_is_elf_blooded_trigger = yes }
+				}
+			}
+			add_character_flag = gen_half_elf
+		}
+		else_if = {
+			limit = {
+				OR = {
+					mother ?= { gen_is_orc_blooded_trigger = yes }
+					real_father ?= { gen_is_orc_blooded_trigger = yes }
+				}
+			}
+			add_character_flag = gen_half_orc
+		}
+	}
+}
+
 # Copies one parent's race onto the newborn.
 #
 # Written as an else_if chain rather than seven independent ifs so a parent who somehow carries two

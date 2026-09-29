@@ -56,6 +56,12 @@ gen_phenotype_game_start_on_action = {
 			gen_horns_upkeep_effect = yes
 			gen_tusks_game_start_effect = yes
 		}
+
+		# A second pass, after every living race is settled: half-elves and half-orcs among the
+		# history cast, who were never born in game (00_phenotype_birth_effects.txt).
+		every_living_character = {
+			gen_resolve_history_half_race_effect = yes
+		}
 	}
 }
 

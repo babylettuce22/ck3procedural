@@ -1,4 +1,4 @@
-// Emit/TablePropTucker.cs
+// Emit/Map/TablePropTucker.cs
 namespace Ck3MapGen.Emit;
 
 using System.Globalization;

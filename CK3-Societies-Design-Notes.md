@@ -140,7 +140,7 @@ Use the target crown’s relevant territory as the geographic focus; permit outs
 
 ### Technical fit and limits
 
-The repo already integrates Situations through `Emit/FrontierWriter.cs` and patches the shared Situation window in `Emit/GuiWriter.cs`. That is a useful local precedent. The GUI code documents two existing pitfalls: a phase without a duration can display a bogus end date in the generic window, and phase artwork required an explicit GUI extension for the Wilds. Reuse the established integration carefully rather than assuming the default UI exposes all desired information.
+The repo already integrates Situations through `Emit/Situations/FrontierWriter.cs` and patches the shared Situation window in `Emit/GuiWindows/GuiWriter.cs`. That is a useful local precedent. The GUI code documents two existing pitfalls: a phase without a duration can display a bogus end date in the generic window, and phase artwork required an explicit GUI extension for the Wilds. Reuse the established integration carefully rather than assuming the default UI exposes all desired information.
 
 Native runtime creation/destruction, war-reference persistence, custom columns/actions, external participants, information visibility, and current DLC/version requirements still need verification against the target installation’s game scripts and script docs. An official Situation dev diary was located but could not be retrieved during this review; it is not used to claim specific supported APIs.
 

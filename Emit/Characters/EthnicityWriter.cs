@@ -74,7 +74,7 @@ public static class EthnicityWriter
 
             // -----------------------------------------------------------------
             // 2. Child Variants. A fantasy variant is a hair lean over its base; a human one is a
-            //    culture's dress over one vanilla ethnicity (see MapGen/HumanLooks.cs) and names
+            //    culture's dress over one vanilla ethnicity (see MapGen/Peoples/HumanLooks.cs) and names
             //    that key as its template instead.
             // -----------------------------------------------------------------
             foreach (var variant in eth.Variants)

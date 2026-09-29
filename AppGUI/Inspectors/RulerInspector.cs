@@ -63,7 +63,7 @@ public sealed class RulerInspector : InspectorForm
         => targets.OfType<Ruler>().Select(r => new Fields(r, Edits, Realm));
 
     // A historical ruler is written from vanilla's own history block, so an edit to their skills,
-    // traits or house here would look accepted and ship nothing. See MapGen/VanillaCharacters.cs.
+    // traits or house here would look accepted and ship nothing. See MapGen/Vanilla/VanillaCharacters.cs.
     protected override bool IsInherited(object target) => target is Ruler { IsHistorical: true };
 
     protected override IEnumerable<object> WrapLoaded(IReadOnlyList<WorldEntry> entries)

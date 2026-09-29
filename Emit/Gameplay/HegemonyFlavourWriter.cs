@@ -1,4 +1,4 @@
-// Emit/HegemonyFlavourWriter.cs
+// Emit/Gameplay/HegemonyFlavourWriter.cs
 namespace Ck3MapGen.Emit;
 
 using System.IO;
@@ -10,9 +10,9 @@ using Ck3MapGen.MapGen;
 ///
 /// <code>
 /// Related:
-///   MapGen/Titles.cs           HegemonyKey — why the title is keyed h_china at all
-///   Emit/DynasticCycleWriter   the situation that key exists to satisfy
-///   Emit/CoatOfArmsWriter      WriteHegemonyArms, the shield this writer ships
+///   MapGen/Titles/Titles.cs             HegemonyKey — why the title is keyed h_china at all
+///   Emit/Gameplay/DynasticCycleWriter   the situation that key exists to satisfy
+///   Emit/Culture/CoatOfArmsWriter       WriteHegemonyArms, the shield this writer ships
 /// </code>
 ///
 /// ---- The bargain, and what it was quietly costing ----

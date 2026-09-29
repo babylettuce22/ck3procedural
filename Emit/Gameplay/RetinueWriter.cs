@@ -114,7 +114,7 @@ public static class RetinueWriter
                 // keeps the illustration, discards the icon, and logs one
                 // men_at_arms_type.cpp:350 error per entry ("Found both 'illustration' and 'icon'
                 // properties, 'icon' <name> is ignored"). No vanilla entry sets both. Icon is still
-                // chosen in MapGen/Retinues.cs for the archetypes that get no illustration, where
+                // chosen in MapGen/Titles/Retinues.cs for the archetypes that get no illustration, where
                 // it is load-bearing: with neither, CK3 looks for a texture named after the
                 // regiment key and there is no gen_maa_h0.dds on anybody's disk.
                 if (regiment.Icon is not null && regiment.Illustration is null)

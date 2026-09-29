@@ -249,7 +249,7 @@ public sealed class RulerMap
             int birthDay = rng.Int(1, 28);
 
             // Everything about the man rather than the land — schooling, skills, byname, the
-            // standing he starts with. See Emit/RulerProfile.cs for what each number is worth.
+            // standing he starts with. See Emit/Characters/RulerProfile.cs for what each number is worth.
             var profile = RulerProfile.Build(
                 county, primaryTitle.Tier, government, culture.Ethos,
                 cfg.StartYear - birthYear, liegeCounties.Contains(county), cfg.Seed, cfg.PeopleSalt);

@@ -1089,6 +1089,15 @@ public static class TerrainTextureWriter
                         : 0.0;
 
                     byte self = label[pSrc];
+
+                    // Dry ground the province map calls sea — the sliver where a province coast and
+                    // the heightmap's disagree, and a river province's banks — takes the nearest
+                    // land's ground. The Sea palette is shallow-water mud; vanilla has none of it
+                    // above the waterline, and ours was a dark rim on 11% of the first two units.
+                    if (relief > 0 && TerrainPalette.TerrainOf(self) == TerrainClass.Sea &&
+                        TerrainPalette.TerrainOf(boundaryOther[pSrc]) != TerrainClass.Sea)
+                        self = boundaryOther[pSrc];
+
                     var blend = TerrainPalette.For(TerrainPalette.TerrainOf(self),
                         TerrainPalette.ClimateFromLabel(self), relief, nA, nB, nC,
                         canopyDensity, zoneA, zoneB, rugged);

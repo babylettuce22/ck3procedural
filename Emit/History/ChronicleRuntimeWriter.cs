@@ -54,9 +54,9 @@ namespace Ck3MapGen.Emit;
 ///   Wilderness/events/wilderness_ruins_events.txt                calls gen_chr_push_up_effect
 ///
 /// Related generated files, written elsewhere:
-///   Emit/StruggleWriter.cs        on_change_phase and the drift ticker call the struggle check
-///   Emit/FrontierWriter.cs        the phase announce effect calls gen_chr_wilds_effect
-///   Emit/GuiWriter.cs             the title window's lore panel reads gen_chr_line_N
+///   Emit/Situations/StruggleWriter.cs    on_change_phase and the drift ticker call the struggle check
+///   Emit/Situations/FrontierWriter.cs    the phase announce effect calls gen_chr_wilds_effect
+///   Emit/GuiWindows/GuiWriter.cs         the title window's lore panel reads gen_chr_line_N
 ///   Emit/GuiWindows/ChronicleWindow.cs   the world window reads gen_chw_line_N
 /// </code>
 /// </summary>

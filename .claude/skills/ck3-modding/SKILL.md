@@ -22,7 +22,9 @@ this machine and must not be blindly overwritten by a regenerated one. Local cha
   - placeholder paths resolved to real ones (Step 0 table below);
   - references/patterns/map-modding.md corrected against measurements taken from vanilla
     1.19 by the procedural map tool in this repo (see its "Verified on this install" box);
-  - dangling mods/pod.md + mods/agot.md pointers repointed at the installed AGOT folder.
+  - dangling mods/pod.md + mods/agot.md pointers repointed at the installed AGOT folder;
+  - 2026-09-29: workshop table refreshed (AGOT is numeric 2962333032 again, EK2 added), and
+    pointers added to this repo's own verification tooling (mod-verify skill).
 -->
 
 # CK3 Modding
@@ -37,7 +39,7 @@ the game ignore your file with no error. Follow the workflow below to avoid that
 The base game files are THE source of truth for everything. Never guess trigger/effect/scope
 names from memory; find them in a vanilla file, an `_*.info` schema doc, or the script_docs logs.
 
-**These were resolved on 2026-08-10 and are baked in below.** Re-detect only if one turns out to
+**These were resolved on 2026-08-10 and re-checked 2026-09-29 (all present; game 1.19.0.6).** Re-detect only if one turns out to
 be missing (a Steam library move, an uninstall). Wherever this skill or its reference files write
 `<game>`, `<logs>`, `<mods>`, `<workshop>` or `<tiger>`, substitute the real path from this table:
 
@@ -55,13 +57,16 @@ being hand-modded. When a question is about what the generator writes, the C# em
 `Emit/` are the source of truth, not the mod folder — the mod folder is their output and is
 overwritten on every run.
 
-**Workshop subscriptions (checked 2026-08-10).** Only these exist under `<workshop>`:
+**Workshop subscriptions (checked 2026-09-29).** Only these exist under `<workshop>` — subscriptions
+change, so `ls <workshop>` and read each `descriptor.mod`'s `name=` if a folder below is missing:
 
 | Folder | Mod |
 |---|---|
-| `gameofthronesfiles` | **A Game of Thrones** — the real AGOT mod; note it is a *named* folder, not the numeric `2962333032` |
-| `3627171889` | Map Generator 4k Template (1.18, Generator Alpha 0.30.0) — another map generator's output template; useful as a worked example of a generated map's file set |
-| `3768884568` / `3776619131` | Kio's Mod Editor / Kio's auto terrain painter — standalone HTML tools, no script content to grep |
+| `2962333032` | **A Game of Thrones** (1.19.0.6) — the AGOT mod. (It was briefly a named `gameofthronesfiles` folder in 2026-08; that folder is gone.) |
+| `2887120253` | **Elder Kings 2** (1.19.0.6) — fantasy total conversion; the reference for fantasy races (portrait genes, race traits) |
+| `3794003456` | EK2: Unearthed (EK2 submod) |
+| `3719888822` / `3403938445` | Legacy of Valyria — AGOT compatch (1.19) / base submod (1.18.4) |
+| `2264428428` | Debug Toggle (Less Invasive), 1.16 — no idiom value |
 
 **Princes of Darkness is NOT subscribed** — ignore any PoD-based advice in the reference files and
 never cite a `<workshop>\2216659254` path.
@@ -108,7 +113,7 @@ Get-ChildItem '<game>\dlc' -Directory | Select-Object -ExpandProperty Name
 
 **AGOT is the second ground-truth layer** on this machine: a total conversion, and a
 state-of-the-art idiom source for patterns vanilla lacks (custom UI, story cycles, ai_accept
-craft, secret societies, perf budgeting). Grep `<workshop>\gameofthronesfiles` directly.
+craft, secret societies, perf budgeting). Grep `<workshop>\2962333032` directly.
 
 The upstream skill also shipped distilled notes (`mods/pod.md`, `mods/agot.md`) and its reference
 files cite them by pattern number. **Those files were not included in the drop and do not exist
@@ -169,11 +174,17 @@ last play session will list stale effect/trigger names and mislead you. Confirm 
 1. Identify which system the task touches (event? decision? trait? GUI? loc? ...).
 2. Read the matching reference file below, plus the system's `_*.info` and a vanilla example.
    For mechanic *design* questions (meters, hidden societies, AI-driven drama), grep AGOT
-   (`<workshop>\gameofthronesfiles`) for a shipped implementation.
+   (`<workshop>\2962333032`) for a shipped implementation.
 3. Write the mod file: new file, mod-tagged name, correct folder, correct override order
    (script = LIOS/last wins; GUI = FIOS/first wins).
 4. Add localization for every new key.
 5. Run ck3-tiger on the mod (`references/validation.md`). Fix Fatal/Error, then Warning.
+   **In this repo, use the `mod-verify` skill instead of running tiger by hand**: its verify.sh
+   builds, generates one world, runs tiger + the local ScriptIndex, and diffs against a baseline.
+   Judge tiger by findings naming `[MOD]` files, never by total counts (vanilla strict-scopes
+   warnings swing run to run). Tiger is not the oracle: it passes things the engine rejects
+   (CB-group fields, `?=` on unset `var:`, barony-only triggers on counties, gene weight sums
+   over 255, missing `meshsettings`) — `error.log` / `debug.log` from a real launch settle it.
 6. Verify in-game: give the user the exact test steps (`-debug_mode`, console command), ask them
    to run the game, then read the logs yourself and confirm or fix (see "Game logs"). For GUI
    work, use the test-window feedback loop in `references/gui.md`.
@@ -189,9 +200,9 @@ last play session will list stale effect/trigger names and mislead you. Confirm 
 | GUI: custom windows, HUD widgets, scripted_widgets, data binding, scripted_guis | `references/gui.md` | vanilla `gui/preload/defaults.gui`, AGOT's `gui/` (PoD's `gui/POD_windows/` is cited upstream but PoD is not installed) |
 | Validating mod code (ck3-tiger) | `references/validation.md` | — |
 | Debugging, console, logs, graphics/portraits, tooling | `references/debugging.md` | game `tests/` |
-| Design patterns: AI-initiated drama, story cycles, narrated ai_accept, duels, secrets, alerts, tiered meters, perf budgeting | grep `<workshop>\gameofthronesfiles` | AGOT mod folder |
+| Design patterns: AI-initiated drama, story cycles, narrated ai_accept, duels, secrets, alerts, tiered meters, perf budgeting | grep `<workshop>\2962333032` | AGOT mod folder |
 | Mod-vs-mod conflicts, total-conversion submods, compatch strategy | `references/compat.md` + `scripts/check_compat.sh` | — |
-| **This project**: what the generator emits into `map_data/`, `landed_titles`, history | the C# emitters in `Emit/` (authoritative) + `references/patterns/map-modding.md` | `Emit/MapDataWriter.cs` |
+| **This project**: what the generator emits into `map_data/`, `landed_titles`, history | the C# emitters in `Emit/` (authoritative) + `references/patterns/map-modding.md` | `Emit/Map/MapDataWriter.cs` |
 
 Read multiple files when the task spans systems (most content tasks also need localization).
 

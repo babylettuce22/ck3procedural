@@ -439,7 +439,7 @@ public static class HistoryWriter
                 // A ruler out of vanilla's history is vanilla's own block — traits, skills, parents,
                 // marriages, dated events — under this seat's id. Only the name (while unedited it
                 // is vanilla's key), the sex and the DNA the bookmark portrait was painted from are
-                // written here. See MapGen/VanillaCharacters.cs.
+                // written here. See MapGen/Vanilla/VanillaCharacters.cs.
                 if (ruler.IsHistorical)
                 {
                     b.Quoted("name", ruler.Name == ruler.HistoricalName && ruler.HistoricalNameKey is { } historicalKey

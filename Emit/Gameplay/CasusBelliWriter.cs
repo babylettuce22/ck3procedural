@@ -354,7 +354,7 @@ public static class CasusBelliWriter
     ///
     /// The first branch — the one for a target title that DOES have a holder — is left unguarded on
     /// purpose. The dummies hold counties and two titular kingdoms with no de jure land
-    /// (MapGen/Wilderness.cs), and `abandon_county_effect` is the only path that transfers anything
+    /// (MapGen/Titles/Wilderness.cs), and `abandon_county_effect` is the only path that transfers anything
     /// to them, county-tier only. So no county's de jure liege is ever a dummy, and a guard there
     /// would be an untestable branch whose failure mode — falling through to the free-title branch
     /// and taking a held title without war — is worse than the state it guards against.
@@ -370,7 +370,7 @@ public static class CasusBelliWriter
         // government_is_herder`, so the arms are the positive tests for what is being excluded —
         // a `NOT` here would read as "must be the wilderness" and select nothing else. Root is the
         // candidate holder in both, so neither test needs a scope, and the trait arm covers the
-        // ruins dummy for free (MapGen/Wilderness.cs gives both dummies the same trait).
+        // ruins dummy for free (MapGen/Titles/Wilderness.cs gives both dummies the same trait).
         patch.InsertAfter("dominate title candidate filter",
             "\n\t\t\t\t\t\t\thas_trait = wilderness"
             + "\n\t\t\t\t\t\t\tgovernment_has_flag = government_is_wilderness",

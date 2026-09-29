@@ -331,8 +331,21 @@ public static class TreeWriter
             ["tree_sakura_01_mesh", "tree_sakura_02_mesh", "tree_sakura_03_mesh"], [], 1.0, 1.0),
     ];
 
+    /// <summary>
+    /// How far a tree stands back from a major river's carved channel, in province pixels (world
+    /// units). The channel is a ~3u trench narrower than the vertex spacing of the terrain mesh
+    /// CK3 draws at mid zoom, so there the drawn banks sag and the water spreads wider than
+    /// heightmap.png says. Props snap to the full-resolution height, so a tree on the bank came
+    /// out hanging over the dip or standing in the water. Vanilla's rivers are not trenched and
+    /// never show it. Grass-layer scatter (reeds) is exempt: it belongs at the water.
+    /// </summary>
+    private const int RiverTreeSetback = 3;
+
+    /// <param name="riverWater">
+    /// 1 on major-river water at province resolution, or null — see <see cref="RiverTreeSetback"/>.
+    /// </param>
     public static void WriteAll(string modDir, MapConfig cfg, TerrainClass[] terrain,
-        KoppenClass[] climate, float[] elevation, Rng rng)
+        KoppenClass[] climate, float[] elevation, Rng rng, byte[]? riverWater = null)
     {
         string dir = Path.Combine(modDir, "gfx", "map", "map_object_data", "generated");
         Directory.CreateDirectory(dir);
@@ -352,7 +365,16 @@ public static class TreeWriter
         var field = CanopyField.Create(cfg);
 
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
-        long total = 0, drowned = 0, steep = 0;
+        long total = 0, drowned = 0, steep = 0, riverside = 0;
+
+        // Distance to major-river water only, capped just past the setback.
+        byte[]? riverDistance = null;
+        if (riverWater is not null)
+        {
+            var notRiver = new byte[riverWater.Length];
+            Parallel.For(0, notRiver.Length, i => notRiver[i] = riverWater[i] == 0 ? (byte)1 : (byte)0);
+            riverDistance = TerrainClassifier.DistanceToWater(notRiver, width, height, RiverTreeSetback);
+        }
 
         // A file holds one object block per generator that names it, in table order.
         var byFile = new Dictionary<string,
@@ -410,6 +432,14 @@ public static class TreeWriter
                         // heightmap pixel that is genuinely under water. See ScatterGround.
                         if (!ScatterGround.IsDryLand(elevation, cfg, jx, jy)) { drowned++; continue; }
 
+                        if (riverDistance is not null && generator.Layer == "tree_high_layer" &&
+                            riverDistance[Math.Min((int)jy, height - 1) * width + Math.Min((int)jx, width - 1)]
+                                <= RiverTreeSetback)
+                        {
+                            riverside++;
+                            continue;
+                        }
+
                         // Every mesh needs the ground level under its base, and a wide one under
                         // all of itself. Tested at the jittered position, where it will stand.
                         if (generator.Footprint > 0 && !ScatterGround.IsFlatEnough(
@@ -456,6 +486,7 @@ public static class TreeWriter
 
         Console.WriteLine($"  trees: {total:N0} instances across {Generators.Length} generators " +
                           $"in {byFile.Count} files ({drowned:N0} rejected below the waterline, " +
+                          $"{riverside:N0} within {RiverTreeSetback} u of a major river, " +
                           $"{steep:N0} on ground too steep for their footprint)");
     }
 

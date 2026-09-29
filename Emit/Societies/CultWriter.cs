@@ -224,7 +224,7 @@ internal static class CultWriter
         string faith = $"${plan.Host.Key}$";
 
         // The host's own words for its clergy, by loc key like the devil's, so the prose says "Twaitru"
-        // where it means priest and carries the religion's hover gloss (Emit/ReligionGlossary.cs)
+        // where it means priest and carries the religion's hover gloss (Emit/Culture/ReligionGlossary.cs)
         // anywhere it is printed: events, decisions, interactions and the cult panel alike.
         foreach (var (key, tag, english) in ClergyWords)
         {

@@ -61,7 +61,7 @@ morph_genes = {
 
 		# Pale gold: ivory at low intensity, a faint gilt at the top. A small warm rotation with
 		# the VALUE lifted is what sets it apart from its warm neighbours — the gnome's ochre is
-		# saturated and darkened, the wood elf's olive sits twice as far round. It used to be a
+		# saturated and darkened, the wood elf's olive sits half again as far round. It used to be a
 		# lavender pallor at hue 0.58, three hundredths from the giantkin's frost blue, and the two
 		# could only be told apart by their bodies.
 		gen_skin_high_elf = {
@@ -79,14 +79,15 @@ morph_genes = {
 			girl = male
 		}
 
-		# Olive bark. Held clear of the orc's green by hue rather than by strength.
+		# Olive bark. Held clear of the orc's green by hue rather than by strength. Was 0.12 until
+		# 2026-09-29, which read as slightly too green in game; 0.09 lands on olive/khaki.
 		gen_skin_wood_elf = {
 			index = 2
 			male = {
 				skin_hsv_shift_curve = {
 					curve = {
-						{ 0.0  { 0.12 -0.12 -0.02 } }
-						{ 1.0  { 0.12  0.01 -0.04 } }
+						{ 0.0  { 0.09 -0.12 -0.02 } }
+						{ 1.0  { 0.09  0.01 -0.04 } }
 					}
 				}
 			}

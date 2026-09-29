@@ -22,9 +22,9 @@ namespace Ck3MapGen.Emit;
 /// Related base files: none — the open state is a GUI variable, see <see cref="IsOpen"/>.
 ///
 /// Related generated files, written elsewhere:
-///   Emit/ChronicleRuntimeWriter.cs   gen_chw_line_N and every string this window shows
-///   Emit/ChronicleWriter.cs          gen_chronicle_world_past, the "before the bookmark" half
-///   Emit/GuiWriter.cs                the tab, and the IsRightWindowOpen widening
+///   Emit/History/ChronicleRuntimeWriter.cs   gen_chw_line_N and every string this window shows
+///   Emit/History/ChronicleWriter.cs          gen_chronicle_world_past, the "before the bookmark" half
+///   Emit/GuiWindows/GuiWriter.cs             the tab, and the IsRightWindowOpen widening
 /// </code>
 /// </summary>
 public static class ChronicleWindow

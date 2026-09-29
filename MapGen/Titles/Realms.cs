@@ -1458,7 +1458,7 @@ public static class Realms
     /// its realm are very nearly the same shape, the way vanilla's Song hold nearly all of China.
     /// The last tenth is deliberate — a rebel duchy or an unbowed kingdom inside the border is the
     /// first thing worth playing about, and All Under Heaven's Dynastic Cycle measures exactly this
-    /// ratio every year (see <c>Emit/DynasticCycleWriter.cs</c>), so starting at nine tenths leaves
+    /// ratio every year (see <c>Emit/Gameplay/DynasticCycleWriter.cs</c>), so starting at nine tenths leaves
     /// the whole of vanilla's warning band below the start position instead of beginning inside it.
     ///
     /// This replaced a share of the *world* (two fifths), which was the only thing a hegemony could
@@ -1701,7 +1701,7 @@ public static class Realms
     /// crowned hegemon, or null when nobody wears the crown.
     ///
     /// This is the ratio All Under Heaven's Dynastic Cycle tests every year (see
-    /// <c>Emit/DynasticCycleWriter.cs</c>), and it is deliberately neither of the numbers
+    /// <c>Emit/Gameplay/DynasticCycleWriter.cs</c>), and it is deliberately neither of the numbers
     /// <see cref="ExpandHegemonRealm"/> grows by. Both ends are restricted to the hegemony's own
     /// de jure ground, exactly as vanilla's <c>title:h_china = { any_de_jure_county = { … } }</c>
     /// counts it: a county the hegemon holds outside the border is not in the numerator, and a

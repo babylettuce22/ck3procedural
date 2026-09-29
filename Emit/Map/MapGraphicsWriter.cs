@@ -1,4 +1,4 @@
-// Emit/MapGraphicsWriter.cs
+// Emit/Map/MapGraphicsWriter.cs
 using Ck3MapGen.Config;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -20,6 +20,7 @@ public static class MapGraphicsWriter
                           $"too warm for snow), {surround}");
 
         WriteSurroundShader(modDir, gameDir, cfg);
+        WriteProvinceEffectsShader(modDir, gameDir, cfg);
     }
 
     /// <summary>
@@ -393,6 +394,114 @@ public static class MapGraphicsWriter
     }
 
     private const string SurroundDepthState = "proctool_surround_depth_test";
+
+    /// <summary>
+    /// gfx/FX/province_effects.fxh with the effect mask read over a disc rather than one texel.
+    ///
+    /// A situation phase's <c>map_province_effect</c> (the Wilds' summer grass, the Great Steppe's
+    /// droughts, snows and green seasons) is stored per province and looked up through the province
+    /// indirection texture. Vanilla's terrain path blends the four texels around the pixel, so the
+    /// effect fades over exactly one province-map pixel and ends on the border as a ruled line. That
+    /// is invisible where vanilla uses it, on steppe that looks the same either side, and loud on
+    /// ours, where a Wilds frontier greens a desert county next to a bare one.
+    ///
+    /// The replacement averages <see cref="EffectTaps"/> point lookups spread over a disc, which is
+    /// the share of the neighbourhood carrying the effect: 1 deep inside, 0.5 on the border, 0 a
+    /// radius out. The disc turns per pixel by a fine noise, so the steps between tap counts dither
+    /// rather than band, and its radius wanders with a coarse one, so the fade is ragged along the
+    /// border the way the detail-texture band is. The tree and decal path (vanilla's single lookup)
+    /// gets the same treatment, so trees tint with the ground under them.
+    ///
+    /// Patched from the installed game like <see cref="WriteSurroundShader"/>: if either function
+    /// has changed shape, nothing ships and the hard edge comes back, nothing else.
+    /// </summary>
+    private static void WriteProvinceEffectsShader(string modDir, string gameDir, MapConfig cfg)
+    {
+        if (!cfg.SoftProvinceEffects)
+        {
+            Console.WriteLine("  soft province effects: off — vanilla's gfx/FX/province_effects.fxh left in place");
+            return;
+        }
+
+        var patch = VanillaPatch.Open(gameDir, "soft province effects", "gfx", "FX", "province_effects.fxh");
+        if (patch is null) return;
+
+        string radius = Math.Max(2.0, cfg.Scaled(EffectFadeRadius)).ToString("0.0##", System.Globalization.CultureInfo.InvariantCulture);
+
+        patch.ReplaceBlock("BilinearSampleProvinceEffectsMask",
+            "void BilinearSampleProvinceEffectsMask(",
+            $$"""
+            // Procedural map: effects fade over a disc of province-map pixels, not one texel.
+            		static const int PROCTOOL_EFFECT_TAPS = {{EffectTaps}};
+            		static const float PROCTOOL_EFFECT_RADIUS = {{radius}}f;
+
+            		void ProctoolAddEffect( float4 Sample, float Weight, inout EffectIntensities Sum )
+            		{
+            			float Impact = RemapClamped( Sample.g, 0.0f, OpacityLowImpactValue, 0.0f, 0.5f );
+            			Impact += RemapClamped( Sample.g, OpacityLowImpactValue, OpacityHighImpactValue, 0.0f, 0.5f );
+            			Impact *= Weight;
+
+            			Sum._Drought += ( Sample.r == DROUGHT_INDEX ) * Impact;
+            			Sum._Flood += ( Sample.r == FLOOD_INDEX ) * Impact;
+            			Sum._Summer += ( Sample.r == SUMMER_INDEX ) * Impact;
+            			Sum._Snow += ( Sample.r == SNOW_INDEX ) * Impact;
+            		}
+
+            		void ProctoolSoftSampleProvinceEffectsMask( float2 MapCoords, inout EffectIntensities ConditionData )
+            		{
+            			ConditionData._Drought = 0.0f;
+            			ConditionData._Flood = 0.0f;
+            			ConditionData._Summer = 0.0f;
+            			ConditionData._Snow = 0.0f;
+
+            			#ifdef LOW_SPEC_SHADERS
+            				return;
+            			#endif
+
+            			// Fine noise turns the disc per pixel; coarse noise swells and shrinks it.
+            			float2 NoiseUV = float2( MapCoords.x * 2.0f, MapCoords.y );
+            			float Spin = PdxTex2D( ProvinceEffectsNoise, NoiseUV * 900.0f ).r * 6.2831853f;
+            			float Reach = PROCTOOL_EFFECT_RADIUS * ( 0.6f + 0.8f * PdxTex2D( ProvinceEffectsNoise, NoiseUV * 18.0f ).r );
+
+            			float2 Centre = MapCoords * IndirectionMapSize;
+            			float Weight = 1.0f / PROCTOOL_EFFECT_TAPS;
+
+            			for ( int i = 0; i < PROCTOOL_EFFECT_TAPS; ++i )
+            			{
+            				// Golden-angle spiral: even cover of the disc at any tap count.
+            				float Angle = i * 2.3999632f + Spin;
+            				float Distance = sqrt( ( i + 0.5f ) / PROCTOOL_EFFECT_TAPS ) * Reach;
+            				float2 Texel = floor( Centre + float2( cos( Angle ), sin( Angle ) ) * Distance );
+            				float2 Pixel = ( Texel + 0.5f ) * InvIndirectionMapSize;
+            				ProctoolAddEffect( SampleProvinceEffects( Pixel ), Weight, ConditionData );
+            			}
+            		}
+
+            		void BilinearSampleProvinceEffectsMask( float2 MapCoords, inout EffectIntensities ConditionData )
+            		{
+            			ProctoolSoftSampleProvinceEffectsMask( MapCoords, ConditionData );
+            		}
+            """);
+
+        patch.ReplaceBlock("SampleProvinceEffectsMask",
+            "void SampleProvinceEffectsMask(",
+            """
+            void SampleProvinceEffectsMask( float2 MapCoords, inout EffectIntensities ConditionData )
+            		{
+            			ProctoolSoftSampleProvinceEffectsMask( MapCoords, ConditionData );
+            		}
+            """);
+
+        patch.Ship(modDir, bom: false);
+    }
+
+    /// <summary>Radius of the effect fade, in province-map pixels of a vanilla-width map. The fade
+    /// runs a radius either side of the border, so 24 makes it about as wide as the 44 px band the
+    /// detail textures blend biomes over.</summary>
+    private const double EffectFadeRadius = 24;
+
+    /// <summary>Lookups per pixel. Each is one indirection fetch and one buffer read.</summary>
+    private const int EffectTaps = 12;
 
     /// <summary>Every surround effect drawn in the 3D map — the clouds, their low-spec twin and the
     /// shadow under them. Not surroundmap_flat; see <see cref="WriteSurroundShader"/>.</summary>

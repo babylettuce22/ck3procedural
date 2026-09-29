@@ -7,7 +7,7 @@
 The imported text below is partly **CK2/early-CK3 era and wrong for 1.19**. The following were
 measured directly from the vanilla files on this machine (PNG IHDR headers and file bytes, 1.19.0.6)
 and are implemented in this repo's emitters; where they conflict with anything further down,
-**these win**. Sources of truth: `<game>\map_data\` itself and `Emit/MapDataWriter.cs`.
+**these win**. Sources of truth: `<game>\map_data\` itself and `Emit/Map/MapDataWriter.cs`.
 
 **Vanilla map dimensions and formats, read from the PNG headers — not 8192 x 4096:**
 
@@ -64,7 +64,7 @@ localization. First three bytes of each vanilla file, checked 2026-08-10:
 - Emit LF, not CRLF.
 
 > Known discrepancy in this repo: `Io/ParadoxText.cs` documents `heightmap.heightmap` as a no-BOM
-> file and `Emit/MapDataWriter.cs` writes it via `WriteNoBom`, but vanilla's has a BOM. Low impact
+> file and `Emit/Map/MapDataWriter.cs` writes it via `WriteNoBom`, but vanilla's has a BOM. Low impact
 > while we ship a bare `heightmap.png` and let `-mapeditor` repack (the editor rewrites the file),
 > but it is wrong if we ever ship the trio ourselves.
 

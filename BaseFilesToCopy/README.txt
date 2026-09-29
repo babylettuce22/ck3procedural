@@ -16,6 +16,7 @@ a file's path below the set folder is its path in the mod.
             common/...                              is on AND RaceMode is not HumanOnly
             events/...
             gfx/interface/icons/traits/
+            gfx/portraits/portrait_modifiers/
             localization/english/...
 
 Two rules:
@@ -60,25 +61,38 @@ be a dangling pointer on any map that did not happen to roll it.
 
 --- Fantasy ---
 
-The static half of the fantasy race system: the seven phenotype race traits (the six fantasy races
-plus the visible Human trait), the scripted triggers/effects/on_actions that assign them at birth
-and through the culture pulse, the long-lived races' world_weary fading (traits, events, death
-reason, script values), the race trait icons, and the forced dwarf beards portrait modifier.
+The static half of the fantasy race system:
+  - the nine phenotype race traits (the eight fantasy races, Hornkin's phenotype_horned among them,
+    plus the visible Human trait), all mutual opposites, and the scripted triggers/effects/
+    on_actions that assign them at birth, through the culture pulse and from ethnicity
+  - half-elf / half-orc resolution at birth and, separately, for history characters at game start
+    (00_phenotype_birth_effects.txt); half-races are a look only, marked by character flags
+  - the Hornborn trait, horn-style flags, the file-your-horns decision and its modifier
+  - broken-tusk scar flags (00_tusk_effects.txt)
+  - the long-lived races' world_weary fading (traits, events, death reason, script values), the
+    dwarves' later ailment onset, and the rare "A Late Child" event past 45
+  - the race trait icons, and the dwarf-beard and elf-clean-shaven portrait modifiers
 
 Gated so a realistic map ships none of it: no race chips in the ruler designer, no fading events,
-no phenotype pulses. Two fantasy-adjacent things deliberately stay in Core because they are written
-into every mod regardless of mode:
-  - common/genes/gen_race_skin.txt — Emit/PortraitWriter.cs writes this gene into every persistent
-    DNA record on every map, so the declaration must always exist (it is inert without the traits).
-  - the gen_race_skin loc line in localization/english/gen_req_localization_l_english.yml.
+no phenotype pulses. A few fantasy-adjacent things deliberately stay in Core because they are
+written into every mod regardless of mode:
+  - common/genes/gen_race_skin.txt, gen_bs_elf_ears.txt, gen_bs_orc_tusks.txt,
+    gen_bs_horn_boss.txt and gen_bs_giant_face.txt — Emit/PortraitWriter.cs writes these genes into every persistent DNA
+    record on every map, so the declarations must always exist (they are inert without the traits).
+  - their loc lines in localization/english/gen_req_localization_l_english.yml.
 
 What the generator emits alongside it, and which these files therefore assume exists:
   - phenotype traits stamped onto history characters by Emit/HistoryWriter.cs (humans get
     phenotype_human; the culture pulse spreads traits to engine-generated characters from there)
-  - gfx/portraits/portrait_modifiers/99_gen_race_morphs.txt from Emit/RaceMorphWriter.cs, which
-    forces each race's look by trait — and resets inherited skin shifts on mixed-line humans via
-    the gen_phenotype_human character FLAG (narrow marker; not the same thing as the Human trait)
-  - the marriage-reluctance patch from Emit/InteractionWriter.cs, which calls
-    gen_is_different_race_than from this set's scripted triggers
+  - from Emit/RaceMorphWriter.cs: gfx/portraits/portrait_modifiers/99_gen_race_morphs.txt, which
+    forces each race's look by trait (shape, skin, male elf faces, horns, tusk variants, body-state
+    re-application) and resets inherited race features on humans; and
+    common/scripted_triggers/99_gen_race_ethnicity_triggers.txt, the gen_is_<race>_ethnicity_trigger
+    probes this set uses to read a character's race from their ethnicity
+  - from Emit/RaceHeadWriter.cs: the pointed-ear, tusk and horn-mound head/teeth blendshapes
+    patched into the installed game's head assets, the horn accessory models, the generated
+    common/genes/gen_horns.txt accessory gene, and zz_gen_horn_crowns.txt (crowns worn as bands)
+  - the marriage patch from Emit/InteractionWriter.cs, which calls gen_is_different_race_than and
+    the showing-horns triggers from this set's scripted triggers
 
 The same no-generated-keys rule as Wilderness applies: this set ships identically for every seed.

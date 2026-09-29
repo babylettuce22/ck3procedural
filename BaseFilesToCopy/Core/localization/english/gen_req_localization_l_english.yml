@@ -12,6 +12,8 @@
  # Horns: the accessory gene is generated with the horn models; the skin mound is static in Core.
  gen_horns:0 "Horns"
  gen_bs_horn_boss:0 "Horn Base"
+ # The giantkin brow and jaw (common/genes/gen_bs_giant_face.txt).
+ gen_bs_giant_face:0 "Giant's Brow"
 
  gen_early_realm_stability:0 "A Stable Realm"
  gen_early_realm_stability_desc:0 "This realm is in a period of internal alignment."

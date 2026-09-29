@@ -329,7 +329,7 @@ public static partial class ContentWriter
                 world.GeneratedGovernments, generatedWilderness, worldCenters, silkRoad, cfg.Seed, azgaar, counties).Holdings;
 
         // Where an army can march across water: straits and major-river crossings, written into
-        // map_data/adjacencies.csv over the stub the map writer left. See MapGen/Crossings.cs.
+        // map_data/adjacencies.csv over the stub the map writer left. See MapGen/Provinces/Crossings.cs.
         //
         // After the join, not straight after BuildWorld where the crossings are ready: map_data
         // writes that stub on its own thread, after the heightmap, so written any earlier this
@@ -369,7 +369,8 @@ public static partial class ContentWriter
         // renderedElevation for all three, not terra.Elevation: every one of them seeds from
         // province-resolution terrain and then jitters to a sub-pixel position, and has to ask the
         // heightmap the engine renders whether that spot is dry. See ScatterGround.
-        Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, classified.Climate, renderedElevation, rng));
+        Core.Stage.Time("trees", () => TreeWriter.WriteAll(modDir, cfg, terrain, classified.Climate, renderedElevation, rng,
+            classified.RiverWater));
         Core.Stage.Time("animals", () => AnimalWriter.WriteAll(modDir, cfg, terrain, renderedElevation, rng));
         Core.Stage.Time("env effects", () => EnvEffectWriter.WriteAll(modDir, cfg, terrain, renderedElevation, rng));
         Core.Stage.Time("bridges", () => BridgeWriter.WriteAll(modDir, cfg, terra.MajorRiversList, classified.Climate, renderedElevation, rng));
@@ -701,7 +702,7 @@ public static partial class ContentWriter
                     if (title.Tier == "c" && !title.Inherited) jb.Field("definite_form", "no");
 
                     // Stated as vanilla states it on its own duchies and above, though the engine
-                    // would take the first county anyway: the two agree because MapGen/Capitals
+                    // would take the first county anyway: the two agree because MapGen/Titles/Capitals
                     // put the capital first, and saying so keeps a hand edit of the order from
                     // silently moving the seat.
                     if (title.Tier == "h" && hegemonSeat is not null)

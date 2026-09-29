@@ -77,7 +77,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Real-world place names the name generator must avoid (MapGen/Gazetteer.cs). Embedded
+    <!-- Real-world place names the name generator must avoid (MapGen/Language/Gazetteer.cs). Embedded
          rather than copied beside the executable, so a name check can never come up empty
          because the file was not shipped. Rebuild it with tools/make_gazetteer.py. -->
     <None Remove="assets\realworld_places.txt" />

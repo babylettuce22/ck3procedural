@@ -152,7 +152,7 @@ public static class WonderWriter
         return scaled;
     }
 
-    // Emit/WonderWriter.cs -> WriteBuildingDefinitions()
+    // Emit/Map/WonderWriter.cs -> WriteBuildingDefinitions()
 
     private static void WriteBuildingDefinitions(string modDir, WorldCenterMap worldCenters)
     {
@@ -257,7 +257,7 @@ public static class WonderWriter
                         {
                             b.Field("save_scope_as", "gen_wonder_county");
                             // And the chronicle: the county's book, its lieges' and the world's.
-                            // See Emit/ChronicleRuntimeWriter.cs.
+                            // See Emit/History/ChronicleRuntimeWriter.cs.
                             b.Inline("gen_chr_push_up_effect", "TMPL = gen_chr_wonder ACTOR = holder WORLD = yes");
                         }
 

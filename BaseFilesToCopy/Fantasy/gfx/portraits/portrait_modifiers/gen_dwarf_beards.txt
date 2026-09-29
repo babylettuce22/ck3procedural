@@ -1,4 +1,4 @@
-﻿# Every adult male dwarf wears a beard, no exceptions.
+﻿# Every adult male dwarf wears a big beard; the only exception is vanilla's beardless eunuch.
 #
 # An ethnicity cannot ask for this. `beards` is an ACCESSORY gene, and CK3 rejects an ethnicity that
 # names one outright -- "gene category 'beards' cannot be influenced by DNA", ethnicity.cpp:304 --
@@ -58,49 +58,157 @@ gen_dwarf_beard = {
 	# Split by hair type the way vanilla splits its own regional beard sets, so a curly-haired dwarf
 	# does not end up with a straight beard. Dwarf ethnicities roll gene_hair_type at roughly
 	# 45% curly / 35% wavy / 20% straight -- see ApplyMorphGenes in MapGen/Ethnicities.cs -- and the
-	# straight entry below is the fallback for everything that is not curly.
+	# straight entries below are the fallback for everything that is not curly.
 	#
-	# The northern sets are the ones worth having: inside northern_beards_straight the three big
-	# Norse beards carry weight 20 apiece against 5 for each short western one, so about two thirds
-	# of dwarves land on something substantial. `range = { 0 1 }` samples across that list, which is
-	# what vanilla's own entries do and comment as needed "for the randomness to work correctly".
-	gen_dwarf_beard_curly = {
+	# **Big beards only, by name (2026-09-29).** This used to sample the whole northern set with
+	# `range = { 0 1 }`, which also rolls its goatees and short beards: about a third of straight-haired
+	# dwarves and half the curly ones came out looking barely bearded. Each entry now names ONE beard
+	# with `accessory = <name>` + `type = male`, the form vanilla's 02_all_historical_characters.txt
+	# uses to give a named character a specific beard (the accessory must be in the named template).
+	# Straight: the three Norse beards plus the standard full beard. Curly: the big bushy beard plus
+	# the standard full beard -- the curly set holds nothing else of size.
+	#
+	# **Weights stay under 100.** The first entry whose weight reaches 100 is taken outright
+	# (_portrait_modifiers.info), which would make the first beard listed the only one ever worn.
+	# The roll is stable per character, like vanilla's own beard choice.
+	#
+	# **Beardless eunuchs are left alone.** Vanilla's special_beardless_eunuch group shaves them, but
+	# this group applies later and would paint the beard back on; with every entry excluded, the group
+	# selects nothing and vanilla's no_beard stands.
+
+	gen_dwarf_beard_curly_bushy = {
 		dna_modifiers = {
 			accessory = {
 				mode = add
 				gene = beards
 				template = northern_beards_curly
-				range = { 0 1 }
+				accessory = male_beard_western_06	# Big bushy beard
+				type = male
 			}
 		}
 		weight = {
 			base = 0
 			modifier = {
-				add = 100
+				add = 60
 				exists = this
 				is_female = no
 				has_trait = phenotype_stocky
+				NOT = { has_trait = beardless_eunuch }
 				has_gene = { category = gene_hair_type template = hair_curly }
 			}
 		}
 	}
 
-	gen_dwarf_beard_straight = {
+	gen_dwarf_beard_curly_full = {
 		dna_modifiers = {
 			accessory = {
 				mode = add
 				gene = beards
-				template = northern_beards_straight
-				range = { 0 1 }
+				template = northern_beards_curly
+				accessory = male_beard_western_01	# Standard full beard
+				type = male
 			}
 		}
 		weight = {
 			base = 0
 			modifier = {
-				add = 100
+				add = 40
 				exists = this
 				is_female = no
 				has_trait = phenotype_stocky
+				NOT = { has_trait = beardless_eunuch }
+				has_gene = { category = gene_hair_type template = hair_curly }
+			}
+		}
+	}
+
+	gen_dwarf_beard_straight_wide = {
+		dna_modifiers = {
+			accessory = {
+				mode = add
+				gene = beards
+				template = northern_beards_straight
+				accessory = male_beard_northern_01	# Big wide
+				type = male
+			}
+		}
+		weight = {
+			base = 0
+			modifier = {
+				add = 30
+				exists = this
+				is_female = no
+				has_trait = phenotype_stocky
+				NOT = { has_trait = beardless_eunuch }
+				NOT = { has_gene = { category = gene_hair_type template = hair_curly } }
+			}
+		}
+	}
+
+	gen_dwarf_beard_straight_braid = {
+		dna_modifiers = {
+			accessory = {
+				mode = add
+				gene = beards
+				template = northern_beards_straight
+				accessory = male_beard_northern_02	# Single braid
+				type = male
+			}
+		}
+		weight = {
+			base = 0
+			modifier = {
+				add = 25
+				exists = this
+				is_female = no
+				has_trait = phenotype_stocky
+				NOT = { has_trait = beardless_eunuch }
+				NOT = { has_gene = { category = gene_hair_type template = hair_curly } }
+			}
+		}
+	}
+
+	gen_dwarf_beard_straight_beaded = {
+		dna_modifiers = {
+			accessory = {
+				mode = add
+				gene = beards
+				template = northern_beards_straight
+				accessory = male_beard_northern_03	# Beaded beard
+				type = male
+			}
+		}
+		weight = {
+			base = 0
+			modifier = {
+				add = 25
+				exists = this
+				is_female = no
+				has_trait = phenotype_stocky
+				NOT = { has_trait = beardless_eunuch }
+				NOT = { has_gene = { category = gene_hair_type template = hair_curly } }
+			}
+		}
+	}
+
+	gen_dwarf_beard_straight_full = {
+		dna_modifiers = {
+			accessory = {
+				mode = add
+				gene = beards
+				template = northern_beards_straight
+				accessory = male_beard_western_01	# Standard full beard
+				type = male
+			}
+		}
+		weight = {
+			base = 0
+			modifier = {
+				add = 20
+				exists = this
+				is_female = no
+				has_trait = phenotype_stocky
+				NOT = { has_trait = beardless_eunuch }
 				NOT = { has_gene = { category = gene_hair_type template = hair_curly } }
 			}
 		}

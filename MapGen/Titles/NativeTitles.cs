@@ -42,9 +42,9 @@ public sealed record RankWord(string Male, string Female);
 ///
 /// <code>
 /// Related:
-///   MapGen/Language.cs        RankWord, FeminineRank — the compounding itself
-///   Emit/NativeRankWriter.cs  the flavorization, loc, tooltips and flag script built from this
-///   Emit/TitleTierWriter.cs   the English ladders this sits above when both are on
+///   MapGen/Language/Language.cs       RankWord, FeminineRank — the compounding itself
+///   Emit/Culture/NativeRankWriter.cs  the flavorization, loc, tooltips and flag script built from this
+///   Emit/Culture/TitleTierWriter.cs   the English ladders this sits above when both are on
 /// </code>
 ///
 /// ---- Words are compounds of roots, not draws ----

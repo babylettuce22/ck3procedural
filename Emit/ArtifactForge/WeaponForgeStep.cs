@@ -13,7 +13,7 @@ using System.IO;
 /// <see cref="MapGen.ArtifactMap"/> hands out, and <see cref="WeaponAssets"/> does not know they
 /// exist. Everything this feature emits comes from <c>Emit/ArtifactForge/</c>, so removing it means
 /// deleting that folder and its two calls in <see cref="ContentWriter"/>. What is left behind is
-/// <c>Io/PdxMesh.cs</c> and <c>MapGen/WeaponForge.cs</c>, which stay put deliberately: the first is
+/// <c>Io/PdxMesh.cs</c> and <c>MapGen/Artifacts/WeaponForge.cs</c>, which stay put deliberately: the first is
 /// the <c>.mesh</c> format itself and will be wanted for map objects, the second is mesh assembly
 /// with no weapon-specific knowledge in it. Both are libraries, not part of this feature.
 ///

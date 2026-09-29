@@ -1,4 +1,4 @@
-﻿// Emit/FlatmapInk.cs
+﻿// Emit/Map/FlatmapInk.cs
 namespace Ck3MapGen.Emit;
 
 using System;

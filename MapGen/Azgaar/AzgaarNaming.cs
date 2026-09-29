@@ -173,7 +173,7 @@ public static class AzgaarNaming
             if (azgaar.World.State(id) is not { } state) continue;
 
             // The tier already says the form, so the name must not say it too — CK3 would render
-            // "United Provinces of United Provinces of Ryalos". Emit/TitleTierWriter writes one
+            // "United Provinces of United Provinces of Ryalos". Emit/Culture/TitleTierWriter writes one
             // flavorization rule per state title, so the word is carried there for every state that
             // has one, and reading the same list is what keeps the two from disagreeing.
             //

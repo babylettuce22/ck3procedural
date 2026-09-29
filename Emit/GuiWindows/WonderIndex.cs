@@ -36,8 +36,8 @@ namespace Ck3MapGen.Emit;
 ///   gui/scripted_widgets/gen_wonder_index.txt             instantiates the host
 ///
 /// Related generated files, written elsewhere:
-///   Emit/WonderWriter.cs   the buildings themselves, and the `building_<key>` name and
-///                          description loc the rows and the hover panel both read
+///   Emit/Map/WonderWriter.cs   the buildings themselves, and the `building_<key>` name and
+///                              description loc the rows and the hover panel both read
 /// </code>
 ///
 /// Two consequences worth knowing before testing a change here. <c>--gui-only</c> does NOT emit this

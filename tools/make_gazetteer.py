@@ -9,7 +9,7 @@ world CK3's map stops short of: the Americas, East Asia, Oceania, and the modern
 the game only knows by their medieval ones.
 
 Run from the repo root:  python tools/make_gazetteer.py [path-to-ck3/game]
-The output is committed; the generator reads it as an embedded resource (MapGen/Gazetteer.cs),
+The output is committed; the generator reads it as an embedded resource (MapGen/Language/Gazetteer.cs),
 so it never needs the game install at runtime.
 """
 import re

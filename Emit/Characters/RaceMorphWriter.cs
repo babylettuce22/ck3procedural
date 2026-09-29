@@ -61,6 +61,10 @@ public static class RaceMorphWriter
     /// and for horned children whose genome may lack horns — gen_horn_style_ibex and so on.</summary>
     public static string StyleFlag(string style) => $"gen_horn_style_{style}";
 
+    /// <summary>A human for the resets: a traited human, or a human of a mixed line (flag set at birth).</summary>
+    private const string HumanCondition =
+        "OR = { has_trait = phenotype_human has_character_flag = gen_phenotype_human }";
+
     /// <summary>
     /// Race head features that belong to some races only — each gene with its empty template. A race
     /// whose <see cref="RaceMorphs"/> row does not name one has it forced to none.
@@ -69,6 +73,7 @@ public static class RaceMorphWriter
     [
         (PointedEars.Gene, PointedEars.NoneTemplate),
         (OrcTusks.Gene, OrcTusks.NoneTemplate),
+        (GiantFace.Gene, GiantFace.NoneTemplate),
     ];
 
     /// <summary>
@@ -127,15 +132,21 @@ public static class RaceMorphWriter
             HalfEntry(b, "gen_race_morph_half_orc", "has_character_flag = gen_half_orc",
                 FeatureOf(RaceArchetype.Orc, OrcTusks.Gene), f);
 
-            // Every other human of a mixed line: ears and tusks are inheritable, so a quarter-elf
-            // would otherwise show whatever a grandparent handed down. The half features are not
-            // passed on — only the half-race entries above put them back. Weight 50, under both.
+            // Every other human: ears and tusks are inheritable, so a quarter-elf would otherwise
+            // show whatever a grandparent handed down. The half features are not passed on — only
+            // the half-race entries above put them back. Weight 50, under both.
+            //
+            // The human TRAIT counts as well as the mixed-line flag, because history characters are
+            // never flagged: a human born before the bookmark to a minority elf (culture 6 of the
+            // "qw" map lists 15 = a high-elf ethnicity beside its human one) inherited the ears in
+            // DNA and showed them, with nothing to switch them off. No human ethnicity carries ears
+            // or tusks, so on a traited human they are always an inheritance leak.
             using (b.Block("gen_race_morph_mixed_human"))
             {
                 using (b.Block("dna_modifiers"))
                     foreach (var (gene, none) in ExclusiveFeatures)
                         Morph(b, gene, none, 0f, 0f);
-                Weight(b, "has_character_flag = gen_phenotype_human", weight: 50);
+                Weight(b, HumanCondition, weight: 50);
             }
 
             b.Blank();
@@ -163,24 +174,20 @@ public static class RaceMorphWriter
             // nothing ever turns it off: the observed bug was literally a wood-elf-coloured human
             // child. Range { 0 0 } because there is nothing to vary — off is off.
             //
-            // Keyed on the gen_phenotype_human FLAG, deliberately NOT the phenotype_human TRAIT. The
-            // trait is broad racial identity and sits on every member of a human culture; the flag is
-            // set only for humans of a mixed line (see 00_phenotype_birth_effects.txt), which is
-            // exactly the population whose inherited shift needs snapping off.
-            //
-            // Minority-race members used to be the reason for the split — they held the human trait
-            // while their looks came from rolled ethnicity genes, so keying the reset on the trait
-            // erased them. They now hold their own race's trait instead (resolved from their genes by
-            // gen_reconcile_phenotype_with_genes_effect), so they are no longer the argument. The split
-            // still is the right one: a mixed-line human is precisely "human whose inherited shift must
-            // go", and no trait describes that.
-            SkinEntry(b, "gen_race_skin_human", "has_character_flag = gen_phenotype_human",
+            // Keyed on the gen_phenotype_human FLAG (humans of a mixed line, set at birth — see
+            // 00_phenotype_birth_effects.txt) OR the phenotype_human TRAIT. The trait used to be left
+            // out because minority-race members held it while their looks came from rolled ethnicity
+            // genes, so a trait-keyed reset erased them. They now hold their own race's trait
+            // (gen_reconcile_phenotype_with_genes_effect at game start), so that argument is gone —
+            // and the flag alone missed history characters, which are never flagged: a human born
+            // before the bookmark to a minority-elf father rendered with the elven shift (and ears).
+            // No human ethnicity names gen_race_skin, so resetting it on a human removes only leaks.
+            SkinEntry(b, "gen_race_skin_human", HumanCondition,
                 "gen_skin_human", 0f, 0f, weight: 100);
 
-            // The eight fantasy traits and the mixed-line flag are the whole roster; a character with
-            // none of them (a traited-but-unmixed human, or a pre-pulse engine character) has no entry
-            // fire and keeps its inherited appearance — phenotype_human deliberately forces nothing,
-            // human looks belong to the ethnicity.
+            // The eight fantasy traits, the human trait and the mixed-line flag are the whole roster;
+            // a character with none of them (a pre-pulse engine character) has no entry fire and
+            // keeps its inherited appearance.
         }
 
         // ---- Group 3: horns ----------------------------------------------------------------

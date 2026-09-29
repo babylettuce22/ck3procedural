@@ -10,8 +10,8 @@ namespace Ck3MapGen.Emit;
 ///
 /// <code>
 /// Related:
-///   MapGen/NativeTitles.cs     the words, the ranks they gloss, families and variants
-///   Emit/TitleTierWriter.cs    the English ladders underneath, and the caller of this
+///   MapGen/Titles/NativeTitles.cs     the words, the ranks they gloss, families and variants
+///   Emit/Culture/TitleTierWriter.cs   the English ladders underneath, and the caller of this
 ///   game/common/flavorization/_flavourization.info   what every condition below means
 ///   game/common/scripted_effects/00_flavorization_effects.txt   vanilla's own flag bridge
 /// </code>

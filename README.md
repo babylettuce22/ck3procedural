@@ -250,7 +250,7 @@ dotnet run -- --languages Norse 4242 family
 ```
 
 Omit the flavour name to sample all flavours. The implementation lives in
-`MapGen/Language.cs`, `Phonology.cs`, `Lexicon.cs`, and `LanguageFlavour.cs`.
+`MapGen/Language/`: `Language.cs`, `Phonology.cs`, `Lexicon.cs`, and `LanguageFlavour.cs`.
 
 ### Faith icons
 
@@ -269,7 +269,7 @@ stone or wood, lit from the upper left, in vanilla's 100×100 format.
   faith's map colour, and redrawn when the colour is edited.
 
 Choosing a vanilla icon in the Faith inspector replaces the generated one. Turn the feature off
-with Generated Faith Icons in Cultures and faiths. The designs live in `MapGen/FaithIcons.cs`
+with Generated Faith Icons in Cultures and faiths. The designs live in `MapGen/Peoples/FaithIcons.cs`
 and the renderer in `Emit/Relief/`.
 
 ### Native rank titles
@@ -290,7 +290,7 @@ Duchy, Kingdom and Empire. The two options work independently.
   this off with Native rank tooltips.
 
 To sample the words for a language, `--languages` prints them. The coining is in
-`MapGen/NativeTitles.cs` and the game files in `Emit/NativeRankWriter.cs`. From the command
+`MapGen/Titles/NativeTitles.cs` and the game files in `Emit/Culture/NativeRankWriter.cs`. From the command
 line: `--native-titles`, `--native-realms`, `--no-rank-tooltips`.
 
 ### Coats of arms
@@ -301,7 +301,7 @@ Byzantine rondels, steppe tamgas, Iberian bordures and so on) chosen by the same
 faith triggers the game uses. A main house bears its dynasty's arms; a cadet bears them in
 another livery with a cadency mark. Everything is written out, so the bookmark screen and the
 Ruler inspector show real shields. Without a game install, a small fixed set is used instead.
-The rules are run in `Emit/VanillaHeraldry.cs`.
+The rules are run in `Emit/Culture/VanillaHeraldry.cs`.
 
 ## Building from source
 
@@ -355,12 +355,12 @@ watermarks include a generation timestamp, so whole-folder byte identity is not 
 
 | Directory | Responsibility |
 | --- | --- |
-| `AppGUI/` | Windows Forms interface, map previews, inspectors, and editing. |
+| `AppGUI/` | Windows Forms interface, map previews, inspectors, and editing. `MainForm` sits at the top; `Chrome/`, `Map/`, `Inspectors/`, `Workspaces/`, `Dialogs/`, `Quick/`, `Forge/` and `Azgaar/` hold the rest. |
 | `Config/` | Settings, defaults, descriptions, and property-grid behavior. |
 | `Core/` | Pipeline coordination, loaded-world model, RNG, timing, and game discovery. |
-| `MapGen/` | Geography, society and history generation, imports, names, and asset composition. |
+| `MapGen/` | Geography, society and history generation, imports, names, and asset composition, by subject: `Terrain/`, `Climate/`, `Rivers/`, `Provinces/`, `Titles/`, `Peoples/`, `Language/`, `History/`, `Vanilla/`, `Artifacts/`, `Situations/`, `Societies/`, `Azgaar/`. |
 | `World/` | Coarse simulation grid. |
-| `Emit/` | Mod writers and compatibility patches. |
+| `Emit/` | Mod writers and compatibility patches. The pipeline (`ModWriter`, `ContentWriter`, `StaticFileWriter`, `CompatibilityWriter`) sits at the top; the writers are grouped by what they emit: `Map/`, `Terrain/`, `Relief/`, `Characters/`, `Culture/`, `History/`, `Gameplay/`, `Situations/`, `Societies/`, `GuiWindows/`, `ArtifactForge/`. |
 | `Io/` | Image/text formats and source-preserving file edits. |
 | `GameGUI/` | Paradox GUI parsing and preview support. |
 | `BaseFilesToCopy/` | Bundled mod file sets: Core, Wilderness, Ruins, Fantasy, and Societies. |

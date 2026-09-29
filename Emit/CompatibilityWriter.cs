@@ -2171,7 +2171,7 @@ public static partial class CompatibilityWriter
     /// the 3,910 points a 34-year reign had accumulated, and instability needs only 2,000 more to
     /// reach chaos. So one region in five is allowed onto crown ground and the rest are grown
     /// strictly off it — the same rescale-Earth's-proportion-to-this-map argument
-    /// <c>Emit/DynasticCycleWriter.cs</c> makes for the land thresholds.</para>
+    /// <c>Emit/Gameplay/DynasticCycleWriter.cs</c> makes for the land thresholds.</para>
     ///
     /// <para>Only independent rulers pass the participant check, so a county held by any vassal
     /// still makes the top liege the participant: the set that must be rationed is the hegemon's

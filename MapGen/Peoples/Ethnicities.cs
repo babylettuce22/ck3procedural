@@ -125,7 +125,7 @@ internal static class RaceMorphs
             new("gene_height", "normal_height", 0.60f, 0.70f),
             new("gene_bs_body_type", "body_fat_head_fat_low", 0.46f, 0.56f),
             new("gene_bs_body_shape", "body_shape_hourglass_half", 0.14f, 0.30f, Tiered: false),
-            // The real pointed ear (Emit/RaceHeadWriter.cs). It replaced ear_angle and ear_bend,
+            // The real pointed ear (Emit/Characters/RaceHeadWriter.cs). It replaced ear_angle and ear_bend,
             // which were the stock-geometry approximation of one: stacked on the point, the bend
             // curled the tip forward into a crease (rendered 2026-09-28). Bend is now forced to
             // zero so no inherited human fold can do the same; size and outward stay, giving a
@@ -163,7 +163,7 @@ internal static class RaceMorphs
             new("gene_height", "normal_height", 0.58f, 0.72f),
             new("gene_bs_body_type", "body_fat_head_fat_medium", 0.52f, 0.64f),
             new("gene_bs_body_shape", "body_shape_triangle_full", 0.80f, 1.00f, Tiered: false),
-            // Lower tusks (Emit/RaceHeadWriter.cs), pinned to the lower lip so they line up on
+            // Lower tusks (Emit/Characters/RaceHeadWriter.cs), pinned to the lower lip so they line up on
             // every face. Tiered: a low-fantasy orc shows half-grown ones.
             new(OrcTusks.Gene, OrcTusks.LowerTemplate, 0.80f, 1.00f),
             new("gene_jaw_width", "jaw_width_pos", 0.88f, 1.00f),
@@ -184,7 +184,11 @@ internal static class RaceMorphs
             new("gene_bs_body_type", "body_fat_head_fat_full", 0.52f, 0.62f),
             new("gene_bs_body_shape", "body_shape_triangle_full", 0.72f, 0.95f, Tiered: false),
             new("gene_jaw_width", "jaw_width_pos", 0.75f, 1.00f),
-            new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.65f, 0.90f),
+            // The brow shelf and heavy jaw (Emit/Characters/RaceHeadWriter.cs, MapGen/GiantFace.cs).
+            // It replaced gene_bs_forehead_brow_forward, which only pinched the brows into a frown;
+            // that gene is now forced to zero so an inherited human brow cannot stack on the shelf.
+            new(GiantFace.Gene, GiantFace.OnTemplate, 0.80f, 1.00f),
+            new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.00f, 0.00f, Tiered: false),
             new("gene_bs_ear_size", "ear_size_neg", 0.50f, 0.80f),
         ],
         RaceArchetype.Deepkin =>
@@ -201,7 +205,7 @@ internal static class RaceMorphs
         // Highland and steppe herders: rangy rather than bulky, a strong brow for the horns to rise
         // from. The horns themselves are not in this table — they are an accessory gene (a mix of
         // styles per culture, written in ApplyMorphGenes) and are enforced by their own portrait
-        // group in Emit/RaceMorphWriter.cs, together with the skin mound they grow from.
+        // group in Emit/Characters/RaceMorphWriter.cs, together with the skin mound they grow from.
         RaceArchetype.Hornkin =>
         [
             new("gene_height", "normal_height", 0.54f, 0.66f),
@@ -325,7 +329,7 @@ public sealed class EthnicityDef
     /// the world while the number of RACES stays what the user asked for.
     ///
     /// Safe only because race-defining genes are now forced by phenotype trait at render time —
-    /// see Emit/RaceMorphWriter.cs. Before that, more colouring variety per race would have been
+    /// see Emit/Characters/RaceMorphWriter.cs. Before that, more colouring variety per race would have been
     /// more chances to drift out of the race.
     /// </summary>
     public List<EthnicityVariant> Variants { get; } = [];
@@ -1721,7 +1725,7 @@ public static class Ethnicities
 
     /// <summary>
     /// The phonology a race speaks, or null for humans, who draw from the world's real-world
-    /// flavours like any people. Four fantasy tongues for eight races, grouped by kinship: the
+    /// flavours like any people. Five fantasy tongues for eight races, grouped by kinship: the
     /// deepkin are estranged elves, gnomes are dwarf-kin, and giants are as rough-tongued as orcs.
     /// The hornkin have a tongue of their own, from the back of the throat.
     /// Applied by <see cref="Cultures.SpeakAsRace"/>.
@@ -1745,7 +1749,7 @@ public static class Ethnicities
                 // Tall, narrow and unmuscled. The height alone does not read as elven — it is the
                 // absence of bulk beside it that does.
                 // The race-defining genes come from the shared table so the ethnicity and the
-                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                // portrait-modifier enforcement (Emit/Characters/RaceMorphWriter.cs) cannot drift apart.
                 foreach (var m in RaceMorphs.Of(archetype))
                     Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.58f, 0.74f);
@@ -1799,7 +1803,7 @@ public static class Ethnicities
                 // Human height, and a hunter rather than an aristocrat — broader skull, sharper
                 // cheekbones and appreciably more muscle than the high elf carries.
                 // The race-defining genes come from the shared table so the ethnicity and the
-                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                // portrait-modifier enforcement (Emit/Characters/RaceMorphWriter.cs) cannot drift apart.
                 foreach (var m in RaceMorphs.Of(archetype))
                     Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.50f, 0.75f);
@@ -1833,7 +1837,7 @@ public static class Ethnicities
                 // to the old 0.02-0.10 put bs_dwarf_1 at ~0.90 and made this indistinguishable from
                 // the gnome, which really does want the bottom of the ramp.
                 // The race-defining genes come from the shared table so the ethnicity and the
-                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                // portrait-modifier enforcement (Emit/Characters/RaceMorphWriter.cs) cannot drift apart.
                 foreach (var m in RaceMorphs.Of(archetype))
                     Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_width", "neck_width_pos", 0.85f, 1.0f);
@@ -1865,7 +1869,7 @@ public static class Ethnicities
                 // 0.65-0.92, which reads as a heavy bodybuilder. Mass now comes from the muscle
                 // axis and body_type sits barely above neutral.
                 // The race-defining genes come from the shared table so the ethnicity and the
-                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                // portrait-modifier enforcement (Emit/Characters/RaceMorphWriter.cs) cannot drift apart.
                 // The tusk row is the standard tusk's strength; AddTusks spreads it over the variants.
                 foreach (var m in RaceMorphs.Of(archetype))
                 {
@@ -1921,7 +1925,7 @@ public static class Ethnicities
                 // near-zero muscle and a thin neck it no longer collides with the dwarf. The big
                 // splayed ears here are deliberate and are why the elves gave theirs up.
                 // The race-defining genes come from the shared table so the ethnicity and the
-                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                // portrait-modifier enforcement (Emit/Characters/RaceMorphWriter.cs) cannot drift apart.
                 foreach (var m in RaceMorphs.Of(archetype))
                     Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.55f, 0.80f);
@@ -1945,7 +1949,7 @@ public static class Ethnicities
                 // of the value written, so it cannot respond to MorphIntensity. normal_height at the
                 // ceiling reaches the same place and still scales with the map's fantasy level.
                 // The race-defining genes come from the shared table so the ethnicity and the
-                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                // portrait-modifier enforcement (Emit/Characters/RaceMorphWriter.cs) cannot drift apart.
                 foreach (var m in RaceMorphs.Of(archetype))
                     Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_width", "neck_width_pos", 0.85f, 1.0f);
@@ -1966,7 +1970,7 @@ public static class Ethnicities
                 // light-adapted eyes are the distinguishing feature; the old values sank the eye
                 // with eye_depth_pos 0.60-0.85 instead, which is the opposite read.
                 // The race-defining genes come from the shared table so the ethnicity and the
-                // portrait-modifier enforcement (Emit/RaceMorphWriter.cs) cannot drift apart.
+                // portrait-modifier enforcement (Emit/Characters/RaceMorphWriter.cs) cannot drift apart.
                 foreach (var m in RaceMorphs.Of(archetype))
                     Shape(def, rng, m.Tiered ? f : Untiered, m.Gene, m.Template, m.Min, m.Max);
                 Shape(def, rng, f, "gene_neck_length", "neck_length_pos", 0.56f, 0.72f);
@@ -2412,7 +2416,7 @@ public static class Ethnicities
     }
 
     /// <summary>
-    /// An orc culture's mix of inherited tusk shapes (MapGen/OrcTusks.cs): standard, stubby and great
+    /// An orc culture's mix of inherited tusk shapes (MapGen/Peoples/OrcTusks.cs): standard, stubby and great
     /// shuffled onto weights 12/6/3, so one clan runs to great tusks and another to stubby ones, and
     /// families keep theirs by inheritance. All at the standard tusk's strength. Broken tusks are
     /// scars and never in a DNA.

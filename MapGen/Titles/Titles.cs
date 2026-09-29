@@ -789,7 +789,7 @@ public static class Titles
     /// situation, the celestial government's ministry, the Mandate casus belli and the tribute
     /// missions, and a hundred more times in localisation datafunctions. Under a key of its own the
     /// hegemony was a border and a name; under this one every one of those references resolves to
-    /// it, and the Dynastic Cycle can be started on it (Emit/DynasticCycleWriter.cs). The price is
+    /// it, and the Dynastic Cycle can be started on it (Emit/Gameplay/DynasticCycleWriter.cs). The price is
     /// that vanilla's rules about that key apply too — <c>is_alliance_valid</c> forbids alliances
     /// with its holder — and that vanilla's "China" strings have to be re-worded, which
     /// BaseFilesToCopy/Core/localization/english/zz_gen_dynastic_cycle_l_english.yml does.
@@ -849,7 +849,7 @@ public static class Titles
     /// <para><b>It is a region, not the map.</b> The first version parented every empire on the
     /// planet, which made the hegemony's de jure border the coastline and nothing else: a title
     /// that claimed everything said nothing, the Dynastic Cycle's "share of your de jure land"
-    /// tests measured against the whole world (see <c>Emit/DynasticCycleWriter.cs</c>), and no
+    /// tests measured against the whole world (see <c>Emit/Gameplay/DynasticCycleWriter.cs</c>), and no
     /// starting hegemon could ever look like one. What is built now is the shape a real hegemony
     /// has — a heartland of neighbouring empires, one landmass wherever the land offers one,
     /// large enough that no single empire outweighs it and small enough that the rest of the world

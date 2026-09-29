@@ -286,7 +286,7 @@ public static class Steppe
         // it. With no nomad anywhere there is no top herd, the fallback was never written, and
         // opening the window is an access violation inside ck3.exe. Measured on a forest world
         // whose belt came to one county: six steppe provinces out of 5,700, one nomad at 900, none
-        // left by 994, and a hard crash on the click. See Emit/SteppeWriter.cs, which writes
+        // left by 994, and a hard crash on the click. See Emit/Situations/SteppeWriter.cs, which writes
         // nothing at all for an empty map, so the situation is never started.
         int beltCounties = ordered.Sum(g => g.Count);
         int beltNomads = ordered.Sum(g => g.Count(i => isNomad[i]));
@@ -355,7 +355,7 @@ public static class Steppe
         for (int c = 0; c < pieces.Count; c++)
         {
             // Partition returns one slot per graph node, indexed by node id — read it as
-            // owner[node], never positionally over members. See MapGen/Faiths.cs for the bug that
+            // owner[node], never positionally over members. See MapGen/Peoples/Faiths.cs for the bug that
             // rule prevents.
             var owner = RegionGrowth.Partition(graph, pieces[c], quota[c], rng, out _);
 

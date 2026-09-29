@@ -1,4 +1,4 @@
-﻿// Emit/FlatmapWriter.cs
+﻿// Emit/Map/FlatmapWriter.cs
 namespace Ck3MapGen.Emit;
 
 using System;

@@ -94,8 +94,8 @@ public static class GuiWriter
     ///   Societies/localization/english/society_l_english.yml       SOCIETY_TAB_BUTTON
     ///
     /// Related generated files, written elsewhere:
-    ///   Emit/GuiWindows/ChronicleWindow.cs   the chronicle panel and its icon
-    ///   Emit/ChronicleRuntimeWriter.cs       GEN_CHRONICLE_TAB_BUTTON
+    ///   Emit/GuiWindows/ChronicleWindow.cs       the chronicle panel and its icon
+    ///   Emit/History/ChronicleRuntimeWriter.cs   GEN_CHRONICLE_TAB_BUTTON
     /// </code>
     ///
     /// ---- Two of ours, and they have to know about each other ----
@@ -924,7 +924,7 @@ public static class GuiWriter
     ///
     /// <code>
     /// Related base files:
-    ///   Emit/FrontierWriter.cs   writes common/situation/situations/gen_the_wilds.txt
+    ///   Emit/Situations/FrontierWriter.cs   writes common/situation/situations/gen_the_wilds.txt
     /// </code>
     ///
     /// The line is <c>SITUATION_CURRENT_PHASE_ENDS</c>, drawn with no <c>visible</c> of its own,
@@ -1266,8 +1266,8 @@ public static class GuiWriter
     ///   Wilderness/common/scripted_guis/00_wilderness_scripted_gui.txt   wilderness_title
     ///
     /// Related generated files, written elsewhere:
-    ///   Emit/ChronicleWriter.cs          the `gen_lore_&lt;title key&gt;` loc the panel reads
-    ///   Emit/ChronicleRuntimeWriter.cs   gen_chr_line_N, and GEN_CHRONICLE_SINCE
+    ///   Emit/History/ChronicleWriter.cs          the `gen_lore_&lt;title key&gt;` loc the panel reads
+    ///   Emit/History/ChronicleRuntimeWriter.cs   gen_chr_line_N, and GEN_CHRONICLE_SINCE
     /// </code>
     /// </summary>
     private static void PatchTitleWindow(string modDir, string gameDir, bool chronicle,
@@ -1654,7 +1654,7 @@ public static class GuiWriter
     /// Related base files: NONE.
     ///
     /// Related generated files, written elsewhere:
-    ///   Emit/BookmarkWriter.cs   GroupSubtitleKey, and the loc behind it
+    ///   Emit/History/BookmarkWriter.cs   GroupSubtitleKey, and the loc behind it
     /// </code>
     ///
     /// The subtitle asks whether that key resolves to anything before drawing, so a run that wrote

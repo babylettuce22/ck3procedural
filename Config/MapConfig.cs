@@ -737,7 +737,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// Whether All Under Heaven's Dynastic Cycle runs on the hegemony at all.
     ///
     /// On, the situation starts from history the way vanilla's does on China (see
-    /// <c>Emit/DynasticCycleWriter.cs</c>): eras, movements, catalysts, the Mandate of Heaven, and
+    /// <c>Emit/Gameplay/DynasticCycleWriter.cs</c>): eras, movements, catalysts, the Mandate of Heaven, and
     /// the chaos phase that shatters a hegemon who has lost too much. Off, that one history entry
     /// is not written and nothing else is: the hegemony title, the celestial government and its
     /// nine ministries all stand on <c>title:h_china</c> and work without the situation, the
@@ -787,7 +787,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// setting existed produced. On, each heritage fields a regiment its cultures can always
     /// raise, martial or wealthy cultures earn an elite behind a generated innovation, and the
     /// traditions that would have handed out vanilla's named units are kept off generated
-    /// cultures so nothing on the map is called a Huscarl. See <c>MapGen/Retinues.cs</c>.
+    /// cultures so nothing on the map is called a Huscarl. See <c>MapGen/Titles/Retinues.cs</c>.
     /// </summary>
     [Category("02 World State")]
     [Description("Generate a men-at-arms roster for the world: one regiment per heritage, plus an elite "
@@ -1782,7 +1782,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// This is the map_data/adjacencies.csv threshold — a real crossing, drawn on the map and
     /// blockable by a fleet — and so much narrower than the realm bridge above: vanilla crosses
     /// the Øresund and the Bosporus, about 10 px, and the Sicilian narrows at 25, but never the
-    /// Strait of Dover at 30. Zero declares no crossings at all. See MapGen/Crossings.cs.
+    /// Strait of Dover at 30. Zero declares no crossings at all. See MapGen/Provinces/Crossings.cs.
     /// </summary>
     [AdvancedSetting]
     [Category("04 Titles")]
@@ -2252,6 +2252,17 @@ public sealed class MapConfig : CustomTypeDescriptor
     [DisplayName("Map Edge Depth Test")]
     [Description("Stop the dark clouds beyond the map's edge from cutting off hills and mountains that run right up to it. Patches one of the game's shaders from your installed copy of CK3 each time a map is generated. Turn it off if a game update ever makes the map's edge look wrong.")]
     public bool SurroundDepthTest { get; set; } = true;
+
+    /// <summary>
+    /// Ships vanilla's <c>gfx/FX/province_effects.fxh</c> with its effect mask averaged over a
+    /// jittered disc instead of one bilinear texel, so a situation's drought, summer grass or snow
+    /// fades across a province border rather than stopping on it. Patched from the installed game
+    /// at each generation by <see cref="Emit.MapGraphicsWriter"/>; off leaves vanilla's shader.
+    /// </summary>
+    [Category("06 Map Objects")]
+    [DisplayName("Soft Province Effects")]
+    [Description("Fade the ground effects situations paint on whole provinces (the Wilds' grass, the steppe's droughts and snows) across province borders instead of ending them in a hard line. Patches one of the game's shaders from your installed copy of CK3 each time a map is generated. Turn it off if a game update ever makes those effects look wrong.")]
+    public bool SoftProvinceEffects { get; set; } = true;
 
 
     // =========================================================================
@@ -3457,7 +3468,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     public enum HumanLook
     {
         /// <summary>
-        /// Every look family, in an even split, each placed by climate (see MapGen/HumanLooks.cs).
+        /// Every look family, in an even split, each placed by climate (see MapGen/Peoples/HumanLooks.cs).
         /// Seeds from before 2026-09-28 get different human looks under it; nothing else moves.
         /// </summary>
         Varied,
