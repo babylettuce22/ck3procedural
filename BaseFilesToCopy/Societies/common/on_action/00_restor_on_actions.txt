@@ -93,6 +93,12 @@ restor_on_death = {
 		if = {
 			limit = { restor_is_usurper_trigger = yes }
 			remove_global_variable = restor_usurper
+			# Re-picked now (restor_valid_usurper_trigger skips the dying), so reports of suspects do
+			# not go nowhere for up to a year.
+			if = {
+				limit = { restor_underground_trigger = yes }
+				restor_recompute_usurper_effect = yes
+			}
 		}
 	}
 }

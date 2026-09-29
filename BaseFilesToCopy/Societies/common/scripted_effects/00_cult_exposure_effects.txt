@@ -1,0 +1,496 @@
+﻿# The inversion cult's exposure pack: shared effects (cult.0300-0399). See README.txt, THE INVERSION
+# CULT. Built on the Restorationists' exposure effects (00_restor_exposure_effects.txt), with the
+# church's tools in place of a usurper's: examination on the faith, the trial for heresy, public
+# penance, excommunication, and absolution for names.
+#
+# "Within the hunter's reach" is `any_liege_or_above = hunter`, or a guest at the hunter's own court.
+# That is where arrest and trial make sense. A hunter who is also the head of the faith reaches
+# further in one way only: excommunication, which needs no army.
+
+# ---- Named exposure changes ---------------------------------------------------------------------
+#
+# The core's exposure effects speak to the member ("Your exposure rises"). When the HUNTER's choice
+# moves a member's exposure, the hunter's tooltip names whose it is. The member still gets the core
+# effect's own toast.
+
+cult_their_exposure_gain_effect = {
+	$WHO$ = { save_scope_as = cult_exposure_target }
+	save_scope_value_as = {
+		name = cult_their_delta
+		value = $VALUE$
+	}
+	custom_tooltip = cult_their_exposure_gain_tt
+	hidden_effect = {
+		scope:cult_exposure_target = { cult_exposure_gain_effect = { VALUE = $VALUE$ } }
+	}
+}
+
+cult_their_exposure_loss_effect = {
+	$WHO$ = { save_scope_as = cult_exposure_target }
+	save_scope_value_as = {
+		name = cult_their_delta
+		value = $VALUE$
+	}
+	custom_tooltip = cult_their_exposure_loss_tt
+	hidden_effect = {
+		scope:cult_exposure_target = { cult_exposure_loss_effect = { VALUE = $VALUE$ } }
+	}
+}
+
+# ---- Names ----------------------------------------------------------------------------------------
+
+# THIS gives the church the names of the three most careless of the Faithless. Each gains 10 exposure
+# and, if a player, is told who named them.
+cult_name_others_effect = {
+	save_scope_as = cult_informant
+	custom_tooltip = cult_name_others_tt
+	hidden_effect = {
+		ordered_in_global_list = {
+			variable = cult_roster
+			limit = {
+				is_alive = yes
+				has_trait = cult_member
+				NOT = { this = scope:cult_informant }
+			}
+			order_by = {
+				value = 0
+				if = {
+					limit = { has_variable = cult_exposure }
+					add = var:cult_exposure
+				}
+			}
+			max = 3
+			check_range_bounds = no
+			cult_exposure_gain_effect = { VALUE = 10 }
+			if = {
+				limit = { is_ai = no }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult_named_by_informant_toast
+					left_icon = scope:cult_informant
+				}
+			}
+		}
+	}
+}
+
+# THIS (a member) confesses to $TO$ and names names: the pardon-for-names and confession paths. THIS
+# leaves the cult; the Hierophant learns who talked; $TO$ is grateful, and told.
+cult_confess_and_name_effect = {
+	$TO$ = { save_scope_as = cult_confessed_to }
+	save_scope_as = cult_penitent
+	cult_name_others_effect = yes
+	custom_tooltip = cult_confess_and_name_tt
+	hidden_effect = { cult_leave_effect = yes }
+	if = {
+		limit = {
+			exists = global_var:cult_hierophant
+			NOT = { global_var:cult_hierophant = scope:cult_penitent }
+		}
+		global_var:cult_hierophant = {
+			add_opinion = {
+				target = scope:cult_penitent
+				modifier = cult_betrayed_the_cult_opinion
+			}
+		}
+	}
+	scope:cult_confessed_to = {
+		add_opinion = {
+			target = scope:cult_penitent
+			modifier = brought_heretics_to_my_notice_opinion
+		}
+		hidden_effect = {
+			if = {
+				limit = { is_ai = no }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult_confessed_to_you_toast
+					left_icon = scope:cult_penitent
+				}
+			}
+		}
+	}
+}
+
+# ---- The church's instruments ---------------------------------------------------------------------
+
+# ROOT (the hunter) examines $SUSPECT$ on the faith, face to face: learning against learning. A
+# worshipper of the Adversary who slips on a point of doctrine gives the hunter a hook and a reason
+# to hold them; one who answers every question walks out less suspected than they walked in.
+cult_examine_suspect_effect = {
+	save_scope_as = cult_examiner
+	$SUSPECT$ = { save_scope_as = cult_examined }
+	duel = {
+		skill = learning
+		target = scope:cult_examined
+		50 = {
+			desc = cult_examine_caught_toast
+			compare_modifier = {
+				value = scope:duel_value
+				multiplier = 3.5
+				min = -45
+			}
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = cult_examine_caught_toast
+				left_icon = scope:cult_examined
+				add_opinion = {
+					target = scope:cult_examined
+					modifier = treachery_opinion
+				}
+				if = {
+					limit = {
+						can_add_hook = {
+							target = scope:cult_examined
+							type = suspicious_activity_hook
+						}
+					}
+					add_hook = {
+						type = suspicious_activity_hook
+						target = scope:cult_examined
+					}
+				}
+			}
+			cult_their_exposure_gain_effect = { WHO = scope:cult_examined VALUE = 5 }
+			scope:cult_examined = {
+				if = {
+					limit = { is_ai = no }
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = cult_examined_badly_toast
+						left_icon = root
+					}
+				}
+			}
+		}
+		50 = {
+			desc = cult_examine_cleared_toast
+			compare_modifier = {
+				value = scope:duel_value
+				multiplier = -3.5
+				min = -45
+			}
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = cult_examine_cleared_toast
+				left_icon = scope:cult_examined
+			}
+			cult_their_exposure_loss_effect = { WHO = scope:cult_examined VALUE = 5 }
+			scope:cult_examined = {
+				if = {
+					limit = { is_ai = no }
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = cult_examined_well_toast
+						left_icon = root
+					}
+				}
+			}
+		}
+	}
+}
+
+# ROOT (the hunter) arrests $WHO$ to stand trial for heresy. In ROOT's own court, certain. A lord in
+# ROOT's realm has men of their own: a roll, reported either way. Whoever ends up in ROOT's prison
+# is brought to trial within the week (cult.0309 checks that they are still there).
+cult_arrest_member_effect = {
+	$WHO$ = { save_scope_as = cult_accused }
+	if = {
+		limit = {
+			scope:cult_accused = {
+				OR = {
+					is_courtier_of = root
+					is_foreign_court_guest_of = root
+					is_pool_guest_of = root
+				}
+			}
+		}
+		rightfully_imprison_character_effect = {
+			TARGET = scope:cult_accused
+			IMPRISONER = root
+		}
+	}
+	else = {
+		random_list = {
+			60 = {
+				desc = cult_arrest_success_toast
+				modifier = { add = 15 intrigue >= 14 }
+				modifier = { add = 15 dread >= 40 }
+				modifier = { add = -20 scope:cult_accused = { is_landed = yes } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult_arrest_success_toast
+					left_icon = scope:cult_accused
+					rightfully_imprison_character_effect = {
+						TARGET = scope:cult_accused
+						IMPRISONER = root
+					}
+				}
+			}
+			40 = {
+				desc = cult_arrest_failure_toast
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult_arrest_failure_toast
+					left_icon = scope:cult_accused
+					add_prestige = minor_prestige_loss
+					scope:cult_accused = {
+						add_opinion = {
+							target = root
+							modifier = attempted_arrest_opinion
+						}
+					}
+				}
+			}
+		}
+	}
+	custom_tooltip = cult_trial_follows_tt
+	hidden_effect = { trigger_event = { id = cult.0309 days = 7 } }
+}
+
+# ROOT (the hunter) sets $WHO$ a public penance: a fine paid to the church, a walk barefoot before
+# the faithful, a release from ROOT's prison if they were in it. Some penitents mean it and forswear
+# the cult; most go through the motions. Either way the result is reported.
+cult_public_penance_effect = {
+	$WHO$ = { save_scope_as = cult_penitent }
+	add_piety = medium_piety_gain
+	scope:cult_penitent = {
+		if = {
+			limit = { is_imprisoned_by = root }
+			release_from_prison = yes
+		}
+		pay_short_term_gold = {
+			target = root
+			gold = 50
+		}
+		add_prestige = major_prestige_loss
+		stress_impact = {
+			arrogant = medium_stress_impact_gain
+			base = minor_stress_impact_gain
+		}
+	}
+	random_list = {
+		35 = {
+			desc = cult_penance_repents_toast
+			modifier = {
+				add = 20
+				scope:cult_penitent = { has_trait = craven }
+			}
+			modifier = {
+				add = 15
+				scope:cult_penitent = { has_trait = honest }
+			}
+			modifier = {
+				add = -20
+				scope:cult_penitent = { cult_rank_at_least_trigger = { RANK = 50 } }
+			}
+			# The Hierophant is the cult; walking away from it is not on offer.
+			modifier = {
+				factor = 0
+				scope:cult_penitent = { cult_is_hierophant_trigger = yes }
+			}
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = cult_penance_repents_toast
+				left_icon = scope:cult_penitent
+			}
+			scope:cult_penitent = {
+				hidden_effect = {
+					if = {
+						limit = { is_ai = no }
+						send_interface_toast = {
+							type = event_toast_effect_neutral
+							title = cult_penance_repents_toast
+							left_icon = root
+						}
+					}
+				}
+				custom_tooltip = cult_penance_repents_tt
+				hidden_effect = { cult_leave_effect = yes }
+			}
+		}
+		65 = {
+			desc = cult_penance_motions_toast
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = cult_penance_motions_toast
+				left_icon = scope:cult_penitent
+			}
+			scope:cult_penitent = {
+				hidden_effect = {
+					if = {
+						limit = { is_ai = no }
+						send_interface_toast = {
+							type = event_toast_effect_neutral
+							title = cult_penance_motions_toast
+							left_icon = root
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# ROOT (the hunter, and the head of the faith) casts $WHO$ out of the church, the vanilla way: the
+# same effect and piety cost as the Excommunicate interaction.
+cult_excommunicate_effect = {
+	$WHO$ = { save_scope_as = cult_outcast }
+	add_piety = major_piety_loss
+	excommunicate_character = {
+		REQUESTING_CHARACTER = root
+		TARGET_CHARACTER = scope:cult_outcast
+	}
+}
+
+# ---- The search -----------------------------------------------------------------------------------
+
+# ROOT (the hunter) turns the church loose on its own realm: every member of the host faith inside it
+# gains 10 exposure and is warned (cult.0312), and the most exposed is named to ROOT (cult.0310).
+# Used by cult_root_out_heresy_decision.
+cult_root_out_effect = {
+	save_scope_as = cult_seeker
+	add_character_flag = {
+		flag = cult_rooting_out
+		days = 30
+	}
+	every_in_global_list = {
+		variable = cult_roster
+		limit = {
+			is_alive = yes
+			has_trait = cult_member
+			cult_of_the_host_trigger = yes
+			NOT = { this = scope:cult_seeker }
+			OR = {
+				any_liege_or_above = { this = scope:cult_seeker }
+				is_foreign_court_guest_of = scope:cult_seeker
+				is_pool_guest_of = scope:cult_seeker
+			}
+		}
+		cult_exposure_gain_effect = { VALUE = 10 }
+		trigger_event = { id = cult.0312 days = 1 }
+	}
+	if = {
+		limit = {
+			any_in_global_list = {
+				variable = cult_roster
+				is_alive = yes
+				has_trait = cult_member
+				cult_of_the_host_trigger = yes
+				NOT = { this = scope:cult_seeker }
+				OR = {
+					any_liege_or_above = { this = scope:cult_seeker }
+					is_foreign_court_guest_of = scope:cult_seeker
+					is_pool_guest_of = scope:cult_seeker
+				}
+			}
+		}
+		ordered_in_global_list = {
+			variable = cult_roster
+			limit = {
+				is_alive = yes
+				has_trait = cult_member
+				cult_of_the_host_trigger = yes
+				NOT = { this = scope:cult_seeker }
+				OR = {
+					any_liege_or_above = { this = scope:cult_seeker }
+					is_foreign_court_guest_of = scope:cult_seeker
+					is_pool_guest_of = scope:cult_seeker
+				}
+			}
+			order_by = {
+				value = 0
+				if = {
+					limit = { has_variable = cult_exposure }
+					add = var:cult_exposure
+				}
+			}
+			save_scope_as = cult_named
+		}
+		trigger_event = { id = cult.0310 days = 5 }
+	}
+	else = {
+		send_interface_toast = {
+			type = event_toast_effect_neutral
+			title = cult_root_out_nobody_toast
+			left_icon = root
+		}
+	}
+}
+
+# Picks the member a hunter-side event is about: somebody sworn inside ROOT's realm, the careless
+# first. Saves scope:cult_mark; sets nothing when there is nobody.
+cult_pick_mark_in_realm_effect = {
+	save_scope_as = cult_seeker
+	random_in_global_list = {
+		variable = cult_roster
+		limit = {
+			is_alive = yes
+			is_adult = yes
+			has_trait = cult_member
+			NOT = { this = scope:cult_seeker }
+			OR = {
+				any_liege_or_above = { this = scope:cult_seeker }
+				is_foreign_court_guest_of = scope:cult_seeker
+				is_pool_guest_of = scope:cult_seeker
+			}
+		}
+		weight = {
+			base = 5
+			modifier = {
+				add = 10
+				has_variable = cult_exposure
+				var:cult_exposure >= 10
+			}
+			modifier = {
+				add = 10
+				has_variable = cult_exposure
+				var:cult_exposure >= 20
+			}
+		}
+		save_scope_as = cult_mark
+	}
+}
+
+# The same, from anywhere in the faith: confessors hear penitents from every land.
+cult_pick_mark_anywhere_effect = {
+	save_scope_as = cult_seeker
+	random_in_global_list = {
+		variable = cult_roster
+		limit = {
+			is_alive = yes
+			is_adult = yes
+			has_trait = cult_member
+			cult_of_the_host_trigger = yes
+			NOT = { this = scope:cult_seeker }
+		}
+		weight = {
+			base = 5
+			modifier = {
+				add = 15
+				OR = {
+					any_liege_or_above = { this = scope:cult_seeker }
+					is_foreign_court_guest_of = scope:cult_seeker
+					is_pool_guest_of = scope:cult_seeker
+				}
+			}
+			modifier = {
+				add = 10
+				has_variable = cult_exposure
+				var:cult_exposure >= 10
+			}
+		}
+		save_scope_as = cult_mark
+	}
+}
+
+# ROOT learns $WHO$'s secret, if it exists yet: then the vanilla Expose and Blackmail interactions
+# on the character work for them. Tooltipped by the caller.
+cult_reveal_secret_to_root_effect = {
+	$WHO$ = {
+		every_secret = {
+			limit = { secret_type = secret_cult_member }
+			reveal_to = root
+		}
+	}
+}

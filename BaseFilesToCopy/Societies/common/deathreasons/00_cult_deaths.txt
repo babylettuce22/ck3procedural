@@ -1,0 +1,12 @@
+﻿# What an offering to the cult's master is recorded as. Used by cult_offer_sacrifice_interaction.
+#
+# Not vanilla's death_sacrificed_to_gods: every vanilla sacrifice and execution reason is
+# `public_knowledge = yes`, which tells the whole world who the KILLER was (_death_reasons.info).
+# The cult kills in the dark, so the attribution comes off: the world reads "died in captivity",
+# and anyone who does learn the killer reads the _killer string instead. (The prototype's reason,
+# ../../../SocietyPrototype/common/deathreasons/00_society_deaths.txt, carries the full note.)
+
+death_cult_sacrifice = {
+	public_knowledge = no
+	icon = "death_murder.dds"
+}

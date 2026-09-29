@@ -1,0 +1,259 @@
+﻿# The inversion cult's charges: what the Hierophant may ask of a member, and when it is done.
+# See README.txt, THE INVERSION CULT, and 00_cult_charge_effects.txt for the state these read.
+# Built on the Restorationists' charges (00_restor_charge_triggers.txt).
+#
+# The state, on the member:
+#   var:cult_charge           flag:turn_priest / flag:taint / flag:defile_site / flag:offering /
+#                             flag:recruit
+#   var:cult_charge_target    turn_priest only: the priest to turn. Always a character.
+#   var:cult_charge_county    taint / defile_site only: the county to taint or the holy site to
+#                             defile. Always a county title.
+#   var:cult_charge_given     timed, three years. Gone while cult_charge remains = expired.
+#   var:cult_charge_goal      offering only: the cult_power total that completes it.
+#   cult_charge_old_recruits  recruit only: a variable list of the sworn this member had already
+#                             brought in when the charge was given, so only a new recruit counts.
+#
+# ROOT MUST BE THE MEMBER wherever these are asked. Every caller is the member's own on_action,
+# event, or decision, so it is; the nested lists below need a fixed name for the member and `root` is
+# the only one a trigger can use.
+
+cult_charge_has_trigger = {
+	has_variable = cult_charge
+}
+
+# ---- Who is offered one ---------------------------------------------------------------------------
+
+cult_charge_can_be_offered_trigger = {
+	cult_secret_phase_trigger = yes
+	has_trait = cult_member
+	is_adult = yes
+	is_imprisoned = no
+	NOT = { has_variable = cult_charge }
+	NOT = { cult_is_hierophant_trigger = yes }
+	exists = global_var:cult_hierophant
+	global_var:cult_hierophant = { is_alive = yes }
+}
+
+# ---- Targets nobody else is already charged with --------------------------------------------------
+
+# THIS is a character. True when another member already has them as a priest to turn.
+cult_charge_char_taken_trigger = {
+	any_in_global_list = {
+		variable = cult_roster
+		has_variable = cult_charge
+		var:cult_charge = flag:turn_priest
+		has_variable = cult_charge_target
+		var:cult_charge_target = prev
+	}
+}
+
+# THIS is a county title. True when another member is already charged with tainting or defiling it.
+cult_charge_county_taken_trigger = {
+	any_in_global_list = {
+		variable = cult_roster
+		has_variable = cult_charge
+		OR = {
+			var:cult_charge = flag:taint
+			var:cult_charge = flag:defile_site
+		}
+		has_variable = cult_charge_county
+		var:cult_charge_county = prev
+	}
+}
+
+# ---- Which charges make sense right now ------------------------------------------------------------
+
+# THIS is a character. Holds a post that is worth the cult's while: a court chaplain, or a ruler of
+# a theocracy.
+cult_charge_priest_post_trigger = {
+	OR = {
+		has_council_position = councillor_court_chaplain
+		AND = {
+			is_landed = yes
+			government_has_flag = government_is_theocracy
+		}
+	}
+}
+
+# THIS is a candidate priest. An AI priest of the host faith, in a post worth having, who could be
+# approached fairly and is not someone else's charge.
+cult_charge_turn_priest_target_trigger = {
+	is_ai = yes
+	cult_recruitable_trigger = yes
+	NOT = { this = root }
+	cult_charge_priest_post_trigger = yes
+	NOT = { cult_charge_char_taken_trigger = yes }
+}
+
+# THIS is a ruler. A host-faith court with a chaplain to turn, or a host-faith theocrat to turn.
+cult_charge_priest_court_trigger = {
+	faith = global_var:cult_host_faith
+	highest_held_title_tier >= tier_county
+	OR = {
+		cp:councillor_court_chaplain ?= { cult_charge_turn_priest_target_trigger = yes }
+		AND = {
+			government_has_flag = government_is_theocracy
+			cult_charge_turn_priest_target_trigger = yes
+		}
+	}
+}
+
+cult_charge_turn_priest_possible_trigger = {
+	any_ruler = { cult_charge_priest_court_trigger = yes }
+}
+
+# THIS is a county title of the host faith that is not tainted and not already somebody's charge.
+cult_charge_taint_target_trigger = {
+	faith = global_var:cult_host_faith
+	NOT = { has_county_modifier = cult_county_tainted }
+	NOT = { cult_charge_county_taken_trigger = yes }
+}
+
+cult_charge_taint_possible_trigger = {
+	any_county = { cult_charge_taint_target_trigger = yes }
+}
+
+# THIS is a county title: a holy site of the host faith that is not tainted and not already somebody's
+# charge. Holy sites are the church's own ground; they are read from the faith, not the county.
+cult_charge_defile_site_target_trigger = {
+	NOT = { has_county_modifier = cult_county_tainted }
+	NOT = { cult_charge_county_taken_trigger = yes }
+}
+
+cult_charge_defile_site_possible_trigger = {
+	global_var:cult_host_faith = {
+		any_holy_site = {
+			county = { cult_charge_defile_site_target_trigger = yes }
+		}
+	}
+}
+
+# Gold for the offering decision now, or an income that will make it inside the three years.
+cult_charge_offering_possible_trigger = {
+	OR = {
+		gold >= 100
+		monthly_character_income >= 3
+	}
+}
+
+# ---- Is it done? --------------------------------------------------------------------------------------
+
+# Somebody in the roster who calls this member their recruiter, and was not already on the list when
+# the charge was given. The recruitment pack's accept path gives the recruit cult_brought_me_in_opinion
+# towards whoever brought them in.
+cult_charge_recruit_done_trigger = {
+	any_in_global_list = {
+		variable = cult_roster
+		is_alive = yes
+		has_opinion_modifier = {
+			target = root
+			modifier = cult_brought_me_in_opinion
+		}
+		NOT = {
+			root = {
+				is_target_in_variable_list = {
+					name = cult_charge_old_recruits
+					target = prev
+				}
+			}
+		}
+	}
+}
+
+cult_charge_done_trigger = {
+	has_variable = cult_charge
+	OR = {
+		AND = {
+			var:cult_charge = flag:turn_priest
+			exists = var:cult_charge_target
+			var:cult_charge_target = { has_trait = cult_member }
+		}
+		AND = {
+			OR = {
+				var:cult_charge = flag:taint
+				var:cult_charge = flag:defile_site
+			}
+			exists = var:cult_charge_county
+			var:cult_charge_county = { has_county_modifier = cult_county_tainted }
+		}
+		AND = {
+			var:cult_charge = flag:offering
+			has_variable = cult_power
+			has_variable = cult_charge_goal
+			var:cult_power >= var:cult_charge_goal
+		}
+		AND = {
+			var:cult_charge = flag:recruit
+			cult_charge_recruit_done_trigger = yes
+		}
+	}
+}
+
+# ---- Can it still be done? -------------------------------------------------------------------------
+#
+# A charge the world has made impossible is withdrawn, not failed: the member is not blamed for a
+# priest who died, lost the post, or left the faith. Every charge is withdrawn at the Unveiling --
+# there is nothing left to hide inside.
+
+cult_charge_invalid_trigger = {
+	has_variable = cult_charge
+	OR = {
+		NOT = { cult_secret_phase_trigger = yes }
+		AND = {
+			var:cult_charge = flag:turn_priest
+			OR = {
+				NOT = { exists = var:cult_charge_target }
+				var:cult_charge_target = { is_alive = no }
+				var:cult_charge_target = {
+					NOT = { has_trait = cult_member }
+					OR = {
+						NOT = { faith = global_var:cult_host_faith }
+						has_trait = restor_member
+						cult_is_hunter_trigger = yes
+						NOT = { cult_charge_priest_post_trigger = yes }
+					}
+				}
+			}
+		}
+		AND = {
+			var:cult_charge = flag:taint
+			OR = {
+				NOT = { exists = var:cult_charge_county }
+				var:cult_charge_county = {
+					NOT = { has_county_modifier = cult_county_tainted }
+					NOT = { faith = global_var:cult_host_faith }
+				}
+			}
+		}
+		AND = {
+			var:cult_charge = flag:defile_site
+			NOT = { exists = var:cult_charge_county }
+		}
+	}
+}
+
+# ---- The fallback decisions' gates ---------------------------------------------------------------------
+
+# The member holds the charge's county, a county beside it, or a county of the same duchy.
+cult_charge_can_reach_county_trigger = {
+	has_variable = cult_charge
+	var:cult_charge = flag:taint
+	exists = var:cult_charge_county
+	var:cult_charge_county = {
+		OR = {
+			holder ?= root
+			any_neighboring_county = { holder ?= root }
+			duchy ?= {
+				any_de_jure_county = { holder ?= root }
+			}
+		}
+	}
+}
+
+# A lord of the member's own court or realm who might be sounded out for the recruit charge.
+# THIS is the candidate.
+cult_charge_recruit_candidate_trigger = {
+	is_ai = yes
+	cult_recruitable_trigger = yes
+	NOT = { this = root }
+}

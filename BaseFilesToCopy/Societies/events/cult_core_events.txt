@@ -1,0 +1,485 @@
+﻿# The inversion cult's core events: debug, introductions, the soul's cost, the rot's milestones, the
+# capture of the church, the Unveiling, the Purification, and succession.
+#
+#   cult.0001-0004   debug (console)
+#   cult.0010-0011   introductions: a sworn player; the hunter
+#   cult.0050        what the cult took from you (soul corruption)
+#   cult.0601-0603   the rot passes 25 / 50 / 75 (every member)
+#   cult.0701        the church is hollow (every member)
+#   cult.0710-0712   the Unveiling: the unveiler, the sworn, the faithful who were not
+#   cult.0720-0722   the Purification: the head's choice, the sworn, the purifier
+#   cult.0801        the church slips from the cult's hands (every member)
+#   cult.0820        a new Hierophant
+
+namespace = cult
+
+# =====================================================================================
+#  Debug
+# =====================================================================================
+
+cult.0001 = {
+	type = character_event
+	hidden = yes
+	trigger = { cult_active_trigger = yes }
+	immediate = {
+		cult_swear_in_effect = { RANK = 50 }
+		cult_power_gain_effect = { VALUE = 150 }
+	}
+}
+
+# Taint every county of the host faith's holy sites and recompute: walks the rot up.
+cult.0002 = {
+	type = character_event
+	hidden = yes
+	trigger = { cult_active_trigger = yes }
+	immediate = {
+		global_var:cult_host_faith = {
+			every_holy_site = {
+				county = {
+					add_county_modifier = {
+						modifier = cult_county_tainted
+						years = 10
+					}
+				}
+			}
+		}
+		cult_rot_refresh_effect = yes
+	}
+}
+
+# Make yourself the Hierophant.
+cult.0003 = {
+	type = character_event
+	hidden = yes
+	trigger = { cult_active_trigger = yes }
+	immediate = {
+		cult_make_hierophant_effect = yes
+	}
+}
+
+# Swear the host faith's head in (tests the capture).
+cult.0004 = {
+	type = character_event
+	hidden = yes
+	trigger = {
+		cult_active_trigger = yes
+		exists = global_var:cult_host_faith.religious_head
+	}
+	immediate = {
+		global_var:cult_host_faith.religious_head = { cult_swear_in_effect = { RANK = 50 } }
+	}
+}
+
+# =====================================================================================
+#  Introductions
+# =====================================================================================
+
+cult.0010 = {
+	type = character_event
+	title = cult.0010.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_is_hierophant_trigger = yes }
+				desc = cult.0010.desc_hierophant
+			}
+			desc = cult.0010.desc
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:cult_hierophant
+			NOT = { scope:cult_hierophant = root }
+		}
+		character = scope:cult_hierophant
+		animation = personality_cynical
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:cult_hunter }
+		character = scope:cult_hunter
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0010.a
+		custom_tooltip = cult.0010.a.tt
+	}
+}
+
+cult.0011 = {
+	type = character_event
+	title = cult.0011.t
+	desc = cult.0011.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0011.a
+	}
+	option = {
+		name = cult.0011.b
+		custom_tooltip = cult.0011.b.tt
+		hidden_effect = {
+			every_in_global_list = {
+				variable = cult_roster
+				limit = { is_alive = yes }
+				cult_exposure_gain_effect = { VALUE = 3 }
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0050 -- what it took
+# =====================================================================================
+
+cult.0050 = {
+	type = character_event
+	title = cult.0050.t
+	desc = cult.0050.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = stress
+	}
+	trigger = { is_ai = no }
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0050.a
+	}
+}
+
+# =====================================================================================
+#  The rot
+# =====================================================================================
+
+cult.0601 = {
+	type = character_event
+	title = cult.0601.t
+	desc = cult.0601.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	trigger = {
+		is_ai = no
+		cult_secret_phase_trigger = yes
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0601.a
+		custom_tooltip = cult.0601.a.tt
+	}
+}
+
+cult.0602 = {
+	type = character_event
+	title = cult.0602.t
+	desc = cult.0602.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_head }
+		character = scope:cult_head
+	}
+	trigger = {
+		is_ai = no
+		cult_secret_phase_trigger = yes
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0602.a
+		custom_tooltip = cult.0602.a.tt
+	}
+}
+
+cult.0603 = {
+	type = character_event
+	title = cult.0603.t
+	desc = cult.0603.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	trigger = {
+		is_ai = no
+		cult_secret_phase_trigger = yes
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0603.a
+	}
+}
+
+# =====================================================================================
+#  The church captured
+# =====================================================================================
+
+cult.0701 = {
+	type = character_event
+	title = cult.0701.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_head }
+				desc = cult.0701.desc_head
+			}
+			desc = cult.0701.desc_sites
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_head }
+		character = scope:cult_head
+		animation = scheme
+	}
+	trigger = { is_ai = no }	# informational
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0701.a
+		custom_tooltip = cult.0701.a.tt
+	}
+}
+
+# =====================================================================================
+#  The Unveiling
+# =====================================================================================
+
+cult.0710 = {
+	type = character_event
+	title = cult.0710.t
+	desc = cult.0710.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0710.a
+	}
+}
+
+cult.0711 = {
+	type = character_event
+	title = cult.0711.t
+	desc = cult.0711.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_unveiler }
+		character = scope:cult_unveiler
+	}
+	trigger = {
+		is_ai = no
+		exists = scope:cult_unveiler
+		NOT = { this = scope:cult_unveiler }
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0711.a
+	}
+}
+
+# A faithful ruler of the host who was never sworn. The same decision is on their panel now.
+cult.0712 = {
+	type = character_event
+	title = cult.0712.t
+	desc = cult.0712.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_unveiler }
+		character = scope:cult_unveiler
+		animation = personality_bold
+	}
+	immediate = { cult_save_scopes_effect = yes }
+
+	option = {
+		name = cult.0712.a
+		trigger = { NOT = { has_trait = cynical } }
+		add_piety = 50
+		custom_tooltip = cult.0712.a.tt
+	}
+	option = {
+		name = cult.0712.b
+		custom_tooltip = cult.0712.b.tt
+		ai_chance = { base = 0 }
+	}
+	# Some are more interested than horrified.
+	option = {
+		name = cult.0712.c
+		trigger = {
+			OR = {
+				has_trait = cynical
+				cult_sinner_trigger = yes
+			}
+			NOT = { has_trait = restor_member }
+		}
+		cult_swear_in_effect = { RANK = 0 }
+		ai_chance = { base = 0 }
+	}
+}
+
+# =====================================================================================
+#  The Purification
+# =====================================================================================
+
+# To a head of the host faith who is not sworn, yearly while the faith is unveiled.
+cult.0720 = {
+	type = character_event
+	title = cult.0720.t
+	desc = cult.0720.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = personality_zealous
+	}
+	trigger = {
+		cult_unveiled_trigger = yes
+		NOT = { has_trait = cult_member }
+		# Still the head ten days after being asked.
+		exists = global_var:cult_host_faith.religious_head
+		this = global_var:cult_host_faith.religious_head
+	}
+	immediate = { cult_save_scopes_effect = yes }
+
+	option = {
+		name = cult.0720.a
+		custom_tooltip = cult.0720.a.tt
+		hidden_effect = { cult_purify_effect = yes }
+		ai_chance = {
+			base = 70
+			modifier = { add = 30 has_trait = zealous }
+			modifier = { add = -40 has_trait = cynical }
+		}
+	}
+	option = {
+		name = cult.0720.b
+		add_piety = -100
+		# Asked again in five years, not every year.
+		add_character_flag = { flag = cult_declined_purify years = 5 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 40 has_trait = cynical }
+		}
+	}
+}
+
+cult.0721 = {
+	type = character_event
+	title = cult.0721.t
+	desc = cult.0721.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_purifier }
+		character = scope:cult_purifier
+		animation = personality_zealous
+	}
+	trigger = { is_ai = no }	# informational
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0721.a
+		custom_tooltip = cult.0721.a.tt
+	}
+}
+
+cult.0722 = {
+	type = character_event
+	title = cult.0722.t
+	desc = cult.0722.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = personality_zealous
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0722.a
+	}
+}
+
+# =====================================================================================
+#  The church lost; a new Hierophant
+# =====================================================================================
+
+cult.0801 = {
+	type = character_event
+	title = cult.0801.t
+	desc = cult.0801.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_head }
+		character = scope:cult_head
+	}
+	trigger = { is_ai = no }	# informational
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0801.a
+	}
+}
+
+cult.0820 = {
+	type = character_event
+	title = cult.0820.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_is_hierophant_trigger = yes }
+				desc = cult.0820.desc_you
+			}
+			desc = cult.0820.desc
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:cult_hierophant
+			NOT = { scope:cult_hierophant = root }
+		}
+		character = scope:cult_hierophant
+	}
+	trigger = {
+		is_ai = no
+		exists = global_var:cult_hierophant
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0820.a
+	}
+}

@@ -24,7 +24,7 @@ restor_stir_the_county_decision = {
 		has_trait = restor_member
 		has_variable = restor_charge
 		var:restor_charge = flag:stir
-		exists = var:restor_charge_target
+		exists = var:restor_charge_county
 	}
 
 	is_valid_showing_failures_only = {
@@ -38,7 +38,7 @@ restor_stir_the_county_decision = {
 		}
 		custom_tooltip = {
 			text = restor_stir_the_county_not_stirred_tt
-			var:restor_charge_target = {
+			var:restor_charge_county = {
 				NOT = { has_county_modifier = restor_county_stirred }
 			}
 		}
@@ -49,7 +49,7 @@ restor_stir_the_county_decision = {
 	}
 
 	effect = {
-		restor_charge_stir_county_effect = { COUNTY = var:restor_charge_target }
+		restor_charge_stir_county_effect = { COUNTY = var:restor_charge_county }
 		restor_exposure_gain_effect = { VALUE = 5 }
 		hidden_effect = { restor_charge_check_effect = yes }
 	}

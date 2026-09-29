@@ -1,0 +1,640 @@
+﻿# The inversion cult's charges: giving, checking, completing, expiring. cult.0500-0599.
+# See README.txt, THE INVERSION CULT, and 00_cult_charge_triggers.txt for the state.
+# Built on the Restorationists' charges (00_restor_charge_effects.txt), fixes included.
+#
+# One path for everything. The yearly member pulse and the players' quarterly check both call
+# cult_charge_check_effect; the decisions and events that do a charge's work call it too, so a
+# charge completes the moment it is done rather than at the next pulse.
+#
+# ROOT is the member throughout.
+
+# =====================================================================================
+#  The pulses
+# =====================================================================================
+
+# The yearly member pulse (cult_charge_pulse).
+cult_charge_pulse_effect = {
+	if = {
+		limit = { has_variable = cult_charge }
+		cult_charge_check_effect = yes
+
+		# Still open: the AI works at it in the abstract; a player is given a chance to act on it.
+		if = {
+			limit = { has_variable = cult_charge }
+			if = {
+				limit = { is_ai = yes }
+				random = {
+					chance = 35
+					cult_charge_ai_attempt_effect = yes
+				}
+			}
+			else = {
+				random = {
+					chance = 50
+					cult_charge_opportunity_effect = yes
+				}
+			}
+		}
+	}
+	else_if = {
+		limit = { cult_charge_can_be_offered_trigger = yes }
+		random = {
+			chance = 50
+			cult_charge_offer_effect = yes
+		}
+	}
+}
+
+# Checks an open charge: withdrawn if the world made it impossible, paid if it is done, failed if
+# its three years are up.
+cult_charge_check_effect = {
+	if = {
+		limit = { has_variable = cult_charge }
+		if = {
+			limit = { cult_charge_invalid_trigger = yes }
+			cult_charge_withdraw_effect = yes
+		}
+		else_if = {
+			limit = { cult_charge_done_trigger = yes }
+			cult_charge_complete_effect = yes
+		}
+		else_if = {
+			limit = { NOT = { has_variable = cult_charge_given } }
+			cult_charge_expire_effect = yes
+		}
+	}
+}
+
+# =====================================================================================
+#  Giving a charge
+# =====================================================================================
+
+# Picks a charge that can be done right now and gives it. The AI takes it silently; a player gets
+# the Hierophant's note (cult.0501) and may turn it down.
+cult_charge_offer_effect = {
+	random_list = {
+		30 = {
+			trigger = { cult_charge_turn_priest_possible_trigger = yes }
+			cult_charge_give_turn_priest_effect = yes
+		}
+		25 = {
+			trigger = { cult_charge_taint_possible_trigger = yes }
+			modifier = {
+				add = 10
+				is_landed = yes
+			}
+			cult_charge_give_taint_effect = yes
+		}
+		# The church's own ground is for those the circle already trusts.
+		10 = {
+			trigger = { cult_charge_defile_site_possible_trigger = yes }
+			modifier = {
+				add = 15
+				cult_rank_at_least_trigger = { RANK = 25 }
+			}
+			cult_charge_give_defile_site_effect = yes
+		}
+		20 = {
+			trigger = { cult_charge_offering_possible_trigger = yes }
+			modifier = {
+				add = 15
+				gold >= 200
+			}
+			cult_charge_give_offering_effect = yes
+		}
+		10 = {
+			cult_charge_give_recruit_effect = yes
+		}
+	}
+	if = {
+		limit = {
+			has_variable = cult_charge
+			is_ai = no
+		}
+		trigger_event = { id = cult.0501 days = 1 }
+	}
+}
+
+# The timer every charge shares.
+cult_charge_start_timer_effect = {
+	set_variable = {
+		name = cult_charge_given
+		value = yes
+		years = 3
+	}
+}
+
+# The nearest court of the host faith with a chaplain worth turning, or the nearest theocrat.
+cult_charge_give_turn_priest_effect = {
+	location = { save_scope_as = cult_charge_member_location }
+	ordered_ruler = {
+		limit = { cult_charge_priest_court_trigger = yes }
+		order_by = {
+			value = "capital_province.squared_distance(scope:cult_charge_member_location)"
+			multiply = -1
+		}
+		if = {
+			limit = {
+				cp:councillor_court_chaplain ?= { cult_charge_turn_priest_target_trigger = yes }
+			}
+			cp:councillor_court_chaplain = { save_scope_as = cult_charge_pick }
+		}
+		else = {
+			save_scope_as = cult_charge_pick
+		}
+	}
+	if = {
+		limit = { exists = scope:cult_charge_pick }
+		set_variable = { name = cult_charge value = flag:turn_priest }
+		set_variable = { name = cult_charge_target value = scope:cult_charge_pick }
+		cult_charge_start_timer_effect = yes
+	}
+}
+
+# The nearest county of the host faith that is not tainted yet.
+cult_charge_give_taint_effect = {
+	location = { save_scope_as = cult_charge_member_location }
+	ordered_county = {
+		limit = { cult_charge_taint_target_trigger = yes }
+		order_by = {
+			value = "title_province.squared_distance(scope:cult_charge_member_location)"
+			multiply = -1
+		}
+		save_scope_as = cult_charge_pick_county
+	}
+	if = {
+		limit = { exists = scope:cult_charge_pick_county }
+		set_variable = { name = cult_charge value = flag:taint }
+		set_variable = { name = cult_charge_county value = scope:cult_charge_pick_county }
+		cult_charge_start_timer_effect = yes
+	}
+}
+
+# The nearest holy site of the host faith that is not tainted yet.
+cult_charge_give_defile_site_effect = {
+	location = { save_scope_as = cult_charge_member_location }
+	global_var:cult_host_faith = {
+		every_holy_site = {
+			county = {
+				if = {
+					limit = { cult_charge_defile_site_target_trigger = yes }
+					add_to_temporary_list = cult_charge_site_candidates
+				}
+			}
+		}
+	}
+	ordered_in_list = {
+		list = cult_charge_site_candidates
+		order_by = {
+			value = "title_province.squared_distance(scope:cult_charge_member_location)"
+			multiply = -1
+		}
+		save_scope_as = cult_charge_pick_county
+	}
+	if = {
+		limit = { exists = scope:cult_charge_pick_county }
+		set_variable = { name = cult_charge value = flag:defile_site }
+		set_variable = { name = cult_charge_county value = scope:cult_charge_pick_county }
+		cult_charge_start_timer_effect = yes
+	}
+}
+
+# The goal is the dark power the member holds now, plus 60.
+cult_charge_give_offering_effect = {
+	set_variable = { name = cult_charge value = flag:offering }
+	if = {
+		limit = { has_variable = cult_power }
+		set_variable = { name = cult_charge_goal value = var:cult_power }
+		change_variable = { name = cult_charge_goal add = 60 }
+	}
+	else = {
+		set_variable = { name = cult_charge_goal value = 60 }
+	}
+	cult_charge_start_timer_effect = yes
+}
+
+# Remembers who this member had already brought in, so only a new oath counts.
+cult_charge_give_recruit_effect = {
+	set_variable = { name = cult_charge value = flag:recruit }
+	clear_variable_list = cult_charge_old_recruits
+	every_in_global_list = {
+		variable = cult_roster
+		limit = {
+			has_opinion_modifier = {
+				target = root
+				modifier = cult_brought_me_in_opinion
+			}
+		}
+		save_temporary_scope_as = cult_charge_old
+		root = {
+			add_to_variable_list = {
+				name = cult_charge_old_recruits
+				target = scope:cult_charge_old
+			}
+		}
+	}
+	cult_charge_start_timer_effect = yes
+}
+
+# =====================================================================================
+#  Reading and clearing the state
+# =====================================================================================
+
+# For event loc: scope:cult_charge_target (a character) or scope:cult_charge_county (a title),
+# scope:cult_charge_kind (the flag), and for a chaplain, scope:cult_charge_court (the ruler the
+# chaplain serves). Call before clearing, so the event still has them.
+cult_charge_save_state_effect = {
+	if = {
+		limit = { has_variable = cult_charge }
+		save_scope_value_as = {
+			name = cult_charge_kind
+			value = var:cult_charge
+		}
+	}
+	if = {
+		limit = {
+			has_variable = cult_charge
+			OR = {
+				var:cult_charge = flag:taint
+				var:cult_charge = flag:defile_site
+			}
+			exists = var:cult_charge_county
+		}
+		var:cult_charge_county = { save_scope_as = cult_charge_county }
+	}
+	else_if = {
+		limit = {
+			has_variable = cult_charge
+			var:cult_charge = flag:turn_priest
+			exists = var:cult_charge_target
+		}
+		var:cult_charge_target = {
+			save_scope_as = cult_charge_target
+			if = {
+				limit = { has_council_position = councillor_court_chaplain }
+				liege ?= { save_scope_as = cult_charge_court }
+			}
+		}
+	}
+	if = {
+		limit = {
+			has_variable = cult_charge
+			var:cult_charge = flag:offering
+			has_variable = cult_charge_goal
+		}
+		save_scope_value_as = {
+			name = cult_charge_goal_value
+			value = var:cult_charge_goal
+		}
+	}
+}
+
+cult_charge_clear_effect = {
+	remove_variable = cult_charge
+	remove_variable = cult_charge_target
+	remove_variable = cult_charge_county
+	remove_variable = cult_charge_given
+	remove_variable = cult_charge_goal
+	clear_variable_list = cult_charge_old_recruits
+}
+
+# =====================================================================================
+#  Endings
+# =====================================================================================
+
+# What a kept charge pays. Called from the completion events' options (so the player sees it) and
+# directly for the AI. The rot is recomputed: most charges changed the map.
+cult_charge_reward_effect = {
+	cult_power_gain_effect = { VALUE = $POWER$ }
+	add_trait_xp = {
+		trait = cult_member
+		track = cult_rank
+		value = $XP$
+	}
+	if = {
+		limit = {
+			exists = global_var:cult_hierophant
+			NOT = { global_var:cult_hierophant = root }
+		}
+		global_var:cult_hierophant = {
+			add_opinion = {
+				target = root
+				modifier = cult_kept_charge_opinion
+			}
+		}
+	}
+	hidden_effect = { cult_rot_refresh_effect = yes }
+}
+
+# The charge is done. Players get the event for its kind; the AI is paid at once. The state is
+# cleared before the event arrives, so a second check in the meantime cannot pay twice.
+cult_charge_complete_effect = {
+	cult_save_scopes_effect = yes
+	cult_charge_save_state_effect = yes
+	if = {
+		limit = { is_ai = no }
+		if = {
+			limit = { var:cult_charge = flag:turn_priest }
+			trigger_event = { id = cult.0510 days = 1 }
+		}
+		else_if = {
+			limit = { var:cult_charge = flag:taint }
+			trigger_event = { id = cult.0511 days = 1 }
+		}
+		else_if = {
+			limit = { var:cult_charge = flag:defile_site }
+			trigger_event = { id = cult.0512 days = 1 }
+		}
+		else_if = {
+			limit = { var:cult_charge = flag:offering }
+			trigger_event = { id = cult.0513 days = 1 }
+		}
+		else = {
+			trigger_event = { id = cult.0514 days = 1 }
+		}
+	}
+	else = {
+		if = {
+			limit = { var:cult_charge = flag:turn_priest }
+			cult_charge_reward_effect = { POWER = 50 XP = 15 }
+		}
+		else_if = {
+			limit = { var:cult_charge = flag:taint }
+			cult_charge_reward_effect = { POWER = 35 XP = 10 }
+		}
+		else_if = {
+			limit = { var:cult_charge = flag:defile_site }
+			cult_charge_reward_effect = { POWER = 60 XP = 15 }
+		}
+		else_if = {
+			limit = { var:cult_charge = flag:offering }
+			cult_charge_reward_effect = { POWER = 20 XP = 12 }
+		}
+		else = {
+			cult_charge_reward_effect = { POWER = 40 XP = 12 }
+		}
+	}
+	cult_charge_clear_effect = yes
+}
+
+# What a failed or refused charge costs.
+cult_charge_penalty_effect = {
+	cult_power_spend_effect = { VALUE = $POWER$ }
+	if = {
+		limit = {
+			exists = global_var:cult_hierophant
+			NOT = { global_var:cult_hierophant = root }
+		}
+		global_var:cult_hierophant = {
+			add_opinion = {
+				target = root
+				modifier = cult_failed_charge_opinion
+			}
+		}
+	}
+}
+
+# Three years and nothing done.
+cult_charge_expire_effect = {
+	cult_save_scopes_effect = yes
+	cult_charge_save_state_effect = yes
+	if = {
+		limit = { is_ai = no }
+		trigger_event = { id = cult.0520 days = 1 }
+	}
+	else = {
+		cult_charge_penalty_effect = { POWER = 15 }
+	}
+	cult_charge_clear_effect = yes
+}
+
+# The world made the charge impossible. No blame; a player is told why.
+cult_charge_withdraw_effect = {
+	cult_save_scopes_effect = yes
+	cult_charge_save_state_effect = yes
+	if = {
+		limit = { is_ai = no }
+		if = {
+			limit = { NOT = { cult_secret_phase_trigger = yes } }
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = cult_charge_withdrawn_toast
+				left_icon = root
+				custom_tooltip = cult_charge_withdrawn_unveiled_tt
+			}
+		}
+		else = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = cult_charge_withdrawn_toast
+				left_icon = root
+				custom_tooltip = cult_charge_withdrawn_tt
+			}
+		}
+	}
+	cult_charge_clear_effect = yes
+}
+
+# =====================================================================================
+#  The AI's abstract year of work
+# =====================================================================================
+#
+# Each kind does its real work on the map where it has one, then completes. A roll that cannot be
+# made (no gold, nobody to recruit, a priest who will not listen) leaves the charge open for another
+# year.
+
+cult_charge_ai_attempt_effect = {
+	if = {
+		limit = {
+			OR = {
+				var:cult_charge = flag:taint
+				var:cult_charge = flag:defile_site
+			}
+			exists = var:cult_charge_county
+		}
+		cult_charge_taint_county_effect = { COUNTY = var:cult_charge_county }
+		cult_exposure_gain_effect = { VALUE = 4 }
+		cult_charge_complete_effect = yes
+	}
+	else_if = {
+		limit = {
+			var:cult_charge = flag:turn_priest
+			exists = var:cult_charge_target
+			var:cult_charge_target = {
+				is_ai = yes
+				is_imprisoned = no
+			}
+		}
+		var:cult_charge_target = { save_scope_as = cult_charge_target }
+		random_list = {
+			50 = {
+				modifier = {
+					add = 20
+					scope:cult_charge_target = { cult_sinner_trigger = yes }
+				}
+				cult_charge_swear_priest_effect = { PRIEST = scope:cult_charge_target }
+				cult_charge_complete_effect = yes
+			}
+			50 = {
+				modifier = {
+					add = 20
+					scope:cult_charge_target = { has_trait = zealous }
+				}
+				cult_exposure_gain_effect = { VALUE = 3 }
+			}
+		}
+	}
+	else_if = {
+		limit = {
+			var:cult_charge = flag:offering
+			gold >= 100
+		}
+		remove_short_term_gold = 100
+		cult_power_gain_effect = { VALUE = 60 }
+		cult_corrupt_soul_effect = yes
+		cult_charge_complete_effect = yes
+	}
+	else_if = {
+		limit = {
+			var:cult_charge = flag:recruit
+			OR = {
+				any_vassal = { cult_charge_recruit_candidate_trigger = yes }
+				any_courtier = {
+					is_adult = yes
+					cult_charge_recruit_candidate_trigger = yes
+				}
+			}
+		}
+		cult_charge_pick_recruit_effect = yes
+		random_list = {
+			50 = {
+				modifier = {
+					add = 20
+					scope:cult_charge_recruit = { cult_sinner_trigger = yes }
+				}
+				scope:cult_charge_recruit = {
+					cult_swear_in_effect = { RANK = 0 }
+					add_opinion = {
+						target = root
+						modifier = cult_brought_me_in_opinion
+					}
+				}
+				cult_charge_complete_effect = yes
+			}
+			50 = {
+				scope:cult_charge_recruit = {
+					add_character_flag = {
+						flag = cult_refused_recently
+						years = 5
+					}
+				}
+				cult_exposure_gain_effect = { VALUE = 3 }
+			}
+		}
+	}
+}
+
+# Saves scope:cult_charge_recruit: a vassal if there is one to ask, else a courtier. The host's
+# sinners first -- what the church calls sin, the cult calls promise.
+cult_charge_pick_recruit_effect = {
+	if = {
+		limit = { any_vassal = { cult_charge_recruit_candidate_trigger = yes } }
+		random_vassal = {
+			limit = { cult_charge_recruit_candidate_trigger = yes }
+			weight = {
+				base = 1
+				modifier = {
+					add = 2
+					opinion = {
+						target = root
+						value >= 25
+					}
+				}
+				modifier = {
+					add = 3
+					cult_sinner_trigger = yes
+				}
+			}
+			save_scope_as = cult_charge_recruit
+		}
+	}
+	else = {
+		random_courtier = {
+			limit = {
+				is_adult = yes
+				cult_charge_recruit_candidate_trigger = yes
+			}
+			weight = {
+				base = 1
+				modifier = {
+					add = 2
+					opinion = {
+						target = root
+						value >= 25
+					}
+				}
+				modifier = {
+					add = 3
+					cult_sinner_trigger = yes
+				}
+			}
+			save_scope_as = cult_charge_recruit
+		}
+	}
+}
+
+# =====================================================================================
+#  Doing the work
+# =====================================================================================
+
+# A priest takes the oath at the member's hand. The chaplain's seat now counts toward the rot.
+cult_charge_swear_priest_effect = {
+	$PRIEST$ = {
+		cult_swear_in_effect = { RANK = 0 }
+		add_opinion = {
+			target = root
+			modifier = cult_brought_me_in_opinion
+		}
+	}
+	hidden_effect = { cult_rot_refresh_effect = yes }
+}
+
+# Tainting a county by hand: the fallback decision, cult.0531, cult.0532 and the AI.
+cult_charge_taint_county_effect = {
+	$COUNTY$ = {
+		add_county_modifier = {
+			modifier = cult_county_tainted
+			years = 10
+		}
+	}
+	hidden_effect = { cult_rot_refresh_effect = yes }
+}
+
+# =====================================================================================
+#  A player's chance to act
+# =====================================================================================
+#
+# Once a year, sometimes, a player with an open charge is handed a way to do it: cult.0530-0534.
+# Each event re-checks that it still applies.
+
+cult_charge_opportunity_effect = {
+	if = {
+		limit = { var:cult_charge = flag:turn_priest }
+		trigger_event = { id = cult.0530 days = { 30 120 } }
+	}
+	else_if = {
+		limit = { var:cult_charge = flag:taint }
+		trigger_event = { id = cult.0531 days = { 30 120 } }
+	}
+	else_if = {
+		limit = { var:cult_charge = flag:defile_site }
+		trigger_event = { id = cult.0532 days = { 30 120 } }
+	}
+	else_if = {
+		limit = { var:cult_charge = flag:offering }
+		trigger_event = { id = cult.0533 days = { 30 120 } }
+	}
+	else = {
+		trigger_event = { id = cult.0534 days = { 30 120 } }
+	}
+}

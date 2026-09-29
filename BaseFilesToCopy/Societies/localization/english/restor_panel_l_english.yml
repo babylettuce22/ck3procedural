@@ -1,7 +1,7 @@
 ﻿l_english:
 
  # The HUD tab (key kept from the prototype; Emit/GuiWriter.cs names it).
- SOCIETY_TAB_BUTTON:0 "#T $restor_society_name$#!"
+ SOCIETY_TAB_BUTTON:0 "#T Your Society#!"
 
  RESTOR_PANEL_TITLE:0 "$restor_society_name$"
  RESTOR_PANEL_AIM:0 "Sworn to put House $restor_house_name$ back on the throne of #high $restor_crown_name$#!, which has had no king of the house since $restor_fell_year$. The old seat is $restor_seat_name$."

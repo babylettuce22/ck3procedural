@@ -1,0 +1,62 @@
+﻿# One line naming a member's current charge, for the cult panel: [GetPlayer.Custom('CultCurrentCharge')].
+# ROOT is the member. Keys in cult_charge_l_english.yml.
+
+CultCurrentCharge = {
+	type = character
+
+	text = {
+		trigger = {
+			has_variable = cult_charge
+			var:cult_charge = flag:turn_priest
+			exists = var:cult_charge_target
+		}
+		localization_key = cult_charge_line_turn_priest
+	}
+	text = {
+		trigger = {
+			has_variable = cult_charge
+			var:cult_charge = flag:taint
+			exists = var:cult_charge_county
+		}
+		localization_key = cult_charge_line_taint
+	}
+	text = {
+		trigger = {
+			has_variable = cult_charge
+			var:cult_charge = flag:defile_site
+			exists = var:cult_charge_county
+		}
+		localization_key = cult_charge_line_defile_site
+	}
+	text = {
+		trigger = {
+			has_variable = cult_charge
+			var:cult_charge = flag:offering
+			has_variable = cult_charge_goal
+		}
+		localization_key = cult_charge_line_offering
+	}
+	text = {
+		trigger = {
+			has_variable = cult_charge
+			var:cult_charge = flag:recruit
+		}
+		localization_key = cult_charge_line_recruit
+	}
+	text = {
+		localization_key = cult_charge_line_none
+	}
+}
+
+# The deadline, or "overdue" in the days between the timer running out and the next check.
+CultChargeDeadline = {
+	type = character
+
+	text = {
+		trigger = { has_variable = cult_charge_given }
+		localization_key = cult_charge_deadline
+	}
+	text = {
+		localization_key = cult_charge_overdue
+	}
+}

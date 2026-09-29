@@ -1,0 +1,63 @@
+﻿# The hunter's decision: turn the church loose on the realm looking for the Faithless. See
+# cult_root_out_effect (00_cult_exposure_effects.txt).
+#
+# Shown only to the hunter (never sworn: cult_valid_hunter_trigger; cult.0011 told them the cult
+# exists), and only while the cult is secret. Every member of the host faith inside the realm gains
+# 10 exposure and is warned (cult.0312); the most exposed of them is named to the hunter (cult.0310).
+# If nobody sworn is inside the realm, a toast says so.
+
+cult_root_out_heresy_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_personal_religious.dds"
+	}
+	ai_check_interval = 36
+
+	desc = cult_root_out_heresy_decision_desc
+	selection_tooltip = cult_root_out_heresy_decision_tooltip
+
+	cooldown = { years = 5 }
+
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		cult_is_hunter_trigger = yes
+		NOT = { has_trait = cult_member }
+	}
+
+	is_valid_showing_failures_only = {
+		is_adult = yes
+		is_imprisoned = no
+	}
+
+	cost = {
+		gold = 100
+		piety = 150
+	}
+
+	effect = {
+		custom_tooltip = cult_root_out_heresy_effect_tt
+		hidden_effect = { cult_root_out_effect = yes }
+	}
+
+	ai_potential = {
+		cult_is_hunter_trigger = yes
+		gold >= 250
+		piety >= 300
+	}
+
+	ai_will_do = {
+		base = 5
+		modifier = { add = 25 has_trait = zealous }
+		modifier = { add = 15 has_trait = paranoid }
+		modifier = {
+			add = 15
+			exists = global_var:cult_rot
+			global_var:cult_rot >= 25
+		}
+		modifier = {
+			add = 25
+			exists = global_var:cult_rot
+			global_var:cult_rot >= 50
+		}
+		modifier = { add = -5 has_trait = cynical }
+	}
+}

@@ -3,8 +3,9 @@
 #
 # The state, on the member:
 #   var:restor_charge          flag:win_over / flag:war_chest / flag:stir / flag:shelter / flag:recruit
-#   var:restor_charge_target   the lord to win over or the heir to shelter (a character), or the county
-#                              to stir (a title). Unset for war_chest and recruit.
+#   var:restor_charge_target   win_over / shelter only: the lord to win over or the heir to shelter.
+#                              Always a character.
+#   var:restor_charge_county   stir only: the county to stir. Always a county title.
 #   var:restor_charge_given    timed, three years. Gone while restor_charge remains = expired.
 #   var:restor_charge_goal     war_chest only: the restor_given_to_cause total that completes it.
 #   restor_charge_old_recruits recruit only: a variable list of the sworn this member had already
@@ -55,8 +56,8 @@ restor_charge_county_taken_trigger = {
 		variable = restor_roster
 		has_variable = restor_charge
 		var:restor_charge = flag:stir
-		has_variable = restor_charge_target
-		var:restor_charge_target = prev
+		has_variable = restor_charge_county
+		var:restor_charge_county = prev
 	}
 }
 
@@ -176,8 +177,8 @@ restor_charge_done_trigger = {
 		}
 		AND = {
 			var:restor_charge = flag:stir
-			exists = var:restor_charge_target
-			var:restor_charge_target = { has_county_modifier = restor_county_stirred }
+			exists = var:restor_charge_county
+			var:restor_charge_county = { has_county_modifier = restor_county_stirred }
 		}
 		AND = {
 			var:restor_charge = flag:shelter
@@ -216,7 +217,7 @@ restor_charge_invalid_trigger = {
 		}
 		AND = {
 			var:restor_charge = flag:stir
-			NOT = { exists = var:restor_charge_target }
+			NOT = { exists = var:restor_charge_county }
 		}
 		AND = {
 			var:restor_charge = flag:shelter
@@ -245,9 +246,9 @@ restor_charge_invalid_trigger = {
 restor_charge_can_reach_county_trigger = {
 	has_variable = restor_charge
 	var:restor_charge = flag:stir
-	exists = var:restor_charge_target
+	exists = var:restor_charge_county
 	OR = {
-		var:restor_charge_target = {
+		var:restor_charge_county = {
 			OR = {
 				holder ?= root
 				any_neighboring_county = { holder ?= root }
@@ -256,9 +257,7 @@ restor_charge_can_reach_county_trigger = {
 				}
 			}
 		}
-		# restor_charge_target holds a county here; tiger types it by its first (character) set.
-		#tiger-ignore(key=scopes)
-		location.county ?= { this = root.var:restor_charge_target }
+		location.county ?= { this = root.var:restor_charge_county }
 	}
 }
 

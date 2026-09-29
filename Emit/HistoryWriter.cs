@@ -1427,7 +1427,7 @@ public static class HistoryWriter
     /// map between <see cref="RulerMap.Build"/> and this writer; reading the map directly keeps
     /// this correct even if that changes.
     /// </summary>
-    private static string? TemporalHeadHolder(Faith faith, RealmMap realms, FaithMap faiths,
+    internal static string? TemporalHeadHolder(Faith faith, RealmMap realms, FaithMap faiths,
         WildernessMap wilderness)
     {
         if (faith.Head is not { Temporal: true }) return null;

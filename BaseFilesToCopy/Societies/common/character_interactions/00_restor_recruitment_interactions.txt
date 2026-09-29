@@ -32,6 +32,7 @@ restor_sound_out_interaction = {
 		scope:recipient = {
 			is_adult = yes
 			NOT = { has_trait = restor_member }
+			NOT = { has_trait = cult_member }
 			NOT = { restor_is_usurper_trigger = yes }
 		}
 	}
@@ -153,6 +154,7 @@ restor_offer_oath_interaction = {
 		scope:recipient = {
 			is_adult = yes
 			NOT = { has_trait = restor_member }
+			NOT = { has_trait = cult_member }
 			NOT = { restor_is_usurper_trigger = yes }
 		}
 	}

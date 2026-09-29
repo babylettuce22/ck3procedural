@@ -181,12 +181,9 @@ activity_restor_errand = {
 				scope:host = {
 					has_variable = restor_charge
 					var:restor_charge = flag:stir
-					has_variable = restor_charge_target
+					has_variable = restor_charge_county
 				}
-				# restor_charge_target is a county for a stir charge and a character for the others;
-				# tiger types it by its first set (a character). Guarded above by the charge kind.
-				#tiger-ignore(key=scopes)
-				county ?= { this = scope:host.var:restor_charge_target }
+				county ?= { this = scope:host.var:restor_charge_county }
 			}
 			add = 100
 		}

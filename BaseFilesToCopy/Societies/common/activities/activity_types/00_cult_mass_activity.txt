@@ -1,0 +1,321 @@
+﻿# THE BLACK MASS -- the Faithless meet in a Magister's or the Hierophant's own chapel, at night, and
+# say the church's service to the devil. Events cult.0901-0908.
+#
+# The Restorationists' Gathering (00_restor_gathering_activity.txt) with the cult's purpose. Kept
+# from it, deliberately, because each was a trap once:
+#
+#   THE THREE GATES   is_shown, can_start_showing_failures_only and can_be_activity_guest all assert
+#                     membership: each is evaluated at a different moment.
+#   `rules`, NOT `defaults`, for guest invite rules: a default arrives ticked.
+#   is_valid on a LIVE activity: everything in it must hold of a Mass already under way.
+#   background needs texture + environment + ambience together.
+#   FIVE art files derived from the keys (icon, header icon, header background, phase icon); see
+#                     gfx/interface/.
+#
+# The host chooses the purpose on the first night (cult.0901), after seeing who came:
+#
+#   INVOKE     every attendee gains dark power, and pays for it in the soul
+#   PROFANE    host-faith counties held by or next to the attendees are tainted (cult.0902)
+#   INITIATE   one attendee raised, or a courtier the host brought sworn in (cult.0903)
+#
+# A member who was asked and stayed away is judged on day six whatever the purpose (cult.0904).
+# Every attendee takes +3 exposure when it ends. Once the church is unveiled the Mass is held
+# openly: the exposure effects are no-ops then, and nobody in town has anything to whisper about
+# (cult.0908 only fires in the secret phases).
+
+activity_cult_mass = {
+	activity_group_type = cult_group
+	sort_order = 5
+
+	# ---- Gate one: who knows it exists ------------------------------------------------------
+	is_shown = {
+		cult_active_trigger = yes
+		has_trait = cult_member
+
+		is_playable_character = yes
+		highest_held_title_tier > tier_barony
+
+		trigger_if = {
+			limit = { is_ai = yes }
+			is_at_war = no
+			NOT = { has_variable = conqueror }
+			NOT = { has_realm_law = uncrowned }
+		}
+	}
+
+	# ---- Gate two: who may call one --------------------------------------------------------
+	#
+	# A Magister or the Hierophant. An Initiate can be invited long before they can say the Mass.
+	can_always_plan = no
+
+	can_start_showing_failures_only = {
+		is_available_adult = yes
+		NOT = { is_activity_type_on_cooldown = activity_cult_mass }
+
+		custom_tooltip = {
+			text = cult_rite_requires_membership_tt
+			has_trait = cult_member
+			cult_active_trigger = yes
+		}
+		custom_tooltip = {
+			text = cult_mass_requires_rank_tt
+			OR = {
+				cult_is_hierophant_trigger = yes
+				cult_rank_at_least_trigger = { RANK = 50 }
+			}
+		}
+	}
+
+	is_valid = {
+		NOT = { has_variable = activity_invalidated }
+		scope:host = {
+			is_playable_character = yes
+			is_incapable = no
+			has_trait = cult_member
+		}
+	}
+
+	on_host_death = {
+		scope:activity = {
+			set_variable = { name = activity_invalidated }
+		}
+	}
+
+	on_invalidated = {
+		invalidation_imprisoned_effect = yes
+		invalidation_incapable_effect = yes
+	}
+
+	# ---- Who was asked ----------------------------------------------------------------------
+	#
+	# CK3 keeps no record of a declined invitation, so the activity remembers everyone it has seen
+	# invited or travelling, and cult.0901 looks for somebody on that list who is not in the chapel.
+	on_start = {
+		every_invited_character = {
+			save_scope_as = cult_invitee
+			scope:activity = {
+				add_to_variable_list = {
+					name = cult_mass_invited
+					target = scope:cult_invitee
+				}
+			}
+		}
+	}
+
+	on_enter_travel_state = {
+		if = {
+			limit = { NOT = { this = scope:host } }
+			save_scope_as = cult_invitee
+			scope:activity = {
+				add_to_variable_list = {
+					name = cult_mass_invited
+					target = scope:cult_invitee
+				}
+			}
+		}
+	}
+
+	###################
+	# WHERE
+	###################
+
+	# The host's own seat, and nowhere else: the Mass is said in the host's own chapel.
+	is_location_valid = {
+		this = scope:host.capital_province
+	}
+
+	province_filter = capital
+	ai_province_filter = capital
+	is_single_location = yes
+	max_province_icons = 3
+
+	province_description = {
+		desc = activity_cult_mass_province_desc
+	}
+
+	###################
+	# WHEN
+	###################
+
+	wait_time_before_start = { months = 3 }
+	max_guest_arrival_delay_time = { months = 5 }
+	cooldown = { years = 4 }
+
+	# Declared and empty: the purpose is chosen on the night (cult.0901), because who came decides
+	# what the Mass can do.
+	options = {
+	}
+
+	###################
+	# PHASES
+	###################
+
+	phases = {
+		cult_mass_phase = {
+			is_predefined = yes
+
+			on_phase_active = {
+				if = {
+					limit = { this = scope:host }
+					scope:activity = { progress_activity_phase_after = { weeks = 2 } }
+					trigger_event = {
+						id = cult.0901
+						days = 1
+					}
+					# Somebody outside notices. Half the time, and only while there is a secret to keep.
+					if = {
+						limit = { cult_secret_phase_trigger = yes }
+						random = {
+							chance = 50
+							trigger_event = {
+								id = cult.0908
+								days = 10
+							}
+						}
+					}
+				}
+				else = {
+					trigger_event = {
+						id = cult.0905
+						days = 2
+					}
+				}
+			}
+		}
+	}
+
+	###################
+	# INTENTS
+	###################
+
+	host_intents = {
+		default = cult_mass_intent
+		intents = { cult_mass_intent }
+	}
+
+	guest_intents = {
+		default = cult_mass_intent
+		intents = { cult_mass_intent }
+	}
+
+	###################
+	# GUESTS
+	###################
+
+	max_guests = 12
+
+	allow_zero_guest_invites = no
+	open_invite = no
+
+	guest_invite_rules = {
+		rules = {
+			1 = cult_invite_rule_court
+			2 = cult_invite_rule_elsewhere
+		}
+	}
+
+	# Gate three. `is_healthy`, not `is_available`: vanilla's base rule handles availability, with a
+	# carve-out for guests already travelling here that `is_available` would undo.
+	can_be_activity_guest = {
+		has_trait = cult_member
+		cult_active_trigger = yes
+		is_adult = yes
+		is_healthy = yes
+		in_diplomatic_range = scope:host
+	}
+
+	guest_join_chance = {
+		base = 40
+		base_activity_modifier = yes
+		activity_guest_shared_ai_accept_modifier = yes
+	}
+
+	###################
+	# PAYOUT
+	###################
+
+	# Once per attending character. Everyone who knelt in that chapel is a little easier to find
+	# afterwards; the host, who said the Mass, is paid for it.
+	on_complete = {
+		cult_exposure_gain_effect = { VALUE = 3 }
+		if = {
+			limit = { this = scope:host }
+			cult_power_gain_effect = { VALUE = 10 }
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = 5
+			}
+		}
+	}
+
+	###################
+	# AI
+	###################
+
+	# Rarely. A Mass is a real risk, and the AI's Faithless should say one now and then rather than
+	# every time the cooldown lifts.
+	ai_will_do = {
+		value = 10
+		if = {
+			limit = { cult_is_hierophant_trigger = yes }
+			add = 10
+		}
+		if = {
+			limit = { has_trait = zealous }
+			add = -10
+		}
+		if = {
+			limit = { has_trait = paranoid }
+			add = -10
+		}
+		if = {
+			limit = { is_at_war = yes }
+			add = -40
+		}
+		if = {
+			limit = {
+				has_variable = cult_exposure
+				var:cult_exposure >= 15
+			}
+			add = -20
+		}
+	}
+
+	ai_check_interval_by_tier = {
+		barony = 0
+		county = 60
+		duchy = 60
+		kingdom = 60
+		empire = 60
+		hegemony = 60
+	}
+
+	ai_will_select_province = {
+		value = 10
+	}
+
+	###################
+	# GRAPHICS
+	###################
+
+	# The cellar under the chapel.
+	background = {
+		trigger = { always = yes }
+		texture = "gfx/interface/illustrations/event_scenes/dungeon.dds"
+		environment = "environment_event_dungeon"
+		ambience = "event:/SFX/Ambience/2DAmbience/Interface/dungeon"
+	}
+
+	window_characters = {
+		host = {
+			camera = camera_body
+			effect = {
+				scope:host = { add_to_list = characters }
+			}
+			scripted_animation = {
+				animation = scheme
+			}
+		}
+	}
+}

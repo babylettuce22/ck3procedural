@@ -23,7 +23,7 @@ RestorCurrentCharge = {
 		trigger = {
 			has_variable = restor_charge
 			var:restor_charge = flag:stir
-			exists = var:restor_charge_target
+			exists = var:restor_charge_county
 		}
 		localization_key = restor_charge_line_stir
 	}

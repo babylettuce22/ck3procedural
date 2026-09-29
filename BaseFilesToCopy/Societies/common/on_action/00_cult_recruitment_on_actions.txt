@@ -1,0 +1,94 @@
+﻿# The inversion cult: recruitment's yearly hooks. Redeclaring a vanilla on_action appends to it.
+#
+#   cult_recruit_yearly         hidden and hollow. An AI member of Adept standing or above, while the
+#                               circle has room, sometimes approaches someone (35% a year, then three
+#                               years' wait). A player member is sometimes pointed at a likely soul
+#                               (cult.0105), so the interactions are found.
+#   cult_recruit_public_yearly  unveiled. The church is the cult's open face; its lords are invited
+#                               to take the oath in daylight (cult.0125 to a player, a quiet join for
+#                               the AI who lean that way).
+
+random_yearly_everyone_pulse = {
+	on_actions = { cult_recruit_yearly }
+}
+
+cult_recruit_yearly = {
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		is_alive = yes
+		is_adult = yes
+		is_imprisoned = no
+	}
+	effect = {
+		if = {
+			limit = {
+				is_ai = yes
+				NOT = { has_character_flag = cult_recruited_lately }
+				cult_rank_at_least_trigger = { RANK = 25 }
+				cult_recruit_roster_open_trigger = yes
+			}
+			random = {
+				chance = 35
+				cult_recruit_ai_approach_effect = yes
+			}
+		}
+		else_if = {
+			limit = {
+				is_ai = no
+				NOT = { has_character_flag = cult_suggested_recently }
+			}
+			random = {
+				chance = 30
+				save_scope_as = cult_recruiter
+				cult_recruit_gather_candidates_effect = yes
+				random_in_list = {
+					list = cult_candidates
+					weight = {
+						base = 1
+						modifier = { add = cult_recruit_candidate_value }
+					}
+					save_scope_as = cult_recruit
+					scope:cult_recruiter = {
+						add_character_flag = {
+							flag = cult_suggested_recently
+							years = 3
+						}
+						trigger_event = { id = cult.0105 days = { 1 30 } }
+					}
+				}
+			}
+		}
+	}
+}
+
+random_yearly_playable_pulse = {
+	on_actions = { cult_recruit_public_yearly }
+}
+
+cult_recruit_public_yearly = {
+	trigger = {
+		cult_recruit_public_candidate_trigger = yes
+		cult_recruit_roster_open_trigger = yes
+	}
+	effect = {
+		if = {
+			limit = { is_ai = no }
+			random = {
+				chance = 30
+				trigger_event = { id = cult.0125 days = { 1 30 } }
+			}
+		}
+		else_if = {
+			# The unveiled church takes the willing, not everyone: sinners and cynics, not the pious.
+			limit = {
+				NOT = { has_trait = zealous }
+				cult_recruit_pull_value >= 20
+			}
+			random = {
+				chance = 5
+				cult_recruit_join_church_effect = yes
+			}
+		}
+	}
+}

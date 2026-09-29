@@ -1,0 +1,144 @@
+﻿l_english:
+
+ # ---- Interactions ------------------------------------------------------------------------------
+
+ cult_sound_out_interaction:0 "Sound Out"
+ cult_sound_out_interaction_desc:0 "Talk about the church, carefully: its priests, its rules, what it forgives and what it does not. Find out whether this person still believes before you say anything you cannot take back."
+ cult_sound_out_interaction_tt:0 "Learn whether they are #high sympathetic#!, cold, or #N dangerous#!. A cold answer raises your exposure a little. A dangerous one means they may take what you said to their priest, or to the hunter. The sympathetic are far more likely to accept the oath."
+ cult_sound_out_interaction_chaplain_tt:0 "A #high court chaplain#! sworn to the circle is worth more to the rot than almost anyone, and a loyal one is the most likely of all to report you. Learn whether they are #high sympathetic#!, cold, or #N dangerous#!."
+ cult_sound_out_already_sympathetic_tt:0 "Already known to be sympathetic. #high Offer the Oath#! instead."
+ cult_recruit_refused_recently_tt:0 "Turned the circle away within the last five years"
+
+ cult_offer_oath_interaction:0 "Offer the Oath"
+ cult_offer_oath_interaction_desc:0 "Tell this person plainly what you are, and ask them to swear themselves to $cult_devil_name$ with $cult_society_name$. If they refuse, they will know your secret."
+ cult_offer_oath_needs_trust_tt:0 "They have been sounded out and found sympathetic, or you are at least an #high Adept#! of the circle"
+ cult_offer_oath_interaction_sympathetic_tt:0 "They are known to be sympathetic, and #high likely#! to accept. If they join, you gain dark power and standing. If they refuse, your exposure rises."
+ cult_offer_oath_interaction_cold_tt:0 "Nobody has sounded them out. They may well #N refuse#!, or report you, and either raises your exposure. If they join, you gain dark power and standing."
+
+ # ---- cult.0101 ---------------------------------------------------------------------------------
+
+ cult.0101.t:0 "Talk About the Church"
+ cult.0101.desc_intro:0 "[cult_recruiter.GetTitledFirstName] has sought your company more than once this season, and every time the talk comes round to the church. The priests who preach poverty and live well. The prayers that are never answered. [cult_recruiter.GetSheHe|U] says these things lightly, and watches you while [cult_recruiter.GetSheHe] says them."
+ cult.0101.desc_intro_sinner:0 "[cult_recruiter.GetTitledFirstName] has sought your company more than once this season. [cult_recruiter.GetSheHe|U] seems to know what the priests say about you, and seems not to mind at all. Today [cult_recruiter.GetSheHe] asked whether you have ever wondered if the priests are wrong about what is sin."
+ cult.0101.desc_intro_grudge:0 "[cult_recruiter.GetTitledFirstName] has sought your company more than once this season, and every time the talk comes round to the church and how it has treated you. [cult_recruiter.GetSheHe|U] agrees with every complaint you make, and adds a few of [cult_recruiter.GetHerHis] own."
+ cult.0101.desc_society:0 "\n\nThere are stories of a circle inside $cult_host_name$ that prays to $cult_devil_name$ instead of [cult_faith.HighGodName], and calls itself $cult_society_name$. [cult_recruiter.GetSheHe|U] has not said the name. But [cult_recruiter.GetSheHe] is plainly asking how much of your faith is left."
+ cult.0101.a:0 "The priests preach one thing and do another. I've always said so."
+ cult.0101.a.tt:0 "[cult_recruiter.GetFirstNameNoTooltip] will know you are #high sympathetic#!"
+ cult.0101.a.offer_tt:0 "Expect [cult_recruiter.GetHerHim] to come back soon with an offer"
+ cult.0101.b:0 "I'd rather not talk about the church."
+ cult.0101.b.tt:0 "[cult_recruiter.GetFirstNameNoTooltip] will take the hint and let it drop"
+ cult.0101.c:0 "That is heresy, [cult_recruiter.GetFirstNameNoTooltip], and I won't keep it to myself."
+ cult.0101.c.tt:0 "You will tell [cult_confessor.GetTitledFirstName] what [cult_recruiter.GetFirstNameNoTooltip] said, and [cult_recruiter.GetFirstNameNoTooltip] will not raise the subject with you again"
+ cult.0101.c.tt_nobody:0 "You will let it be known what [cult_recruiter.GetFirstNameNoTooltip] said, and [cult_recruiter.GetSheHe] will not raise the subject with you again"
+
+ # ---- cult.0102-0104 ----------------------------------------------------------------------------
+
+ cult.0102.t:0 "Little Faith Left"
+ cult.0102.desc:0 "You talked about the church with [cult_recruit.GetTitledFirstName], carefully, the way the circle teaches. [cult_recruit.GetSheHe|U] did not change the subject. [cult_recruit.GetSheHe|U] laughed at the priests, and said [cult_recruit.GetSheHe] stopped expecting answers from [cult_faith.HighGodName] a long time ago.\n\nThat is as good an answer as anyone gets before the oath is offered."
+ cult.0102.desc_chaplain:0 "You talked about the church with [cult_recruit.GetTitledFirstName], carefully, the way the circle teaches. For a court chaplain [cult_recruit.GetSheHe] has a strange way of talking about [cult_faith.HighGodName]: tired, and a little bitter. [cult_recruit.GetSheHe|U] hears the confessions of a whole court, and believes very little of what [cult_recruit.GetSheHe] tells them.\n\nA chaplain in the circle is worth ten lords. This one might be had."
+ cult.0102.a:0 "Then I'll offer [cult_recruit.GetHerHim] the oath now."
+ cult.0102.a.tt:0 "Ask [cult_recruit.GetFirstNameNoTooltip] to swear. Having answered as [cult_recruit.GetSheHe] did, [cult_recruit.GetSheHe] is #high likely#! to accept"
+ cult.0102.b:0 "Not yet. Let [cult_recruit.GetHerHim] think on it."
+ cult.0102.b.tt:0 "For five years [cult_recruit.GetFirstNameNoTooltip] is known to be #high sympathetic#!: any of the Faithless can #high Offer the Oath#!, and [cult_recruit.GetSheHe] is far more likely to take it"
+
+ cult.0103.t:0 "No Interest"
+ cult.0103.desc:0 "You talked about the church with [cult_recruit.GetTitledFirstName]. [cult_recruit.GetSheHe|U] agreed that some priests are greedy, said that is no fault of [cult_faith.HighGodName], and asked about your harvest.\n\nThere is nothing to be done with an answer like that, except hope [cult_recruit.GetSheHe] does not remember the conversation."
+ cult.0103.a:0 "Leave it there."
+
+ cult.0104.t:0 "A Warning"
+ cult.0104.desc_intro:0 "You talked about the church with [cult_recruit.GetTitledFirstName], and [cult_recruit.GetHerHis] face went cold. [cult_recruit.GetSheHe|U] said that talk like yours is how heresy starts, and that [cult_recruit.GetSheHe] knows [cult_recruit.GetHerHis] duty."
+ cult.0104.desc_ours:0 "\n\n[cult_recruit.GetSheHe|U] said [cult_recruit.GetSheHe] would tell [cult_confessor.GetTitledFirstName]. [cult_recruit.GetSheHe|U] does not know what you know: [cult_confessor.GetFirstNameNoTooltip] is one of the circle. Whatever [cult_recruit.GetSheHe] confesses will go no further."
+ cult.0104.desc_hunter:0 "\n\n[cult_recruit.GetSheHe|U] said [cult_recruit.GetSheHe] would tell [cult_confessor.GetTitledFirstName], who is already hunting the Faithless. [cult_recruit.GetSheHe|U] has no proof of anything. But your name will be remembered."
+ cult.0104.desc_priest:0 "\n\n[cult_recruit.GetSheHe|U] said [cult_recruit.GetSheHe] would take it to [cult_confessor.GetTitledFirstName], the chaplain [cult_recruit.GetSheHe] confesses to. [cult_recruit.GetSheHe|U] has no proof. But priests talk to other priests, and your name will travel."
+ cult.0104.desc_nobody:0 "\n\n[cult_recruit.GetSheHe|U] has no proof of anything. But [cult_recruit.GetSheHe] will remember, and so will anyone [cult_recruit.GetSheHe] tells."
+ cult.0104.a:0 "I'll keep well away from [cult_recruit.GetHerHim] from now on."
+ cult.0104.b:0 "Send [cult_recruit.GetHerHim] a generous gift, and hope [cult_recruit.GetSheHe] takes the hint."
+
+ # ---- cult.0105 ---------------------------------------------------------------------------------
+
+ cult.0105.t:0 "A Likely Soul"
+ cult.0105.desc_sympathetic:0 "[cult_recruit.GetTitledFirstName] has already told one of the Faithless how little [cult_recruit.GetSheHe] thinks of the church. Nobody has offered [cult_recruit.GetHerHim] the oath yet."
+ cult.0105.desc_chaplain:0 "[cult_recruit.GetTitledFirstName] is a court chaplain of $cult_host_name$. A chaplain in the circle hears a whole court's confessions for the cult, and counts for more in the rot than almost anyone. A chaplain who is still loyal is also the most dangerous person you could ask."
+ cult.0105.desc_sinner:0 "[cult_recruit.GetTitledFirstName] lives in a way the priests of $cult_host_name$ call sin, and has heard them say so. The circle calls it a beginning."
+ cult.0105.desc_grudge:0 "[cult_recruit.GetTitledFirstName] has no love for [cult_head.GetTitledFirstName], and says so more loudly than is wise. Someone who resents the head of the church may not mind seeing it hollowed out."
+ cult.0105.desc_doubter:0 "[cult_recruit.GetTitledFirstName] goes through the forms of $cult_host_name$ like everyone else. Whether [cult_recruit.GetSheHe] means them is another question."
+ cult.0105.desc_zealous:0 "\n\nBe careful. [cult_recruit.GetSheHe|U] is devout, and would sooner burn a heretic than listen to one."
+ cult.0105.desc_careful:0 "\n\nBe careful. [cult_recruit.GetSheHe|U] is close to the church, or to those who hunt the Faithless, and may take anything you say straight to them."
+ cult.0105.desc_unknown:0 "\n\nYou do not know yet how much of [cult_recruit.GetHerHis] faith is left."
+ cult.0105.desc_how:0 "\n\nYou can #high Sound Out#! a likely soul, or #high Offer the Oath#! to one who is ready, by right-clicking them. You could start with [cult_recruit.GetFirstNameNoTooltip]."
+ cult.0105.a:0 "I'll sound [cult_recruit.GetHerHim] out."
+ cult.0105.a.tt:0 "Talk about the church with [cult_recruit.GetFirstNameNoTooltip] and see how [cult_recruit.GetSheHe] answers: #high sympathetic#!, cold, or #N dangerous#!"
+ cult.0105.b:0 "I'll offer [cult_recruit.GetHerHim] the oath."
+ cult.0105.b.tt:0 "Ask [cult_recruit.GetFirstNameNoTooltip] to swear. Having already spoken against the church, [cult_recruit.GetSheHe] is #high likely#! to accept"
+ cult.0105.c:0 "Not now."
+
+ # ---- cult.0110 ---------------------------------------------------------------------------------
+
+ cult.0110.t:0 "An Offer After Prayers"
+ cult.0110.desc_intro:0 "[cult_recruiter.GetTitledFirstName] asks to speak with you alone after the evening prayers, and once the door is shut [cult_recruiter.GetSheHe] does not waste words. [cult_recruiter.GetSheHe|U] kneels in the [cult_faith.HouseOfWorship] like everyone else. [cult_recruiter.GetSheHe|U] prays to $cult_devil_name$, with $cult_society_name$."
+ cult.0110.desc_hidden:0 "\n\nThe circle is already inside $cult_host_name$: in its courts, its holy places and its confessionals. It means to hollow the church out until nothing of [cult_faith.HighGodName] is left in it but the forms."
+ cult.0110.desc_hollow:0 "\n\nThe church already belongs to the circle, though the faithful do not know it. Before long it will be unveiled, and the ones who swore early will stand highest."
+ cult.0110.desc_sinner:0 "\n\n"The priests call what you are sin," [cult_recruiter.GetSheHe] says. "We call it a beginning." [cult_recruiter.GetSheHe|U] wants you to swear the oath tonight."
+ cult.0110.desc_ask:0 "\n\n[cult_recruiter.GetSheHe|U] wants you to swear the oath tonight."
+ cult.0110.desc_risk_confessor:0 "\n\n[cult_recruiter.GetSheHe|U] has just put [cult_recruiter.GetHerHis] life in your hands, and knows it. One word to [cult_confessor.GetTitledFirstName] would be enough."
+ cult.0110.desc_risk:0 "\n\n[cult_recruiter.GetSheHe|U] has just put [cult_recruiter.GetHerHis] life in your hands, and knows it."
+ cult.0110.a:0 "I'll swear it."
+ cult.0110.a.tt:0 "You join #high $cult_society_name$#! as one of the Faithless"
+ cult.0110.b:0 "No. And I'll forget you ever asked."
+ cult.0110.b.tt:0 "[cult_recruiter.GetFirstNameNoTooltip] leaves, and the circle will not ask you again for five years"
+ cult.0110.c:0 "May [cult_faith.HighGodName] forgive you. I won't."
+ cult.0110.c.tt:0 "You take what [cult_recruiter.GetFirstNameNoTooltip] said to [cult_confessor.GetTitledFirstName]"
+ cult.0110.c.tt_nobody:0 "You tell anyone who will listen what [cult_recruiter.GetFirstNameNoTooltip] is"
+
+ # ---- cult.0111-0113 ----------------------------------------------------------------------------
+
+ cult.0111.t:0 "One of Us"
+ cult.0111.desc:0 "[cult_recruit.GetTitledFirstName] heard you out, asked the questions anyone sensible would ask, and then swore the oath to $cult_devil_name$ with [cult_recruit.GetHerHis] hand on the [cult_faith.ReligiousText], held upside down."
+ cult.0111.desc_chaplain:0 "\n\nA court chaplain of $cult_host_name$ belongs to the circle now. Every confession in that court will reach the cult, and the rot in the church goes deeper. The Hierophant will hear that it was you who brought [cult_recruit.GetHerHim] in."
+ cult.0111.desc_end:0 "\n\nThe circle is one stronger. The Hierophant will hear that it was you who brought [cult_recruit.GetHerHim] in."
+ cult.0111.a:0 "Welcome, [cult_recruit.GetFirstNameNoTooltip]."
+
+ cult.0112.t:0 "The Oath Refused"
+ cult.0112.desc:0 "[cult_recruit.GetTitledFirstName] heard you out and said no. [cult_recruit.GetSheHe|U] was frightened more than angry, and [cult_recruit.GetSheHe] left without promising to keep quiet.\n\n[cult_recruit.GetSheHe|U] knows what you are now. Whether anyone else finds out is up to [cult_recruit.GetHerHim]."
+ cult.0112.a:0 "Send [cult_recruit.GetHerHim] gold. Enough to keep [cult_recruit.GetHerHis] mouth shut."
+ cult.0112.b:0 "[cult_recruit.GetSheHe|U] has no proof. Let [cult_recruit.GetHerHim] talk."
+
+ cult.0113.t:0 "Reported"
+ cult.0113.desc_ours:0 "You offered [cult_recruit.GetTitledFirstName] the oath, and [cult_recruit.GetSheHe] went straight to [cult_confessor.GetTitledFirstName] to confess what [cult_recruit.GetSheHe] had heard.\n\n[cult_recruit.GetSheHe|U] does not know that [cult_confessor.GetFirstNameNoTooltip] is one of the circle. [cult_confessor.GetSheHe|U] gave [cult_recruit.GetHerHim] a penance, told [cult_recruit.GetHerHim] to think no more of it, and sent word to you. It has gone no further."
+ cult.0113.desc_hunter:0 "You offered [cult_recruit.GetTitledFirstName] the oath, and [cult_recruit.GetSheHe] went straight to [cult_confessor.GetTitledFirstName] with it.\n\nNobody will arrest you tomorrow. It is your word against [cult_recruit.GetHerHis], and nothing was written down. But the one who hunts the Faithless now knows your name."
+ cult.0113.desc_priest:0 "You offered [cult_recruit.GetTitledFirstName] the oath, and [cult_recruit.GetSheHe] went straight to [cult_confessor.GetTitledFirstName], the chaplain [cult_recruit.GetSheHe] confesses to.\n\nNobody will arrest you tomorrow. It is your word against [cult_recruit.GetHerHis]. But priests talk to other priests, and before long the church will be asking questions about you."
+ cult.0113.desc_nobody:0 "You offered [cult_recruit.GetTitledFirstName] the oath, and [cult_recruit.GetSheHe] has been telling anyone who will listen.\n\nNobody will arrest you tomorrow. It is your word against [cult_recruit.GetHerHis], and nothing was written down. But from now on, people will be watching you."
+ cult.0113.a:0 "I'll deny everything."
+ cult.0113.b:0 "Pay someone to swear I was at prayer that night."
+ cult.0113.c:0 "[cult_confessor.GetFirstNameNoTooltip] has earned [cult_confessor.GetHerHis] place."
+
+ # ---- cult.0115 ---------------------------------------------------------------------------------
+
+ cult.0115.t:0 "The First Night"
+ cult.0115.desc_intro:0 "[cult_recruiter.GetTitledFirstName] brings you after the last prayers to a [cult_faith.HouseOfWorship] you have knelt in many times. The doors are barred behind you. A few people are waiting inside, and the candles on the altar have been turned upside down. You swear yourself to $cult_devil_name$ on the [cult_faith.ReligiousText] of [cult_faith.HighGodName], and only then do they tell you their names."
+ cult.0115.desc_intro_plain:0 "You are brought after the last prayers to a [cult_faith.HouseOfWorship] you have knelt in many times. The doors are barred behind you. A few people are waiting inside, and the candles on the altar have been turned upside down. You swear yourself to $cult_devil_name$ on the [cult_faith.ReligiousText] of [cult_faith.HighGodName], and only then do they tell you their names."
+ cult.0115.desc_intro_public:0 "Nobody comes for you after dark. You swear the oath at noon, in the great [cult_faith.HouseOfWorship] of $cult_host_name$, with the faithful watching. The prayers are the old ones read backwards, and the name at the end of them is $cult_devil_name$."
+ cult.0115.desc_hierophant_brought_you:0 "\n\n[cult_recruiter.GetFirstNameNoTooltip] is the Hierophant. [cult_recruiter.GetSheHe|U] leads $cult_society_name$ and gives the Faithless their work, and from tonight [cult_recruiter.GetSheHe] gives you yours."
+ cult.0115.desc_hierophant:0 "\n\nOne of them is [cult_hierophant.GetTitledFirstName], the Hierophant, who leads the circle and gives the Faithless their work."
+ cult.0115.desc_no_hierophant:0 "\n\nThe circle has no Hierophant just now. The most senior of the Faithless will take up the place before long."
+ cult.0115.desc_chaplain:0 "\n\nYou are a court chaplain. The Hierophant wants you to stay one: to hear every confession in that court and pass on what matters, and to keep the prayers sounding right."
+ cult.0115.desc_sinner:0 "\n\nNobody here calls you a sinner. What the priests condemned in you, the circle calls a gift."
+ cult.0115.desc_aim_hidden_head:0 "\n\nThey tell you what the circle wants. Not war on the church: its capture. Holy places in the hands of the Faithless, chaplains sworn, shrines quietly defiled. And in the end, [cult_head.GetTitledFirstName], head of $cult_host_name$, sworn to $cult_devil_name$ without the faithful ever knowing."
+ cult.0115.desc_aim_hidden:0 "\n\nThey tell you what the circle wants. Not war on the church: its capture. Holy places in the hands of the Faithless, chaplains sworn, shrines quietly defiled, until half the holy places of $cult_host_name$ answer to the circle."
+ cult.0115.desc_aim_hollow_head:0 "\n\nThen they tell you the secret behind the secret: [cult_head.GetTitledFirstName], head of $cult_host_name$, is already sworn. The church is the circle's. What remains is to rot it deep enough that it can be unveiled, and its doctrines turned over, without the faithful being able to stop it."
+ cult.0115.desc_aim_hollow:0 "\n\nThen they tell you the secret behind the secret: the holy places of $cult_host_name$ are already in the circle's hands. The church is the circle's. What remains is to rot it deep enough that it can be unveiled, and its doctrines turned over, without the faithful being able to stop it."
+ cult.0115.desc_aim_unveiled:0 "\n\n$cult_host_name$ is unveiled. $cult_unveil_list$ What the circle wants now is to keep it that way. Every faithful lord who remembers the old church wants it back, and some of them are strong enough to try."
+ cult.0115.a:0 "My prayers go to $cult_devil_name$ now."
+ cult.0115.a.tt:0 "The #high $cult_society_name$#! tab beside Intrigue shows the cult: the rot in the church, the hunter, your standing and what you can do next. Right-click a character to #high Sound Out#! a likely soul or #high Offer the Oath#!."
+ cult.0115.a.tt_public:0 "The #high $cult_society_name_public$#! tab beside Intrigue shows the unveiled church and what it is working toward."
+
+ # ---- cult.0125 ---------------------------------------------------------------------------------
+
+ cult.0125.t:0 "An Invitation from the Church"
+ cult.0125.desc_inviter:0 "A messenger from [cult_inviter.GetTitledFirstName] has come to your hall. $cult_host_name$ has been unveiled, and the circle that hollowed it out no longer hides. $cult_unveil_list$"
+ cult.0125.desc_church:0 "A messenger from the church has come to your hall. $cult_host_name$ has been unveiled, and the circle that hollowed it out no longer hides. $cult_unveil_list$"
+ cult.0125.desc_offer:0 "\n\nThe church that was $cult_society_name$ is $cult_society_name_public$ now, and it would like its lords sworn in daylight. Nobody hunts its members any more. Joining costs you your name on the roll, and your prayers to $cult_devil_name$."
+ cult.0125.a:0 "I'll take the oath."
+ cult.0125.a.tt:0 "You join #high $cult_society_name_public$#! as one of the Faithless"
+ cult.0125.b:0 "I will keep the faith I was raised in."
+ cult.0125.b.tt:0 "The church will not ask again for five years"

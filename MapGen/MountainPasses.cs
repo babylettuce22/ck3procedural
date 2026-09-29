@@ -29,8 +29,17 @@ public sealed record MountainPass(
 public static class MountainPasses
 {
     /// <summary>How many necks of one wall are tried, a barony apart, before its pass is chosen:
-    /// enough to cover a range forty baronies long end to end.</summary>
+    /// enough to cover a range forty baronies long end to end. A longer wall gets
+    /// <see cref="TestsPerBarony"/> for each barony of its length instead.</summary>
     private const int TestsPerWall = 64;
+
+    /// <summary>
+    /// Tries per barony of a wall's length, for walls longer than <see cref="TestsPerWall"/> covers.
+    /// A wall right across a continent (the Wall map type's, some 125 baronies) has thin spurs
+    /// fraying off both flanks all along it, and taken thinnest first they spent all 64 tries before
+    /// the one real neck in its middle was reached: it was a barony through and got no pass.
+    /// </summary>
+    private const double TestsPerBarony = 1.6;
 
     /// <summary>A wall may take one pass, and one more for every this many baronies it covers, up
     /// to <see cref="MaxPassesPerWall"/>; each later one only where the earlier ones leave its way
@@ -202,13 +211,14 @@ public static class MountainPasses
             : p.Saddle != q.Saddle ? p.Saddle.CompareTo(q.Saddle)
             : p.A != q.A ? p.A.CompareTo(q.A) : p.B.CompareTo(q.B));
 
-        // 3. Every neck whose way round is long enough, of at most TestsPerWall tried, never two
+        // 3. Every neck whose way round is long enough, of at most `tests` tried, never two
         // tried within a barony of each other; then the lowest of those.
         var tried = new List<(double X, double Y)>();
         var qualified = new List<(float Saddle, int Span, int A, int B, double Needed)>();
+        int tests = Math.Max(TestsPerWall, (int)Math.Ceiling(TestsPerBarony * Math.Max(bw, bh) / across));
         foreach (var neck in necks)
         {
-            if (tried.Count >= TestsPerWall) break;
+            if (tried.Count >= tests) break;
             double mx = (neck.A % width + neck.B % width) / 2.0, my = (neck.A / width + neck.B / width) / 2.0;
             if (tried.Any(t => (t.X - mx) * (t.X - mx) + (t.Y - my) * (t.Y - my) < across * across)) continue;
             tried.Add((mx, my));

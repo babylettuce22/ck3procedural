@@ -41,7 +41,7 @@ types gen_society_panel {
 		parentanchor = top|right
 		using = Window_Size_MainTab
 
-		visible = "[And( GetScriptedGui('society_panel_window').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), Not( IsRightWindowOpen ) )]"
+		visible = "[And( And( GetScriptedGui('society_panel_window').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), GetScriptedGui('restor_panel_viewer_member').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ), Not( IsRightWindowOpen ) )]"
 
 		state = {
 			name = _show
@@ -68,6 +68,11 @@ types gen_society_panel {
 			widget = {
 				size = { 100% 100% }
 
+				# Every paragraph's max_width (restor_para) is 520, and it is a budget: a max_width wider than the
+				# room does not wrap early, it pushes the whole panel out past the screen's right edge
+				# (seen on screen at 600). 655 (Window_Size_MainTab) - 13 margin_right - 80
+				# Window_Margins - 20 box margins leaves ~540 (measured on screen: a 500 paragraph
+				# centred with 20px either side). Same lesson as ChronicleWindow.RowWidth.
 				vbox = {
 					using = Window_Margins
 					spacing = 6
@@ -86,21 +91,15 @@ types gen_society_panel {
 						}
 					}
 
-					text_multi = {
-						layoutpolicy_horizontal = expanding
-						max_width = 600
-						autoresize = yes
-						margin = { 10 0 }
-						text = "RESTOR_PANEL_AIM"
+					restor_para = {
+						margin_left = 10
 						visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+						blockoverride "para" { text = "RESTOR_PANEL_AIM" }
 					}
-					text_multi = {
-						layoutpolicy_horizontal = expanding
-						max_width = 600
-						autoresize = yes
-						margin = { 10 0 }
-						text = "RESTOR_PANEL_AIM_PUBLIC"
+					restor_para = {
+						margin_left = 10
 						visible = "[GetScriptedGui('restor_panel_restored').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+						blockoverride "para" { text = "RESTOR_PANEL_AIM_PUBLIC" }
 					}
 
 					# ---- 2. The people --------------------------------------------------------------
@@ -179,13 +178,9 @@ types gen_society_panel {
 								text = "[GetPlayer.MakeScope.Var('restor_panel_war_chest').GetValue|0]"
 							}
 						}
-						text_multi = {
-							layoutpolicy_horizontal = expanding
-							max_width = 600
-							autoresize = yes
-							default_format = "#weak"
-							text = "RESTOR_PANEL_SUPPORT_NEXT"
+						restor_para = {
 							visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							blockoverride "para" { default_format = "#weak" text = "RESTOR_PANEL_SUPPORT_NEXT" }
 						}
 
 						hbox = {
@@ -244,6 +239,7 @@ types gen_society_panel {
 					text_single = {
 						layoutpolicy_horizontal = expanding
 						margin_top = 4
+						margin_left = 10
 						align = left
 						default_format = "#weak"
 						text = "RESTOR_PANEL_NEXT_HEADER"
@@ -258,12 +254,9 @@ types gen_society_panel {
 							color = { 0.2 0.2 0.31 0.45 }
 						}
 
-						text_multi = {
-							layoutpolicy_horizontal = expanding
-							max_width = 600
-							autoresize = yes
-							text = "RESTOR_PANEL_CHARGE"
+						restor_para = {
 							visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							blockoverride "para" { text = "RESTOR_PANEL_CHARGE" }
 						}
 
 						restor_action_row = {
@@ -289,12 +282,8 @@ types gen_society_panel {
 							blockoverride "action_lit" { text = "RESTOR_PANEL_ACTION_ERRAND" visible = "[GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
 							blockoverride "action_dim" { text = "RESTOR_PANEL_ACTION_ERRAND" visible = "[Not( GetScriptedGui('restor_panel_underground').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
 						}
-						text_multi = {
-							layoutpolicy_horizontal = expanding
-							max_width = 600
-							autoresize = yes
-							default_format = "#weak"
-							text = "RESTOR_PANEL_POWERS_HINT"
+						restor_para = {
+							blockoverride "para" { default_format = "#weak" text = "RESTOR_PANEL_POWERS_HINT" }
 						}
 					}
 
@@ -303,6 +292,7 @@ types gen_society_panel {
 					text_single = {
 						layoutpolicy_horizontal = expanding
 						margin_top = 4
+						margin_left = 10
 						align = left
 						default_format = "#weak"
 						text = "RESTOR_PANEL_ROSTER_HEADER"
@@ -323,6 +313,7 @@ types gen_society_panel {
 										datacontext = "[Scope.Char]"
 										layoutpolicy_horizontal = expanding
 										spacing = 10
+										margin_right = 12
 										background = {
 											texture = "gfx/interface/component_masks/mask_brushed.dds"
 											color = { 0.2 0.2 0.31 0.45 }
@@ -427,8 +418,11 @@ types gen_society_panel {
 		}
 	}
 
-	type restor_rung_chip = widget {
-		autoresize = yes
+	# An hbox, not a widget: a widget's autoresize does not measure its text children, so every chip
+	# came out zero-wide and the four rungs printed on top of each other. ignoreinvisible so the hidden
+	# half does not hold a gap.
+	type restor_rung_chip = hbox {
+		ignoreinvisible = yes
 		text_single = {
 			default_format = "#high"
 			block "chip_lit" {}
@@ -443,6 +437,7 @@ types gen_society_panel {
 	# when they cannot. The text carries both halves; the colour says which applies.
 	type restor_action_row = hbox {
 		layoutpolicy_horizontal = expanding
+		ignoreinvisible = yes
 		text_single = {
 			layoutpolicy_horizontal = expanding
 			align = left
@@ -455,6 +450,19 @@ types gen_society_panel {
 			default_format = "#weak"
 			block "action_dim" {}
 		}
+	}
+
+	# A wrapped paragraph held to the left edge. A bare text_multi narrower than its vbox is centred
+	# in it, so paragraphs sat ~20px further in than the labels around them; the expand pushes this
+	# one left. 520 fits the ~540 inside a margined box (the budget note above the main vbox).
+	type restor_para = hbox {
+		layoutpolicy_horizontal = expanding
+		text_multi = {
+			autoresize = yes
+			max_width = 520
+			block "para" {}
+		}
+		expand = {}
 	}
 }
 

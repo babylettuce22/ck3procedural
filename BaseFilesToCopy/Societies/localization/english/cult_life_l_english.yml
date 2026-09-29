@@ -1,0 +1,243 @@
+﻿l_english:
+
+ # ---- Shared ------------------------------------------------------------------------------------
+
+ cult_life_tainted_rot_tt:0 "Tainted counties add to the #high rot#! in $cult_host_name$"
+ cult_life_rival_quarrel:0 "[TARGET_CHARACTER.GetShortUIName|U] took the other side when [CHARACTER.GetShortUIName] quarrelled with another of the Faithless."
+
+ cult_life_zealot_unrest_modifier:0 "Zealots in the Streets"
+ cult_life_zealot_unrest_modifier_desc:0 "People who still pray the old way have rioted here against the new rites."
+
+ cult_life_took_my_side_opinion:0 "Took my side in the circle"
+ cult_life_took_their_side_opinion:0 "Took the other side"
+ cult_life_scolded_me_opinion:0 "Scolded me"
+ cult_life_kept_the_peace_opinion:0 "Kept the peace in the circle"
+ cult_life_stood_sponsor_opinion:0 "Stood sponsor for my child"
+ cult_life_kept_my_child_out_opinion:0 "Promised to keep my child out of it"
+ cult_life_refused_sponsor_opinion:0 "Would not stand sponsor for my child"
+ cult_life_let_me_go_opinion:0 "Let me leave the circle"
+ cult_life_threatened_me_opinion:0 "Threatened me"
+ cult_life_walked_away_opinion:0 "Walked away from the circle"
+ cult_life_praised_the_sermon_opinion:0 "Understood my sermon"
+ cult_life_spared_my_prayers_opinion:0 "Let me keep the old prayers"
+ cult_life_made_an_example_opinion:0 "Made an example of me"
+ cult_life_soft_on_the_faithful_opinion:0 "Soft on the old faithful"
+ cult_life_prayed_the_old_way_opinion:0 "Prayed the old way"
+
+ # ---- cult.0201 ---------------------------------------------------------------------------------
+
+ cult.0201.t:0 "The Holy Day"
+ cult.0201.desc:0 "It is a holy day of $cult_host_name$, and the whole court has come to the [cult_faith.HouseOfWorship] to take the sacrament. Your place is at the front. Everyone will see you kneel, and everyone will see you take it.\n\n"
+ cult.0201.desc_sworn_priest:0 "The [cult_faith.PriestNeuter] at the rail is [cult_life_chaplain.GetTitledFirstName], your own chaplain. You last saw [cult_life_chaplain.GetHerHim] at a gathering of the circle, three nights ago, saying the prayers backwards. [cult_life_chaplain.GetSheHe|U] will not meet your eye."
+ cult.0201.desc_priest:0 "The [cult_faith.PriestNeuter] at the rail is old and kind, and has known you since you were a child. [cult_faith.HighGodNamePossessive|U] blessing will be said over you by someone who means every word of it."
+ cult.0201.a:0 "Kneel, take it, and think of nothing."
+ cult.0201.b:0 "Take it, and say the circle's words under my breath."
+ cult.0201.b.unheard:0 "Nobody Hears"
+ cult.0201.b.unheard.tt:0 "The choir drowns out whatever you said"
+ cult.0201.b.heard:0 "The Woman Beside You Heard Something"
+ cult.0201.c:0 "Send word that I have a fever."
+ cult.0201.c.believed:0 "Nobody Remarks on It"
+ cult.0201.c.believed.tt:0 "Your absence is put down to the fever"
+ cult.0201.c.noted:0 "Your Absence Is Noted"
+
+ # ---- cult.0202 ---------------------------------------------------------------------------------
+
+ cult.0202.t:0 "The Confessor's Questions"
+ cult.0202.desc:0 "[cult_life_confessor.GetTitledFirstName] has heard your confession every month for years, and has never pushed. Today [cult_life_confessor.GetSheHe] did.\n\n[cult_life_confessor.GetSheHe|U] asked where you ride on the nights of the new moon. [cult_life_confessor.GetSheHe|U] asked why you no longer wear the [cult_faith.ReligiousSymbol] your mother gave you. Then [cult_life_confessor.GetSheHe] waited, the way confessors do, for you to fill the silence."
+ cult.0202.a:0 "Answer every question, calmly, with a lie."
+ cult.0202.a.satisfied:0 "The Confessor Is Satisfied"
+ cult.0202.a.satisfied.tt:0 "[cult_life_confessor.GetFirstNameNoTooltip] gives you your penance and asks nothing more"
+ cult.0202.a.doubts:0 "The Confessor Has Doubts"
+ cult.0202.b:0 "Confess a smaller sin, and let that be the answer."
+ cult.0202.c:0 "Tell [cult_life_confessor.GetHerHim] the truth, and ask [cult_life_confessor.GetHerHim] to join us."
+ cult.0202.c.sworn:0 "[cult_life_confessor.GetFirstNameNoTooltip] Takes the Oath"
+ cult.0202.c.sworn.tt:0 "A sworn court chaplain adds to the #high rot#! in $cult_host_name$"
+ cult.0202.c.refused:0 "[cult_life_confessor.GetFirstNameNoTooltip] Is Horrified"
+
+ # ---- cult.0203 ---------------------------------------------------------------------------------
+
+ cult.0203.t:0 "The Relic in the Chapel"
+ cult.0203.desc:0 "The [cult_faith.BishopNeuter] has sent a gift to your chapel in [cult_life_county.GetNameNoTier]: a relic of [cult_faith.HighGodName], a finger bone in a silver case, carried in procession with candles and singing. It is a great honour.\n\nIt is also a thing you will be expected to kiss, in front of your household, every holy day for the rest of your life."
+ cult.0203.a:0 "Kneel, and kiss it. They're watching."
+ cult.0203.b:0 "Let it stay. The circle will know what to do with it at night."
+ cult.0203.b.unnoticed:0 "The Chapel Keeps Its Secret"
+ cult.0203.b.unnoticed.tt:0 "The silver case still shines on the altar, and nobody looks inside"
+ cult.0203.b.noticed:0 "The Sacristan Notices"
+ cult.0203.c:0 "Such a relic belongs in a cathedral. Send it on."
+
+ # ---- cult.0204 ---------------------------------------------------------------------------------
+
+ cult.0204.t:0 "The Pilgrim at the Gate"
+ cult.0204.desc:0 "A pilgrim asked for bread at your gate today, and you had the guards bring them in. They are walking to the shrine at [cult_life_site.GetNameNoTier], a holy place of $cult_host_name$, to pray for a sick child at home. They have been on the road for a month.\n\nThe shrine at [cult_life_site.GetNameNoTier] is kept by the circle. The prayers said there go where the circle sends them. The pilgrim does not know that, and is very grateful for the bread."
+ cult.0204.a:0 "Bless the journey, and give them what they need."
+ cult.0204.b:0 "Tell them the road is closed, and send them home."
+ cult.0204.b.turns_back:0 "The Pilgrim Turns Back"
+ cult.0204.b.turns_back.tt:0 "They thank you for the warning and go home to their child"
+ cult.0204.b.goes_on:0 "The Pilgrim Goes On Anyway"
+ cult.0204.c:0 "Give them a gift to leave at the shrine. The keepers will know what it means."
+ cult.0204.c.delivered:0 "The Gift Is Delivered"
+ cult.0204.c.opened:0 "The Pilgrim Opened It"
+
+ # ---- cult.0205 ---------------------------------------------------------------------------------
+
+ cult.0205.t:0 "A Sign in the Night"
+ cult.0205.desc:0 "You woke in the dark with the certainty that someone had said your name. The candle had gone out. Down in the yard a black dog was sitting under your window, looking up, and it did not bark.\n\nBy morning it was gone. Your kennel master says none of his dogs are black. The circle teaches that $cult_devil_name$ sends signs to the ones who are marked. The circle also drinks a great deal of wine at its gatherings."
+ cult.0205.a:0 "It is a sign. I will answer it."
+ cult.0205.b:0 "A stray dog and a bad dream. Nothing more."
+ cult.0205.c:0 "Go down to the chapel and pray, the way I used to."
+ cult.0205.c.calm:0 "The Old Words Come Back"
+ cult.0205.c.no_words:0 "The Words Will Not Come"
+
+ # ---- cult.0206 ---------------------------------------------------------------------------------
+
+ cult.0206.t:0 "A Christening in the Circle"
+ cult.0206.desc:0 "[cult_life_parent.GetTitledFirstName] has asked you to stand sponsor for [cult_life_parent.GetHerHis] child, [cult_life_infant.GetFirstNameNoTooltip], at the font of the [cult_faith.HouseOfWorship]. At the font you will be asked to renounce $cult_devil_name$ aloud, on the child's behalf, in front of everyone.\n\nAfterwards, alone with you, [cult_life_parent.GetFirstNameNoTooltip] asks for one more thing. Whatever happens to [cult_life_parent.GetHerHim], [cult_life_infant.GetFirstNameNoTooltip] is never to be brought into the circle."
+ cult.0206.a:0 "I promise. The child will never be asked."
+ cult.0206.b:0 "I'll stand at the font. The rest isn't mine to promise."
+ cult.0206.c:0 "Two of the Faithless at one font is asking to be noticed. Find someone else."
+
+ # ---- cult.0207 ---------------------------------------------------------------------------------
+
+ cult.0207.t:0 "The Hunter's Preacher"
+ cult.0207.desc:0 "A travelling preacher arrived at your court this morning with a letter from [cult_hunter.GetTitledFirstName], asking that he be given your hall to preach in.\n\nHis sermon is about the faithless: those who kneel in the [cult_faith.HouseOfWorship] and pray to $cult_devil_name$ in secret. He describes them well. Better than you would like. He says they can be known by their eyes during the sacrament, and he looks at every face in the hall as he says it."
+ cult.0207.a:0 "Give him the hall, and sit in the front row."
+ cult.0207.b:0 "Feed him, pay him, and send him to the next court."
+ cult.0207.b.moves_on:0 "The Preacher Moves On"
+ cult.0207.b.moves_on.tt:0 "He thanks you for your generosity and takes the road south"
+ cult.0207.b.writes:0 "The Preacher Writes to [cult_hunter.GetFirstNameNoTooltip]"
+ cult.0207.c:0 "Let the circle make a fool of him."
+ cult.0207.c.disgraced:0 "The Preacher Is Disgraced"
+ cult.0207.c.stubborn:0 "The Preacher Will Not Be Moved"
+
+ # ---- cult.0208 ---------------------------------------------------------------------------------
+
+ cult.0208.t:0 "One Who Wants Out"
+ cult.0208.desc:0 "[cult_life_leaver.GetTitledFirstName] came to see you tonight, alone and without a torch. [cult_life_leaver.GetSheHe|U] has been one of the Faithless for longer than you have, and [cult_life_leaver.GetSheHe] is old now.\n\n[cult_life_leaver.GetSheHe|U] wants to leave the circle, and make [cult_life_leaver.GetHerHis] peace with [cult_faith.HighGodName] before the end. [cult_life_leaver.GetSheHe|U] swears [cult_life_leaver.GetSheHe] will name nobody. [cult_life_leaver.GetSheHe|U] also means to make a full confession to a [cult_faith.PriestNeuter], and old people who are afraid of dying do not always keep to the terms."
+ cult.0208.a:0 "Go, then. I hope you find what you're looking for."
+ cult.0208.a.tt:0 "[cult_life_leaver.GetFirstNameNoTooltip] is no longer one of the Faithless"
+ cult.0208.a.silent:0 "[cult_life_leaver.GetFirstNameNoTooltip] Keeps [cult_life_leaver.GetHerHis] Word"
+ cult.0208.a.silent.tt:0 "Whatever [cult_life_leaver.GetFirstNameNoTooltip] tells [cult_life_leaver.GetHerHis] confessor, your name is not part of it"
+ cult.0208.a.confesses:0 "[cult_life_leaver.GetFirstNameNoTooltip] Says Too Much"
+ cult.0208.b:0 "Stay. After all these years, what would you even say to a priest?"
+ cult.0208.b.stays:0 "[cult_life_leaver.GetFirstNameNoTooltip] Stays"
+ cult.0208.b.stays.tt:0 "[cult_life_leaver.GetFirstNameNoTooltip] goes home, and comes to the next gathering as if nothing had happened"
+ cult.0208.b.leaves:0 "[cult_life_leaver.GetFirstNameNoTooltip] Leaves Anyway"
+ cult.0208.c:0 "Remind [cult_life_leaver.GetHerHim] what happens to those who leave."
+ cult.0208.c.tt:0 "[cult_life_leaver.GetFirstNameNoTooltip] stays in the circle, because [cult_life_leaver.GetSheHe] is afraid of you"
+
+ # ---- cult.0209 ---------------------------------------------------------------------------------
+
+ cult.0209.t:0 "A Quarrel in the Circle"
+ cult.0209.desc:0 "[cult_life_quarrel_a.GetTitledFirstName] and [cult_life_quarrel_b.GetTitledFirstName] have fallen out over who serves $cult_devil_name$ better. [cult_life_quarrel_a.GetFirstNameNoTooltip] says [cult_life_quarrel_b.GetFirstNameNoTooltip] still weeps in the [cult_faith.HouseOfWorship], and only swore the oath for what the circle could get [cult_life_quarrel_b.GetHerHim]. [cult_life_quarrel_b.GetFirstNameNoTooltip] says [cult_life_quarrel_a.GetFirstNameNoTooltip] takes risks nobody asked for, and will get them all burned.\n\nThey are both a little right, and neither will sit at the same table as the other."
+ cult.0209.desc_hierophant:0 "\n\nAs Hierophant, it falls to you to settle it before it splits the circle. Whoever you side with will remember it. So will the other."
+ cult.0209.desc_asked:0 "\n\n[cult_hierophant.GetTitledFirstName] has asked you to settle it before it splits the circle. Whoever you side with will remember it. So will the other."
+ cult.0209.desc_alone:0 "\n\nThey have both come to you. Whoever you side with will remember it. So will the other."
+ cult.0209.a:0 "[cult_life_quarrel_a.GetFirstNameNoTooltip] is right. Half-hearted oaths are dangerous."
+ cult.0209.b:0 "[cult_life_quarrel_b.GetFirstNameNoTooltip] is right. Zeal gets people burned."
+ cult.0209.c:0 "Both of you, stop. The church is our enemy, not each other."
+ cult.0209.a_accepts:0 "[cult_life_quarrel_a.GetFirstNameNoTooltip] Accepts Your Judgement"
+ cult.0209.a_accepts.tt:0 "[cult_life_quarrel_a.GetFirstNameNoTooltip] is sore about it, but lets the matter drop"
+ cult.0209.a_rival:0 "[cult_life_quarrel_a.GetFirstNameNoTooltip] Will Not Forgive It"
+ cult.0209.b_accepts:0 "[cult_life_quarrel_b.GetFirstNameNoTooltip] Accepts Your Judgement"
+ cult.0209.b_accepts.tt:0 "[cult_life_quarrel_b.GetFirstNameNoTooltip] is sore about it, but lets the matter drop"
+ cult.0209.b_rival:0 "[cult_life_quarrel_b.GetFirstNameNoTooltip] Will Not Forgive It"
+
+ # ---- cult.0210 ---------------------------------------------------------------------------------
+
+ cult.0210.t:0 "The Burning"
+ cult.0210.desc:0 "A heretic is to be burned in the square today. Not one of the circle: a weaver who said the wrong thing about the [cult_faith.ReligiousText] once too often. The whole town has come out to watch, and a lord of $cult_host_name$ is expected to be seen there.\n\nOthers of the Faithless are in the crowd. You can see them from where you stand. None of them looks at any of the others."
+ cult.0210.a:0 "Stand at the front, and shout with the crowd."
+ cult.0210.b:0 "Stand at the back, and say nothing."
+ cult.0210.b.unnoticed:0 "Nobody Looks Your Way"
+ cult.0210.b.unnoticed.tt:0 "Every eye in the square is on the fire"
+ cult.0210.b.noticed:0 "Someone Saw You Look Away"
+ cult.0210.c:0 "Ask the [cult_faith.BishopNeuter] to show mercy."
+
+ # ---- cult.0211 ---------------------------------------------------------------------------------
+
+ cult.0211.t:0 "The Rebuilding"
+ cult.0211.desc:0 "The [cult_faith.HouseOfWorship] in [cult_life_county.GetNameNoTier] is old, and last winter part of the roof came down. The [cult_faith.BishopNeuter] is raising money to rebuild it, and has come to you first. The whole county will know what you give.\n\nGive too little, and people will wonder why. Give generously, and you will be paying to raise a house for [cult_faith.HighGodName] with your own gold. Unless you also have a say in who lays the stones."
+ cult.0211.a:0 "Give generously. Let the whole county see it."
+ cult.0211.b:0 "Give a token sum. Times are hard."
+ cult.0211.b.accepted:0 "The [cult_faith.BishopNeuter|U] Thanks You"
+ cult.0211.b.accepted.tt:0 "The [cult_faith.BishopNeuter] takes the purse with a smile and says nothing more about it"
+ cult.0211.b.remarked:0 "People Remark on It"
+ cult.0211.c:0 "Pay in full, and choose the masons myself."
+ cult.0211.c.laid:0 "A Stone Is Laid Upside Down"
+ cult.0211.c.laid.tt:0 "Under the new altar there is a stone the circle carved, and only the circle knows it is there"
+ cult.0211.c.found:0 "A Mason Talks"
+ cult.0211.d:0 "Not a penny. The church has money enough."
+
+ # ---- cult.0212 ---------------------------------------------------------------------------------
+
+ cult.0212.t:0 "What the Servant Found"
+ cult.0212.desc:0 "One of the chambermaids was cleaning your rooms today and found what you keep at the bottom of the chest: the [cult_faith.ReligiousSymbol] of $cult_host_name$, turned upside down and scratched with the circle's marks.\n\nShe put it back exactly where it was and said nothing. But your steward says she has been crying in the kitchen all afternoon, and will not tell anyone why."
+ cult.0212.a:0 "Pay her, well, to forget it."
+ cult.0212.a.forgets:0 "She Forgets"
+ cult.0212.a.forgets.tt:0 "The maid goes back to work, and does not cry again"
+ cult.0212.a.talks:0 "She Talks Anyway"
+ cult.0212.b:0 "Tell her it is a ward against $cult_devil_name$, hung upside down as an insult to $cult_devil_name$."
+ cult.0212.b.believed:0 "She Believes You"
+ cult.0212.b.believed.tt:0 "She is ashamed of what she thought, and asks you to pray for her"
+ cult.0212.b.doubted:0 "She Does Not Believe You"
+ cult.0212.c:0 "Tell the circle. They'll take care of it."
+ cult.0212.c.tt:0 "The maid leaves your service within the week. Nobody sees where she goes"
+
+ # ---- cult.0213 ---------------------------------------------------------------------------------
+
+ cult.0213.t:0 "The Parish"
+ cult.0213.desc:0 "Your reeve in [cult_life_county.GetNameNoTier] mentioned it as a small thing. The village [cult_faith.PriestNeuter] has stopped saying some of the old prayers. The shrine at the crossroads has not been swept since spring. Fewer people come to the [cult_faith.HouseOfWorship] every week, and nobody seems to know why.\n\nYou know why. The rot in $cult_host_name$ is spreading on its own now, and it has reached a parish of yours."
+ cult.0213.a:0 "Send the circle's people to help it along."
+ cult.0213.b:0 "Leave it alone. It's doing well enough."
+ cult.0213.c:0 "Send a new priest, and let everyone see me do it."
+
+ # ---- cult.0214 ---------------------------------------------------------------------------------
+
+ cult.0214.t:0 "What You Have Become"
+ cult.0214.desc:0 "Nothing happened tonight. You ate, you listened to your steward, you knelt for evening prayers with the household and said the words without hearing them. Then you sat alone by the fire and tried to remember when you last meant a prayer to anyone.\n\nYou took the oath to $cult_society_name$ for reasons that seemed good at the time. You can still remember what they were. You are less sure you remember who you were before."
+ cult.0214.a:0 "It was worth it. It still is."
+ cult.0214.b:0 "Pray to [cult_faith.HighGodName], once, the way I used to."
+ cult.0214.b.sleep:0 "You Sleep Well"
+ cult.0214.b.silence:0 "Nothing Answers"
+ cult.0214.c:0 "I've paid enough. I'm done with the circle."
+ cult.0214.c.tt:0 "You are no longer one of the Faithless. Your #high dark power#! and #high exposure#! go with it."
+
+ # ---- cult.0215 ---------------------------------------------------------------------------------
+
+ cult.0215.t:0 "The Sermon"
+ cult.0215.desc:0 "[cult_head.GetTitledFirstName] preached today in the great [cult_faith.HouseOfWorship], and half the lords of $cult_host_name$ came to hear [cult_head.GetHerHim]. It was a fine sermon. In the middle of it, [cult_head.GetSheHe] used a phrase from the circle's own rite, word for word, and nobody but the Faithless noticed.\n\nBeside you, an old lord you have known all your life is weeping with joy at how holy it all is."
+ cult.0215.a:0 "Bow my head, and weep with him."
+ cult.0215.b:0 "Allow myself a small smile."
+ cult.0215.b.unseen:0 "Nobody Sees"
+ cult.0215.b.seen:0 "The Old Lord Saw You Smile"
+ cult.0215.c:0 "Write to [cult_head.GetFirstNameNoTooltip] tonight, in the circle's words."
+
+ # ---- cult.0250 ---------------------------------------------------------------------------------
+
+ cult.0250.t:0 "The Old Faithful"
+ cult.0250.desc:0 "The new rites of $cult_society_name_public$ were said in your hall today, and every head bowed except one. [cult_life_faithful.GetTitledFirstName] stood, and said the old prayer to [cult_faith.HighGodName] loudly over the top of them, and walked out.\n\nThe whole court saw it. They are waiting to see what you do. So, you suspect, are the others who still pray the old way when they think nobody is listening."
+ cult.0250.a:0 "Let [cult_life_faithful.GetHerHim] keep [cult_life_faithful.GetHerHis] prayers. It's only words."
+ cult.0250.b:0 "Make an example of [cult_life_faithful.GetHerHim], in front of everyone."
+ cult.0250.c:0 "Take [cult_life_faithful.GetHerHim] aside, and offer [cult_life_faithful.GetHerHim] a place in the circle."
+ cult.0250.c.kneels:0 "[cult_life_faithful.GetFirstNameNoTooltip] Kneels"
+ cult.0250.c.refuses:0 "[cult_life_faithful.GetFirstNameNoTooltip] Spits at Your Feet"
+
+ # ---- cult.0251 ---------------------------------------------------------------------------------
+
+ cult.0251.t:0 "Zealots in the Streets"
+ cult.0251.desc:0 "A crowd came through the streets of [cult_life_county.GetNameNoTier] this morning, singing the old hymns to [cult_faith.HighGodName]. By noon they had pulled down the new altar in the [cult_faith.HouseOfWorship] and set fire to the vestry.\n\nThey are still out there, and more are joining them. They know who you are now. Everyone does."
+ cult.0251.a:0 "Send the guard to clear the streets."
+ cult.0251.a.scattered:0 "The Crowd Scatters"
+ cult.0251.a.bloody:0 "It Turns Bloody"
+ cult.0251.b:0 "Let them shout themselves hoarse. They'll go home."
+ cult.0251.c:0 "Pay the ringleaders to take their grievance somewhere else."
+
+ # ---- cult.0252 ---------------------------------------------------------------------------------
+
+ cult.0252.t:0 "Was It Worth It?"
+ cult.0252.desc:0 "$cult_host_name$ is what the circle always said it would be. The prayers go to $cult_devil_name$ now, openly, and nobody has to hide. You have what you swore for.\n\nYour sister has not written in a year. The old priest who taught you your letters would not stay under your roof. People who used to laugh at your table cross themselves when you pass. You are feared, which is not the same thing as loved, and tonight you are not sure which you wanted."
+ cult.0252.a:0 "Every bit of it."
+ cult.0252.b:0 "I don't know any more."
+ cult.0252.c:0 "Light a candle to [cult_faith.HighGodName], the old way. Just one."
+ cult.0252.c.unseen:0 "Nobody Sees"
+ cult.0252.c.seen:0 "One of the Circle Saw You"

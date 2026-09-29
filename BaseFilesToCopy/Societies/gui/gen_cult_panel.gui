@@ -1,0 +1,430 @@
+# The inversion cult's panel, behind the same HUD tab as the Restorationists' (a character belongs to
+# one society at most, and each window shows only to its own members). Built from
+# gen_society_panel.gui, whose window mechanics are the prototype's and are explained there -- change
+# them in both or neither. The content answers the same six questions for the cult: what it is for,
+# who matters (the Hierophant, the head of the faith it wants, the hunter), how far the rot has gone,
+# where you stand, what to do next, and who else is sworn.
+
+types gen_cult_panel {
+
+	type gen_cult_panel_host = window {
+		name = "gen_cult_panel_host"
+		allow_outside = yes
+		parentanchor = center
+		size = { 100% 100% }
+		alwaystransparent = yes
+		layer = windows_layer
+		visible = "[And( Not( IsPauseMenuShown ), And( Or( Not( IsObserver ), GetPlayer.IsValid ), IsDefaultGUIMode ) )]"
+
+		gen_cult_panel_window = {}
+	}
+
+	type gen_cult_panel_window = window {
+		name = "gen_cult_panel_window"
+		allow_outside = yes
+		movable = no
+		parentanchor = top|right
+		using = Window_Size_MainTab
+
+		visible = "[And( And( GetScriptedGui('society_panel_window').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ), GetScriptedGui('cult_panel_viewer_member').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) ), Not( IsRightWindowOpen ) )]"
+
+		state = {
+			name = _show
+			using = Window_Position_MainTab
+			using = Animation_FadeIn_Quick
+			using = Sound_WindowShow_Standard
+			on_start = "[GetScriptedGui('cult_panel_gather').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+		}
+
+		state = {
+			name = _hide
+			using = Window_Position_MainTab_Hide
+			using = Animation_FadeOut_Quick
+			using = Sound_WindowHide_Standard
+			on_start = "[GetScriptedGui('society_panel_window').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+		}
+
+		margin_widget = {
+			size = { 100% 100% }
+			margin_top = 30
+			margin_bottom = 25
+			margin_right = 13
+
+			widget = {
+				size = { 100% 100% }
+
+				vbox = {
+					using = Window_Margins
+					spacing = 6
+
+					# ---- 1. Title and aim ----------------------------------------------------------
+
+					header_standard = {
+						layoutpolicy_horizontal = expanding
+						blockoverride "header_text" {
+							text = "CULT_PANEL_TITLE"
+						}
+						blockoverride "button_close" {
+							datacontext = "[GetScriptedGui( 'society_panel_window' )]"
+							onclick = "[ScriptedGui.Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							shortcut = "close_window"
+						}
+					}
+
+					cult_para = {
+						margin_left = 10
+						visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+						blockoverride "para" { text = "CULT_PANEL_AIM" }
+					}
+					cult_para = {
+						margin_left = 10
+						visible = "[GetScriptedGui('cult_panel_unveiled').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+						blockoverride "para" { text = "CULT_PANEL_AIM_PUBLIC" }
+					}
+
+					# ---- 2. The people --------------------------------------------------------------
+
+					hbox = {
+						layoutpolicy_horizontal = expanding
+						spacing = 8
+						margin = { 10 6 }
+						background = {
+							texture = "gfx/interface/component_masks/mask_brushed.dds"
+							color = { 0.2 0.2 0.31 0.45 }
+						}
+
+						cult_person_slot = {
+							visible = "[GetScriptedGui('cult_panel_has_hierophant').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							datacontext = "[GetPlayer.MakeScope.Var('cult_panel_hierophant').Char]"
+							blockoverride "slot_label" { text = "CULT_PANEL_HIEROPHANT" }
+						}
+						cult_person_slot = {
+							visible = "[GetScriptedGui('cult_panel_has_head').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							datacontext = "[GetPlayer.MakeScope.Var('cult_panel_head').Char]"
+							blockoverride "slot_label" { text = "CULT_PANEL_HEAD" }
+						}
+						cult_person_slot = {
+							visible = "[GetScriptedGui('cult_panel_has_hunter').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							datacontext = "[GetPlayer.MakeScope.Var('cult_panel_hunter').Char]"
+							blockoverride "slot_label" { text = "CULT_PANEL_HUNTER" }
+						}
+						expand = {}
+					}
+
+					# ---- 3 & 4. Support, standing, meters -----------------------------------------------
+
+					vbox = {
+						layoutpolicy_horizontal = expanding
+						margin = { 10 6 }
+						spacing = 4
+						background = {
+							texture = "gfx/interface/component_masks/mask_brushed.dds"
+							color = { 0.2 0.2 0.31 0.45 }
+						}
+
+						hbox = {
+							layoutpolicy_horizontal = expanding
+							spacing = 6
+							visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							text_single = {
+								default_format = "#weak"
+								text = "CULT_PANEL_SUPPORT_LABEL"
+							}
+							text_single = {
+								default_format = "#high"
+								text = "[GetPlayer.MakeScope.Var('cult_panel_rot').GetValue|0] / 100"
+							}
+							expand = {}
+							text_single = {
+								default_format = "#weak"
+								text = "CULT_PANEL_LAND_LABEL"
+							}
+							text_single = {
+								default_format = "#high"
+								text = "[GetPlayer.MakeScope.Var('cult_panel_sites').GetValue|0]%"
+							}
+						}
+						cult_para = {
+							visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							blockoverride "para" { default_format = "#weak" text = "CULT_PANEL_SUPPORT_NEXT" }
+						}
+
+						hbox = {
+							layoutpolicy_horizontal = expanding
+							spacing = 14
+							text_single = {
+								default_format = "#weak"
+								text = "CULT_PANEL_STANDING_LABEL"
+							}
+							cult_rung_chip = {
+								blockoverride "chip_lit" { text = "CULT_RANK_0" visible = "[GetScriptedGui('cult_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+								blockoverride "chip_dim" { text = "CULT_RANK_0" visible = "[Not( GetScriptedGui('cult_panel_rank_0').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+							}
+							cult_rung_chip = {
+								blockoverride "chip_lit" { text = "CULT_RANK_1" visible = "[GetScriptedGui('cult_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+								blockoverride "chip_dim" { text = "CULT_RANK_1" visible = "[Not( GetScriptedGui('cult_panel_rank_1').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+							}
+							cult_rung_chip = {
+								blockoverride "chip_lit" { text = "CULT_RANK_2" visible = "[GetScriptedGui('cult_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+								blockoverride "chip_dim" { text = "CULT_RANK_2" visible = "[Not( GetScriptedGui('cult_panel_rank_2').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+							}
+							cult_rung_chip = {
+								blockoverride "chip_lit" { text = "CULT_RANK_3" visible = "[GetScriptedGui('cult_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+								blockoverride "chip_dim" { text = "CULT_RANK_3" visible = "[Not( GetScriptedGui('cult_panel_rank_3').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+							}
+							expand = {}
+						}
+
+						hbox = {
+							layoutpolicy_horizontal = expanding
+							spacing = 6
+							text_single = {
+								default_format = "#weak"
+								text = "CULT_PANEL_FAVOUR_LABEL"
+							}
+							text_single = {
+								default_format = "#high"
+								text = "[GetPlayer.MakeScope.Var('cult_power').GetValue|0]"
+							}
+							expand = {}
+							text_single = {
+								default_format = "#weak"
+								text = "CULT_PANEL_EXPOSURE_LABEL"
+								visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							}
+							text_single = {
+								default_format = "#high"
+								text = "[GetPlayer.MakeScope.Var('cult_exposure').GetValue|0]"
+								visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							}
+						}
+					}
+
+					# ---- 5. What to do next --------------------------------------------------------
+
+					text_single = {
+						layoutpolicy_horizontal = expanding
+						margin_top = 4
+						margin_left = 10
+						align = left
+						default_format = "#weak"
+						text = "CULT_PANEL_NEXT_HEADER"
+					}
+
+					vbox = {
+						layoutpolicy_horizontal = expanding
+						margin = { 10 6 }
+						spacing = 3
+						background = {
+							texture = "gfx/interface/component_masks/mask_brushed.dds"
+							color = { 0.2 0.2 0.31 0.45 }
+						}
+
+						cult_para = {
+							visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							blockoverride "para" { text = "CULT_PANEL_CHARGE" }
+						}
+
+						cult_action_row = {
+							visible = "[GetScriptedGui('cult_panel_hollow').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							blockoverride "action_lit" { text = "CULT_PANEL_ACTION_UNVEIL" visible = "[GetScriptedGui('cult_panel_can_unveil').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+							blockoverride "action_dim" { text = "CULT_PANEL_ACTION_UNVEIL" visible = "[Not( GetScriptedGui('cult_panel_can_unveil').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+						}
+						cult_action_row = {
+							visible = "[GetScriptedGui('cult_panel_viewer_member').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+							blockoverride "action_lit" { text = "CULT_PANEL_ACTION_OFFER" visible = "[GetScriptedGui('cult_panel_can_offer').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+							blockoverride "action_dim" { text = "CULT_PANEL_ACTION_OFFER" visible = "[Not( GetScriptedGui('cult_panel_can_offer').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+						}
+						cult_action_row = {
+							blockoverride "action_lit" { text = "CULT_PANEL_ACTION_MASS" visible = "[GetScriptedGui('cult_panel_can_mass').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+							blockoverride "action_dim" { text = "CULT_PANEL_ACTION_MASS" visible = "[Not( GetScriptedGui('cult_panel_can_mass').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+						}
+						cult_action_row = {
+							blockoverride "action_lit" { text = "CULT_PANEL_ACTION_DESECRATE" visible = "[GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]" }
+							blockoverride "action_dim" { text = "CULT_PANEL_ACTION_DESECRATE" visible = "[Not( GetScriptedGui('cult_panel_secret').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End ) )]" }
+						}
+						cult_para = {
+							blockoverride "para" { default_format = "#weak" text = "CULT_PANEL_POWERS_HINT" }
+						}
+					}
+
+					# ---- 6. The roster --------------------------------------------------------------
+
+					text_single = {
+						layoutpolicy_horizontal = expanding
+						margin_top = 4
+						margin_left = 10
+						align = left
+						default_format = "#weak"
+						text = "CULT_PANEL_ROSTER_HEADER"
+					}
+
+					scrollbox = {
+						layoutpolicy_horizontal = expanding
+						layoutpolicy_vertical = expanding
+
+						blockoverride "scrollbox_content" {
+							vbox = {
+								layoutpolicy_horizontal = expanding
+								spacing = 4
+								datamodel = "[GetPlayer.MakeScope.GetList( 'cult_panel_roster' )]"
+
+								item = {
+									hbox = {
+										datacontext = "[Scope.Char]"
+										layoutpolicy_horizontal = expanding
+										spacing = 10
+										margin_right = 12
+										background = {
+											texture = "gfx/interface/component_masks/mask_brushed.dds"
+											color = { 0.2 0.2 0.31 0.45 }
+										}
+
+										portrait_head_small = {}
+
+										vbox = {
+											layoutpolicy_horizontal = expanding
+											text_single = {
+												layoutpolicy_horizontal = expanding
+												align = left
+												default_format = "#high"
+												text = "[Character.GetName]"
+											}
+											text_single = {
+												layoutpolicy_horizontal = expanding
+												align = left
+												default_format = "#weak"
+												visible = "[Character.IsRuler]"
+												text = "[Character.GetPrimaryTitle.GetNameNoTooltip]"
+											}
+										}
+
+										vbox = {
+											text_single = {
+												align = right
+												default_format = "#high"
+												text = "CULT_ROSTER_HEAD"
+												visible = "[GetScriptedGui('cult_panel_is_head').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+											text_single = {
+												align = right
+												default_format = "#high"
+												text = "CULT_ROSTER_HIEROPHANT"
+												visible = "[GetScriptedGui('cult_panel_is_hierophant').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+											text_single = {
+												align = right
+												text = "CULT_RANK_0"
+												visible = "[GetScriptedGui('cult_panel_rank_0').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+											text_single = {
+												align = right
+												text = "CULT_RANK_1"
+												visible = "[GetScriptedGui('cult_panel_rank_1').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+											text_single = {
+												align = right
+												text = "CULT_RANK_2"
+												visible = "[GetScriptedGui('cult_panel_rank_2').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+											text_single = {
+												align = right
+												text = "CULT_RANK_3"
+												visible = "[GetScriptedGui('cult_panel_rank_3').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+											text_single = {
+												align = right
+												default_format = "#V"
+												text = "CULT_ROSTER_SUSPECT"
+												visible = "[GetScriptedGui('cult_panel_suspect').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+											text_single = {
+												align = right
+												default_format = "#X"
+												text = "CULT_ROSTER_VERY_SUSPECT"
+												visible = "[GetScriptedGui('cult_panel_very_suspect').IsShown( GuiScope.SetRoot( Character.MakeScope ).End )]"
+											}
+										}
+									}
+								}
+							}
+						}
+
+						blockoverride "scrollbox_empty" {
+							visible = "[IsDataModelEmpty( GetPlayer.MakeScope.GetList( 'cult_panel_roster' ) )]"
+							text = "CULT_PANEL_ROSTER_EMPTY"
+						}
+					}
+				}
+			}
+		}
+	}
+
+	# One of the people at the top: a label, a face, a name. The face opens the character like any
+	# vanilla portrait does.
+	type cult_person_slot = vbox {
+		spacing = 2
+		minimumsize = { 130 -1 }
+		text_single = {
+			default_format = "#weak"
+			align = hcenter
+			block "slot_label" {}
+		}
+		portrait_head_small = {}
+		text_single = {
+			align = hcenter
+			default_format = "#high"
+			max_width = 130
+			text = "[Character.GetFirstNameNoTooltip]"
+		}
+	}
+
+	# An hbox, not a widget: a widget's autoresize does not measure its text children, so every chip
+	# came out zero-wide and the four rungs printed on top of each other. ignoreinvisible so the hidden
+	# half does not hold a gap.
+	type cult_rung_chip = hbox {
+		ignoreinvisible = yes
+		text_single = {
+			default_format = "#high"
+			block "chip_lit" {}
+		}
+		text_single = {
+			default_format = "#weak"
+			block "chip_dim" {}
+		}
+	}
+
+	# An action the viewer can take, lit when they can take it now and dimmed with its requirement
+	# when they cannot. The text carries both halves; the colour says which applies.
+	type cult_action_row = hbox {
+		layoutpolicy_horizontal = expanding
+		ignoreinvisible = yes
+		text_single = {
+			layoutpolicy_horizontal = expanding
+			align = left
+			default_format = "#high"
+			block "action_lit" {}
+		}
+		text_single = {
+			layoutpolicy_horizontal = expanding
+			align = left
+			default_format = "#weak"
+			block "action_dim" {}
+		}
+	}
+
+	# A wrapped paragraph held to the left edge. A bare text_multi narrower than its vbox is centred
+	# in it, so paragraphs sat ~20px further in than the labels around them; the expand pushes this
+	# one left. 520 fits the ~540 inside a margined box (see the width budget in the society panel).
+	type cult_para = hbox {
+		layoutpolicy_horizontal = expanding
+		text_multi = {
+			autoresize = yes
+			max_width = 520
+			block "para" {}
+		}
+		expand = {}
+	}
+}
+
+gen_cult_panel_host = {}

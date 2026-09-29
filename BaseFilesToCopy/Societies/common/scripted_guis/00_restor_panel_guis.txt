@@ -18,13 +18,23 @@ society_panel_window = {
 	effect = { remove_variable = society_panel_open }
 }
 
-# The tab. Shown only to a member, so a non-member has no tab at all -- the society's existence is
-# not advertised to people outside it.
+# The tab. Shown only to a member of a society, so a non-member has no tab at all -- no society's
+# existence is advertised to people outside it. One tab for every society: a character belongs to
+# at most one, and each society's window shows only to its own members (restor_panel_viewer_member,
+# cult_panel_viewer_member).
 society_panel_toggle = {
 	scope = character
 	is_shown = {
-		restor_active_trigger = yes
-		has_trait = restor_member
+		OR = {
+			AND = {
+				restor_active_trigger = yes
+				has_trait = restor_member
+			}
+			AND = {
+				cult_active_trigger = yes
+				has_trait = cult_member
+			}
+		}
 	}
 	effect = {
 		if = {
@@ -106,6 +116,15 @@ restor_panel_gather = {
 				}
 			}
 		}
+	}
+}
+
+# This window is the Restorationists'. The cult has its own (gen_cult_panel.gui) behind the same tab.
+restor_panel_viewer_member = {
+	scope = character
+	is_shown = {
+		restor_active_trigger = yes
+		has_trait = restor_member
 	}
 }
 

@@ -1,0 +1,173 @@
+﻿# The inversion cult's charges: the decisions that let a member do a charge's work by hand.
+# Each is shown only to a member holding that kind of charge, so nobody else ever sees one.
+#
+#   cult_taint_the_county_decision     taint: gold and exposure; taints the charge's county if you
+#                                      hold it, hold land beside it, or hold land in its duchy
+#   cult_work_on_the_priest_decision   turn_priest: gold and dark power; the priest warms to you, and
+#                                      may take the oath there and then. Once a year.
+#
+# The offering charge uses the core decision cult_offer_to_the_dark_decision; the recruit charge the
+# recruitment interactions; the holy site the rite pack's Pilgrimage of Defilement (and cult.0532).
+# A taint charge can also be done by the rite pack's Black Mass (profane purpose), which taints the
+# guests' counties and those beside them; the Pilgrimage goes only to holy sites.
+
+cult_taint_the_county_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
+	}
+	ai_check_interval = 36
+
+	desc = cult_taint_the_county_decision_desc
+	selection_tooltip = cult_taint_the_county_decision_tooltip
+
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		has_variable = cult_charge
+		var:cult_charge = flag:taint
+		exists = var:cult_charge_county
+	}
+
+	is_valid_showing_failures_only = {
+		is_imprisoned = no
+	}
+
+	is_valid = {
+		custom_tooltip = {
+			text = cult_taint_the_county_reach_tt
+			cult_charge_can_reach_county_trigger = yes
+		}
+		custom_tooltip = {
+			text = cult_taint_the_county_not_tainted_tt
+			var:cult_charge_county = {
+				NOT = { has_county_modifier = cult_county_tainted }
+			}
+		}
+	}
+
+	cost = {
+		gold = 75
+	}
+
+	effect = {
+		cult_charge_taint_county_effect = { COUNTY = var:cult_charge_county }
+		cult_exposure_gain_effect = { VALUE = 5 }
+		hidden_effect = { cult_charge_check_effect = yes }
+	}
+
+	ai_potential = {
+		has_trait = cult_member
+	}
+
+	ai_will_do = {
+		base = 50
+	}
+}
+
+cult_work_on_the_priest_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_personal_religious.dds"
+	}
+	ai_check_interval = 24
+
+	desc = cult_work_on_the_priest_decision_desc
+	selection_tooltip = cult_work_on_the_priest_decision_tooltip
+
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		has_variable = cult_charge
+		var:cult_charge = flag:turn_priest
+		exists = var:cult_charge_target
+	}
+
+	is_valid_showing_failures_only = {
+		is_imprisoned = no
+		NOT = { has_character_flag = cult_worked_on_the_priest }
+		var:cult_charge_target = {
+			is_alive = yes
+			is_imprisoned = no
+			NOT = { has_trait = cult_member }
+		}
+	}
+
+	is_valid = {
+		custom_tooltip = {
+			text = cult_work_on_the_priest_power_tt
+			has_variable = cult_power
+			var:cult_power >= 25
+		}
+	}
+
+	cost = {
+		gold = 50
+	}
+
+	effect = {
+		add_character_flag = {
+			flag = cult_worked_on_the_priest
+			years = 1
+		}
+		cult_power_spend_effect = { VALUE = 25 }
+		cult_corrupt_soul_effect = yes
+		var:cult_charge_target = {
+			save_scope_as = cult_charge_target
+			add_opinion = {
+				target = root
+				modifier = friendliness_opinion
+				opinion = 15
+			}
+		}
+		random_list = {
+			25 = {
+				modifier = {
+					add = 20
+					scope:cult_charge_target = {
+						opinion = {
+							target = root
+							value >= 30
+						}
+					}
+				}
+				modifier = {
+					add = 20
+					scope:cult_charge_target = { cult_sinner_trigger = yes }
+				}
+				modifier = {
+					add = 10
+					intrigue >= 14
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult_work_on_the_priest_success
+					left_icon = root
+					right_icon = scope:cult_charge_target
+					cult_charge_swear_priest_effect = { PRIEST = scope:cult_charge_target }
+				}
+			}
+			75 = {
+				modifier = {
+					add = 25
+					scope:cult_charge_target = { has_trait = zealous }
+				}
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult_work_on_the_priest_not_yet
+					left_icon = root
+					right_icon = scope:cult_charge_target
+					custom_tooltip = cult_work_on_the_priest_not_yet_tt
+				}
+			}
+		}
+		cult_exposure_gain_effect = { VALUE = 3 }
+		hidden_effect = { cult_charge_check_effect = yes }
+	}
+
+	ai_potential = {
+		has_trait = cult_member
+	}
+
+	ai_will_do = {
+		base = 40
+	}
+}

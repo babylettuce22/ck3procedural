@@ -1,0 +1,91 @@
+﻿# What the inversion cult's everyday life leaves between people. cult.0200-0299.
+
+cult_life_took_my_side_opinion = {
+	opinion = 20
+	years = 5
+	decaying = yes
+}
+
+cult_life_took_their_side_opinion = {
+	opinion = -15
+	years = 5
+	decaying = yes
+}
+
+cult_life_scolded_me_opinion = {
+	opinion = -5
+	years = 2
+	decaying = yes
+}
+
+cult_life_kept_the_peace_opinion = {
+	opinion = 10
+	years = 3
+	decaying = yes
+}
+
+cult_life_stood_sponsor_opinion = {
+	opinion = 10
+	years = 10
+	decaying = yes
+}
+
+cult_life_kept_my_child_out_opinion = {
+	opinion = 25
+	years = 20
+	decaying = yes
+}
+
+cult_life_refused_sponsor_opinion = {
+	opinion = -10
+	years = 3
+	decaying = yes
+}
+
+cult_life_let_me_go_opinion = {
+	opinion = 20
+	years = 10
+	decaying = yes
+}
+
+cult_life_threatened_me_opinion = {
+	opinion = -25
+	years = 10
+	decaying = yes
+}
+
+cult_life_walked_away_opinion = {
+	opinion = -20
+	years = 10
+	decaying = yes
+}
+
+cult_life_praised_the_sermon_opinion = {
+	opinion = 10
+	years = 5
+	decaying = yes
+}
+
+cult_life_spared_my_prayers_opinion = {
+	opinion = 20
+	years = 10
+	decaying = yes
+}
+
+cult_life_made_an_example_opinion = {
+	opinion = -30
+	years = 10
+	decaying = yes
+}
+
+cult_life_soft_on_the_faithful_opinion = {
+	opinion = -10
+	years = 5
+	decaying = yes
+}
+
+cult_life_prayed_the_old_way_opinion = {
+	opinion = -10
+	years = 5
+	decaying = yes
+}

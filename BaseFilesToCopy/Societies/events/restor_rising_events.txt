@@ -23,7 +23,10 @@ restor.0601 = {
 		trigger = { exists = scope:restor_pretender }
 		character = scope:restor_pretender
 	}
-	trigger = { restor_underground_trigger = yes }
+	trigger = {
+		is_ai = no
+		restor_underground_trigger = yes
+	}
 	immediate = { restor_save_scopes_effect = yes }
 	option = {
 		name = restor.0601.a
@@ -55,7 +58,10 @@ restor.0602 = {
 		}
 		character = scope:restor_pretender
 	}
-	trigger = { restor_underground_trigger = yes }
+	trigger = {
+		is_ai = no
+		restor_underground_trigger = yes
+	}
 	immediate = { restor_save_scopes_effect = yes }
 	option = {
 		name = restor.0602.a
@@ -81,7 +87,10 @@ restor.0603 = {
 		trigger = { exists = scope:restor_pretender }
 		character = scope:restor_pretender
 	}
-	trigger = { restor_underground_trigger = yes }
+	trigger = {
+		is_ai = no
+		restor_underground_trigger = yes
+	}
 	immediate = { restor_save_scopes_effect = yes }
 	option = {
 		name = restor.0603.a
@@ -102,7 +111,10 @@ restor.0604 = {
 		character = scope:restor_usurper
 		animation = personality_bold
 	}
-	trigger = { restor_underground_trigger = yes }
+	trigger = {
+		is_ai = no
+		restor_underground_trigger = yes
+	}
 	immediate = { restor_save_scopes_effect = yes }
 	option = {
 		name = restor.0604.a

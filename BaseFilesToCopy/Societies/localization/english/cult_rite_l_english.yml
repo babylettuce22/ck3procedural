@@ -1,0 +1,255 @@
+﻿l_english:
+
+ # ---- The planner group -------------------------------------------------------------------------
+
+ activity_group_type_cult_group:0 "$cult_society_name$"
+
+ cult_rite_requires_membership_tt:0 "You are sworn to $cult_society_name$"
+ cult_mass_requires_rank_tt:0 "You are a #high Magister#! of the circle or higher, or the Hierophant"
+ cult_defilement_requires_membership_tt:0 "You are sworn to $cult_society_name$, and the circle still works in secret"
+ cult_defilement_requires_host_faith_tt:0 "You still keep the forms of $cult_host_name$, so nobody will wonder why you go on pilgrimage"
+ cult_defilement_location_holy_site_tt:0 "A holy site of $cult_host_name$"
+ cult_defilement_location_not_capital_tt:0 "Not your own capital"
+
+ # ---- The Black Mass ----------------------------------------------------------------------------
+ # No datafunctions in _desc: an activity's desc is rendered without a character root.
+
+ activity_cult_mass_host_an_a: "$host_activity_a$"
+ activity_cult_defilement_host_an_a: "$host_activity_a$"
+ activity_cult_mass:0 "Say a Black Mass"
+ activity_cult_mass_name:0 "The Black Mass"
+ activity_cult_mass_owner:0 "Said by [ROOT.Char.GetTitledFirstName]"
+ activity_cult_mass_selection_tooltip:0 "Call the Faithless to your chapel at night to invoke $cult_devil_name$, profane the land around you, or bring someone new into the circle."
+ activity_cult_mass_host_desc:0 "You say the Mass. If it is discovered, it was your chapel."
+ activity_cult_mass_guest_desc:0 "Only the Faithless can be invited."
+ activity_cult_mass_guest_help_text:0 "Members of $cult_society_name$ you can reach. Nobody else can be invited or attend."
+ activity_cult_mass_destination_selection:0 "Your own chapel"
+ activity_cult_mass_predicted_cost:0 "No gold. Everyone who comes gains #N 3#! exposure while the cult is secret."
+ activity_cult_mass_conclusion_desc:0 "The candles are out and the Faithless have gone home."
+ activity_cult_mass_desc:0 "The circle meets rarely, in a Magister's or the Hierophant's own chapel, after the household is asleep. The service is the church's own, said to $cult_devil_name$ instead. Once everyone has arrived, the host decides what the Mass is for: to call on $cult_devil_name$ for power, to profane the land around the chapel, or to raise someone within the circle.\n\nEveryone who comes takes a risk. The host is paid for it."
+ TRAVEL_NAME_FOR_activity_cult_mass:0 "Journey to the Black Mass"
+ activity_cult_mass_province_desc:0 "Your own seat. The Faithless arrive after dark and go down to the chapel one at a time."
+
+ cult_mass_intent:0 "Kneel in the Dark"
+ cult_mass_intent_desc:0 "You are here because you are sworn."
+ cult_mass_phase:0 "The Black Mass"
+ cult_mass_phase_desc:0 "Two weeks of nights in the chapel."
+
+ cult_invite_rule_court:0 "Faithless at Court"
+ cult_invite_rule_court_desc:0 "Members of $cult_society_name$ at your own court."
+ cult_invite_rule_elsewhere:0 "Faithless Elsewhere"
+ cult_invite_rule_elsewhere_desc:0 "Every other member of $cult_society_name$ you know of."
+
+ # ---- The Pilgrimage of Defilement --------------------------------------------------------------
+
+ activity_cult_defilement:0 "Go on a Pilgrimage of Defilement"
+ activity_cult_defilement_name:0 "Pilgrimage of Defilement"
+ activity_cult_defilement_owner:0 "[ROOT.Char.GetTitledFirstName]'s Pilgrimage"
+ activity_cult_defilement_selection_tooltip:0 "Walk the pilgrim road to a holy site of $cult_host_name$ like any of the faithful, and do the circle's work when you get there."
+ activity_cult_defilement_host_desc:0 "You lead the pilgrimage, and you answer for what happens at the shrine."
+ activity_cult_defilement_guest_desc:0 "Up to two of the Faithless from your court can walk with you."
+ activity_cult_defilement_guest_help_text:0 "Only the Faithless can come."
+ activity_cult_defilement_destination_selection:0 "Which holy site of $cult_host_name$?"
+ activity_cult_defilement_predicted_cost:0 "No gold. You come home with between #N 1#! and #N 12#! exposure, depending on what you do and how you go about it."
+ activity_cult_defilement_conclusion_desc:0 "You are home, and everyone thinks you went to pray."
+ activity_cult_defilement_desc:0 "To everyone at home, this is an ordinary pilgrimage. You take the road to a holy site of $cult_host_name$ with the rest of the faithful, and pray where they pray. You choose before you leave what you will really do there.\n\nWhat it pays, and how much it exposes you, depends on how carefully you go about it."
+ TRAVEL_NAME_FOR_activity_cult_defilement:0 "Pilgrimage"
+ activity_cult_defilement_province_desc:0 "A holy site of $cult_host_name$. Pilgrims come here all year round."
+
+ cult_defilement_intent:0 "See It Done"
+ cult_defilement_intent_desc:0 "You are here on the business of the circle."
+ cult_defilement_phase:0 "The Pilgrimage"
+ cult_defilement_phase_desc:0 "About a month at the shrine."
+
+ cult_defilement_purpose:0 "What the Pilgrimage Is For"
+ cult_defilement_defile:0 "Defile the Shrine"
+ cult_defilement_defile_desc:0 "Undo the blessings, foul the altar, and leave the priests to find it. #bold The county is Tainted for 10 years, which feeds the rot. The most exposure.#!"
+ cult_defilement_relic:0 "Steal a Relic"
+ cult_defilement_relic_desc:0 "Take one of the shrine's relics home in your baggage. #bold Dark power for you, and the lord who keeps the shrine loses piety.#!"
+ cult_defilement_sign:0 "Leave a Sign"
+ cult_defilement_sign_desc:0 "Cut the circle's mark somewhere the faithful will touch it every day and never notice. #bold A little dark power and standing. The least exposure.#!"
+
+ # ---- cult.0901 ---------------------------------------------------------------------------------
+
+ cult.0901.t:0 "The Black Mass"
+ cult.0901.desc:0 "[cult_mass_count|0] of the Faithless have come down to your chapel, most of them by back roads and under some other excuse. The servants are asleep. The candles are black, the holy signs hang upside down, and the words of the service are the ones the priests of $cult_host_name$ say every morning, only turned to $cult_devil_name$.\n\nEveryone here has risked a great deal to come. They will want the night to be for something."
+ cult.0901.desc_open:0 "[cult_mass_count|0] of the Faithless have come to your chapel. The doors stand open now: the church is the cult's, and nobody needs to come by back roads any more. The service is the old one, said to $cult_devil_name$, and the choir sings it without lowering their voices."
+ cult.0901.desc_alone:0 "You called the Faithless to your chapel, and nobody has come. The candles burn down with only you to see them."
+ cult.0901.desc_absent:0 "\n\nOne place is empty. [cult_absentee.GetTitledFirstName] was asked, and has not come."
+ cult.0901.desc_end:0 "\n\nWhat is this Mass for?"
+ cult.0901.a:0 "We call on $cult_devil_name$, every one of us."
+ cult.0901.a.tt:0 "Every member here gains dark power, and may lose something to it"
+ cult.0901.b:0 "We profane the land around us."
+ cult.0901.b.tt:0 "Choose counties of $cult_host_name$ to taint: one for each of the Faithless here who holds land"
+ cult.0901.c:0 "Tonight, someone is raised."
+ cult.0901.c.tt:0 "Raise one of the Faithless here, or swear in a courtier you brought down to the chapel"
+
+ # ---- cult.0902 ---------------------------------------------------------------------------------
+
+ cult.0902.t:0 "The Profanation"
+ cult.0902.desc:0 "The Faithless each carry something home from the chapel: a handful of ash from the altar, a word for the village priest who takes the cult's money. Scattered in the right places, it spoils a county's shrines for years, and the priests who notice say nothing.\n\n[cult_profane_n|0] of you here can carry it home, one county each. [cult_profane_own_count|0] untainted counties of $cult_host_name$ are held by someone in this chapel. [cult_profane_near_count|0] more lie next to your lands, in other hands."
+ cult.0902.a:0 "Start at home, in our own counties."
+ cult.0902.a.tt:0 "Up to #high [cult_profane_n|0]#! counties of $cult_host_name$ held by the Faithless in this chapel become #high Tainted#! for 10 years. Their people will think a little less of their lords."
+ cult.0902.b:0 "Carry it into our neighbours' counties."
+ cult.0902.b.tt:0 "Up to #high [cult_profane_n|0]#! counties of $cult_host_name$ next to our lands, held by others, become #high Tainted#! for 10 years. It is their lords who lose goodwill, and yours the risk."
+ cult.0902.c:0 "Not yet. Somebody would notice."
+ cult.0902.toast:0 "The Land Profaned"
+ cult.0902.toast.tt:0 "#high [cult_tainted_now|0]#! counties of $cult_host_name$ are now #high Tainted#!. The rot in the church is recounted."
+
+ # ---- cult.0903 ---------------------------------------------------------------------------------
+
+ cult.0903.t:0 "The Initiation"
+ cult.0903.desc:0 "Before the last candle goes out, the one who says the Mass may raise someone in the circle."
+ cult.0903.desc_candidate:0 "\n\n[cult_mass_candidate.GetTitledFirstName] has done more for the cult this year than anyone else in the chapel, and everyone knows it."
+ cult.0903.desc_nocandidate:0 "\n\nNobody in the chapel has earned it more than anyone else."
+ cult.0903.desc_recruit:0 "\n\n[cult_mass_recruit.GetTitledFirstName] is here too, standing by the door. [cult_mass_recruit.GetSheHe|U] was told only that there would be a private service tonight, and has watched all of it without saying a word or trying to leave."
+ cult.0903.desc_end:0 "\n\nYou could also remind the circle whose chapel this is."
+ cult.0903.a:0 "[cult_mass_candidate.GetFirstNameNoTooltip] has earned it. Kneel."
+ cult.0903.a.toast:0 "Raised Before the Circle"
+ cult.0903.b:0 "[cult_mass_recruit.GetFirstNameNoTooltip], come to the altar. You belong here."
+ cult.0903.c:0 "Nobody has risked more for this circle than I have."
+ cult.0903.d:0 "Nobody is raised tonight."
+
+ # ---- cult.0904 ---------------------------------------------------------------------------------
+
+ cult.0904.t:0 "An Empty Place"
+ cult.0904.desc:0 "[cult_absentee.GetTitledFirstName] was asked to come and did not. No message, no excuse. Every night of the Mass [cult_absentee.GetHerHis] place in the chapel has stood empty, and the others have noticed.\n\nA member who stays away could be ill, or careful, or thinking about confessing. Once the circle starts wondering which, it is hard to make them stop."
+ cult.0904.desc_none:0 "Everyone who was asked has come. There is nobody to answer for staying away."
+ cult.0904.a:0 "Name [cult_absentee.GetHerHim] before the circle."
+ cult.0904.b:0 "[cult_absentee.GetSheHe|U] will have had [cult_absentee.GetHerHis] reasons. Let it go."
+ cult.0904.c:0 "Good. Let's get on."
+
+ # ---- cult.0905 ---------------------------------------------------------------------------------
+
+ cult.0905.t:0 "The Black Mass"
+ cult.0905.desc:0 "You reach [host.GetTitledFirstName]'s seat after dark, as you were told to, and a servant who asks no questions takes you down to the chapel. [cult_mass_count|0] of the Faithless are there. Some of them you know from court and from church. Some of them you had no idea were sworn."
+ cult.0905.desc_nohost:0 "You have come to the Black Mass. [cult_mass_count|0] of the Faithless are there."
+ cult.0905.desc_hierophant_here:0 "\n\nThe Hierophant, [cult_hierophant.GetTitledFirstName], kneels in the front row and says every response."
+ cult.0905.desc_hierophant_away:0 "\n\nThe Hierophant, [cult_hierophant.GetTitledFirstName], is not here."
+ cult.0905.desc_head_here:0 "\n\n[cult_head.GetTitledFirstName] is here in person. The head of $cult_host_name$ stands in the dark with the rest of you, saying the prayers backwards."
+ cult.0905.desc_end:0 "\n\nAnyone in this chapel could burn for being in it. How loudly you pray tonight is up to you."
+ cult.0905.desc_end_open:0 "\n\nNobody here needs to hide any more. The only question is how you are seen."
+ cult.0905.a:0 "Say the responses loudest of all."
+ cult.0905.b:0 "Keep to the back, and keep my hood up."
+
+ # ---- cult.0906 ---------------------------------------------------------------------------------
+
+ cult.0906.t:0 "What the Mass Was For"
+ cult.0906.desc_invoke:0 "On the last night [host.GetTitledFirstName] had every one of the Faithless call on $cult_devil_name$ together. Something answered. You all felt it, and nobody slept afterwards."
+ cult.0906.desc_profane:0 "[host.GetTitledFirstName] gave every lord in the chapel something to carry home. By spring the shrines of [cult_tainted_now|0] counties of $cult_host_name$ will be spoiled, and their priests paid to look away."
+ cult.0906.desc_raised:0 "On the last night [host.GetTitledFirstName] had [cult_mass_candidate.GetTitledFirstName] kneel at the altar, and raised [cult_mass_candidate.GetHerHim] in front of everyone."
+ cult.0906.desc_raised_you:0 "On the last night [host.GetTitledFirstName] had you kneel at the altar, and raised you in front of everyone. The circle trusts you more than it did."
+ cult.0906.desc_sworn:0 "On the last night [host.GetTitledFirstName] brought [cult_mass_recruit.GetTitledFirstName] to the altar, and [cult_mass_recruit.GetSheHe] swore the oath to $cult_devil_name$ in front of everyone. The circle is one larger."
+ cult.0906.desc_self:0 "On the last night [host.GetTitledFirstName] said that nobody had done more for the circle than [host.GetSheHe] had, and raised [host.GetHerselfHimself]. Nobody argued, out loud."
+ cult.0906.desc_quiet:0 "The Faithless prayed together every night, but [host.GetTitledFirstName] asked nothing more of them. It is too soon, [host.GetSheHe] says."
+ cult.0906.a:0 "Understood."
+
+ # ---- cult.0907 ---------------------------------------------------------------------------------
+
+ cult.0907.t:0 "Named Before the Circle"
+ cult.0907.t_forgiven:0 "Excused by the Circle"
+ cult.0907.desc:0 "A letter reaches you from one of the Faithless. At [host.GetTitledFirstName]'s Black Mass your place was empty, and [host.GetFirstNameNoTooltip] said so in front of everyone. Your name was spoken as the name of someone who might go to a confessor.\n\nThe circle will remember it. So will you."
+ cult.0907.desc_forgiven:0 "A letter reaches you from one of the Faithless. At [host.GetTitledFirstName]'s Black Mass your place was empty, and some wanted you named for it. [host.GetFirstNameNoTooltip] would not hear of it, and said you would have had your reasons."
+ cult.0907.a:0 "Send [host.GetFirstNameNoTooltip] a gift, and an apology."
+ cult.0907.b:0 "[host.GetFirstNameNoTooltip] can think what [host.GetSheHe] likes."
+ cult.0907.c:0 "I owe [host.GetFirstNameNoTooltip] for that."
+
+ # ---- cult.0908 ---------------------------------------------------------------------------------
+
+ cult.0908.t:0 "Talk in Town"
+ cult.0908.desc:0 "Your steward has come to you with a problem. The town below your seat has noticed things: riders arriving after dark, lights in the chapel long after the last prayers, and singing that seems to come from under the floor. People are asking what it is."
+ cult.0908.desc_hunter:0 "\n\nOne of the people asking is a priest who writes to [cult_hunter.GetTitledFirstName] every month."
+ cult.0908.desc_nohunter:0 "\n\nSooner or later somebody will ask a priest."
+ cult.0908.a:0 "Tell them it was a vigil for the dead."
+ cult.0908.a.success:0 "The Story Holds"
+ cult.0908.a.success.tt:0 "The town believes it was a vigil"
+ cult.0908.a.failure:0 "Nobody Believes the Story"
+ cult.0908.b:0 "Pay a few people to talk about something else."
+ cult.0908.b.tt:0 "The talk dies down"
+ cult.0908.c:0 "Let them talk."
+
+ # ---- cult.0910 ---------------------------------------------------------------------------------
+
+ cult.0910.t:0 "A Pilgrim's Robe"
+ cult.0910.desc_defile:0 "You leave for the holy site at [cult_defilement_county.GetNameNoTier] tomorrow, in a pilgrim's robe, with a pilgrim's staff. Your household thinks you are going to pray there, and has told you how pious that is.\n\nYou are going to undo every blessing on the place. When you are finished, the faithful will go on praying at an altar that belongs to $cult_devil_name$, and never know."
+ cult.0910.desc_relic:0 "You leave for the holy site at [cult_defilement_county.GetNameNoTier] tomorrow, in a pilgrim's robe, with a pilgrim's staff. Your household thinks you are going to pray there, and has told you how pious that is.\n\nThe shrine keeps relics that the faithful of $cult_host_name$ have kissed for generations. One of them is coming home with you."
+ cult.0910.desc_sign:0 "You leave for the holy site at [cult_defilement_county.GetNameNoTier] tomorrow, in a pilgrim's robe, with a pilgrim's staff. Your household thinks you are going to pray there, and has told you how pious that is.\n\nYou are going to leave the circle's mark somewhere in the shrine, small enough that nobody will see it, where every pilgrim who comes after you will touch it."
+ cult.0910.a:0 "Pack the robe."
+ cult.0910.a.tt:0 "The pilgrimage takes about a month at the shrine. You are paid when you come home, and how much you are exposed depends on how you go about it."
+
+ # ---- cult.0911 ---------------------------------------------------------------------------------
+
+ cult.0911.t:0 "On the Pilgrim Road"
+ cult.0911.desc:0 "[host.GetTitledFirstName] has asked you to walk with [host.GetHerHim] to the holy site at [cult_defilement_county.GetNameNoTier], among the faithful going there to pray. [host.GetSheHe|U] has not said what the circle wants done there, and you have not asked."
+ cult.0911.a:0 "I'll pray like everyone else."
+ cult.0911.a.tt:0 "When the pilgrimage ends you gain a little #high standing#! in the circle, and a little exposure"
+
+ # ---- cult.0912 ---------------------------------------------------------------------------------
+
+ cult.0912.t:0 "Among the Faithful"
+ cult.0912.desc_defile:0 "You have reached [cult_defilement_county.GetNameNoTier]. The road was full of pilgrims, and the shrine is fuller: the sick, the grieving, whole villages come to give thanks. They make room for you at the altar because you look like one of them.\n\nYou could take your time: pray with them all week, learn when the priests sleep, and do the work a little each night. Or you could do it all in one night and be on the road before morning."
+ cult.0912.desc_relic:0 "You have reached [cult_defilement_county.GetNameNoTier]. The relics are kept behind a grille by the altar, and the faithful queue from dawn to kiss the glass. A priest stands beside them all day, and another sleeps beside them at night.\n\nYou could take your time: come every day, until the priests stop seeing you. Or you could wait for one crowded morning and take it under their noses."
+ cult.0912.desc_sign:0 "You have reached [cult_defilement_county.GetNameNoTier]. The pilgrims touch everything here: the doorposts, the altar rail, the worn step where their saints are said to have knelt.\n\nYou could take your time and cut the mark slowly, a little each visit, where nobody will look. Or you could cut it deep in one night and be gone."
+ cult.0912.a:0 "We take our time, and pray with the rest."
+ cult.0912.a.tt:0 "Careful: no extra exposure, and any trouble at the shrine can be dealt with quietly"
+ cult.0912.b:0 "We get it done quickly."
+ cult.0912.b.tt:0 "Hasty: a bigger result when you come home, and #N 2#! more exposure"
+
+ # ---- cult.0913 ---------------------------------------------------------------------------------
+
+ cult.0913.t:0 "Seen at the Shrine"
+ cult.0913.desc_priest:0 "[cult_witness.GetTitledFirstName], who keeps the [cult_faith.HouseOfWorship] here for [cult_defilement_county.GetHolder.GetTitledFirstName], came in to trim the lamps at an hour when no pilgrim should have been there. [cult_witness.GetSheHe|U] saw you. [cult_witness.GetSheHe|U] has been asking the other pilgrims about you ever since."
+ cult.0913.desc_hunter:0 "[cult_witness.GetTitledFirstName] is among the pilgrims, and serves [cult_hunter.GetTitledFirstName], who has been hunting the Faithless for years. [cult_witness.GetSheHe|U] saw you somewhere you had no reason to be, and has been watching you ever since."
+ cult.0913.desc_named:0 "[cult_witness.GetTitledFirstName], who serves [cult_defilement_county.GetHolder.GetTitledFirstName], saw you somewhere in the shrine you had no reason to be, and has been asking the other pilgrims about you ever since."
+ cult.0913.desc_unnamed:0 "One of the shrine's lay brothers saw you somewhere you had no reason to be, and has been asking the other pilgrims about you ever since."
+ cult.0913.desc_careful:0 "\n\nYou have been careful, and nobody has anything they could prove. You know where the witness sleeps and who they talk to. This can be dealt with quietly."
+ cult.0913.desc_hasty:0 "\n\nYou have not been careful. Too many pilgrims have seen your face in the wrong places. There is no quiet way out of this now: pay, press on and hope, or go home."
+ cult.0913.a:0 "Deal with it quietly."
+ cult.0913.clean.tt:0 "The witness is dealt with: #P no extra exposure#! when you come home"
+ cult.0913.b:0 "Pay [cult_witness.GetHerHim] to forget it."
+ cult.0913.b_unnamed:0 "Pay the witness to forget it."
+ cult.0913.c:0 "Press on. Nothing can be proven."
+ cult.0913.c.tt:0 "#N 3#! more exposure when you come home, and even odds that the witness talks"
+ cult.0913.d:0 "Go home. Say my prayers and go home."
+ cult.0913.d.tt:0 "The pilgrimage is only a pilgrimage. You come home with nothing, and #N 1#! exposure"
+
+ # ---- cult.0914 ---------------------------------------------------------------------------------
+
+ cult.0914.t:0 "Home from the Pilgrimage"
+ cult.0914.desc_defile:0 "You are home from [cult_defilement_county.GetNameNoTier]. The shrine looks the same as it always did. The faithful still queue at the altar and still leave their offerings. They are praying to $cult_devil_name$ now, and the priests who might notice have been paid not to."
+ cult.0914.desc_relic:0 "You are home from [cult_defilement_county.GetNameNoTier] with a small wrapped bundle at the bottom of your baggage. By now the priests have found the empty space behind the grille. [cult_defilement_county.GetHolder.GetTitledFirstName] will be asked how it could happen at a shrine in [cult_defilement_county.GetHolder.GetHerHis] keeping."
+ cult.0914.desc_sign:0 "You are home from [cult_defilement_county.GetNameNoTier]. The mark is cut where you meant it to be. Every pilgrim who goes there will touch it, and carry a little of $cult_devil_name$ home without knowing."
+ cult.0914.desc_abandoned:0 "You are home from [cult_defilement_county.GetNameNoTier] having done nothing but pray. You turned back when it got dangerous, and you are still free because of it."
+ cult.0914.desc_blank:0 "\n\nAs far as anyone knows, it was an ordinary pilgrimage."
+ cult.0914.desc_clean:0 "\n\nNobody followed you home. Your household greets you as a pilgrim."
+ cult.0914.desc_messy:0 "\n\nYou left a witness behind, and pilgrims who saw your face. What happened at the shrine will be talked about."
+ cult.0914.a:0 "It wasn't worth burning for."
+ cult.0914.a.tt:0 "Nothing is gained"
+ cult.0914.b:0 "Let them pray. Their prayers are ours now."
+ cult.0914.b.hasty_tt:0 "A neighbouring county of $cult_host_name$ is Tainted as well"
+ cult.0914.rot_tt:0 "The rot in $cult_host_name$ is recounted"
+ cult.0914.c:0 "Unwrap it, once the doors are shut."
+ cult.0914.d:0 "The mark will outlast us all."
+ cult.0914.witness_talks:0 "[cult_witness.GetFirstNameNoTooltip] Talks"
+ cult.0914.witness_quiet:0 "[cult_witness.GetFirstNameNoTooltip] Keeps Quiet"
+ cult.0914.witness_secret_tt:0 "[cult_witness.GetFirstNameNoTooltip] learns that you worship $cult_devil_name$"
+ cult.0914.witness_quiet_tt:0 "Nothing more comes of it"
+
+ # ---- cult.0915 ---------------------------------------------------------------------------------
+
+ cult.0915.t:0 "The Stolen Relic"
+ cult.0915.desc:0 "The relic from [cult_defilement_county.GetNameNoTier] lies on your table: a little bone in a silver case, worn smooth by the lips of the faithful. Word of the theft has already spread. The priests of $cult_host_name$ are praying for its return.\n\nYou could burn it before $cult_devil_name$ tonight. Or you could carry it back to the shrine yourself, tell them you found it on the road, and let them thank you."
+ cult.0915.a:0 "Burn it."
+ cult.0915.b:0 "Take it back. I found it on the road."
+
+ # ---- cult.0916 ---------------------------------------------------------------------------------
+
+ cult.0916.t_defile:0 "The Shrine Defiled"
+ cult.0916.t_relic:0 "A Relic Stolen"
+ cult.0916.desc_defile:0 "The priests at [cult_defilement_county.GetNameNoTier] have written to you in distress. Someone has been at the holy site in your keeping: the altar cloths fouled, the blessed water spoiled, marks cut in the stone that none of them can read. It was done by someone who came as a pilgrim.\n\nThe faithful have not been told. The priests would like to know what you want done."
+ cult.0916.desc_relic:0 "The priests at [cult_defilement_county.GetNameNoTier] have written to you in distress. One of the relics of the holy site in your keeping is gone, taken from behind the grille in the middle of the pilgrim season. Whoever did it came as a pilgrim and left as one.\n\nThe faithful are asking how it could happen at a shrine you are meant to protect."
+ cult.0916.a:0 "Find whoever did this."
+ cult.0916.a.cold_tt:0 "Whoever did it covered their tracks. The search finds nothing."
+ cult.0916.a.trail_tt:0 "Whoever did it left a trail. They are a little easier to find."
+ cult.0916.b:0 "Have the shrine purified, whatever it costs."
+ cult.0916.c:0 "Pray for the shrine, and for whoever did this."

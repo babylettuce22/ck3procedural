@@ -1,0 +1,46 @@
+﻿# The inversion cult: recruitment's questions. See events/cult_recruitment_events.txt.
+
+# Is there room in the circle for AI recruiting? The cult should grow to 10-20 over a few decades,
+# not to hundreds, and a bigger host faith hides a few more. Bands rather than a computed cap, so the
+# comparison stays a plain number.
+cult_recruit_roster_open_trigger = {
+	OR = {
+		cult_roster_size_value < 12
+		AND = {
+			cult_roster_size_value < 16
+			global_var:cult_host_faith = { num_county_followers >= 80 }
+		}
+		AND = {
+			cult_roster_size_value < 20
+			global_var:cult_host_faith = { num_county_followers >= 160 }
+		}
+	}
+}
+
+# A court chaplain: the church's eyes in some ruler's court, and the rot's second measure.
+cult_recruit_is_chaplain_trigger = {
+	has_council_position = councillor_court_chaplain
+}
+
+# THIS is someone scope:cult_recruiter would sensibly approach: a lord of the host faith, or a court
+# chaplain of one, within reach. Cheap tests first -- this runs over every ruler of the faith, a few
+# times a year.
+cult_recruit_candidate_trigger = {
+	is_adult = yes
+	NOT = { has_trait = cult_member }
+	NOT = { has_trait = restor_member }	# one society per character
+	NOT = { this = scope:cult_recruiter }
+	cult_recruitable_trigger = yes
+	OR = {
+		is_landed = yes
+		cult_recruit_is_chaplain_trigger = yes
+	}
+	in_diplomatic_range = scope:cult_recruiter
+}
+
+# THIS is a lord of the host faith the unveiled church could invite in the open.
+cult_recruit_public_candidate_trigger = {
+	cult_unveiled_trigger = yes
+	is_landed = yes
+	cult_recruitable_trigger = yes
+}

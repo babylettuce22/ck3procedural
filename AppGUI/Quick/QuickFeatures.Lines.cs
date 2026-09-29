@@ -240,7 +240,7 @@ public static partial class QuickFeatures
     /// Across the wall, in core half-widths: a flat top at full height, a short steep face, a low
     /// glacis at its feet, and land on both sides of it the whole way.
     ///
-    /// At a saddle the wall pinches to about a third of its width but keeps most of its height.
+    /// At a saddle the wall pinches to about a fifth of its width but keeps most of its height.
     /// The whole wall is some four baronies thick, and the pass survey only cuts where a wall is at
     /// most 1.5 (MapConfig.MountainPassMaxThickness), so without them an 8192 world came out sealed
     /// coast to coast. Thin and still high, a saddle stays part of the wall, and the survey, which
@@ -255,10 +255,12 @@ public static partial class QuickFeatures
         double saddle = 0;
         foreach (double at in wall.Saddles) saddle = Math.Max(saddle, Gauss((t - at) / 0.012));
         double landReach = d / 12;
-        d /= breadth * (1 - 0.65 * saddle);
+        d /= breadth * (1 - 0.78 * saddle);
 
+        // The glacis goes too at a saddle: left full, it widened the foot the auto-cut takes in,
+        // and a saddle at a third of the wall's width still measured 1.6 baronies through.
         float range = (float)((1 - SmoothStep(0.45, 1.05, d)) * (1 - 0.2 * saddle));
-        float delta = (float)(0.18 * Gauss(d / 3) * (1 - 0.5 * saddle));
+        float delta = (float)(0.18 * Gauss(d / 3) * (1 - 0.8 * saddle));
         float coast = (float)(0.25 * Gauss(landReach));
         return new Sample(coast, delta, 0, 0, range, 0);
     }

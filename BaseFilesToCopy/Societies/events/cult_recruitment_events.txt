@@ -1,0 +1,844 @@
+﻿namespace = cult
+
+# The inversion cult: recruitment. cult.0100-0199.
+#
+# A courtship in two steps (see common/scripted_effects/00_cult_recruitment_effects.txt), only for
+# souls of the host faith -- the cult lives inside it:
+#
+#   0101   a player is sounded out by a member (sympathetic / cold / dangerous)
+#   0102   the recruiter hears: sympathetic
+#   0103   the recruiter hears: cold
+#   0104   the recruiter hears: dangerous -- they will take it to their priest, or to the hunter
+#   0105   a player member is pointed at a likely soul
+#   0110   a player is offered the oath (accept / refuse / report)
+#   0111   the recruiter hears: accepted
+#   0112   the recruiter hears: refused -- buy the silence or not
+#   0113   the recruiter hears: reported to a priest or the hunter
+#   0115   the new member's first night in the circle, and what the cult wants now
+#   0125   unveiled: the church invites a player lord to take the oath openly
+#
+# Events go only to players. An AI on either side is settled by the effects, so AI-to-AI recruiting
+# makes no events at all.
+
+# =====================================================================================
+#  cult.0101 -- a player is sounded out
+# =====================================================================================
+#
+# Often the first a player outside the cult hears of it, so the cult, what it serves and the faith it
+# hides in are named plainly.
+
+cult.0101 = {
+	type = character_event
+	title = cult.0101.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_sinner_trigger = yes }
+				desc = cult.0101.desc_intro_sinner
+			}
+			triggered_desc = {
+				trigger = {
+					OR = {
+						has_trait = excommunicated
+						AND = {
+							exists = scope:cult_head
+							opinion = { target = scope:cult_head value <= -20 }
+						}
+					}
+				}
+				desc = cult.0101.desc_intro_grudge
+			}
+			desc = cult.0101.desc_intro
+		}
+		desc = cult.0101.desc_society
+	}
+	theme = secret
+	override_background = { reference = sitting_room }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:cult_recruiter
+		animation = scheme
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		cult_of_the_host_trigger = yes
+		NOT = { has_trait = cult_member }
+		NOT = { has_trait = restor_member }
+		exists = scope:cult_recruiter
+		scope:cult_recruiter = {
+			is_alive = yes
+			has_trait = cult_member
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_recruit_find_confessor_effect = yes
+	}
+
+	# Sympathetic.
+	option = {
+		name = cult.0101.a
+		custom_tooltip = cult.0101.a.tt
+		if = {
+			limit = { scope:cult_recruiter = { is_ai = yes } }
+			custom_tooltip = cult.0101.a.offer_tt
+		}
+		hidden_effect = { cult_sound_out_sympathetic_effect = yes }
+		ai_chance = {
+			base = 10
+			modifier = { add = cult_recruit_pull_value }
+		}
+	}
+
+	# Cold.
+	option = {
+		name = cult.0101.b
+		custom_tooltip = cult.0101.b.tt
+		hidden_effect = { cult_sound_out_cold_effect = yes }
+		ai_chance = { base = 35 }
+	}
+
+	# Dangerous.
+	option = {
+		name = cult.0101.c
+		if = {
+			limit = { exists = scope:cult_confessor }
+			custom_tooltip = cult.0101.c.tt
+		}
+		else = {
+			custom_tooltip = cult.0101.c.tt_nobody
+		}
+		hidden_effect = { cult_sound_out_dangerous_effect = yes }
+		ai_chance = {
+			base = 5
+			modifier = { add = cult_recruit_push_value }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0102-0104 -- the recruiter hears where they stand
+# =====================================================================================
+
+cult.0102 = {
+	type = character_event
+	title = cult.0102.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:cult_recruit = { cult_recruit_is_chaplain_trigger = yes } }
+				desc = cult.0102.desc_chaplain
+			}
+			desc = cult.0102.desc
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:cult_recruit
+		animation = interested
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		exists = scope:cult_recruit
+		scope:cult_recruit = { is_alive = yes }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	# Straight to the oath.
+	option = {
+		name = cult.0102.a
+		trigger = {
+			scope:cult_recruit = {
+				NOT = { has_trait = cult_member }
+				cult_recruitable_trigger = yes
+			}
+		}
+		custom_tooltip = cult.0102.a.tt
+		hidden_effect = {
+			save_scope_as = cult_recruiter
+			cult_offer_oath_start_effect = yes
+		}
+	}
+
+	option = {
+		name = cult.0102.b
+		custom_tooltip = cult.0102.b.tt
+	}
+}
+
+cult.0103 = {
+	type = character_event
+	title = cult.0103.t
+	desc = cult.0103.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:cult_recruit
+		animation = dismissal
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		exists = scope:cult_recruit
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	option = {
+		name = cult.0103.a
+		cult_exposure_gain_effect = { VALUE = 2 }
+	}
+}
+
+cult.0104 = {
+	type = character_event
+	title = cult.0104.t
+	desc = {
+		desc = cult.0104.desc_intro
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_confessor
+					scope:cult_confessor = { has_trait = cult_member }
+				}
+				desc = cult.0104.desc_ours
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_confessor
+					scope:cult_confessor = { cult_is_hunter_trigger = yes }
+				}
+				desc = cult.0104.desc_hunter
+			}
+			triggered_desc = {
+				trigger = { exists = scope:cult_confessor }
+				desc = cult.0104.desc_priest
+			}
+			desc = cult.0104.desc_nobody
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:cult_recruit
+		animation = disapproval
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:cult_confessor }
+		character = scope:cult_confessor
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		exists = scope:cult_recruit
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	option = {
+		name = cult.0104.a
+		cult_exposure_gain_effect = { VALUE = cult_recruit_warning_exposure_value }
+	}
+
+	# A gift, and a hope. Pointless when the priest they would tell is one of the circle.
+	option = {
+		name = cult.0104.b
+		trigger = {
+			gold >= medium_gold_value
+			scope:cult_recruit = { is_alive = yes }
+			NOT = {
+				exists = scope:cult_confessor
+				scope:cult_confessor = { has_trait = cult_member }
+			}
+		}
+		pay_short_term_gold = {
+			target = scope:cult_recruit
+			gold = medium_gold_value
+		}
+		cult_exposure_gain_effect = { VALUE = 3 }
+	}
+}
+
+# =====================================================================================
+#  cult.0105 -- a likely soul (a player member)
+# =====================================================================================
+#
+# The yearly pulse's nudge, so a player finds the two interactions without reading a manual. The
+# candidate is picked by the same weights the AI uses.
+
+cult.0105 = {
+	type = character_event
+	title = cult.0105.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:cult_recruit = { has_character_flag = cult_sounded_sympathetic } }
+				desc = cult.0105.desc_sympathetic
+			}
+			triggered_desc = {
+				trigger = { scope:cult_recruit = { cult_recruit_is_chaplain_trigger = yes } }
+				desc = cult.0105.desc_chaplain
+			}
+			triggered_desc = {
+				trigger = { scope:cult_recruit = { cult_sinner_trigger = yes } }
+				desc = cult.0105.desc_sinner
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_head
+					scope:cult_recruit = { opinion = { target = scope:cult_head value <= -20 } }
+				}
+				desc = cult.0105.desc_grudge
+			}
+			desc = cult.0105.desc_doubter
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:cult_recruit = { has_trait = zealous } }
+				desc = cult.0105.desc_zealous
+			}
+			triggered_desc = {
+				trigger = { scope:cult_recruit = { cult_recruit_push_value >= 30 } }
+				desc = cult.0105.desc_careful
+			}
+			desc = cult.0105.desc_unknown
+		}
+		desc = cult.0105.desc_how
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:cult_recruit
+		animation = idle
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		exists = scope:cult_recruit
+		scope:cult_recruit = {
+			is_alive = yes
+			NOT = { has_trait = cult_member }
+			cult_recruitable_trigger = yes
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		save_scope_as = cult_recruiter
+	}
+
+	option = {
+		name = cult.0105.a
+		trigger = { scope:cult_recruit = { NOT = { has_character_flag = cult_sounded_sympathetic } } }
+		custom_tooltip = cult.0105.a.tt
+		hidden_effect = { cult_sound_out_start_effect = yes }
+	}
+
+	option = {
+		name = cult.0105.b
+		trigger = { scope:cult_recruit = { has_character_flag = cult_sounded_sympathetic } }
+		custom_tooltip = cult.0105.b.tt
+		hidden_effect = { cult_offer_oath_start_effect = yes }
+	}
+
+	option = {
+		name = cult.0105.c
+	}
+}
+
+# =====================================================================================
+#  cult.0110 -- a player is offered the oath
+# =====================================================================================
+
+cult.0110 = {
+	type = character_event
+	title = cult.0110.t
+	desc = {
+		desc = cult.0110.desc_intro
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_hollow_trigger = yes }
+				desc = cult.0110.desc_hollow
+			}
+			desc = cult.0110.desc_hidden
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_sinner_trigger = yes }
+				desc = cult.0110.desc_sinner
+			}
+			desc = cult.0110.desc_ask
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_confessor }
+				desc = cult.0110.desc_risk_confessor
+			}
+			desc = cult.0110.desc_risk
+		}
+	}
+	theme = secret
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:cult_recruiter
+		animation = scheme
+	}
+	lower_right_portrait = {
+		trigger = {
+			exists = scope:cult_hierophant
+			NOT = { scope:cult_hierophant = scope:cult_recruiter }
+		}
+		character = scope:cult_hierophant
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		cult_of_the_host_trigger = yes
+		NOT = { has_trait = cult_member }
+		NOT = { has_trait = restor_member }
+		exists = scope:cult_recruiter
+		scope:cult_recruiter = {
+			is_alive = yes
+			has_trait = cult_member
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_recruit_find_confessor_effect = yes
+	}
+
+	# Swear.
+	option = {
+		name = cult.0110.a
+		custom_tooltip = cult.0110.a.tt
+		hidden_effect = { cult_oath_accepted_effect = yes }
+		ai_chance = {
+			base = 5
+			modifier = { add = cult_recruit_pull_value }
+			modifier = {
+				add = 50
+				has_character_flag = cult_sounded_sympathetic
+			}
+		}
+	}
+
+	# Refuse.
+	option = {
+		name = cult.0110.b
+		custom_tooltip = cult.0110.b.tt
+		hidden_effect = { cult_oath_refused_effect = yes }
+		ai_chance = { base = 30 }
+	}
+
+	# Report.
+	option = {
+		name = cult.0110.c
+		add_piety = minor_piety_gain
+		if = {
+			limit = { exists = scope:cult_confessor }
+			custom_tooltip = cult.0110.c.tt
+		}
+		else = {
+			custom_tooltip = cult.0110.c.tt_nobody
+		}
+		hidden_effect = { cult_oath_reported_effect = yes }
+		ai_chance = {
+			base = 0
+			modifier = { add = cult_recruit_report_value }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0111-0113 -- the recruiter hears the answer to the oath
+# =====================================================================================
+
+cult.0111 = {
+	type = character_event
+	title = cult.0111.t
+	desc = {
+		desc = cult.0111.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:cult_recruit = { cult_recruit_is_chaplain_trigger = yes } }
+				desc = cult.0111.desc_chaplain
+			}
+			desc = cult.0111.desc_end
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	right_portrait = {
+		character = scope:cult_recruit
+		animation = scheme
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		exists = scope:cult_recruit
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	option = {
+		name = cult.0111.a
+		cult_recruiter_reward_effect = yes
+	}
+}
+
+cult.0112 = {
+	type = character_event
+	title = cult.0112.t
+	desc = cult.0112.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:cult_recruit
+		animation = dismissal
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		exists = scope:cult_recruit
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	# Buy the silence.
+	option = {
+		name = cult.0112.a
+		trigger = {
+			gold >= medium_gold_value
+			scope:cult_recruit = { is_alive = yes }
+		}
+		pay_short_term_gold = {
+			target = scope:cult_recruit
+			gold = medium_gold_value
+		}
+		cult_exposure_gain_effect = { VALUE = 5 }
+	}
+
+	# Let them carry it.
+	option = {
+		name = cult.0112.b
+		cult_exposure_gain_effect = { VALUE = 15 }
+	}
+}
+
+cult.0113 = {
+	type = character_event
+	title = cult.0113.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_confessor
+					scope:cult_confessor = { has_trait = cult_member }
+				}
+				desc = cult.0113.desc_ours
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_confessor
+					scope:cult_confessor = { cult_is_hunter_trigger = yes }
+				}
+				desc = cult.0113.desc_hunter
+			}
+			triggered_desc = {
+				trigger = { exists = scope:cult_confessor }
+				desc = cult.0113.desc_priest
+			}
+			desc = cult.0113.desc_nobody
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		character = scope:cult_recruit
+		animation = personality_zealous
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:cult_confessor }
+		character = scope:cult_confessor
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		exists = scope:cult_recruit
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	# The chaplain was one of ours: it went no further.
+	option = {
+		name = cult.0113.c
+		trigger = {
+			exists = scope:cult_confessor
+			scope:cult_confessor = { has_trait = cult_member }
+		}
+		cult_exposure_gain_effect = { VALUE = cult_recruit_report_exposure_value }
+	}
+
+	option = {
+		name = cult.0113.a
+		trigger = {
+			NOT = {
+				exists = scope:cult_confessor
+				scope:cult_confessor = { has_trait = cult_member }
+			}
+		}
+		cult_exposure_gain_effect = { VALUE = cult_recruit_report_exposure_value }
+	}
+
+	option = {
+		name = cult.0113.b
+		trigger = {
+			gold >= medium_gold_value
+			NOT = {
+				exists = scope:cult_confessor
+				scope:cult_confessor = { has_trait = cult_member }
+			}
+		}
+		remove_short_term_gold = medium_gold_value
+		cult_exposure_gain_effect = { VALUE = cult_recruit_report_exposure_bought_value }
+	}
+}
+
+# =====================================================================================
+#  cult.0115 -- the first night
+# =====================================================================================
+#
+# The new member's introduction: where they swore, who leads, and what the circle wants from them
+# now -- by phase -- then where to find the cult's tab.
+
+cult.0115 = {
+	type = character_event
+	title = cult.0115.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_unveiled_trigger = yes }
+				desc = cult.0115.desc_intro_public
+			}
+			triggered_desc = {
+				trigger = { exists = scope:cult_recruiter }
+				desc = cult.0115.desc_intro
+			}
+			desc = cult.0115.desc_intro_plain
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_recruiter
+					scope:cult_recruiter = { cult_is_hierophant_trigger = yes }
+				}
+				desc = cult.0115.desc_hierophant_brought_you
+			}
+			triggered_desc = {
+				trigger = { exists = scope:cult_hierophant }
+				desc = cult.0115.desc_hierophant
+			}
+			desc = cult.0115.desc_no_hierophant
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_recruit_is_chaplain_trigger = yes }
+				desc = cult.0115.desc_chaplain
+			}
+			triggered_desc = {
+				trigger = { cult_sinner_trigger = yes }
+				desc = cult.0115.desc_sinner
+			}
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_unveiled_trigger = yes }
+				desc = cult.0115.desc_aim_unveiled
+			}
+			triggered_desc = {
+				trigger = {
+					cult_hollow_trigger = yes
+					exists = scope:cult_head
+					scope:cult_head = { has_trait = cult_member }
+				}
+				desc = cult.0115.desc_aim_hollow_head
+			}
+			triggered_desc = {
+				trigger = { cult_hollow_trigger = yes }
+				desc = cult.0115.desc_aim_hollow
+			}
+			triggered_desc = {
+				trigger = { exists = scope:cult_head }
+				desc = cult.0115.desc_aim_hidden_head
+			}
+			desc = cult.0115.desc_aim_hidden
+		}
+	}
+	theme = witchcraft
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = personality_cynical
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:cult_recruiter
+			NOT = { scope:cult_recruiter = root }
+		}
+		character = scope:cult_recruiter
+		animation = happiness
+	}
+	lower_right_portrait = {
+		trigger = {
+			exists = scope:cult_hierophant
+			NOT = { scope:cult_hierophant = root }
+			OR = {
+				NOT = { exists = scope:cult_recruiter }
+				NOT = { scope:cult_hierophant = scope:cult_recruiter }
+			}
+		}
+		character = scope:cult_hierophant
+	}
+
+	trigger = {
+		cult_active_trigger = yes
+		has_trait = cult_member
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	option = {
+		name = cult.0115.a
+		if = {
+			limit = { cult_secret_phase_trigger = yes }
+			custom_tooltip = cult.0115.a.tt
+		}
+		else = {
+			custom_tooltip = cult.0115.a.tt_public
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0125 -- unveiled: the church invites its lords in daylight
+# =====================================================================================
+
+cult.0125 = {
+	type = character_event
+	title = cult.0125.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_inviter }
+				desc = cult.0125.desc_inviter
+			}
+			desc = cult.0125.desc_church
+		}
+		desc = cult.0125.desc_offer
+	}
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_inviter }
+		character = scope:cult_inviter
+		animation = personality_bold
+	}
+
+	trigger = {
+		cult_recruit_public_candidate_trigger = yes
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		if = {
+			limit = {
+				exists = scope:cult_head
+				scope:cult_head = { has_trait = cult_member }
+			}
+			scope:cult_head = { save_scope_as = cult_inviter }
+		}
+		else_if = {
+			limit = { exists = scope:cult_hierophant }
+			scope:cult_hierophant = { save_scope_as = cult_inviter }
+		}
+	}
+
+	option = {
+		name = cult.0125.a
+		cult_recruit_join_church_effect = yes
+		custom_tooltip = cult.0125.a.tt
+		hidden_effect = {
+			trigger_event = { id = cult.0115 days = 2 }
+		}
+	}
+
+	option = {
+		name = cult.0125.b
+		custom_tooltip = cult.0125.b.tt
+		hidden_effect = {
+			add_character_flag = {
+				flag = cult_refused_recently
+				years = 5
+			}
+		}
+	}
+}

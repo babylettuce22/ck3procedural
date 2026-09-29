@@ -1,0 +1,66 @@
+﻿# The inversion cult's exposure pack: yearly pulses (cult.0300-0399). Redeclaring a vanilla
+# on_action appends.
+
+# ---- The hunter's year: the church hunts ----------------------------------------------------------
+#
+# Only while the cult is secret, only for the hunter, and only when there is something to hunt:
+# somebody sworn inside the realm, or rot deep enough that the church itself is talking.
+
+random_yearly_playable_pulse = {
+	on_actions = { cult_hunter_pulse }
+}
+
+cult_hunter_pulse = {
+	trigger = {
+		cult_secret_phase_trigger = yes
+		cult_is_hunter_trigger = yes
+		NOT = { has_trait = cult_member }
+		is_imprisoned = no
+		OR = {
+			AND = {
+				exists = global_var:cult_rot
+				global_var:cult_rot >= 25
+			}
+			any_in_global_list = {
+				variable = cult_roster
+				is_alive = yes
+				NOT = { this = root }
+				any_liege_or_above = { this = root }
+			}
+		}
+	}
+	random_events = {
+		250 = 0
+		100 = cult.0320
+		100 = cult.0321
+		100 = cult.0322
+		100 = cult.0323
+		100 = cult.0324
+	}
+}
+
+# ---- A member's year under suspicion --------------------------------------------------------------
+#
+# Exposure 10 and up. Each event offers a way to shed some of it, at a price.
+
+random_yearly_everyone_pulse = {
+	on_actions = { cult_exposure_member_pulse }
+}
+
+cult_exposure_member_pulse = {
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		is_alive = yes
+		is_adult = yes
+		has_variable = cult_exposure
+		var:cult_exposure >= 10
+	}
+	random_events = {
+		200 = 0
+		100 = cult.0330
+		100 = cult.0331
+		100 = cult.0332
+		100 = cult.0333
+	}
+}

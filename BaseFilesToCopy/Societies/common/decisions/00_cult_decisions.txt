@@ -1,0 +1,182 @@
+﻿# The inversion cult's decisions.
+#
+#   cult_unveil_decision             the Hierophant or a sworn head of faith, the church captured and
+#                                    the rot at 60: invert the host faith's doctrines and go public
+#   cult_purify_decision             a faithful ruler of the host, once it is unveiled and no loyal
+#                                    head of faith is doing it: restore the old doctrines
+#   cult_offer_to_the_dark_decision  any member: gold for dark power, at a cost to the soul
+
+cult_unveil_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_major_religion.dds"
+	}
+	decision_group_type = major
+	ai_check_interval = 12
+
+	desc = cult_unveil_decision_desc
+	selection_tooltip = cult_unveil_decision_tooltip
+
+	is_shown = {
+		cult_hollow_trigger = yes
+		has_trait = cult_member
+		OR = {
+			cult_is_hierophant_trigger = yes
+			AND = {
+				exists = global_var:cult_host_faith.religious_head
+				this = global_var:cult_host_faith.religious_head
+			}
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		is_adult = yes
+		is_imprisoned = no
+	}
+
+	is_valid = {
+		custom_tooltip = {
+			text = cult_unveil_captured_tt
+			cult_church_captured_trigger = yes
+		}
+		custom_tooltip = {
+			text = cult_unveil_rot_tt
+			global_var:cult_rot >= cult_unveiling_rot_value
+		}
+	}
+
+	cost = {
+		piety = 300
+	}
+
+	effect = {
+		custom_tooltip = cult_unveil_effect_tt
+		hidden_effect = { cult_unveil_effect = yes }
+	}
+
+	ai_potential = {
+		has_trait = cult_member
+	}
+
+	ai_will_do = {
+		base = 60
+		modifier = { add = 30 has_trait = ambitious }
+		modifier = { add = -30 has_trait = craven }
+	}
+}
+
+cult_purify_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_personal_religious.dds"
+	}
+	decision_group_type = major
+	ai_check_interval = 24
+
+	desc = cult_purify_decision_desc
+	selection_tooltip = cult_purify_decision_tooltip
+
+	is_shown = {
+		cult_unveiled_trigger = yes
+		faith = global_var:cult_host_faith
+		NOT = { has_trait = cult_member }
+		is_landed = yes
+		highest_held_title_tier >= tier_duchy
+		# A head of faith who is not sworn gets the choice as an event every year instead.
+		OR = {
+			NOT = { exists = global_var:cult_host_faith.religious_head }
+			global_var:cult_host_faith.religious_head = { has_trait = cult_member }
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		is_adult = yes
+		is_imprisoned = no
+	}
+
+	is_valid = {
+		custom_tooltip = {
+			text = cult_purify_holy_site_tt
+			global_var:cult_host_faith = {
+				any_holy_site = {
+					county = {
+						exists = holder
+						holder = {
+							OR = {
+								this = root
+								any_liege_or_above = { this = root }
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	cost = {
+		piety = 1000
+	}
+
+	effect = {
+		custom_tooltip = cult_purify_effect_tt
+		hidden_effect = { cult_purify_effect = yes }
+	}
+
+	ai_potential = {
+		NOT = { has_trait = cult_member }
+	}
+
+	ai_will_do = {
+		base = 20
+		modifier = { add = 60 has_trait = zealous }
+		modifier = { add = -20 has_trait = cynical }
+	}
+}
+
+cult_offer_to_the_dark_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
+	}
+	ai_check_interval = 36
+
+	desc = cult_offer_to_the_dark_decision_desc
+	selection_tooltip = cult_offer_to_the_dark_decision_tooltip
+
+	is_shown = {
+		cult_active_trigger = yes
+		has_trait = cult_member
+	}
+
+	is_valid_showing_failures_only = {
+		is_imprisoned = no
+		NOT = { has_character_flag = cult_offered_recently }
+	}
+
+	cost = {
+		gold = 100
+	}
+
+	effect = {
+		cult_power_gain_effect = { VALUE = 40 }
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 3
+		}
+		cult_exposure_gain_effect = { VALUE = 2 }
+		cult_corrupt_soul_effect = yes
+		hidden_effect = {
+			add_character_flag = { flag = cult_offered_recently years = 1 }
+			# An offering charge is paid the moment it is met, not at the next season's check.
+			cult_charge_check_effect = yes
+		}
+	}
+
+	ai_potential = {
+		has_trait = cult_member
+		gold >= 300
+	}
+
+	ai_will_do = {
+		base = 10
+		modifier = { add = 20 has_trait = greedy }
+	}
+}

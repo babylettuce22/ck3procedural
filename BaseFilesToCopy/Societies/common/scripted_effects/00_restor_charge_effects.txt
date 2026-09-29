@@ -153,10 +153,7 @@ restor_charge_give_stir_effect = {
 	if = {
 		limit = { exists = scope:restor_charge_pick_county }
 		set_variable = { name = restor_charge value = flag:stir }
-		# restor_charge_target is a character for the other kinds; tiger types a variable by its
-		# first set and would call this a mismatch.
-		#tiger-ignore(key=scopes)
-		set_variable = { name = restor_charge_target value = scope:restor_charge_pick_county }
+		set_variable = { name = restor_charge_county value = scope:restor_charge_pick_county }
 		restor_charge_start_timer_effect = yes
 	}
 }
@@ -222,12 +219,9 @@ restor_charge_save_state_effect = {
 		limit = {
 			has_variable = restor_charge
 			var:restor_charge = flag:stir
-			exists = var:restor_charge_target
+			exists = var:restor_charge_county
 		}
-		# Through the county's own province and back, so the saved scope is typed as a title (tiger
-		# types restor_charge_target as a character). At run time it is the same county.
-		#tiger-ignore(key=scopes)
-		var:restor_charge_target.title_province.county = { save_scope_as = restor_charge_county }
+		var:restor_charge_county = { save_scope_as = restor_charge_county }
 	}
 	else_if = {
 		limit = {
@@ -245,6 +239,7 @@ restor_charge_save_state_effect = {
 restor_charge_clear_effect = {
 	remove_variable = restor_charge
 	remove_variable = restor_charge_target
+	remove_variable = restor_charge_county
 	remove_variable = restor_charge_given
 	remove_variable = restor_charge_goal
 	clear_variable_list = restor_charge_old_recruits
@@ -398,7 +393,7 @@ restor_charge_withdraw_effect = {
 restor_charge_ai_attempt_effect = {
 	if = {
 		limit = { var:restor_charge = flag:stir }
-		var:restor_charge_target = {
+		var:restor_charge_county = {
 			add_county_modifier = {
 				modifier = restor_county_stirred
 				years = 10

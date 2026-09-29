@@ -291,7 +291,7 @@ public static class ImpassableAutoCut
         if (masked > 0 && (cfg.ImpassableCrestFollow > 0 || minWall > 0.5))
         {
             var (followed, added, dropped) = FollowCrests(mask, smooth, footAnywhere, flat, land, width, height,
-                radius, barony, cfg.Limits.SeaLevelUpper, cfg.ImpassableCrestFollow,
+                radius, barony, cfg.Limits.SeaLevelUpper, gateLine, cfg.ImpassableCrestFollow,
                 cfg.ImpassableCrestReachBaronies, minWall);
             mask = Erode(Dilate(followed, width, height, close), width, height, close);
             Parallel.For(0, height, y =>
@@ -512,10 +512,18 @@ public static class ImpassableAutoCut
     /// peaking at 276 had a line of 228, and its crest flooded the crater's outer slope at 230–280.
     /// Crests made up a fifth of the walls there and 77% of the walled flat low ground, and 62% of
     /// what they added was ground the flat rule had exempted.
+    ///
+    /// Nor does a crest run below <paramref name="gate"/>, the line mountain ground starts at. A
+    /// wall whose peak barely clears the gate is a mound on a hill, and 80% of its height is the
+    /// hill: on a scar world, walls peaking at 239–257 had lines of 198–213, and their crests ran
+    /// along hill bands at 190–220. Up to 85% of such a wall was crest, standing no higher or
+    /// steeper than the passable land around it, and each had been grown past the size at which
+    /// it would have been dropped. Walls that peak above about 290 have lines above the gate
+    /// anyway.
     /// </summary>
     private static (bool[] Mask, long Added, int Dropped) FollowCrests(bool[] mask, float[] smooth,
         bool[]? footAnywhere, bool[]? flat, byte[] land, int width, int height, int radius, double barony, float sea,
-        double fraction, double reachBaronies, double minBaronies)
+        float gate, double fraction, double reachBaronies, double minBaronies)
     {
         int n = width * height;
         var owner = new int[n];
@@ -562,7 +570,7 @@ public static class ImpassableAutoCut
                 int p = queue[head];
                 if (steps[p] >= reach) continue;
                 int id = owner[p];
-                float line = sea + (float)fraction * (peaks[id] - sea);
+                float line = MathF.Max(gate, sea + (float)fraction * (peaks[id] - sea));
                 int x = p % width, y = p / width;
                 for (int dy = -1; dy <= 1; dy++)
                 for (int dx = -1; dx <= 1; dx++)

@@ -1,0 +1,263 @@
+﻿# The inversion cult: recruitment's two interactions, Sound Out and Offer the Oath. See
+# common/scripted_effects/00_cult_recruitment_effects.txt for the whole exchange.
+#
+# Both are auto_accept: the interaction is the ASKING, and the asking always happens. The answer is
+# taken inside the exchange -- by the player being asked, in an event, or by the one set of odds in
+# the roll effects -- so there is no ai_accept here to drift away from those odds.
+#
+# Secrecy: is_shown demands the trait on the actor, so a non-member never sees either of these. Only
+# the hidden and hollow phases: once the church is unveiled, joining it is public (cult.0125).
+#
+# The AI uses them too, sparingly: only Adepts and above, only while the circle has room
+# (cult_recruit_roster_open_trigger), and on the same three-year clock (cult_recruited_lately) as
+# the yearly approach in 00_cult_recruitment_on_actions.txt, so the two routes do not add up.
+
+cult_sound_out_interaction = {
+	category = interaction_category_friendly
+	icon = secret
+	interface_priority = 40
+	common_interaction = no
+
+	desc = cult_sound_out_interaction_desc
+
+	use_diplomatic_range = yes
+	auto_accept = yes
+
+	cooldown = { months = 6 }
+	cooldown_against_recipient = { years = 3 }
+
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		scope:actor = { has_trait = cult_member }
+		scope:recipient != scope:actor
+		scope:recipient = {
+			is_adult = yes
+			cult_of_the_host_trigger = yes
+			NOT = { has_trait = cult_member }
+			NOT = { has_trait = restor_member }
+			NOT = { cult_is_hunter_trigger = yes }
+		}
+	}
+
+	is_available = {
+		has_trait = cult_member
+		is_adult = yes
+		is_imprisoned = no
+	}
+
+	is_valid_showing_failures_only = {
+		scope:actor = { is_imprisoned = no }
+		scope:recipient = { is_imprisoned = no }
+		custom_tooltip = {
+			text = cult_recruit_refused_recently_tt
+			scope:recipient = { NOT = { has_character_flag = cult_refused_recently } }
+		}
+		custom_tooltip = {
+			text = cult_sound_out_already_sympathetic_tt
+			scope:recipient = { NOT = { has_character_flag = cult_sounded_sympathetic } }
+		}
+	}
+
+	on_accept = {
+		if = {
+			limit = { scope:recipient = { cult_recruit_is_chaplain_trigger = yes } }
+			custom_tooltip = cult_sound_out_interaction_chaplain_tt
+		}
+		else = {
+			custom_tooltip = cult_sound_out_interaction_tt
+		}
+		scope:actor = { save_scope_as = cult_recruiter }
+		scope:recipient = { save_scope_as = cult_recruit }
+		hidden_effect = {
+			if = {
+				limit = { scope:actor = { is_ai = yes } }
+				scope:actor = {
+					add_character_flag = {
+						flag = cult_recruited_lately
+						years = 3
+					}
+				}
+			}
+			cult_sound_out_start_effect = yes
+		}
+	}
+
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		ai_recipients = peer_vassals
+		ai_recipients = vassals
+		ai_recipients = liege
+		ai_recipients = courtiers
+		max = 15
+	}
+	ai_target_quick_trigger = {
+		adult = yes
+	}
+	ai_frequency = 36
+
+	ai_will_do = {
+		base = 0
+		modifier = {
+			add = 25
+			scope:recipient = { cult_sinner_trigger = yes }
+		}
+		modifier = {
+			add = 15
+			scope:recipient = { has_trait = cynical }
+		}
+		modifier = {
+			add = 20
+			scope:recipient = { cult_recruit_is_chaplain_trigger = yes }
+		}
+		modifier = {
+			add = 10
+			exists = global_var:cult_host_faith.religious_head
+			scope:recipient = {
+				opinion = {
+					target = global_var:cult_host_faith.religious_head
+					value <= -20
+				}
+			}
+		}
+		modifier = {
+			factor = 0
+			scope:recipient = { has_trait = zealous }
+		}
+		modifier = {
+			factor = 0
+			scope:recipient = {
+				is_landed = no
+				NOT = { cult_recruit_is_chaplain_trigger = yes }
+			}
+		}
+		modifier = {
+			factor = 0
+			scope:actor = {
+				OR = {
+					has_character_flag = cult_recruited_lately
+					NOT = { cult_rank_at_least_trigger = { RANK = 25 } }
+				}
+			}
+		}
+		modifier = {
+			factor = 0
+			NOT = { cult_recruit_roster_open_trigger = yes }
+		}
+		modifier = {
+			factor = 0.5
+			scope:actor = {
+				has_variable = cult_exposure
+				var:cult_exposure >= 15
+			}
+		}
+	}
+}
+
+cult_offer_oath_interaction = {
+	category = interaction_category_friendly
+	icon = icon_scheme_convert_to_witchcraft
+	interface_priority = 41
+	common_interaction = no
+
+	desc = cult_offer_oath_interaction_desc
+
+	use_diplomatic_range = yes
+	auto_accept = yes
+
+	cooldown = { years = 1 }
+	cooldown_against_recipient = { years = 5 }
+
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		scope:actor = { has_trait = cult_member }
+		scope:recipient != scope:actor
+		scope:recipient = {
+			is_adult = yes
+			cult_of_the_host_trigger = yes
+			NOT = { has_trait = cult_member }
+			NOT = { has_trait = restor_member }
+			NOT = { cult_is_hunter_trigger = yes }
+		}
+	}
+
+	is_available = {
+		has_trait = cult_member
+		is_adult = yes
+		is_imprisoned = no
+	}
+
+	is_valid_showing_failures_only = {
+		scope:actor = { is_imprisoned = no }
+		scope:recipient = { is_imprisoned = no }
+		custom_tooltip = {
+			text = cult_recruit_refused_recently_tt
+			scope:recipient = { NOT = { has_character_flag = cult_refused_recently } }
+		}
+		custom_tooltip = {
+			text = cult_offer_oath_needs_trust_tt
+			OR = {
+				scope:recipient = { has_character_flag = cult_sounded_sympathetic }
+				scope:actor = { cult_rank_at_least_trigger = { RANK = 25 } }
+			}
+		}
+	}
+
+	on_accept = {
+		if = {
+			limit = { scope:recipient = { has_character_flag = cult_sounded_sympathetic } }
+			custom_tooltip = cult_offer_oath_interaction_sympathetic_tt
+		}
+		else = {
+			custom_tooltip = cult_offer_oath_interaction_cold_tt
+		}
+		scope:actor = { save_scope_as = cult_recruiter }
+		scope:recipient = { save_scope_as = cult_recruit }
+		hidden_effect = {
+			if = {
+				limit = { scope:actor = { is_ai = yes } }
+				scope:actor = {
+					add_character_flag = {
+						flag = cult_recruited_lately
+						years = 3
+					}
+				}
+			}
+			cult_offer_oath_start_effect = yes
+		}
+	}
+
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		ai_recipients = peer_vassals
+		ai_recipients = vassals
+		ai_recipients = liege
+		ai_recipients = courtiers
+		max = 15
+	}
+	ai_target_quick_trigger = {
+		adult = yes
+	}
+	ai_frequency = 24
+
+	# The AI offers the oath only to people already known to be sympathetic: the two steps in order.
+	ai_will_do = {
+		base = 0
+		modifier = {
+			add = 60
+			scope:recipient = { has_character_flag = cult_sounded_sympathetic }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = {
+				OR = {
+					has_character_flag = cult_recruited_lately
+					NOT = { cult_rank_at_least_trigger = { RANK = 25 } }
+				}
+			}
+		}
+		modifier = {
+			factor = 0
+			NOT = { cult_recruit_roster_open_trigger = yes }
+		}
+	}
+}

@@ -113,6 +113,12 @@ with a named target on the map and three years to do it (restor.0501 offers, res
 Completion pays favour, rank XP and support, and toasts. Expiry (the timed variable runs out)
 costs a little favour and the Keeper's opinion. The AI completes charges abstractly (35% a year).
 
+State on the member: var:restor_charge (the kind, a flag), var:restor_charge_target (win_over and
+shelter: always a character), var:restor_charge_county (stir: always a county title),
+var:restor_charge_given (timed, 3 years), var:restor_charge_goal (war_chest). A character target and
+a county target never share a variable: ck3-tiger types a variable by its first assignment, so an
+overloaded one gives false scope warnings whenever file order changes.
+
 
 FILES AND NAMESPACES
 --------------------
@@ -155,3 +161,94 @@ HOW TO TEST
     event restor.0002    +50 support (walks the milestones)
     event restor.0003    make yourself the pretender
     event restor.0004    print the society's state as a toast chain
+
+
+=====================================================================================================
+THE INVERSION CULT
+=====================================================================================================
+
+The second society, built the same way as the Restorationists and living in the same set: every key
+cult_*, event namespace cult, the same id blocks per pack, the same voice and rules. The two never
+share a member (one society per character, as in CK2): each side's recruitment excludes the other's
+trait, and the generator seeds them from disjoint sets.
+
+THE PRINCIPLE: the cult is derived by INVERTING its host, and the generator already made everything it
+inverts. Generated per world (MapGen/Societies/InversionCult.cs + Emit/Societies/CultWriter.cs):
+
+  the host          the largest generated faith of a monotheist religion that names a devil (a pagan
+                    one that names a devil when no monotheist one fits). global_var:cult_host_faith.
+  what it serves    the host religion's own DevilName, by loc key: $cult_devil_name$. In prose, the
+                    faith's own words come through the saved faith scope: [cult_faith.DevilName],
+                    [cult_faith.HighGodName], [cult_faith.HouseOfWorship], [cult_faith.GetName].
+  who it wants      cult_sinner_trigger -- has one of the host religion's sins (generated). The host's
+                    sins are the cult's virtues: weight recruitment and seeding on them.
+  what winning does cult_unveil_doctrines_effect / cult_purify_doctrines_effect (generated) -- the host's
+                    own sin doctrines turned over (witchcraft and deviancy become virtues; kinslaying,
+                    adultery, close-kin marriage allowed), and back. $cult_unveil_list$ says it in words.
+  its name          $cult_society_name$ (the devil's name or a word of the host's holy tongue);
+                    $cult_society_name_public$ once unveiled. $cult_host_name$ is the faith's name.
+  the sworn         4-8 host-faith rulers whose traits already lean the cult's way; the cleverest is the
+                    Hierophant.
+
+LOYALTY: $cult_devil_name$, against [cult_faith.HighGodName], inside $cult_host_name$. Fixed.
+
+PHASES (global_var:cult_phase)
+  1 HIDDEN    Rot the church from within: holy sites in sworn hands, sworn court chaplains, tainted
+              counties, members. Secret; exposure matters; the HUNTER hunts.
+  2 HOLLOW    The church is captured -- its head of faith sworn, or (no head) sworn realms hold half its
+              holy sites -- and nobody knows. Still secret. The Hierophant or the sworn head can take
+              cult_unveil_decision at 60 rot.
+  3 UNVEILED  The host's doctrines are inverted; every member public (secrets dissolved, exposure off,
+              cult_unveiled_member_modifier); every faithful ruler who was not sworn hates the unveiler.
+  Capture/loss: cult_capture_check_effect (yearly, and when the head swears in) moves 1<->2.
+  Purification: an unsworn head of faith is asked yearly (cult.0720); with no loyal head, any faithful
+              duke+ holding a holy site may take cult_purify_decision. Either restores the doctrines and
+              sends the cult back to phase 1, everyone's exposure at 15.
+
+PEOPLE
+  Hierophant  global_var:cult_hierophant, the leader; hands out charges. Succession: highest rung,
+              then intrigue + learning; never the dying.
+  Hunter      global_var:cult_hunter: the host's head of faith if unsworn, else the strongest
+              independent ruler of the host faith (zealous count double). Kept while valid. Unset once
+              unveiled. The cult's usurper-equivalent: exposure events reach them.
+  Head        scope:cult_head -- the host's head of faith, the prize. May be the hunter, may be sworn.
+  The sworn   trait cult_member ("Faithless"), track cult_rank: 0 Initiate, 25 Adept, 50 Magister,
+              75 Hierarch. Global list cult_roster.
+
+METERS
+  Dark power  var:cult_power: cult_power_gain_effect / cult_power_spend_effect { VALUE }.
+  Exposure    var:cult_exposure: cult_exposure_gain_effect / _loss_effect { VALUE }. 15 whispered about
+              (+secret_cult_member, criminal or shunned per the HOST's witchcraft doctrine), 25 suspected
+              heretic (the hunter is told, cult.0303). No-op once unveiled.
+  Soul        cult_corrupt_soul_effect: CK2's corruption, one-shot per transition; every use of dark
+              power should call it. cult.0050 reports what was taken.
+  Rot         global_var:cult_rot / cult_rot_value, 0-100: 35 x sworn holy sites, 25 x sworn chaplains,
+              +2 per tainted county (max 20), +1 per member (max 20), +20 while the head is sworn.
+              Milestones 25/50/75 -> cult.0601-0603. cult_rot_refresh_effect recomputes it now (use it
+              after anything that changes the map). The county modifier cult_county_tainted is what
+              rites and the errand leave behind.
+
+CONTRACTS FOR THE CULT PACKS (mirror the Restorationists')
+  Effects:  cult_swear_in_effect { RANK }, cult_leave_effect, cult_notify_sworn_effect { EVENT DAYS },
+            cult_save_scopes_effect (scope:cult_hierophant, cult_hunter, cult_faith, cult_head).
+  Triggers: cult_active_trigger, cult_hidden_trigger, cult_hollow_trigger, cult_unveiled_trigger,
+            cult_secret_phase_trigger, cult_is_member_trigger, cult_is_hierophant_trigger,
+            cult_is_hunter_trigger, cult_of_the_host_trigger, cult_rank_at_least_trigger { RANK },
+            cult_recruitable_trigger, cult_sinner_trigger (generated), cult_church_captured_trigger.
+  Charges:  var:cult_charge (flag), var:cult_charge_target (turn_priest: always a character),
+            var:cult_charge_county (taint, defile_site: always a county title), var:cult_charge_given
+            (timed, 3 years), var:cult_charge_goal; the panel reads customizable loc CultCurrentCharge.
+  Flags:    cult_sounded_sympathetic (5 y, recruitment), cult_refused_recently (5 y).
+  Opinions: cult_brought_me_in_opinion (recruitment's accept path adds it; the recruit charge counts it).
+
+  cult.0001-0099  core                             events/cult_core_events.txt
+  cult.0100-0199  recruitment                      events/cult_recruitment_events.txt
+  cult.0200-0299  belonging                        events/cult_life_events.txt
+  cult.0300-0399  exposure, the hunter's side      events/cult_exposure_events.txt   (0300-0303, 0305, 0306 are fired by core)
+  cult.0400-0499  powers                           events/cult_power_events.txt
+  cult.0500-0599  charges                          events/cult_charge_events.txt
+  cult.0600-0899  core (rot, capture, unveiling, purification, succession)
+  cult.0900-0999  the black mass and the defilement events/cult_rite_events.txt
+
+  Test: event cult.0001 (sworn, Magister, 150 power), cult.0002 (taint the holy sites), cult.0003
+  (you are Hierophant), cult.0004 (swear the host's head in -> capture).

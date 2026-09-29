@@ -75,6 +75,7 @@ restor_leave_effect = {
 	remove_variable = restor_exposure
 	remove_variable = restor_charge
 	remove_variable = restor_charge_target
+	remove_variable = restor_charge_county
 	remove_variable = restor_charge_given
 	remove_variable = restor_charge_goal
 	clear_variable_list = restor_charge_old_recruits

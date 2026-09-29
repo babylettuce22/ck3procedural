@@ -1,0 +1,157 @@
+﻿l_english:
+
+ # ---- The trait ---------------------------------------------------------------------------------
+
+ trait_cult_member:0 "Faithless"
+ trait_cult_member_desc:0 "Secretly sworn to $cult_society_name$, who worship $cult_devil_name$ inside the very faith that names $cult_devil_name$ its enemy."
+ trait_cult_member_character_desc:0 "[ROOT.GetCharacter.GetFirstNameNoTooltip] keeps the forms of $cult_host_name$, and secretly prays to $cult_devil_name$ with $cult_society_name$."
+ trait_cult_member_public_desc:0 "[ROOT.GetCharacter.GetFirstNameNoTooltip] belongs to $cult_society_name_public$, and does not hide it."
+ trait_track_cult_rank:0 "Standing in the Circle"
+ trait_track_cult_rank_desc:0 "How far the cult trusts you with its secrets. Rites, offerings and charges kept all raise it."
+
+ # ---- Meters ------------------------------------------------------------------------------------
+
+ cult_power_gain_tt:0 "Gain #P [cult_power_delta|0]#! dark power"
+ cult_power_spend_tt:0 "Spend #N [cult_power_delta|0]#! dark power"
+ cult_power_toast:0 "Dark power: #bold [ROOT.Char.MakeScope.Var('cult_power').GetValue|0]#!"
+ cult_exposure_gain_tt:0 "Your exposure rises by #N [cult_exposure_delta|0]#!"
+ cult_exposure_loss_tt:0 "Your exposure falls by #P [cult_exposure_delta|0]#!"
+ cult_exposure_toast:0 "Exposure: #bold [ROOT.Char.MakeScope.Var('cult_exposure').GetValue|0]#!"
+ cult_corruption_tt:0 "The cult may take something from you: a virtue lost, or a vice gained"
+
+ cult_under_suspicion_modifier:0 "Whispered About"
+ cult_under_suspicion_modifier_desc:0 "People have noticed that this character's piety does not quite ring true."
+ cult_highly_suspect_modifier:0 "Suspected Heretic"
+ cult_highly_suspect_modifier_desc:0 "Widely suspected of worshipping the Adversary."
+ cult_unveiled_member_modifier:0 "Openly Faithless"
+ cult_unveiled_member_modifier_desc:0 "Worships the Adversary in the open, and is feared for it."
+ cult_unveiler_modifier:0 "The Unveiler"
+ cult_unveiler_modifier_desc:0 "Turned a whole faith inside out."
+ cult_county_tainted:0 "Tainted"
+ cult_county_tainted_desc:0 "The shrines here have been defiled, and the local priest looks the other way."
+
+ cult_refused_the_offer_opinion:0 "Tried to lead me into damnation"
+ cult_brought_me_in_opinion:0 "Brought me into the circle"
+ cult_failed_charge_opinion:0 "Failed the circle"
+ cult_kept_charge_opinion:0 "Served the circle well"
+ cult_betrayed_the_cult_opinion:0 "Betrayed the circle"
+ cult_defiled_my_faith_opinion:0 "Defiled my faith"
+ cult_shamed_before_the_circle_opinion:0 "Shamed me before the circle"
+ cult_raised_before_the_circle_opinion:0 "Raised me before the circle"
+
+ secret_cult_member:0 "Worships the Adversary"
+ secret_cult_member_desc:0 "[secret_owner.GetTitledFirstName] is secretly sworn to $cult_society_name$, and worships $cult_devil_name$."
+ secret_cult_member_tooltip_desc:0 "This character secretly worships $cult_devil_name$."
+ secret_cult_member_type_desc:0 "$secret_cult_member_tooltip_desc$"
+
+ # ---- Decisions ---------------------------------------------------------------------------------
+
+ cult_unveil_decision:0 "The Unveiling"
+ cult_unveil_decision_desc:0 "The church belongs to the cult now, whether it knows it or not. Stand before the faithful and tell them the truth: their faith has served $cult_devil_name$ all along. $cult_unveil_list$"
+ cult_unveil_decision_tooltip:0 "Turn $cult_host_name$ inside out and bring $cult_society_name$ into the open."
+ cult_unveil_decision_confirm:0 "Unveil the truth"
+ cult_unveil_captured_tt:0 "The church is in the cult's hands: its head is sworn, or the Faithless hold half its holy sites"
+ cult_unveil_rot_tt:0 "The rot in $cult_host_name$ is at least #high 60#!"
+ cult_unveil_effect_tt:0 "$cult_host_name$ is changed. $cult_unveil_list$ Every member of the cult is revealed, and every faithful ruler who was not sworn will hate you for it."
+
+ cult_purify_decision:0 "Purify the Faith"
+ cult_purify_decision_desc:0 "$cult_host_name$ has been turned against itself. Someone must restore the old doctrines and drive the worshippers of $cult_devil_name$ back into the dark. It may as well be you."
+ cult_purify_decision_tooltip:0 "Restore the doctrines of $cult_host_name$."
+ cult_purify_decision_confirm:0 "Purify the faith"
+ cult_purify_holy_site_tt:0 "Your realm holds at least one holy site of $cult_host_name$"
+ cult_purify_effect_tt:0 "The old doctrines of $cult_host_name$ are restored, and $cult_society_name$ is driven back into hiding"
+
+ cult_offer_to_the_dark_decision:0 "An Offering in the Dark"
+ cult_offer_to_the_dark_decision_desc:0 "Gold melted on the altar of $cult_devil_name$ buys favour below. It always costs a little more than the gold."
+ cult_offer_to_the_dark_decision_tooltip:0 "Spend gold for dark power."
+ cult_offer_to_the_dark_decision_confirm:0 "Make the offering"
+
+ # ---- Introductions -----------------------------------------------------------------------------
+
+ cult.0010.t:0 "$cult_society_name$"
+ cult.0010.desc:0 "You pray with the rest of the faithful of $cult_host_name$, and you mean none of it. You belong to $cult_society_name$, who worship $cult_devil_name$, the enemy the priests warn against.\n\nThe cult does not want to fight the church. It wants to hollow it out: priests turned, holy places defiled, and in the end the head of the faith sworn to the cult without the faithful ever knowing. [cult_hierophant.GetTitledFirstName] leads the circle. If the church is ever truly the cult's, it can be turned inside out."
+ cult.0010.desc_hierophant:0 "You pray with the rest of the faithful of $cult_host_name$, and you mean none of it. You lead $cult_society_name$, who worship $cult_devil_name$, the enemy the priests warn against.\n\nThe cult does not want to fight the church. It wants to hollow it out: priests turned, holy places defiled, and in the end the head of the faith sworn to you without the faithful ever knowing. When that is done, the faith can be turned inside out."
+ cult.0010.a:0 "Let the faithful keep praying."
+ cult.0010.a.tt:0 "The society tab beside Intrigue shows the cult: the rot in the church, the hunter, your standing and what you can do next."
+
+ cult.0011.t:0 "Rot in the Church"
+ cult.0011.desc:0 "Your confessors have heard the same thing too often to ignore it. Inside $cult_host_name$ there is a circle of the faithless who call themselves $cult_society_name$ and pray to $cult_devil_name$.\n\nNobody can name a member. But if they exist, they are inside the church, among the people you trust to guard it. Keeping the faith pure falls to you."
+ cult.0011.a:0 "Let them show themselves. They will."
+ cult.0011.b:0 "Have my confessors listen for names."
+ cult.0011.b.tt:0 "Every member of the cult becomes a little easier to find."
+
+ # ---- cult.0050 ---------------------------------------------------------------------------------
+
+ cult.0050.t:0 "What It Costs"
+ cult.0050.desc:0 "Nothing happened, exactly. You simply noticed, today, that something you used to care about no longer matters to you, and that you do not miss it.\n\nThe others in the circle warned you about this. $cult_devil_name$ gives, and $cult_devil_name$ takes."
+ cult.0050.a:0 "It was never worth much."
+
+ # ---- The rot -----------------------------------------------------------------------------------
+
+ cult.0601.t:0 "Cracks in the Church"
+ cult.0601.desc:0 "The circle's work is starting to show. A priest here says the prayers wrong on purpose. A shrine there has been left to rot. In a few courts the chaplain belongs to the cult.\n\nThe faithful of $cult_host_name$ have not noticed yet."
+ cult.0601.a:0 "Good. Keep going."
+ cult.0601.a.tt:0 "The rot stands at #high 25#!. The church is captured when its head is sworn, or when the Faithless hold half its holy sites."
+
+ cult.0602.t:0 "Halfway Hollow"
+ cult.0602.desc:0 "Half the church is rotten now. The cult's people hold holy places, sit in the councils of the faithful, and hear their confessions.\n\nWhat remains is the head of the faith. Turn [cult_head.GetTitledFirstName], and $cult_host_name$ belongs to $cult_devil_name$."
+ cult.0602.a:0 "Then we go after the head."
+ cult.0602.a.tt:0 "Swear the head of $cult_host_name$ into the cult to capture the church. At #high 60#! rot, a captured church can be unveiled."
+
+ cult.0603.t:0 "The Church Is Ours in All but Name"
+ cult.0603.desc:0 "There is hardly a part of $cult_host_name$ left that the cult has not reached. Its priests, its holy places and its courts are riddled with the Faithless.\n\nThe faithful still pray to [cult_faith.HighGodName]. They have no idea who hears them."
+ cult.0603.a:0 "Soon they will."
+
+ # ---- The church captured -----------------------------------------------------------------------
+
+ cult.0701.t:0 "The Hollow See"
+ cult.0701.desc_head:0 "[cult_head.GetTitledFirstName], head of $cult_host_name$, has sworn the oath to $cult_devil_name$.\n\nThe faithful do not know it. They still kneel to [cult_head.GetHerHim] and obey [cult_head.GetHerHis] word. Every order the church gives from now on, the cult can shape."
+ cult.0701.desc_sites:0 "Most of the holy places of $cult_host_name$ are held by the cult's people now.\n\nThe faithful still make their pilgrimages and leave their offerings, never knowing who keeps the shrines. The church belongs to $cult_devil_name$ in everything but name."
+ cult.0701.a:0 "Let them keep kneeling."
+ cult.0701.a.tt:0 "At #high 60#! rot, the Hierophant or the sworn head of the faith can take #high The Unveiling#! decision."
+
+ # ---- The Unveiling -----------------------------------------------------------------------------
+
+ cult.0710.t:0 "The Unveiling"
+ cult.0710.desc:0 "You stood in the great [cult_faith.HouseOfWorship] of $cult_host_name$ and told them. Some screamed. Some ran. More than you expected stayed to listen.\n\nThe faith is changed. $cult_unveil_list$ Its prayers go to $cult_devil_name$ now, and the Faithless no longer have to hide."
+ cult.0710.a:0 "Let them pray to the true master."
+
+ cult.0711.t:0 "Unveiled"
+ cult.0711.desc:0 "[cult_unveiler.GetTitledFirstName] has done it. Before the faithful of $cult_host_name$, [cult_unveiler.GetSheHe] revealed what the church has become.\n\n$cult_unveil_list$ You no longer have to hide what you are. $cult_society_name$ is now $cult_society_name_public$."
+ cult.0711.a:0 "Finally."
+
+ cult.0712.t:0 "The Faith Betrayed"
+ cult.0712.desc:0 "[cult_unveiler.GetTitledFirstName] has stood before the faithful of $cult_host_name$ and declared that the faith has served $cult_devil_name$ all along. The doctrines have been rewritten. $cult_unveil_list$\n\nThe church you knew is gone. It will not return by itself."
+ cult.0712.a:0 "I will not follow the faith into damnation."
+ cult.0712.a.tt:0 "If no loyal head of the faith is left to do it, #high Purify the Faith#! is open to you in the decisions panel."
+ cult.0712.b:0 "This is a matter for the priests."
+ cult.0712.b.tt:0 "Nothing changes for now."
+ cult.0712.c:0 "Perhaps they have a point."
+
+ # ---- The Purification --------------------------------------------------------------------------
+
+ cult.0720.t:0 "The Faith Defiled"
+ cult.0720.desc:0 "You lead $cult_host_name$, and the faith you lead has been turned against [cult_faith.HighGodName]. $cult_unveil_list$\n\nYou have the authority to undo it. Restoring the old doctrines will drive the Faithless back underground, and they will hate you for it."
+ cult.0720.a:0 "Restore the faith. Now."
+ cult.0720.a.tt:0 "The old doctrines of $cult_host_name$ are restored, and $cult_society_name$ is driven back into hiding"
+ cult.0720.b:0 "Not yet. The faithful are divided."
+
+ cult.0721.t:0 "The Purification"
+ cult.0721.desc:0 "[cult_purifier.GetTitledFirstName] has restored the old doctrines of $cult_host_name$. The prayers to $cult_devil_name$ have stopped, at least in public.\n\nEvery one of the Faithless was seen while the church was theirs. Now they have to hide again, and everyone remembers their faces."
+ cult.0721.a:0 "We hollowed it out once."
+ cult.0721.a.tt:0 "The cult goes back into hiding. Everyone's #high exposure#! starts at #N 15#!."
+
+ cult.0722.t:0 "The Faith Restored"
+ cult.0722.desc:0 "The old doctrines of $cult_host_name$ are restored, by your hand. The faithful are grateful, and the Faithless are running.\n\nThey are not gone. They will try again."
+ cult.0722.a:0 "Then we will be watching."
+
+ # ---- The church lost; a new Hierophant ---------------------------------------------------------
+
+ cult.0801.t:0 "The Church Slips Away"
+ cult.0801.desc:0 "The cult no longer holds $cult_host_name$. The head of the faith is not sworn, and too few of its holy places are in the cult's hands.\n\nThe Faithless are still inside the church. They will have to start again."
+ cult.0801.a:0 "Then we start again."
+
+ cult.0820.t:0 "A New Hierophant"
+ cult.0820.desc:0 "The circle has a new Hierophant: [cult_hierophant.GetTitledFirstName]. From now on, [cult_hierophant.GetSheHe] decides who is trusted, who is sent where, and when the Faithless meet."
+ cult.0820.desc_you:0 "The circle has chosen you as its Hierophant. From now on, every charge the cult gives comes from you, and every one of the Faithless answers to you."
+ cult.0820.a:0 "So be it."

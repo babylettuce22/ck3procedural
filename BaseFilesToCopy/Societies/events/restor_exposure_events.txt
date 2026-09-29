@@ -1777,6 +1777,7 @@ restor.0332 = {
 				is_alive = yes
 				is_adult = yes
 				NOT = { has_trait = restor_member }
+				NOT = { has_trait = cult_member }
 			}
 			save_scope_as = restor_spouse
 		}

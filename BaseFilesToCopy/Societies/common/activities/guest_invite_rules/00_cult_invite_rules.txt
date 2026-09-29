@@ -1,0 +1,42 @@
+﻿# Who the Black Mass's and the Pilgrimage's guest lists may offer. The Restorationists' rules
+# (00_restor_invite_rules.txt), for the cult's roster.
+#
+# A rule is a BUILDER, not a filter: the tab shows whatever the effect put in `characters`, so each
+# route carries its own membership limit. The hard gate is still each activity's
+# can_be_activity_guest. Both are listed under `rules`, never `defaults`, so they arrive unticked
+# and the host chooses whom to name to whom.
+
+# The Faithless at the host's own court.
+cult_invite_rule_court = {
+	effect = {
+		every_courtier = {
+			limit = {
+				has_trait = cult_member
+				is_adult = yes
+				bannable_serving_diarch_trigger = no
+			}
+			add_to_list = characters
+		}
+	}
+}
+
+# Every other living member of the roster.
+cult_invite_rule_elsewhere = {
+	effect = {
+		if = {
+			limit = { cult_active_trigger = yes }
+			every_in_global_list = {
+				variable = cult_roster
+				limit = {
+					is_alive = yes
+					is_adult = yes
+					has_trait = cult_member
+					NOT = { this = root }
+					NOT = { is_courtier_of = root }
+					bannable_serving_diarch_trigger = no
+				}
+				add_to_list = characters
+			}
+		}
+	}
+}

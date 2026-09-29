@@ -1,0 +1,313 @@
+﻿# Take Them: the inversion cult's abduction. Started only by cult_take_them_interaction
+# (common/character_interactions/00_cult_powers.txt), which checks and spends the dark power -- a
+# scheme has no cost block, so abandoning it refunds nothing.
+#
+# Ported from the prototype (../../../../SocietyPrototype/common/schemes/scheme_types/
+# 00_society_abduct_scheme.txt), whose comments carry the reasoning in full. In short:
+#
+#   * A new scheme, not vanilla's `abduct`: vanilla's allow has three hardcoded unlocks (the
+#     Kidnapper perk, a camp parameter, a struggle phase) and no fourth door, so a member without
+#     them could never start it.
+#   * The resolution is vanilla's: abduct_scheme_prep_effect routes the critical moment to
+#     scheme_critical_moments.1061 -> abduct_outcome.0001, and neither checks scheme_type. Take out
+#     the prep effect and the scheme never resolves.
+#   * What is not inherited: vanilla content gated on `scheme_type = abduct` (hunt and court
+#     interruptions, task events). A cult abduction never gets those.
+#   * Agents are the sworn only. valid_agent runs with the candidate as root and gates both the AI
+#     joining and the invite list. The target-perspective agent group is removed together with its
+#     odds term: sworn members around the target are too rare to be worth a group, and a dead group
+#     left declared would inflate the predicted odds.
+
+cult_abduct = {
+	skill = intrigue
+	desc = "cult_abduct_desc"
+	success_desc = "cult_abduct_success_desc"
+	discovery_desc = "cult_abduct_discovery_desc"
+	icon = icon_scheme_abduct
+	illustration = "gfx/interface/illustrations/event_scenes/corridor.dds"
+	category = hostile
+	target_type = character
+	is_secret = yes
+	maximum_breaches = 5
+	cooldown = { years = 10 }
+
+	# Vanilla's abduct numbers: as hard as any kidnapping. The cult gives access, not an edge.
+	speed_per_skill_point = t2_spsp_owner_value
+	speed_per_target_skill_point = t2_spsp_target_value
+	base_progress_goal = t2_base_phase_length_value
+	maximum_secrecy = 85
+	base_maximum_success = t2_base_max_success_value
+	phases_per_agent_charge = 1
+	success_chance_growth_per_skill_point = t2_scgpsp_value
+
+	allow = {
+		custom_tooltip = {
+			text = cult_take_them_needs_member_tt
+			has_trait = cult_member
+		}
+		custom_tooltip = {
+			text = cult_take_them_no_great_lords_tt
+			scope:target = { highest_held_title_tier < tier_duchy }
+		}
+		is_adult = yes
+		is_playable_character = yes
+		is_imprisoned = no
+	}
+
+	valid = {
+		is_playable_character = yes
+		is_ruler = yes
+		is_incapable = no
+		custom_description = {
+			text = abduct_own_children_block
+			object = scope:target
+			trigger_if = {
+				limit = { is_parent_of = scope:target }
+				has_trait_with_flag = can_murder_own_children
+			}
+		}
+		scope:target = {
+			is_imprisoned = no
+			is_hostage = no
+			exists = location
+			in_diplomatic_range = scope:owner
+		}
+		trigger_if = {
+			limit = { has_variable = no_scheming_allowed_var }
+			custom_tooltip = {
+				text = no_scheming_allowed_var_tt
+				var:no_scheming_allowed_var != scope:target
+			}
+		}
+	}
+
+	agent_leave_threshold = -25
+	agent_join_chance = {
+		base = 0
+		ai_agent_join_chance_basic_suite_modifier = yes
+		ai_agent_join_chance_hostile_grievous_modifier = yes
+	}
+	agent_groups_owner_perspective = { courtiers guests scripted_relations }
+	valid_agent = {
+		is_valid_agent_standard_trigger = yes
+		has_trait = cult_member
+	}
+
+	odds_prediction = {
+		add = hostile_scheme_base_odds_prediction_target_is_char_value
+		add = odds_skill_contribution_intrigue_value
+		add = agent_groups_owner_perspective_value
+		min = 0
+	}
+
+	base_success_chance = {
+		base = 0
+		scheme_type_skill_success_chance_modifier = { SKILL = INTRIGUE }
+
+		hostile_scheme_base_chance_modifier = yes
+
+		apply_calculated_scheme_success_chance_adjustments_modifier = yes
+
+		house_feud_hostile_scheme_success_modifier = yes
+
+		first_valid = {
+			modifier = {
+				add = -75
+				desc = "sway_foreign_target"
+				scope:target = {
+					is_ruler = yes
+					scope:target.top_liege != scope:owner.top_liege
+				}
+			}
+			modifier = {
+				add = -40
+				desc = "sway_foreign_target"
+				scope:target = {
+					is_foreign_court_or_pool_guest = no
+					scope:target.top_liege != scope:owner.top_liege
+				}
+			}
+			modifier = {
+				add = -50
+				desc = "FABRICATE_HOOK_RULER_TARGET"
+				scope:target = {
+					is_ruler = yes
+					scope:target.top_liege = scope:owner.top_liege
+				}
+			}
+		}
+
+		first_valid = {
+			modifier = {
+				add = -500
+				desc = "SCHEME_AT_WAR"
+				scope:target = { is_at_war_with = scope:owner }
+			}
+			modifier = {
+				add = -350
+				desc = "SCHEME_AT_WAR_WITH_LIEGE"
+				scope:target = {
+					is_playable_character = no
+					this != top_liege
+					any_liege_or_above = { is_at_war_with = scope:owner }
+				}
+			}
+			modifier = {
+				add = -250
+				desc = "SCHEME_AT_WAR_WITH_LIEGE"
+				scope:target = {
+					is_playable_character = yes
+					this != top_liege
+					any_liege_or_above = { is_at_war_with = scope:owner }
+				}
+			}
+		}
+
+		diarch_scheming_within_realm_bonus_modifier = yes
+	}
+
+	# Vanilla's secrecy_base_value, written out: its spymaster term reads scope:councillor_liege,
+	# which the engine leaves unset here (the `?=` in vanilla swallows it). Here the liege is saved
+	# first -- it is the target, whose spymaster is the one disrupting schemes.
+	base_secrecy = {
+		add = {
+			value = 20
+			desc = BASE
+		}
+		if = {
+			limit = {
+				scheme_target_character = {
+					save_temporary_scope_as = councillor_liege
+					cp:councillor_spymaster ?= {
+						is_performing_council_task = task_disrupt_schemes
+						NOR = {
+							this = scope:owner
+							AND = {
+								save_temporary_scope_as = cult_spymaster_temp
+								root = {
+									any_scheme_agent_character = { this = scope:cult_spymaster_temp }
+								}
+							}
+						}
+					}
+				}
+			}
+			add = {
+				value = scheme_target_character.cp:councillor_spymaster.spymaster_disrupt_schemes_total_modifier
+				multiply = -1
+				desc = secrecy.scheme_owner.spymaster.disrupt_schemes
+			}
+		}
+		add = countermeasure_apply_secrecy_maluses_value
+	}
+
+	on_start = {
+		set_variable = {
+			name = apply_countermeasures
+			value = flag:calculating
+		}
+		add_scheme_starting_opportunities_intrigue_effect = yes
+
+		# The exposure for starting it is charged by the interaction, not here: the exposure
+		# effect's toast names ROOT, and ROOT in a scheme block is the scheme.
+
+		# Fallback agents, for a scheme begun from script rather than the interaction.
+		if = {
+			limit = {
+				scheme_owner = { NOT = { has_variable = agents_added } }
+			}
+			add_agent_slot = agent_thug
+			add_agent_slot = agent_thug
+			add_agent_slot = agent_muscle
+			add_agent_slot = agent_footpad
+			add_agent_slot = agent_lookout
+		}
+	}
+
+	# The borrowed resolution. See the header.
+	on_phase_completed = {
+		suppress_scheme_follow_up_event_till_input_given_effect = yes
+		abduct_scheme_prep_effect = yes
+		cap_schemes_and_fire_reminders_effect = yes
+	}
+
+	on_hud_click = { abduct_scheme_prep_effect = yes }
+
+	on_semiyearly = {
+		if = {
+			limit = { scheme_owner = { is_ai = yes } }
+			abduct_scheme_prep_effect = yes
+			purge_ai_scheme_slots_effect = yes
+		}
+	}
+
+	on_monthly = {
+		# The scopes vanilla's discovery roll reads. The engine sets them for vanilla schemes too;
+		# saving them here says so, and costs nothing.
+		save_scope_as = scheme
+		scheme_owner = { save_scope_as = owner }
+		scheme_target_character = { save_scope_as = target }
+		hostile_scheme_monthly_discovery_chance_effect = yes
+
+		# No `on_action = abduct_ongoing` here, unlike vanilla and the prototype. Its generic agent
+		# wrapper (agent_events.9801 -> agent_events.0012) reads scope:char_1/char_2 before vanilla
+		# sets them, and ck3-tiger reports that against this file. What is lost is flavour only:
+		# the ongoing agent and target events while the plot runs. The resolution is untouched.
+	}
+
+	on_invalidated = {
+		scheme_target_character = { save_scope_as = target }
+		scheme_owner = { save_scope_as = owner }
+
+		if = {
+			limit = { scope:target = { is_alive = no } }
+			scope:owner = {
+				send_interface_toast = {
+					title = cult_abduct_invalidated_title
+					left_icon = scope:target
+					custom_description_no_bullet = {
+						object = scope:target
+						text = scheme_target_died
+					}
+				}
+			}
+		}
+		else_if = {
+			limit = {
+				scope:target = {
+					is_imprisoned = yes
+					imprisoner != scope:owner
+				}
+			}
+			scope:target.imprisoner = { save_scope_as = other_imprisoner }
+			scope:owner = {
+				send_interface_toast = {
+					title = cult_abduct_invalidated_title
+					left_icon = scope:target
+					right_icon = scope:other_imprisoner
+					custom_tooltip = cult_abduct_invalidated_imprisoned_tt
+				}
+			}
+		}
+		else_if = {
+			limit = {
+				scope:target = { NOT = { in_diplomatic_range = scope:owner } }
+			}
+			scope:owner = {
+				send_interface_toast = {
+					title = cult_abduct_invalidated_title
+					left_icon = scope:target
+					custom_tooltip = cult_abduct_invalidated_range_tt
+				}
+			}
+		}
+		else = {
+			scope:owner = {
+				send_interface_toast = {
+					title = cult_abduct_invalidated_title
+					left_icon = scope:target
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,344 @@
+﻿# THE PILGRIMAGE OF DEFILEMENT -- a member walks the pilgrim road to a holy site of the host faith,
+# among the faithful going to pray there, and does the cult's work at the shrine. Events
+# cult.0910-0916.
+#
+# The Restorationists' Errand (00_restor_errand_activity.txt): the same staged spine, the same
+# rule that only the last event pays, the same gating. What changed is where it goes and why.
+#
+# WHERE: a holy site of global_var:cult_host_faith. `is_location_valid`'s root is the PROVINCE, so
+# the test is vanilla's own (00_religious_interactions.txt): `barony = { is_holy_site_of = faith }`.
+# `province_filter = holy_sites` is the planner's own faith's holy sites -- the host faith, for a
+# member who still keeps its forms, which can_start asks. Not the host's own capital, as vanilla's
+# pilgrimage: a journey that goes nowhere is no disguise.
+#
+# WHAT FOR, chosen in the planner (the `cult_defilement_purpose` option category):
+#
+#   cult_defilement_defile   Defile the Shrine    the county gets cult_county_tainted for 10 years
+#                                                 (what the charges pack's defile_site and taint
+#                                                 charges check) and the rot is recomputed
+#   cult_defilement_relic    Steal a Relic        dark power; the site's holder loses piety
+#   cult_defilement_sign     Leave a Sign         a little dark power and standing, little risk
+#
+# THE SPINE (host only; a guest gets one beat):
+#
+#   cult.0910   day  1   Setting Out            the pilgrim's robe
+#   cult.0912   day 10   Among the Faithful     careful or hasty
+#   cult.0913   day 18   Seen at the Shrine     the site's priest, or the hunter's people
+#   cult.0914   day 26   Home                   the ONLY event that pays
+#   cult.0915            the stolen relic: burn it, or "find" it
+#   cult.0916            the site's holder, if a player, learns what was done to the shrine
+#
+# Every read of scope:activity is `?=` or guarded, so the DebugPanel can fire any of these outside
+# an activity.
+
+activity_cult_defilement = {
+	activity_group_type = cult_group
+
+	# Above the Mass: this is the one an Initiate can actually do.
+	sort_order = 10
+
+	# ---- Gate: any member, while the cult is secret -----------------------------------------
+	#
+	# No rank gate: the Pilgrimage is how an Initiate earns standing.
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+
+		is_playable_character = yes
+
+		trigger_if = {
+			limit = { is_ai = yes }
+			is_at_war = no
+			NOT = { has_variable = conqueror }
+			NOT = { has_realm_law = uncrowned }
+		}
+	}
+
+	can_always_plan = no
+
+	can_start_showing_failures_only = {
+		is_available_adult = yes
+		NOT = { is_activity_type_on_cooldown = activity_cult_defilement }
+
+		custom_tooltip = {
+			text = cult_defilement_requires_membership_tt
+			has_trait = cult_member
+			cult_secret_phase_trigger = yes
+		}
+		# The disguise is a pilgrim's: only one of the faithful can wear it.
+		custom_tooltip = {
+			text = cult_defilement_requires_host_faith_tt
+			cult_of_the_host_trigger = yes
+		}
+	}
+
+	is_valid = {
+		NOT = { has_variable = activity_invalidated }
+		scope:host = {
+			is_playable_character = yes
+			is_incapable = no
+			has_trait = cult_member
+		}
+	}
+
+	on_host_death = {
+		scope:activity = {
+			set_variable = { name = activity_invalidated }
+		}
+	}
+
+	on_invalidated = {
+		invalidation_imprisoned_effect = yes
+		invalidation_incapable_effect = yes
+	}
+
+	###################
+	# WHAT FOR
+	###################
+
+	# Read back with
+	#   scope:activity ?= { has_activity_option = { category = cult_defilement_purpose option = X } }
+	options = {
+		cult_defilement_purpose = {
+			cult_defilement_defile = {
+				default = yes
+				is_shown = { always = yes }
+				ai_will_do = {
+					value = 40
+					if = {
+						limit = {
+							has_variable = cult_charge
+							OR = {
+								var:cult_charge = flag:defile_site
+								var:cult_charge = flag:taint
+							}
+						}
+						add = 100
+					}
+				}
+			}
+
+			cult_defilement_relic = {
+				is_shown = { always = yes }
+				ai_will_do = {
+					value = 30
+					if = {
+						limit = { has_trait = greedy }
+						add = 10
+					}
+				}
+			}
+
+			cult_defilement_sign = {
+				is_shown = { always = yes }
+				ai_will_do = {
+					value = 20
+					if = {
+						limit = { has_trait = craven }
+						add = 20
+					}
+				}
+			}
+		}
+	}
+
+	###################
+	# WHERE
+	###################
+
+	province_filter = holy_sites
+	ai_province_filter = holy_sites
+	is_single_location = yes
+	max_province_icons = 10
+
+	is_location_valid = {
+		has_province_owner = yes
+		custom_tooltip = {
+			text = cult_defilement_location_holy_site_tt
+			exists = global_var:cult_host_faith
+			barony ?= { is_holy_site_of = global_var:cult_host_faith }
+		}
+		trigger_if = {
+			limit = {
+				scope:host = { is_landless_adventurer = no }
+			}
+			custom_tooltip = {
+				text = cult_defilement_location_not_capital_tt
+				scope:host.capital_province != root
+			}
+		}
+	}
+
+	# An untainted site is the better target, and the one the host's charge names the best.
+	ai_will_select_province = {
+		value = 10
+		if = {
+			limit = {
+				county ?= {
+					NOT = { has_county_modifier = cult_county_tainted }
+				}
+			}
+			add = 20
+		}
+		if = {
+			limit = {
+				scope:host = {
+					has_variable = cult_charge
+					OR = {
+						var:cult_charge = flag:defile_site
+						var:cult_charge = flag:taint
+					}
+					has_variable = cult_charge_county
+				}
+				county ?= { this = scope:host.var:cult_charge_county }
+			}
+			add = 100
+		}
+	}
+
+	province_description = {
+		desc = activity_cult_defilement_province_desc
+	}
+
+	###################
+	# WHEN
+	###################
+
+	wait_time_before_start = { months = 1 }
+	max_guest_arrival_delay_time = { months = 2 }
+
+	# Three years, as the Errand: it pays well.
+	cooldown = { years = 3 }
+
+	###################
+	# THE CHAIN
+	###################
+
+	phases = {
+		cult_defilement_phase = {
+			is_predefined = yes
+
+			on_phase_active = {
+				if = {
+					limit = { this = scope:host }
+					scope:activity = { progress_activity_phase_after = { weeks = 4 } }
+					trigger_event = { id = cult.0910 days = 1 }
+					trigger_event = { id = cult.0912 days = 10 }
+					trigger_event = { id = cult.0913 days = 18 }
+					trigger_event = { id = cult.0914 days = 26 }
+				}
+				else = {
+					trigger_event = { id = cult.0911 days = 2 }
+				}
+			}
+		}
+	}
+
+	###################
+	# WHO
+	###################
+
+	host_intents = {
+		default = cult_defilement_intent
+		intents = { cult_defilement_intent }
+	}
+
+	guest_intents = {
+		default = cult_defilement_intent
+		intents = { cult_defilement_intent }
+	}
+
+	# Two at most, and none is fine: a pilgrim often walks alone.
+	max_guests = 2
+	allow_zero_guest_invites = yes
+	open_invite = no
+
+	guest_invite_rules = {
+		rules = {
+			1 = cult_invite_rule_court
+		}
+	}
+
+	can_be_activity_guest = {
+		has_trait = cult_member
+		cult_secret_phase_trigger = yes
+		is_adult = yes
+		is_healthy = yes
+		in_diplomatic_range = scope:host
+	}
+
+	guest_join_chance = {
+		base = 40
+		base_activity_modifier = yes
+		activity_guest_shared_ai_accept_modifier = yes
+	}
+
+	# ---- Payment ----
+	#
+	# The host is paid in cult.0914 and nowhere else. A guest's share does not depend on how it went,
+	# so it is paid here: a little standing, and a little exposure for having been on the road.
+	on_complete = {
+		if = {
+			limit = { NOT = { this = scope:host } }
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = 4
+			}
+			cult_exposure_gain_effect = { VALUE = 1 }
+		}
+	}
+
+	###################
+	# AI
+	###################
+
+	ai_will_do = {
+		value = 5
+		if = {
+			limit = {
+				has_variable = cult_charge
+				OR = {
+					var:cult_charge = flag:defile_site
+					var:cult_charge = flag:taint
+				}
+			}
+			add = 25
+		}
+		if = {
+			limit = {
+				has_variable = cult_exposure
+				var:cult_exposure >= 15
+			}
+			add = -20
+		}
+		if = {
+			limit = { has_trait = craven }
+			add = -5
+		}
+	}
+
+	ai_check_interval_by_tier = {
+		barony = 120
+		county = 120
+		duchy = 120
+		kingdom = 120
+		empire = 120
+		hegemony = 120
+	}
+
+	background = {
+		texture = "gfx/interface/illustrations/event_scenes/temple.dds"
+		environment = "environment_event_temple"
+		ambience = "event:/SFX/Events/Backgrounds/temple_generic"
+	}
+
+	window_characters = {
+		host = {
+			camera = camera_body
+			effect = {
+				scope:host = { save_scope_as = selected_character }
+			}
+		}
+	}
+}

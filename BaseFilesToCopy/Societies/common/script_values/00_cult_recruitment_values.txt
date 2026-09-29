@@ -1,0 +1,300 @@
+﻿# The inversion cult: how far a soul of the host faith leans toward the circle, and how far away.
+# See events/cult_recruitment_events.txt for where these are read.
+#
+# Every one is evaluated in the scope of the person being approached. scope:cult_recruiter, when it
+# exists, is the member doing the approaching. The cult inverts its host, so the host's SINS pull and
+# its VIRTUES push. The two are kept apart rather than netted into one number, because a person can
+# be both: a sinner who is also the hunter's own brother. The rolls use pull for the friendly answers
+# and push for the dangerous ones, so such a person is likely to be warm and likely to be dangerous,
+# and rarely indifferent.
+#
+# Read only behind cult_active_trigger.
+
+# Toward the circle.
+cult_recruit_pull_value = {
+	value = 0
+
+	# What the host calls sin, the cult calls promise.
+	if = {
+		limit = { cult_sinner_trigger = yes }
+		add = 25
+	}
+	if = {
+		limit = { has_trait = witch }
+		add = 10
+	}
+
+	# Belief worn thin.
+	if = {
+		limit = { has_trait = cynical }
+		add = 20
+	}
+	if = {
+		limit = { has_trait = ambitious }
+		add = 10
+	}
+	if = {
+		limit = { has_trait = deceitful }
+		add = 10
+	}
+	if = {
+		limit = { has_trait = arbitrary }
+		add = 8
+	}
+	if = {
+		limit = { has_trait = callous }
+		add = 8
+	}
+	if = {
+		limit = { has_trait = sadistic }
+		add = 10
+	}
+
+	# Stress and grief: people in pain listen to anyone who promises an answer.
+	if = {
+		limit = { stress_level >= 2 }
+		add = 15
+	}
+	else_if = {
+		limit = { stress_level >= 1 }
+		add = 8
+	}
+	if = {
+		limit = { has_trait = depressed_1 }
+		add = 10
+	}
+
+	# A grudge against the church.
+	if = {
+		limit = { has_trait = excommunicated }
+		add = 25
+	}
+	if = {
+		limit = { exists = global_var:cult_host_faith.religious_head }
+		if = {
+			limit = { opinion = { target = global_var:cult_host_faith.religious_head value <= -50 } }
+			add = 20
+		}
+		else_if = {
+			limit = { opinion = { target = global_var:cult_host_faith.religious_head value <= -20 } }
+			add = 10
+		}
+	}
+	if = {
+		limit = {
+			exists = global_var:cult_hunter
+			has_relation_rival = global_var:cult_hunter
+		}
+		add = 10
+	}
+
+	# What they think of the one asking.
+	if = {
+		limit = { exists = scope:cult_recruiter }
+		if = {
+			limit = { opinion = { target = scope:cult_recruiter value >= 40 } }
+			add = 15
+		}
+		else_if = {
+			limit = { opinion = { target = scope:cult_recruiter value >= 15 } }
+			add = 8
+		}
+		else_if = {
+			limit = { opinion = { target = scope:cult_recruiter value <= -20 } }
+			subtract = 10
+		}
+	}
+
+	# The virtues hold them back.
+	if = {
+		limit = { has_trait = zealous }
+		subtract = 30
+	}
+	if = {
+		limit = { has_trait = honest }
+		subtract = 8
+	}
+	if = {
+		limit = { has_trait = compassionate }
+		subtract = 5
+	}
+	if = {
+		limit = { has_trait = content }
+		subtract = 5
+	}
+
+	min = 0
+}
+
+# Away from it: how likely they are to take the question to their priest, or to the hunter.
+cult_recruit_push_value = {
+	value = 0
+
+	# Piety.
+	if = {
+		limit = { has_trait = zealous }
+		add = 35
+	}
+	if = {
+		limit = { has_trait = honest }
+		add = 12
+	}
+	if = {
+		limit = { has_trait = just }
+		add = 10
+	}
+	if = {
+		limit = { piety_level >= 4 }
+		add = 20
+	}
+	else_if = {
+		limit = { piety_level >= 3 }
+		add = 10
+	}
+
+	# The church's own people. A chaplain is the best prize in the rot and the worst person to ask:
+	# every one is dangerous, and a loyal one is very dangerous.
+	if = {
+		limit = { cult_recruit_is_chaplain_trigger = yes }
+		add = 10
+		if = {
+			limit = {
+				NOT = { cult_sinner_trigger = yes }
+				NOT = { has_trait = cynical }
+			}
+			add = 20
+		}
+	}
+	if = {
+		limit = { government_has_flag = government_is_theocracy }
+		add = 10
+		if = {
+			limit = {
+				NOT = { cult_sinner_trigger = yes }
+				NOT = { has_trait = cynical }
+			}
+			add = 10
+		}
+	}
+
+	# Close to the hunter.
+	if = {
+		limit = { exists = global_var:cult_hunter }
+		if = {
+			limit = { is_close_family_of = global_var:cult_hunter }
+			add = 30
+		}
+		if = {
+			limit = { is_councillor_of = global_var:cult_hunter }
+			add = 15
+		}
+		if = {
+			limit = { has_relation_friend = global_var:cult_hunter }
+			add = 15
+		}
+		if = {
+			limit = { opinion = { target = global_var:cult_hunter value >= 50 } }
+			add = 15
+		}
+		else_if = {
+			limit = { opinion = { target = global_var:cult_hunter value >= 20 } }
+			add = 8
+		}
+	}
+
+	if = {
+		limit = {
+			exists = scope:cult_recruiter
+			opinion = { target = scope:cult_recruiter value <= -25 }
+		}
+		add = 15
+	}
+	if = {
+		limit = { has_trait = paranoid }
+		add = 5
+	}
+
+	# Nobody reports what they half want.
+	if = {
+		limit = { has_trait = cynical }
+		subtract = 15
+	}
+	if = {
+		limit = { cult_sinner_trigger = yes }
+		subtract = 10
+	}
+
+	min = 0
+}
+
+# The weight of taking a refused oath to the priest or the hunter: the push, past a threshold. A
+# mildly pious soul refuses; only a committed one reports.
+cult_recruit_report_value = {
+	value = cult_recruit_push_value
+	subtract = 15
+	min = 0
+}
+
+# Which of the possible candidates a recruiter goes to first. Leaning, already known to be
+# sympathetic, and a chaplain if one can be had; less so the dangerous.
+cult_recruit_candidate_value = {
+	value = cult_recruit_pull_value
+	if = {
+		limit = { has_character_flag = cult_sounded_sympathetic }
+		add = 30
+	}
+	if = {
+		limit = { cult_recruit_is_chaplain_trigger = yes }
+		add = 20
+	}
+	if = {
+		limit = { is_landed = yes }
+		add = 5
+	}
+	subtract = {
+		value = cult_recruit_push_value
+		divide = 2
+	}
+	min = 1
+}
+
+# What a warning costs the recruiter, by whom it went to (scope:cult_confessor, see
+# cult_recruit_find_confessor_effect). Evaluated in the recruiter's scope.
+cult_recruit_warning_exposure_value = {
+	value = 6
+	if = {
+		limit = { exists = scope:cult_confessor }
+		if = {
+			limit = { scope:cult_confessor = { has_trait = cult_member } }
+			subtract = 4
+		}
+		else_if = {
+			limit = { scope:cult_confessor = { cult_is_hunter_trigger = yes } }
+			add = 2
+		}
+	}
+}
+
+# What a report costs the recruiter. To the hunter, enough to cross "suspected heretic" from nothing,
+# so the core ladder tells the hunter. To one of the circle's own chaplains, almost nothing.
+cult_recruit_report_exposure_value = {
+	value = 20
+	if = {
+		limit = { exists = scope:cult_confessor }
+		if = {
+			limit = { scope:cult_confessor = { has_trait = cult_member } }
+			subtract = 17
+		}
+		else_if = {
+			limit = { scope:cult_confessor = { cult_is_hunter_trigger = yes } }
+			add = 5
+		}
+	}
+}
+
+# ...and with an alibi bought.
+cult_recruit_report_exposure_bought_value = {
+	value = cult_recruit_report_exposure_value
+	subtract = 10
+	min = 2
+}

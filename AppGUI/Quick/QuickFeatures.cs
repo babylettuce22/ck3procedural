@@ -143,11 +143,15 @@ public static partial class QuickFeatures
         }
         else if (shapes[0] is Line line)
         {
+            // How far out from the line its land runs, in half-widths: the rift's floor and walls,
+            // the spine's foothills, and only the ground at the wall's foot, since the wall itself is
+            // impassable and a band as wide as the spine's took in a fifth of the map's baronies.
+            // The lettering stands just off the high ground, on the side away from the sea.
             var (kind, reach, from, to, offset) = line switch
             {
-                Rift r => ("rift", 2.2, Math.Max(r.SeaEnd, 0.1), 0.9, 0.0),
-                Spine s => ("range", 3.5, 0.1, 0.9, -5.0 * s.CoastSide),
-                _ => ("wall", 3.0, 0.1, 0.9, 3.4),
+                Rift r => ("rift", 1.9, Math.Max(r.SeaEnd, 0.1), 0.9, 0.0),
+                Spine s => ("range", 2.6, 0.1, 0.9, -3.2 * s.CoastSide),
+                _ => ("wall", 1.35, 0.1, 0.9, 1.9),
             };
             var label = line.Path.Offset(offset * line.Width, from, to).Select(p => Out(p.X, p.Y)).ToArray();
             found.Add((kind, (x, y) =>

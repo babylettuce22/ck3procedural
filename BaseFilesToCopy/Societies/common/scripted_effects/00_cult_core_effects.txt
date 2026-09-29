@@ -1,0 +1,777 @@
+﻿# The inversion cult's core: membership, the meters, the people, the phases. See README.txt, THE
+# INVERSION CULT. Built on the Restorationists' core (00_restor_core_effects.txt) and carrying the
+# fixes its review found from the start: ranks are raised to AT LEAST a value, succession never picks
+# the dying, and a list is never walked while it is being emptied.
+
+# =====================================================================================
+#  Membership
+# =====================================================================================
+
+cult_swear_in_effect = {
+	if = {
+		limit = { NOT = { has_trait = cult_member } }
+		add_trait = cult_member
+	}
+	while = {
+		limit = {
+			NOT = { cult_rank_at_least_trigger = { RANK = $RANK$ } }
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 5
+		}
+	}
+	if = {
+		limit = { NOT = { has_variable = cult_power } }
+		set_variable = { name = cult_power value = 0 }
+	}
+	if = {
+		limit = { NOT = { has_variable = cult_exposure } }
+		set_variable = { name = cult_exposure value = 0 }
+	}
+	if = {
+		limit = {
+			NOT = {
+				is_target_in_global_variable_list = {
+					name = cult_roster
+					target = this
+				}
+			}
+		}
+		add_to_global_variable_list = {
+			name = cult_roster
+			target = this
+		}
+	}
+	if = {
+		limit = {
+			cult_unveiled_trigger = yes
+			NOT = { has_character_modifier = cult_unveiled_member_modifier }
+		}
+		add_character_modifier = cult_unveiled_member_modifier
+	}
+
+	# The head of the host faith taking the oath IS the capture: check it now, not next year.
+	if = {
+		limit = {
+			exists = global_var:cult_host_faith.religious_head
+			this = global_var:cult_host_faith.religious_head
+			exists = global_var:cult_rot
+		}
+		hidden_effect = { cult_rot_refresh_effect = yes }
+	}
+
+	# The hunter taking the oath -- the head of faith, usually -- is no longer hunting. Re-pick at once,
+	# or reports of suspects keep arriving on a sworn desk until the yearly pulse.
+	if = {
+		limit = { cult_is_hunter_trigger = yes }
+		hidden_effect = { cult_recompute_hunter_effect = yes }
+	}
+}
+
+cult_leave_effect = {
+	if = {
+		limit = { has_trait = cult_member }
+		remove_trait = cult_member
+	}
+	remove_variable = cult_power
+	remove_variable = cult_exposure
+	remove_variable = cult_charge
+	remove_variable = cult_charge_target
+	remove_variable = cult_charge_county
+	remove_variable = cult_charge_given
+	remove_variable = cult_charge_goal
+	clear_variable_list = cult_charge_old_recruits
+	if = {
+		limit = {
+			is_target_in_global_variable_list = {
+				name = cult_roster
+				target = this
+			}
+		}
+		remove_list_global_variable = {
+			name = cult_roster
+			target = this
+		}
+	}
+	cult_secret_remove_effect = yes
+	if = {
+		limit = { has_character_modifier = cult_under_suspicion_modifier }
+		remove_character_modifier = cult_under_suspicion_modifier
+	}
+	if = {
+		limit = { has_character_modifier = cult_highly_suspect_modifier }
+		remove_character_modifier = cult_highly_suspect_modifier
+	}
+	if = {
+		limit = { has_character_modifier = cult_unveiled_member_modifier }
+		remove_character_modifier = cult_unveiled_member_modifier
+	}
+}
+
+cult_notify_sworn_effect = {
+	every_in_global_list = {
+		variable = cult_roster
+		limit = { is_alive = yes }
+		trigger_event = {
+			id = $EVENT$
+			days = $DAYS$
+		}
+	}
+}
+
+# Saves scope:cult_hierophant, scope:cult_hunter, scope:cult_faith (the host faith) and
+# scope:cult_head (its head of faith), each only when it exists. First thing in every immediate.
+# In loc the faith's own words are then available: [cult_faith.DevilName], [cult_faith.HighGodName],
+# [cult_faith.HouseOfWorship], [cult_faith.PriestMale]...
+cult_save_scopes_effect = {
+	if = {
+		limit = { exists = global_var:cult_hierophant }
+		global_var:cult_hierophant = { save_scope_as = cult_hierophant }
+	}
+	if = {
+		limit = { exists = global_var:cult_hunter }
+		global_var:cult_hunter = { save_scope_as = cult_hunter }
+	}
+	if = {
+		limit = { exists = global_var:cult_host_faith }
+		global_var:cult_host_faith = { save_scope_as = cult_faith }
+		if = {
+			limit = { exists = global_var:cult_host_faith.religious_head }
+			global_var:cult_host_faith.religious_head = { save_scope_as = cult_head }
+		}
+	}
+}
+
+# =====================================================================================
+#  The people
+# =====================================================================================
+
+cult_make_hierophant_effect = {
+	set_global_variable = {
+		name = cult_hierophant
+		value = this
+	}
+	cult_swear_in_effect = { RANK = 75 }
+}
+
+cult_hierophant_succession_effect = {
+	if = {
+		limit = { exists = global_var:cult_hierophant }
+		remove_global_variable = cult_hierophant
+	}
+	ordered_in_global_list = {
+		variable = cult_roster
+		limit = {
+			cult_can_succeed_trigger = yes
+			is_adult = yes
+		}
+		order_by = {
+			value = intrigue
+			add = learning
+			if = {
+				limit = { cult_rank_at_least_trigger = { RANK = 75 } }
+				add = 300
+			}
+			else_if = {
+				limit = { cult_rank_at_least_trigger = { RANK = 50 } }
+				add = 200
+			}
+			else_if = {
+				limit = { cult_rank_at_least_trigger = { RANK = 25 } }
+				add = 100
+			}
+		}
+		cult_make_hierophant_effect = yes
+	}
+	if = {
+		limit = { exists = global_var:cult_hierophant }
+		cult_notify_sworn_effect = { EVENT = cult.0820 DAYS = 3 }
+	}
+}
+
+# The hunter: the host faith's head, unless the head is sworn; else the strongest ruler of the faith
+# who is not, preferring the zealous. Kept while still valid, so the enemy does not change yearly.
+cult_recompute_hunter_effect = {
+	if = {
+		limit = { exists = global_var:cult_hunter }
+		global_var:cult_hunter = { save_scope_as = cult_prev_hunter }
+		remove_global_variable = cult_hunter
+	}
+	if = {
+		limit = {
+			exists = global_var:cult_host_faith.religious_head
+			global_var:cult_host_faith.religious_head = { cult_valid_hunter_trigger = yes }
+		}
+		set_global_variable = {
+			name = cult_hunter
+			value = global_var:cult_host_faith.religious_head
+		}
+	}
+	else_if = {
+		limit = {
+			exists = scope:cult_prev_hunter
+			scope:cult_prev_hunter = { cult_valid_hunter_trigger = yes }
+		}
+		set_global_variable = {
+			name = cult_hunter
+			value = scope:cult_prev_hunter
+		}
+	}
+	else = {
+		ordered_ruler = {
+			limit = {
+				is_independent_ruler = yes
+				cult_valid_hunter_trigger = yes
+			}
+			order_by = {
+				value = max_military_strength
+				if = {
+					limit = { has_trait = zealous }
+					multiply = 2
+				}
+			}
+			save_scope_as = cult_new_hunter
+		}
+		if = {
+			limit = { exists = scope:cult_new_hunter }
+			set_global_variable = {
+				name = cult_hunter
+				value = scope:cult_new_hunter
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  Dark power -- the personal currency (CK2's devil-worshipper currency, kept)
+# =====================================================================================
+
+cult_power_gain_effect = {
+	save_scope_value_as = {
+		name = cult_power_delta
+		value = $VALUE$
+	}
+	if = {
+		limit = { NOT = { has_variable = cult_power } }
+		set_variable = { name = cult_power value = 0 }
+	}
+	change_variable = {
+		name = cult_power
+		add = $VALUE$
+	}
+	custom_tooltip = cult_power_gain_tt
+	hidden_effect = {
+		if = {
+			limit = { is_ai = no }
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = cult_power_toast
+				left_icon = root
+			}
+		}
+	}
+}
+
+cult_power_spend_effect = {
+	save_scope_value_as = {
+		name = cult_power_delta
+		value = $VALUE$
+	}
+	change_variable = {
+		name = cult_power
+		subtract = $VALUE$
+	}
+	custom_tooltip = cult_power_spend_tt
+	hidden_effect = {
+		if = {
+			limit = { var:cult_power < 0 }
+			set_variable = { name = cult_power value = 0 }
+		}
+	}
+}
+
+# =====================================================================================
+#  Exposure -- hidden and hollow phases; a no-op once unveiled
+# =====================================================================================
+
+cult_exposure_gain_effect = {
+	if = {
+		limit = { cult_secret_phase_trigger = yes }
+		save_scope_value_as = {
+			name = cult_exposure_delta
+			value = $VALUE$
+		}
+		if = {
+			limit = { NOT = { has_variable = cult_exposure } }
+			set_variable = { name = cult_exposure value = 0 }
+		}
+		change_variable = {
+			name = cult_exposure
+			add = $VALUE$
+		}
+		custom_tooltip = cult_exposure_gain_tt
+		hidden_effect = {
+			if = {
+				limit = { is_ai = no }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult_exposure_toast
+					left_icon = root
+				}
+			}
+			cult_exposure_check_effect = yes
+		}
+	}
+}
+
+cult_exposure_loss_effect = {
+	if = {
+		limit = {
+			cult_secret_phase_trigger = yes
+			has_variable = cult_exposure
+		}
+		save_scope_value_as = {
+			name = cult_exposure_delta
+			value = $VALUE$
+		}
+		change_variable = {
+			name = cult_exposure
+			subtract = $VALUE$
+		}
+		custom_tooltip = cult_exposure_loss_tt
+		hidden_effect = {
+			if = {
+				limit = { var:cult_exposure < 0 }
+				set_variable = { name = cult_exposure value = 0 }
+			}
+			cult_exposure_check_effect = yes
+		}
+	}
+}
+
+cult_exposure_check_effect = {
+	if = {
+		limit = { var:cult_exposure >= 25 }
+		if = {
+			limit = { has_character_modifier = cult_under_suspicion_modifier }
+			remove_character_modifier = cult_under_suspicion_modifier
+		}
+		if = {
+			limit = { NOT = { has_character_modifier = cult_highly_suspect_modifier } }
+			add_character_modifier = cult_highly_suspect_modifier
+			trigger_event = { id = cult.0302 days = 1 }
+			if = {
+				limit = {
+					exists = global_var:cult_hunter
+					NOT = { this = global_var:cult_hunter }
+				}
+				save_scope_as = cult_suspect
+				global_var:cult_hunter = { trigger_event = { id = cult.0303 days = 5 } }
+			}
+		}
+		cult_secret_create_effect = yes
+	}
+	else_if = {
+		limit = { var:cult_exposure >= 15 }
+		if = {
+			limit = { has_character_modifier = cult_highly_suspect_modifier }
+			remove_character_modifier = cult_highly_suspect_modifier
+		}
+		if = {
+			limit = { NOT = { has_character_modifier = cult_under_suspicion_modifier } }
+			add_character_modifier = cult_under_suspicion_modifier
+			trigger_event = { id = cult.0300 days = 1 }
+		}
+		cult_secret_create_effect = yes
+	}
+	else = {
+		if = {
+			limit = { has_character_modifier = cult_under_suspicion_modifier }
+			remove_character_modifier = cult_under_suspicion_modifier
+		}
+		if = {
+			limit = { has_character_modifier = cult_highly_suspect_modifier }
+			remove_character_modifier = cult_highly_suspect_modifier
+		}
+		cult_secret_remove_effect = yes
+	}
+}
+
+cult_exposure_decay_effect = {
+	if = {
+		limit = {
+			has_variable = cult_exposure
+			var:cult_exposure >= 1
+		}
+		random_list = {
+			50 = { cult_exposure_loss_effect = { VALUE = 1 } }
+			20 = {
+				modifier = {
+					add = 10
+					OR = { has_trait = deceitful has_trait = patient has_trait = paranoid }
+				}
+				modifier = { add = 5 intrigue >= 12 }
+				modifier = { add = 5 intrigue >= 16 }
+				cult_exposure_loss_effect = { VALUE = 2 }
+			}
+			15 = {
+				modifier = {
+					add = 7
+					OR = { has_trait = deceitful has_trait = patient has_trait = paranoid }
+				}
+				modifier = { add = 4 intrigue >= 12 }
+				modifier = { add = 4 intrigue >= 16 }
+				cult_exposure_loss_effect = { VALUE = 3 }
+			}
+			10 = {
+				modifier = {
+					add = 5
+					OR = { has_trait = deceitful has_trait = patient has_trait = paranoid }
+				}
+				modifier = { add = 3 intrigue >= 14 }
+				cult_exposure_loss_effect = { VALUE = 5 }
+			}
+		}
+	}
+}
+
+cult_secret_create_effect = {
+	if = {
+		limit = {
+			has_trait = cult_member
+			cult_secret_phase_trigger = yes
+			NOT = { any_secret = { secret_type = secret_cult_member } }
+		}
+		add_secret = { type = secret_cult_member }
+	}
+}
+
+cult_secret_remove_effect = {
+	every_secret = {
+		limit = { secret_type = secret_cult_member }
+		remove_secret = yes
+	}
+}
+
+# =====================================================================================
+#  The soul's cost -- CK2's third meter, ported from the prototype
+# =====================================================================================
+#
+# Every use of the cult's power rolls a chance to strip a virtue or add a vice. Removing a virtue is
+# twice as likely as adding a vice (erosion reads worse than possession), and every transition is
+# one-shot, so a character with nothing left to lose rolls "nothing" rather than a silent no-op.
+# Each change that lands sends cult.0050, so the player sees what the cult took.
+
+cult_corrupt_soul_effect = {
+	custom_tooltip = cult_corruption_tt
+	hidden_effect = {
+		random_list = {
+			10 = {
+				trigger = {
+					has_trait = compassionate
+					NOT = { has_character_flag = cult_lost_compassionate }
+				}
+				add_character_flag = cult_lost_compassionate
+				remove_trait = compassionate
+				trigger_event = { id = cult.0050 days = 3 }
+			}
+			10 = {
+				trigger = {
+					has_trait = just
+					NOT = { has_character_flag = cult_lost_just }
+				}
+				add_character_flag = cult_lost_just
+				remove_trait = just
+				trigger_event = { id = cult.0050 days = 3 }
+			}
+			10 = {
+				trigger = {
+					has_trait = honest
+					NOT = { has_character_flag = cult_lost_honest }
+				}
+				add_character_flag = cult_lost_honest
+				remove_trait = honest
+				trigger_event = { id = cult.0050 days = 3 }
+			}
+			5 = {
+				trigger = {
+					NOR = { has_trait = callous has_trait = sadistic has_trait = compassionate }
+					NOT = { has_character_flag = cult_gained_callous }
+				}
+				add_character_flag = cult_gained_callous
+				add_trait = callous
+				trigger_event = { id = cult.0050 days = 3 }
+			}
+			5 = {
+				trigger = {
+					NOR = { has_trait = deceitful has_trait = honest }
+					NOT = { has_character_flag = cult_gained_deceitful }
+				}
+				add_character_flag = cult_gained_deceitful
+				add_trait = deceitful
+				trigger_event = { id = cult.0050 days = 3 }
+			}
+			20 = {
+				trigger = { always = yes }
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  The rot, and the phases
+# =====================================================================================
+
+cult_recompute_rot_effect = {
+	set_global_variable = {
+		name = cult_rot
+		value = cult_rot_value
+	}
+	if = {
+		limit = { NOT = { exists = global_var:cult_rot_level } }
+		set_global_variable = { name = cult_rot_level value = 0 }
+	}
+	if = {
+		limit = {
+			global_var:cult_rot >= 75
+			global_var:cult_rot_level < 3
+		}
+		set_global_variable = { name = cult_rot_level value = 3 }
+		cult_notify_sworn_effect = { EVENT = cult.0603 DAYS = 1 }
+	}
+	else_if = {
+		limit = {
+			global_var:cult_rot >= 50
+			global_var:cult_rot_level < 2
+		}
+		set_global_variable = { name = cult_rot_level value = 2 }
+		cult_notify_sworn_effect = { EVENT = cult.0602 DAYS = 1 }
+	}
+	else_if = {
+		limit = {
+			global_var:cult_rot >= 25
+			global_var:cult_rot_level < 1
+		}
+		set_global_variable = { name = cult_rot_level value = 1 }
+		cult_notify_sworn_effect = { EVENT = cult.0601 DAYS = 1 }
+	}
+}
+
+cult_rot_refresh_effect = {
+	if = {
+		limit = { cult_secret_phase_trigger = yes }
+		cult_recompute_rot_effect = yes
+		cult_capture_check_effect = yes
+	}
+}
+
+# Hidden <-> hollow, both ways. The unveiled phase is left only by the Purification.
+cult_capture_check_effect = {
+	if = {
+		limit = {
+			cult_hidden_trigger = yes
+			cult_church_captured_trigger = yes
+			# A church just purified is watched too closely to be taken again at once -- without
+			# this, a head still sworn at the Purification re-captured it the next year and the AI
+			# unveiled it again, flipping the doctrines back and forth.
+			NOT = { exists = global_var:cult_purified_recently }
+		}
+		set_global_variable = { name = cult_phase value = 2 }
+		cult_save_scopes_effect = yes
+		cult_notify_sworn_effect = { EVENT = cult.0701 DAYS = 2 }
+	}
+	else_if = {
+		limit = {
+			cult_hollow_trigger = yes
+			cult_church_lost_trigger = yes
+		}
+		set_global_variable = { name = cult_phase value = 1 }
+		cult_save_scopes_effect = yes
+		cult_notify_sworn_effect = { EVENT = cult.0801 DAYS = 2 }
+	}
+}
+
+# The Unveiling. ROOT is whoever took the decision.
+cult_unveil_effect = {
+	set_global_variable = { name = cult_phase value = 3 }
+	save_scope_as = cult_unveiler
+	cult_unveil_doctrines_effect = yes
+	add_character_modifier = {
+		modifier = cult_unveiler_modifier
+		years = 30
+	}
+	if = {
+		limit = { exists = global_var:cult_hunter }
+		remove_global_variable = cult_hunter
+	}
+
+	# Copied first: the loop below changes nothing in the list, but the same rule is kept everywhere.
+	every_in_global_list = {
+		variable = cult_roster
+		limit = { is_alive = yes }
+		add_to_temporary_list = cult_unveiled_list
+	}
+	every_in_list = {
+		list = cult_unveiled_list
+		cult_secret_remove_effect = yes
+		set_variable = { name = cult_exposure value = 0 }
+		if = {
+			limit = { has_character_modifier = cult_under_suspicion_modifier }
+			remove_character_modifier = cult_under_suspicion_modifier
+		}
+		if = {
+			limit = { has_character_modifier = cult_highly_suspect_modifier }
+			remove_character_modifier = cult_highly_suspect_modifier
+		}
+		if = {
+			limit = { NOT = { has_character_modifier = cult_unveiled_member_modifier } }
+			add_character_modifier = cult_unveiled_member_modifier
+		}
+	}
+
+	trigger_event = { id = cult.0710 days = 1 }
+	cult_notify_sworn_effect = { EVENT = cult.0711 DAYS = 3 }
+
+	# The faithful who are not sworn learn what their church has become.
+	every_ruler = {
+		limit = {
+			faith = global_var:cult_host_faith
+			NOT = { has_trait = cult_member }
+			is_ai = no
+		}
+		trigger_event = { id = cult.0712 days = 5 }
+	}
+	every_ruler = {
+		limit = {
+			faith = global_var:cult_host_faith
+			NOT = { has_trait = cult_member }
+			highest_held_title_tier >= tier_duchy
+		}
+		add_opinion = {
+			target = scope:cult_unveiler
+			modifier = cult_defiled_my_faith_opinion
+		}
+	}
+}
+
+# The Purification: the old doctrines restored and the cult driven back underground. ROOT is the
+# purifier.
+cult_purify_effect = {
+	set_global_variable = { name = cult_phase value = 1 }
+	set_global_variable = { name = cult_rot_level value = 0 }
+	change_global_variable = { name = cult_purified_count add = 1 }
+	set_global_variable = {
+		name = cult_purified_recently
+		value = yes
+		years = 15
+	}
+	save_scope_as = cult_purifier
+	cult_purify_doctrines_effect = yes
+	add_piety = 500
+
+	every_in_global_list = {
+		variable = cult_roster
+		limit = { is_alive = yes }
+		add_to_temporary_list = cult_purified_list
+	}
+	every_in_list = {
+		list = cult_purified_list
+		if = {
+			limit = { has_character_modifier = cult_unveiled_member_modifier }
+			remove_character_modifier = cult_unveiled_member_modifier
+		}
+		# Everyone saw who they were. That is not forgotten because the doctrines changed back.
+		set_variable = { name = cult_exposure value = 15 }
+		cult_exposure_check_effect = yes
+	}
+
+	cult_recompute_hunter_effect = yes
+	cult_recompute_rot_effect = yes
+	cult_notify_sworn_effect = { EVENT = cult.0721 DAYS = 2 }
+	trigger_event = { id = cult.0722 days = 1 }
+}
+
+cult_world_started_effect = {
+	cult_recompute_hunter_effect = yes
+	set_global_variable = { name = cult_rot value = cult_rot_value }
+	if = {
+		limit = { global_var:cult_rot >= 75 }
+		set_global_variable = { name = cult_rot_level value = 3 }
+	}
+	else_if = {
+		limit = { global_var:cult_rot >= 50 }
+		set_global_variable = { name = cult_rot_level value = 2 }
+	}
+	else_if = {
+		limit = { global_var:cult_rot >= 25 }
+		set_global_variable = { name = cult_rot_level value = 1 }
+	}
+	else = {
+		set_global_variable = { name = cult_rot_level value = 0 }
+	}
+	set_global_variable = { name = cult_purified_count value = 0 }
+
+	# A church already in the cult's hands at the start is the state of the world, not news: set the
+	# phase silently rather than letting the first yearly pulse announce it.
+	if = {
+		limit = { cult_church_captured_trigger = yes }
+		set_global_variable = { name = cult_phase value = 2 }
+	}
+}
+
+cult_yearly_effect = {
+	if = {
+		limit = { cult_active_trigger = yes }
+
+		every_in_global_list = {
+			variable = cult_roster
+			limit = {
+				OR = {
+					is_alive = no
+					NOT = { has_trait = cult_member }
+				}
+			}
+			add_to_temporary_list = cult_stale
+		}
+		every_in_list = {
+			list = cult_stale
+			save_scope_as = cult_stale_member
+			remove_list_global_variable = {
+				name = cult_roster
+				target = scope:cult_stale_member
+			}
+		}
+
+		if = {
+			limit = {
+				OR = {
+					NOT = { exists = global_var:cult_hierophant }
+					global_var:cult_hierophant = { is_alive = no }
+				}
+			}
+			cult_hierophant_succession_effect = yes
+		}
+
+		if = {
+			limit = { cult_secret_phase_trigger = yes }
+			cult_recompute_hunter_effect = yes
+			cult_recompute_rot_effect = yes
+			cult_capture_check_effect = yes
+		}
+		else_if = {
+			# Unveiled. A head of the faith who is not sworn is the Purification waiting to happen:
+			# they are asked, once a year, whether it happens now.
+			limit = {
+				cult_unveiled_trigger = yes
+				exists = global_var:cult_host_faith.religious_head
+				global_var:cult_host_faith.religious_head = {
+					NOT = { has_trait = cult_member }
+					NOT = { has_character_flag = cult_declined_purify }
+				}
+			}
+			global_var:cult_host_faith.religious_head = { trigger_event = { id = cult.0720 days = 10 } }
+		}
+	}
+}

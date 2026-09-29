@@ -615,6 +615,23 @@ public static partial class ContentWriter
                   + $"{restoration.FellYear} ({(restoration.CrownHeld ? "usurped" : "broken")}, {restoration.FallKind}, {(restoration.FromHistory ? "recorded" : "invented")}); "
                   + $"pretender {restoration.PretenderId} ({(restoration.PretenderLanded ? "landed" : "in exile")}), "
                   + $"{restoration.Members.Count} sworn, usurper {restoration.UsurperId ?? "none"}");
+
+            // The inversion cult, after the Restorationists: one society per character, so anyone
+            // they swore is out of the cult's reach.
+            var taken = new HashSet<string>(StringComparer.Ordinal);
+            if (restoration is not null)
+            {
+                taken.Add(restoration.PretenderId);
+                foreach (var m in restoration.Members) taken.Add(m.Id);
+            }
+            var cult = Core.Stage.Time("inversion cult", () => InversionCult.Build(faiths, rulers!, taken, cfg, realms, wilderness));
+            CultWriter.WriteAll(modDir, cfg, cult);
+            Console.WriteLine(cult is null
+                ? "  inversion cult: no faith fits this world; the cult is switched off"
+                : $"  inversion cult: inside {cult.Host.Key} ({cult.Host.Counties.Count} counties, "
+                  + $"{(cult.Host.Religion.Monotheist ? "monotheist" : "pagan")}), serving {cult.DevilName}; "
+                  + $"{cult.Members.Count} sworn, {cult.Inversions.Count} doctrines to invert, "
+                  + $"head of faith {(cult.Host.Head is null ? "none" : cult.Host.Head.TitleKey)}");
         }
 
         // Beside the artifacts rather than beside the roster: both are things the rulers

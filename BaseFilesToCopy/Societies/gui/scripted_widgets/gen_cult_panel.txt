@@ -1,0 +1,3 @@
+# Instantiates the inversion cult's panel. Names the HOST, as gen_society_panel.txt does, and for the
+# same reason: the registry resolves a top-level instance, which the last line of the .gui provides.
+gui/gen_cult_panel.gui = gen_cult_panel_host

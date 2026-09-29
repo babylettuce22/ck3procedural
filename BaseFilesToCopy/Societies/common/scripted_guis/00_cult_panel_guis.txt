@@ -1,0 +1,200 @@
+﻿# The cult's panel: everything its window asks the script layer. Same arrangement as the
+# Restorationists' (00_restor_panel_guis.txt): questions are scripted_guis asked with IsShown, and
+# numbers and people are copied onto the viewer by cult_panel_gather. The open/close pair
+# (society_panel_toggle / society_panel_window) is shared and lives in that file.
+
+cult_panel_viewer_member = {
+	scope = character
+	is_shown = {
+		cult_active_trigger = yes
+		has_trait = cult_member
+	}
+}
+
+cult_panel_gather = {
+	scope = character
+	is_shown = { cult_active_trigger = yes }
+	effect = {
+		# The live values, read without recomputing the globals: opening a window must not be what
+		# crosses a milestone.
+		set_variable = { name = cult_panel_rot value = cult_rot_value }
+		set_variable = { name = cult_panel_sites value = cult_holy_site_share_value }
+
+		remove_variable = cult_panel_hierophant
+		remove_variable = cult_panel_head
+		remove_variable = cult_panel_hunter
+		if = {
+			limit = { exists = global_var:cult_hierophant }
+			set_variable = { name = cult_panel_hierophant value = global_var:cult_hierophant }
+		}
+		if = {
+			limit = { exists = global_var:cult_host_faith.religious_head }
+			set_variable = { name = cult_panel_head value = global_var:cult_host_faith.religious_head }
+		}
+		if = {
+			limit = {
+				cult_secret_phase_trigger = yes
+				exists = global_var:cult_hunter
+			}
+			set_variable = { name = cult_panel_hunter value = global_var:cult_hunter }
+		}
+
+		# A Magister or above -- and the Hierophant -- knows the whole circle. Below that you know
+		# the people around you and the Hierophant. Once unveiled, everyone knows everyone.
+		clear_variable_list = cult_panel_roster
+		save_scope_as = cult_viewer
+		every_in_global_list = {
+			variable = cult_roster
+			limit = {
+				is_alive = yes
+				OR = {
+					cult_unveiled_trigger = yes
+					scope:cult_viewer = { cult_rank_at_least_trigger = { RANK = 50 } }
+					scope:cult_viewer = { cult_is_hierophant_trigger = yes }
+					this = scope:cult_viewer
+					cult_is_hierophant_trigger = yes
+					is_courtier_of = scope:cult_viewer
+					scope:cult_viewer = { is_courtier_of = prev }
+					is_vassal_of = scope:cult_viewer
+					scope:cult_viewer = { is_vassal_of = prev }
+					is_close_or_extended_family_of = scope:cult_viewer
+				}
+			}
+			save_scope_as = cult_rostered
+			scope:cult_viewer = {
+				add_to_variable_list = {
+					name = cult_panel_roster
+					target = scope:cult_rostered
+				}
+			}
+		}
+	}
+}
+
+cult_panel_hidden = {
+	scope = character
+	is_shown = { cult_hidden_trigger = yes }
+}
+
+cult_panel_hollow = {
+	scope = character
+	is_shown = { cult_hollow_trigger = yes }
+}
+
+cult_panel_unveiled = {
+	scope = character
+	is_shown = { cult_unveiled_trigger = yes }
+}
+
+cult_panel_secret = {
+	scope = character
+	is_shown = { cult_secret_phase_trigger = yes }
+}
+
+cult_panel_has_hierophant = {
+	scope = character
+	is_shown = { has_variable = cult_panel_hierophant }
+}
+
+cult_panel_has_head = {
+	scope = character
+	is_shown = { has_variable = cult_panel_head }
+}
+
+cult_panel_has_hunter = {
+	scope = character
+	is_shown = { has_variable = cult_panel_hunter }
+}
+
+cult_panel_rank_0 = {
+	scope = character
+	is_shown = {
+		has_trait = cult_member
+		NOT = { cult_rank_at_least_trigger = { RANK = 25 } }
+	}
+}
+
+cult_panel_rank_1 = {
+	scope = character
+	is_shown = {
+		cult_rank_at_least_trigger = { RANK = 25 }
+		NOT = { cult_rank_at_least_trigger = { RANK = 50 } }
+	}
+}
+
+cult_panel_rank_2 = {
+	scope = character
+	is_shown = {
+		cult_rank_at_least_trigger = { RANK = 50 }
+		NOT = { cult_rank_at_least_trigger = { RANK = 75 } }
+	}
+}
+
+cult_panel_rank_3 = {
+	scope = character
+	is_shown = { cult_rank_at_least_trigger = { RANK = 75 } }
+}
+
+cult_panel_is_hierophant = {
+	scope = character
+	is_shown = { cult_is_hierophant_trigger = yes }
+}
+
+cult_panel_is_head = {
+	scope = character
+	is_shown = {
+		exists = global_var:cult_host_faith.religious_head
+		this = global_var:cult_host_faith.religious_head
+	}
+}
+
+cult_panel_suspect = {
+	scope = character
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		has_character_modifier = cult_under_suspicion_modifier
+	}
+}
+
+cult_panel_very_suspect = {
+	scope = character
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		has_character_modifier = cult_highly_suspect_modifier
+	}
+}
+
+cult_panel_can_unveil = {
+	scope = character
+	is_shown = {
+		cult_hollow_trigger = yes
+		OR = {
+			cult_is_hierophant_trigger = yes
+			AND = {
+				exists = global_var:cult_host_faith.religious_head
+				this = global_var:cult_host_faith.religious_head
+			}
+		}
+		cult_church_captured_trigger = yes
+		global_var:cult_rot >= cult_unveiling_rot_value
+	}
+}
+
+cult_panel_can_offer = {
+	scope = character
+	is_shown = {
+		gold >= 100
+		NOT = { has_character_flag = cult_offered_recently }
+	}
+}
+
+cult_panel_can_mass = {
+	scope = character
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		OR = {
+			cult_rank_at_least_trigger = { RANK = 50 }
+			cult_is_hierophant_trigger = yes
+		}
+	}
+}

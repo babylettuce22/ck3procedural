@@ -1,0 +1,594 @@
+﻿namespace = cult
+
+# The inversion cult: powers and their outcomes. cult.0400-0499.
+# The powers themselves are interactions: common/character_interactions/00_cult_powers.txt.
+#
+#   0401-0403   Turn a Priest: sworn / takes the gifts / reports it (to the member)
+#   0404        Turn a Priest: the hunter hears of the approach
+#   0405        Turn a Priest: to a player priest, who answers for themselves
+#   0410-0412   Offer to the master: nobody asks / the circle hears / a jailer talks (to the member)
+#   0420-0423   Curse: sickness / misfortune / nothing / traced back (to the member)
+#   0424        Curse: a player victim learns who wished it on them
+#   0430-0433   Defile a Relic: quietly / a scandal / interrupted / caught (to the member)
+#   0434        Defile a Relic: a player lord learns who did it
+#   0440-0442   Whisper to the See: sworn / wavers / appalled (to the member)
+#   0443        Whisper to the See: the head, after refusing
+#   0444        Whisper to the See: to a player head, who answers for themselves
+#
+# The outcome is decided where the power is used, so the interaction's tooltip shows the odds; these
+# events report it. Where the other side is a player, they choose instead of a dice roll.
+
+# =====================================================================================
+#  Turn a Priest
+# =====================================================================================
+
+cult.0401 = {
+	type = character_event
+	title = cult.0401.t
+	desc = cult.0401.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:cult_priest
+		animation = personality_cynical
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0401.a
+		custom_tooltip = cult.0401.a.tt
+	}
+}
+
+cult.0402 = {
+	type = character_event
+	title = cult.0402.t
+	desc = cult.0402.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		character = scope:cult_priest
+		animation = worry
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0402.a
+		custom_tooltip = cult.0402.a.tt
+	}
+}
+
+cult.0403 = {
+	type = character_event
+	title = cult.0403.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_hunter
+					NOT = { scope:cult_hunter = scope:cult_priest }
+				}
+				desc = cult.0403.desc_hunter
+			}
+			desc = cult.0403.desc
+		}
+	}
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		character = scope:cult_priest
+		animation = personality_zealous
+	}
+	lower_right_portrait = {
+		trigger = {
+			exists = scope:cult_hunter
+			NOT = { scope:cult_hunter = scope:cult_priest }
+		}
+		character = scope:cult_hunter
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0403.a
+	}
+}
+
+# To the hunter: a priest has reported being approached.
+cult.0404 = {
+	type = character_event
+	title = cult.0404.t
+	desc = cult.0404.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:cult_priest
+		animation = personality_zealous
+	}
+	lower_right_portrait = {
+		character = scope:cult_priest_turner
+	}
+	trigger = { cult_secret_phase_trigger = yes }
+	immediate = { cult_save_scopes_effect = yes }
+
+	option = {
+		name = cult.0404.a
+		trigger = { gold >= minor_gold_value }
+		pay_short_term_gold = {
+			target = scope:cult_priest
+			gold = minor_gold_value
+		}
+		scope:cult_priest = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 15
+			}
+		}
+		ai_chance = { base = 50 }
+	}
+	option = {
+		name = cult.0404.b
+		add_opinion = {
+			target = scope:cult_priest_turner
+			modifier = suspicion_opinion
+			opinion = -20
+		}
+		ai_chance = { base = 50 }
+	}
+}
+
+# To a player priest. The three answers are the three results the roll gives an AI priest.
+cult.0405 = {
+	type = character_event
+	title = cult.0405.t
+	desc = cult.0405.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		character = scope:cult_priest_turner
+		animation = scheme
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		NOT = { has_trait = cult_member }
+	}
+	immediate = { cult_save_scopes_effect = yes }
+
+	option = {
+		name = cult.0405.a
+		trigger = { NOT = { has_trait = restor_member } }
+		cult_power_priest_sworn_effect = yes
+		ai_chance = { base = 25 }
+	}
+	option = {
+		name = cult.0405.b
+		cult_power_priest_bribed_effect = yes
+		ai_chance = { base = 40 }
+	}
+	option = {
+		name = cult.0405.c
+		cult_power_priest_reports_effect = yes
+		add_piety = minor_piety_gain
+		ai_chance = { base = 35 }
+	}
+}
+
+# =====================================================================================
+#  Offer to the master
+# =====================================================================================
+
+cult.0410 = {
+	type = character_event
+	title = cult.0410.t
+	desc = cult.0410.desc
+	theme = dungeon
+	left_portrait = {
+		character = root
+		animation = personality_callous
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0410.a
+	}
+}
+
+cult.0411 = {
+	type = character_event
+	title = cult.0411.t
+	desc = cult.0411.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:cult_hierophant
+			NOT = { scope:cult_hierophant = root }
+		}
+		character = scope:cult_hierophant
+		animation = admiration
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0411.a
+		custom_tooltip = cult.0411.a.tt
+	}
+}
+
+cult.0412 = {
+	type = character_event
+	title = cult.0412.t
+	desc = cult.0412.desc
+	theme = dungeon
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0412.a
+	}
+}
+
+# =====================================================================================
+#  Curse
+# =====================================================================================
+
+cult.0420 = {
+	type = character_event
+	title = cult.0420.t
+	desc = cult.0420.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:cult_cursed
+		animation = sick
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0420.a
+	}
+}
+
+cult.0421 = {
+	type = character_event
+	title = cult.0421.t
+	desc = cult.0421.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = schadenfreude
+	}
+	right_portrait = {
+		character = scope:cult_cursed
+		animation = stress
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0421.a
+	}
+}
+
+cult.0422 = {
+	type = character_event
+	title = cult.0422.t
+	desc = cult.0422.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = disapproval
+	}
+	right_portrait = {
+		character = scope:cult_cursed
+		animation = happiness
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0422.a
+	}
+}
+
+cult.0423 = {
+	type = character_event
+	title = cult.0423.t
+	desc = cult.0423.desc
+	theme = dread
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+	right_portrait = {
+		character = scope:cult_cursed
+		animation = anger
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0423.a
+	}
+}
+
+# To a player victim, when the curse is traced back.
+cult.0424 = {
+	type = character_event
+	title = cult.0424.t
+	desc = cult.0424.desc
+	theme = dread
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	right_portrait = {
+		character = scope:cult_curser
+		animation = scheme
+	}
+	trigger = { is_ai = no }
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0424.a
+	}
+}
+
+# =====================================================================================
+#  Defile a Relic
+# =====================================================================================
+
+cult.0430 = {
+	type = character_event
+	title = cult.0430.t
+	desc = cult.0430.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:cult_defiled_lord
+		animation = personality_rational
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0430.a
+		custom_tooltip = cult.0430.a.tt
+	}
+}
+
+cult.0431 = {
+	type = character_event
+	title = cult.0431.t
+	desc = cult.0431.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = schadenfreude
+	}
+	right_portrait = {
+		character = scope:cult_defiled_lord
+		animation = shame
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0431.a
+		custom_tooltip = cult.0430.a.tt
+	}
+}
+
+cult.0432 = {
+	type = character_event
+	title = cult.0432.t
+	desc = cult.0432.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0432.a
+	}
+}
+
+cult.0433 = {
+	type = character_event
+	title = cult.0433.t
+	desc = cult.0433.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+	right_portrait = {
+		character = scope:cult_defiled_lord
+		animation = rage
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0433.a
+	}
+}
+
+# To a player lord, when the defilers are caught.
+cult.0434 = {
+	type = character_event
+	title = cult.0434.t
+	desc = cult.0434.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = rage
+	}
+	right_portrait = {
+		character = scope:cult_defiler
+		animation = scheme
+	}
+	trigger = { is_ai = no }
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0434.a
+	}
+}
+
+# =====================================================================================
+#  Whisper to the See
+# =====================================================================================
+
+cult.0440 = {
+	type = character_event
+	title = cult.0440.t
+	desc = cult.0440.desc
+	theme = witchcraft
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		character = scope:cult_see_head
+		animation = scheme
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0440.a
+		custom_tooltip = cult.0440.a.tt
+	}
+}
+
+cult.0441 = {
+	type = character_event
+	title = cult.0441.t
+	desc = cult.0441.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		character = scope:cult_see_head
+		animation = worry
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0441.a
+		custom_tooltip = cult.0441.a.tt
+	}
+}
+
+cult.0442 = {
+	type = character_event
+	title = cult.0442.t
+	desc = cult.0442.desc
+	theme = dread
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+	right_portrait = {
+		character = scope:cult_see_head
+		animation = anger
+	}
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0442.a
+	}
+}
+
+# To the head of the faith, who refused.
+cult.0443 = {
+	type = character_event
+	title = cult.0443.t
+	desc = cult.0443.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = personality_zealous
+	}
+	right_portrait = {
+		character = scope:cult_whisperer
+		animation = scheme
+	}
+	trigger = { cult_secret_phase_trigger = yes }
+	immediate = { cult_save_scopes_effect = yes }
+
+	# Denounce them now.
+	option = {
+		name = cult.0443.a
+		add_piety = minor_piety_gain
+		scope:cult_whisperer = {
+			cult_exposure_gain_effect = { VALUE = 5 }
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = zealous }
+			modifier = { add = 10 has_trait = wrathful }
+		}
+	}
+	# Watch them, and see who else comes.
+	option = {
+		name = cult.0443.b
+		add_opinion = {
+			target = scope:cult_whisperer
+			modifier = suspicion_opinion
+			opinion = -20
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = patient }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+}
+
+# To a player head. The three answers are the three results the roll gives an AI head.
+cult.0444 = {
+	type = character_event
+	title = cult.0444.t
+	desc = cult.0444.desc
+	theme = secret
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		character = scope:cult_whisperer
+		animation = scheme
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		NOT = { has_trait = cult_member }
+	}
+	immediate = { cult_save_scopes_effect = yes }
+
+	option = {
+		name = cult.0444.a
+		trigger = { NOT = { has_trait = restor_member } }
+		cult_power_see_sworn_effect = yes
+		ai_chance = { base = 15 }
+	}
+	option = {
+		name = cult.0444.b
+		cult_power_see_wavers_effect = yes
+		ai_chance = { base = 40 }
+	}
+	option = {
+		name = cult.0444.c
+		cult_power_see_appalled_effect = yes
+		add_piety = minor_piety_gain
+		ai_chance = { base = 45 }
+	}
+}

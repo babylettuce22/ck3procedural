@@ -1,0 +1,88 @@
+﻿# The inversion cult's hooks. Redeclaring a vanilla on_action appends. Every block is gated on
+# cult_active_trigger. The per-pack pulses (cult_life_pulse, cult_charge_pulse) are defined in their
+# packs' own on_action files.
+
+on_game_start_after_lobby = {
+	on_actions = { cult_after_lobby }
+}
+
+cult_after_lobby = {
+	trigger = { cult_active_trigger = yes }
+	effect = {
+		every_player = {
+			if = {
+				limit = { has_trait = cult_member }
+				trigger_event = { id = cult.0010 days = 2 }
+			}
+			else_if = {
+				limit = { cult_is_hunter_trigger = yes }
+				trigger_event = { id = cult.0011 days = 2 }
+			}
+		}
+	}
+}
+
+yearly_global_pulse = {
+	on_actions = { cult_yearly_global }
+}
+
+cult_yearly_global = {
+	trigger = { cult_active_trigger = yes }
+	effect = { cult_yearly_effect = yes }
+}
+
+random_yearly_everyone_pulse = {
+	on_actions = { cult_member_yearly }
+}
+
+cult_member_yearly = {
+	trigger = {
+		cult_active_trigger = yes
+		has_trait = cult_member
+		is_alive = yes
+	}
+	effect = {
+		cult_exposure_decay_effect = yes
+	}
+	on_actions = {
+		cult_life_pulse
+		cult_charge_pulse
+	}
+}
+
+on_death = {
+	on_actions = { cult_on_death }
+}
+
+cult_on_death = {
+	trigger = { cult_active_trigger = yes }
+	effect = {
+		if = {
+			limit = {
+				is_target_in_global_variable_list = {
+					name = cult_roster
+					target = root
+				}
+			}
+			remove_list_global_variable = {
+				name = cult_roster
+				target = root
+			}
+		}
+		if = {
+			limit = { cult_is_hierophant_trigger = yes }
+			save_scope_as = cult_old_hierophant
+			cult_hierophant_succession_effect = yes
+		}
+		if = {
+			limit = { cult_is_hunter_trigger = yes }
+			remove_global_variable = cult_hunter
+			# Re-picked now rather than at the yearly pulse; cult_valid_hunter_trigger skips the dying,
+			# who is still religious_head at this moment.
+			if = {
+				limit = { cult_secret_phase_trigger = yes }
+				cult_recompute_hunter_effect = yes
+			}
+		}
+	}
+}

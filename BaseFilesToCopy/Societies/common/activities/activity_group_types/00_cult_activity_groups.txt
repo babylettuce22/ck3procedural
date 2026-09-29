@@ -1,0 +1,10 @@
+﻿# The inversion cult's own foldout in the activity planner: the Black Mass and the Pilgrimage of
+# Defilement. Built as the Restorationists' restor_group (see 00_restor_activity_groups.txt): the
+# foldout hides itself when both activities fail is_shown, so nobody who is not sworn ever sees the
+# header. Nobody is sworn to both societies, so the two groups never show together and can share
+# the 150 band.
+
+cult_group = {
+	sort_order = 150
+	gui_tags = { big_button }
+}

@@ -463,6 +463,7 @@ restor.0206 = {
 			is_adult = yes
 			is_imprisoned = no
 			NOT = { has_trait = restor_member }
+			NOT = { has_trait = cult_member }
 			NOT = { restor_is_usurper_trigger = yes }
 		}
 		NOT = { has_character_flag = restor_life_seen_0206 }

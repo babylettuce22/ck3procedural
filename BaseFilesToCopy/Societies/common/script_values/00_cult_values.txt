@@ -1,0 +1,102 @@
+﻿# How far the cult has hollowed out its host. See README.txt, THE INVERSION CULT.
+# Read only behind cult_active_trigger.
+
+cult_holy_site_count_value = {
+	value = 0
+	global_var:cult_host_faith = {
+		every_holy_site = { add = 1 }
+	}
+	min = 1
+}
+
+cult_sworn_holy_site_count_value = {
+	value = 0
+	global_var:cult_host_faith = {
+		every_holy_site = {
+			limit = {
+				county = { cult_sworn_county_trigger = yes }
+			}
+			add = 1
+		}
+	}
+}
+
+# The share of the faith's holy sites in sworn hands, 0-100. The capture test for a headless faith.
+cult_holy_site_share_value = {
+	value = cult_sworn_holy_site_count_value
+	divide = cult_holy_site_count_value
+	multiply = 100
+	round = yes
+}
+
+# Court chaplains of the faith's rulers who are sworn: the church's eyes in every court, turned.
+cult_sworn_chaplain_count_value = {
+	value = 0
+	every_ruler = {
+		limit = {
+			faith = global_var:cult_host_faith
+			highest_held_title_tier >= tier_county
+			exists = cp:councillor_court_chaplain
+			cp:councillor_court_chaplain = { has_trait = cult_member }
+		}
+		add = 1
+	}
+}
+
+cult_tainted_county_count_value = {
+	value = 0
+	every_county = {
+		limit = { has_county_modifier = cult_county_tainted }
+		add = 1
+	}
+}
+
+cult_roster_size_value = {
+	value = 0
+	every_in_global_list = {
+		variable = cult_roster
+		add = 1
+	}
+}
+
+# THE ROT, 0-100.
+#   35 x share of the faith's holy sites in sworn hands
+#   25 x sworn court chaplains, against a fixed six (a share of every court in the faith was
+#        diluted to a point or two on a real map -- the 2026-09-28 review)
+#   +2 per tainted county, up to 20
+#   +1 per member, up to 20
+#   +20 while the church is captured: its head sworn, or (no head) half its holy sites held. The
+#   headless route needs the same bonus the headed one gets, or it can never reach the Unveiling.
+cult_rot_value = {
+	value = 0
+	add = {
+		value = cult_sworn_holy_site_count_value
+		divide = cult_holy_site_count_value
+		multiply = 35
+	}
+	add = {
+		value = cult_sworn_chaplain_count_value
+		divide = 6
+		max = 1
+		multiply = 25
+	}
+	add = {
+		value = cult_tainted_county_count_value
+		multiply = 2
+		max = 20
+	}
+	add = {
+		value = cult_roster_size_value
+		max = 20
+	}
+	if = {
+		limit = { cult_church_captured_trigger = yes }
+		add = 20
+	}
+	round = yes
+	min = 0
+	max = 100
+}
+
+# The Unveiling needs the church captured and this much rot.
+cult_unveiling_rot_value = 60

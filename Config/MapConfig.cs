@@ -1680,6 +1680,27 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double LocatorCentroidPull { get; set; } = 0.75;
 
     /// <summary>
+    /// The steepest ground a holding stands on when its province has anything gentler, in
+    /// elevation units per world unit (sea level 36, heightmap maximum 520), measured over about a
+    /// holding's footprint. The default, 5, is the 99th percentile of the ground under vanilla's
+    /// 10,600 holdings (655 in 16-bit heightmap units per world unit; the steepest is 1267).
+    ///
+    /// Only where the province's interior core has nothing under the line does the holding move
+    /// out of it: to half the core's depth, then anywhere at least five pixels inside the border.
+    /// A province with no gentle ground at all keeps its least steep. A province whose holding
+    /// already stood on gentle ground keeps exactly the same spot. Armies and sieges stand where
+    /// the holding does. On an 8192 scar world 12 holdings moved, 7 of them out of the core, and
+    /// holdings steeper than vanilla's 99th percentile went from 14 to 3 (those at the line), with
+    /// none past its 99.9th. It cannot help a province that is all slope; that is the partition's
+    /// to fix. 0 turns it off.
+    /// Recommended: 5.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("04 Titles")]
+    [Description("Keeps holdings off ground steeper than this, in elevation units per world unit, unless their province has nothing gentler. 5 is steeper than 99% of the ground vanilla's holdings stand on. 0 turns it off.")]
+    public double LocatorMaxSlope { get; set; } = 5;
+
+    /// <summary>
     /// How far a special building stands from the holding it shares a province with, in world
     /// units — which are province pixels, see <see cref="Emit.WorldSpace"/>.
     ///

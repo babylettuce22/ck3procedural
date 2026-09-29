@@ -1,0 +1,208 @@
+﻿# The inversion cult's powers: outcomes reached from more than one place. cult.0400-0499.
+# See common/character_interactions/00_cult_powers.txt.
+#
+# Turn a Priest and Whisper to the See each resolve either by a roll (an AI on the other end) or by
+# the other side's own choice (a player on the other end, cult.0405 and cult.0444). Keeping the
+# outcome here means the two routes cannot drift apart. Defile a Relic's two landing outcomes share
+# the defilement itself.
+
+# =====================================================================================
+#  Turn a Priest
+# =====================================================================================
+#
+# Scopes: cult_priest_turner (the member), cult_priest (the chaplain or theocrat), and cult_hunter
+# when there is one.
+
+# Sworn. A chaplain of the faith is part of the rot, so it is recomputed now.
+cult_power_priest_sworn_effect = {
+	scope:cult_priest = {
+		cult_swear_in_effect = { RANK = 0 }
+		add_opinion = {
+			target = scope:cult_priest_turner
+			modifier = cult_brought_me_in_opinion
+		}
+	}
+	scope:cult_priest_turner = {
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 5
+		}
+		hidden_effect = {
+			trigger_event = { id = cult.0401 days = 3 }
+		}
+	}
+	custom_tooltip = cult_power_rot_refresh_tt
+	hidden_effect = { cult_rot_refresh_effect = yes }
+}
+
+# Took the gifts and did not take the oath. The member holds that over them, and the recruiters
+# will find them willing to listen.
+cult_power_priest_bribed_effect = {
+	scope:cult_priest_turner = {
+		if = {
+			limit = {
+				NOT = { has_hook = scope:cult_priest }
+			}
+			add_hook = {
+				type = favor_hook
+				target = scope:cult_priest
+			}
+		}
+		hidden_effect = {
+			trigger_event = { id = cult.0402 days = 3 }
+		}
+	}
+	scope:cult_priest = {
+		hidden_effect = {
+			add_character_flag = {
+				flag = cult_sounded_sympathetic
+				years = 5
+			}
+		}
+	}
+	custom_tooltip = cult_power_priest_sympathetic_tt
+}
+
+# Reported. The member is exposed, the priest will not be asked again for a while, and the hunter
+# hears of it.
+cult_power_priest_reports_effect = {
+	scope:cult_priest_turner = {
+		cult_exposure_gain_effect = { VALUE = 15 }
+		hidden_effect = {
+			trigger_event = { id = cult.0403 days = 3 }
+		}
+	}
+	scope:cult_priest = {
+		add_opinion = {
+			target = scope:cult_priest_turner
+			modifier = cult_refused_the_offer_opinion
+		}
+		hidden_effect = {
+			add_character_flag = {
+				flag = cult_refused_recently
+				years = 5
+			}
+		}
+	}
+	if = {
+		limit = {
+			exists = global_var:cult_hunter
+			NOT = { global_var:cult_hunter = scope:cult_priest }
+			NOT = { global_var:cult_hunter = scope:cult_priest_turner }
+		}
+		custom_tooltip = cult_power_priest_to_hunter_tt
+		hidden_effect = {
+			global_var:cult_hunter = {
+				trigger_event = { id = cult.0404 days = 5 }
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  Whisper to the See
+# =====================================================================================
+#
+# Scopes: cult_whisperer (the member), cult_see_head (the head of the host faith).
+
+# Sworn. cult_swear_in_effect sees that this is the head and runs the capture check itself.
+cult_power_see_sworn_effect = {
+	scope:cult_see_head = {
+		cult_swear_in_effect = { RANK = 25 }
+		add_opinion = {
+			target = scope:cult_whisperer
+			modifier = cult_brought_me_in_opinion
+		}
+	}
+	custom_tooltip = cult_power_see_captured_tt
+	scope:cult_whisperer = {
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 15
+		}
+		hidden_effect = {
+			trigger_event = { id = cult.0440 days = 3 }
+		}
+	}
+}
+
+# Wavers. Neither yes nor no: the head kept the gifts, and will be easier to ask next time.
+cult_power_see_wavers_effect = {
+	scope:cult_see_head = {
+		add_opinion = {
+			target = scope:cult_whisperer
+			modifier = respect_opinion
+			opinion = 25
+		}
+		hidden_effect = {
+			add_character_flag = {
+				flag = cult_see_wavered
+				years = 5
+			}
+			add_character_flag = {
+				flag = cult_sounded_sympathetic
+				years = 5
+			}
+		}
+	}
+	custom_tooltip = cult_power_see_wavered_tt
+	scope:cult_whisperer = {
+		if = {
+			limit = {
+				NOT = { has_hook = scope:cult_see_head }
+			}
+			add_hook = {
+				type = favor_hook
+				target = scope:cult_see_head
+			}
+		}
+		hidden_effect = {
+			trigger_event = { id = cult.0441 days = 3 }
+		}
+	}
+}
+
+# Appalled. The member is badly exposed and the head -- the hunter, while unsworn -- knows who
+# came to them.
+cult_power_see_appalled_effect = {
+	scope:cult_whisperer = {
+		cult_exposure_gain_effect = { VALUE = 25 }
+		hidden_effect = {
+			trigger_event = { id = cult.0442 days = 3 }
+		}
+	}
+	scope:cult_see_head = {
+		add_opinion = {
+			target = scope:cult_whisperer
+			modifier = cult_refused_the_offer_opinion
+		}
+		hidden_effect = {
+			add_character_flag = {
+				flag = cult_refused_recently
+				years = 5
+			}
+			trigger_event = { id = cult.0443 days = 5 }
+		}
+	}
+	custom_tooltip = cult_power_see_to_head_tt
+}
+
+# =====================================================================================
+#  Defile a Relic
+# =====================================================================================
+#
+# Scopes: cult_defiler (the member), cult_defiled_lord (the lord), cult_defiled_county (the
+# holy-site county, chosen when the power is used).
+
+cult_power_defile_county_effect = {
+	scope:cult_defiled_county = {
+		add_county_modifier = {
+			modifier = cult_county_tainted
+			years = 15
+		}
+	}
+	custom_tooltip = cult_power_rot_refresh_tt
+	hidden_effect = { cult_rot_refresh_effect = yes }
+}

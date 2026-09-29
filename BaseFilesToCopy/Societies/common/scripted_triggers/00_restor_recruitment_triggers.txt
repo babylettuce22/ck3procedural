@@ -23,6 +23,7 @@ restor_recruit_roster_open_trigger = {
 restor_recruit_candidate_trigger = {
 	is_adult = yes
 	NOT = { has_trait = restor_member }
+	NOT = { has_trait = cult_member }	# one society per character
 	NOT = { this = scope:restor_recruiter }
 	restor_recruitable_trigger = yes
 	OR = {
@@ -49,6 +50,7 @@ restor_recruit_public_candidate_trigger = {
 	is_landed = yes
 	is_imprisoned = no
 	NOT = { has_trait = restor_member }
+	NOT = { has_trait = cult_member }
 	NOT = { has_character_flag = restor_refused_recently }
 	NOT = { this = global_var:restor_crown.holder }
 	any_liege_or_above = { this = global_var:restor_crown.holder }

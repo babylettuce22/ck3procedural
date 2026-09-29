@@ -1,0 +1,34 @@
+﻿# Why anybody goes to the Black Mass or on the Pilgrimage of Defilement.
+#
+# One intent each, auto-completing, for the Restorationists' reason (00_restor_intents.txt): the
+# activity finishing is what resolves it. `host_intents` is mandatory -- without it the planner
+# refuses to start and logs nothing. No `is_target_valid`: that would turn the intent into a picker
+# drawn from the activity's own participants.
+
+cult_mass_intent = {
+	icon = worship_devil_intent
+
+	auto_complete = yes
+
+	on_invalidated = { trigger_event = activity_system.0090 }
+
+	ai_will_do = {
+		value = 100
+	}
+
+	scripted_animation = {
+		animation = scheme
+	}
+}
+
+cult_defilement_intent = {
+	icon = worship_devil_intent
+
+	auto_complete = yes
+
+	on_invalidated = { trigger_event = activity_system.0090 }
+
+	ai_will_do = {
+		value = 100
+	}
+}

@@ -1,0 +1,78 @@
+﻿# The inversion cult's powers: the questions their interactions ask. cult.0400-0499.
+# See common/character_interactions/00_cult_powers.txt.
+
+# THIS is a priest the cult can try to turn: the court chaplain of a ruler of the host faith (the
+# chaplains the rot counts), or a theocratic ruler of the host faith. Never the head of the faith:
+# that is Whisper to the See. Never anyone sworn to either society.
+cult_power_priest_target_trigger = {
+	cult_of_the_host_trigger = yes
+	NOT = { has_trait = cult_member }
+	NOT = { has_trait = restor_member }
+	NOT = { cult_power_is_host_head_trigger = yes }
+	OR = {
+		AND = {
+			has_council_position = councillor_court_chaplain
+			employer ?= {
+				is_landed = yes
+				highest_held_title_tier >= tier_county
+				faith = global_var:cult_host_faith
+			}
+		}
+		AND = {
+			is_landed = yes
+			government_has_flag = government_is_theocracy
+		}
+	}
+}
+
+# THIS is the head of the host faith.
+cult_power_is_host_head_trigger = {
+	cult_active_trigger = yes
+	exists = global_var:cult_host_faith.religious_head
+	this = global_var:cult_host_faith.religious_head
+}
+
+# THIS holds (or is liege over) the county of at least one holy site of the host faith.
+cult_power_holds_host_holy_site_trigger = {
+	cult_active_trigger = yes
+	save_temporary_scope_as = cult_site_lord_check
+	global_var:cult_host_faith = {
+		any_holy_site = {
+			county = { cult_power_county_under_trigger = { LORD = scope:cult_site_lord_check } }
+		}
+	}
+}
+
+# THIS county is held by $LORD$ or by someone under them.
+cult_power_county_under_trigger = {
+	exists = holder
+	holder = {
+		OR = {
+			this = $LORD$
+			any_liege_or_above = { this = $LORD$ }
+		}
+	}
+}
+
+# THIS is a lord the cult can defile a holy place under: a landed ruler of the host faith, not
+# sworn, whose realm holds a holy site of the faith.
+cult_power_defile_target_trigger = {
+	is_landed = yes
+	cult_of_the_host_trigger = yes
+	NOT = { has_trait = cult_member }
+	cult_power_holds_host_holy_site_trigger = yes
+}
+
+# THIS member has at least $VALUE$ dark power.
+cult_power_has_power_trigger = {
+	has_variable = cult_power
+	var:cult_power >= $VALUE$
+}
+
+# THIS member may whisper to the See: a Hierarch, or the Hierophant.
+cult_power_may_whisper_trigger = {
+	OR = {
+		cult_rank_at_least_trigger = { RANK = 75 }
+		cult_is_hierophant_trigger = yes
+	}
+}

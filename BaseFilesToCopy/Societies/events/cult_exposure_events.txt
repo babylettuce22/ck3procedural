@@ -1,0 +1,2110 @@
+﻿# The inversion cult: exposure, and the hunter's side. cult.0300-0399.
+#
+# The member's side
+#   0300   exposure crossed 15: whispered about; a findable secret now exists (a crime or a disgrace,
+#          by the host faith's own witchcraft doctrine)
+#   0301   the member's secret was exposed: everyone knows
+#   0302   exposure crossed 25: suspected heretic, the hunter is being told
+#   0307   the hunter offers absolution for names
+#   0308   the hunter demands a confession
+#   0312   the church is searching the realm
+#   0330-0333  yearly, exposure 10+: public penance, a showy donation, a scapegoat, the chaplain
+#
+# The hunter's side
+#   0303   a name is suspected (a member crossed 25)
+#   0305   the hunter's court found a member's secret
+#   0306   a member's secret was exposed
+#   0309   the trial for heresy (a member in the hunter's prison)
+#   0310   Root Out Heresy names the most exposed member of the realm
+#   0320-0324  yearly: a confessor's report, a desecrated shrine, a priest who prays wrongly, a witch
+#              accused by villagers, black candles
+#
+# "Within the hunter's reach" is `any_liege_or_above = hunter`, or a guest at the hunter's own court.
+# A hunter who is also the head of the faith may excommunicate anyone of the faith, anywhere.
+
+namespace = cult
+
+# =====================================================================================
+#  cult.0300 -- whispered about
+# =====================================================================================
+
+cult.0300 = {
+	type = character_event
+	title = cult.0300.t
+	desc = {
+		desc = cult.0300.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					global_var:cult_host_faith = {
+						OR = {
+							has_doctrine = doctrine_witchcraft_crime
+							has_doctrine = doctrine_witchcraft_shunned
+						}
+					}
+				}
+				desc = cult.0300.desc_crime
+			}
+			desc = cult.0300.desc_shunned
+		}
+	}
+	theme = witchcraft
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:cult_hunter
+			NOT = { scope:cult_hunter = root }
+		}
+		character = scope:cult_hunter
+		animation = personality_zealous
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+	}
+	immediate = { cult_save_scopes_effect = yes }
+
+	# Keep up appearances.
+	option = {
+		name = cult.0300.a
+		if = {
+			limit = {
+				exists = scope:cult_hunter
+				NOT = { scope:cult_hunter = root }
+			}
+			custom_tooltip = cult.0300.a.tt
+		}
+		else = { custom_tooltip = cult.0300.a.tt_nohunter }
+		ai_chance = { base = 70 }
+	}
+
+	# Clear the house of anything that could be found.
+	option = {
+		name = cult.0300.b
+		cult_exposure_loss_effect = { VALUE = 4 }
+		cult_power_spend_effect = { VALUE = 10 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0302 -- suspected heretic
+# =====================================================================================
+
+cult.0302 = {
+	type = character_event
+	title = cult.0302.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_hunter
+					NOT = { scope:cult_hunter = root }
+				}
+				desc = cult.0302.desc
+			}
+			desc = cult.0302.desc_nohunter
+		}
+	}
+	theme = witchcraft
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:cult_hunter
+			NOT = { scope:cult_hunter = root }
+		}
+		character = scope:cult_hunter
+		animation = personality_zealous
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+	}
+	immediate = { cult_save_scopes_effect = yes }
+
+	# No more rites.
+	option = {
+		name = cult.0302.a
+		custom_tooltip = cult.0302.a.tt
+		ai_chance = { base = 50 }
+	}
+
+	# Pay the talkers.
+	option = {
+		name = cult.0302.b
+		trigger = { gold >= 50 }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = 50
+		cult_exposure_loss_effect = { VALUE = 6 }
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = paranoid }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Get out.
+	option = {
+		name = cult.0302.c
+		trigger = {
+			NOT = { cult_is_hierophant_trigger = yes }
+		}
+		custom_tooltip = cult.0302.c.tt
+		hidden_effect = { cult_leave_effect = yes }
+		if = {
+			limit = { exists = scope:cult_hierophant }
+			scope:cult_hierophant = {
+				add_opinion = {
+					target = root
+					modifier = cult_failed_charge_opinion
+				}
+			}
+		}
+		ai_chance = {
+			base = 10
+			modifier = { add = 25 has_trait = craven }
+			modifier = { add = -10 cult_rank_at_least_trigger = { RANK = 50 } }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0301 -- the member's secret is exposed
+# =====================================================================================
+
+cult.0301 = {
+	type = character_event
+	title = cult.0301.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_hunter
+					NOT = { scope:cult_hunter = root }
+					any_liege_or_above = { this = scope:cult_hunter }
+				}
+				desc = cult.0301.desc_inside
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_hunter
+					NOT = { scope:cult_hunter = root }
+				}
+				desc = cult.0301.desc_outside
+			}
+			desc = cult.0301.desc_nohunter
+		}
+	}
+	theme = secret
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:cult_hunter
+			NOT = { scope:cult_hunter = root }
+		}
+		character = scope:cult_hunter
+		animation = anger
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:cult_refuge }
+		character = scope:cult_refuge
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		# A sworn lord outside the hunter's reach, for a courtier to run to.
+		if = {
+			limit = {
+				is_ruler = no
+				is_imprisoned = no
+			}
+			random_in_global_list = {
+				variable = cult_roster
+				limit = {
+					is_alive = yes
+					is_landed = yes
+					is_imprisoned = no
+					NOT = { this = root }
+					OR = {
+						NOT = { exists = global_var:cult_hunter }
+						NOT = { any_liege_or_above = { this = global_var:cult_hunter } }
+					}
+				}
+				save_scope_as = cult_refuge
+			}
+		}
+	}
+
+	# Deny it.
+	option = {
+		name = cult.0301.a
+		duel = {
+			skill = intrigue
+			value = decent_skill_rating
+			45 = {
+				desc = cult.0301.a.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -40
+				}
+				modifier = { add = 10 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0301.a.success
+					left_icon = root
+					add_prestige = minor_prestige_loss
+				}
+				cult_exposure_loss_effect = { VALUE = 5 }
+			}
+			55 = {
+				desc = cult.0301.a.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -50
+				}
+				modifier = { add = 10 has_trait = honest }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0301.a.failure
+					left_icon = root
+					add_prestige = medium_prestige_loss
+				}
+				cult_exposure_gain_effect = { VALUE = 5 }
+			}
+		}
+		stress_impact = { honest = minor_stress_impact_gain }
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = deceitful }
+			modifier = { add = -20 has_trait = honest }
+		}
+	}
+
+	# Run to a sworn court.
+	option = {
+		name = cult.0301.b
+		trigger = { exists = scope:cult_refuge }
+		scope:cult_refuge = { add_courtier = root }
+		cult_exposure_loss_effect = { VALUE = 5 }
+		custom_tooltip = cult.0301.b.tt
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = craven }
+		}
+	}
+
+	# Confess to the hunter, and name names.
+	option = {
+		name = cult.0301.c
+		trigger = {
+			exists = scope:cult_hunter
+			NOT = { scope:cult_hunter = root }
+			NOT = { cult_is_hierophant_trigger = yes }
+		}
+		add_prestige = minor_prestige_loss
+		cult_confess_and_name_effect = { TO = scope:cult_hunter }
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			brave = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 15
+			modifier = { add = 30 has_trait = craven }
+			modifier = { add = 15 has_trait = deceitful }
+			modifier = { add = -15 cult_rank_at_least_trigger = { RANK = 50 } }
+			modifier = { add = -10 has_trait = brave }
+		}
+	}
+
+	# Own it.
+	option = {
+		name = cult.0301.d
+		add_dread = medium_dread_gain
+		cult_power_gain_effect = { VALUE = 20 }
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 5
+		}
+		if = {
+			limit = {
+				exists = scope:cult_hunter
+				NOT = { scope:cult_hunter = root }
+				any_liege_or_above = { this = scope:cult_hunter }
+			}
+			custom_tooltip = cult.0301.d.tt_inside
+		}
+		stress_impact = { craven = medium_stress_impact_gain }
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = 20 has_trait = arrogant }
+			modifier = { add = 15 cult_rank_at_least_trigger = { RANK = 50 } }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0303 -- the hunter hears a name
+# =====================================================================================
+
+cult.0303 = {
+	type = character_event
+	title = cult.0303.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:cult_suspect = {
+						OR = {
+							any_liege_or_above = { this = root }
+							is_foreign_court_guest_of = root
+							is_pool_guest_of = root
+						}
+					}
+				}
+				desc = cult.0303.desc_inside
+			}
+			desc = cult.0303.desc_outside
+		}
+	}
+	theme = faith
+	override_background = { reference = council_chamber }
+	left_portrait = {
+		character = root
+		animation = personality_zealous
+	}
+	right_portrait = {
+		character = scope:cult_suspect
+		animation = worry
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		exists = scope:cult_suspect
+		scope:cult_suspect = {
+			is_alive = yes
+			has_trait = cult_member
+		}
+		NOT = { has_character_flag = cult_rooting_out }
+		# Still the hunter, and not sworn since the report was sent five days ago.
+		cult_is_hunter_trigger = yes
+		NOT = { has_trait = cult_member }
+	}
+	immediate = { cult_save_scopes_effect = yes }
+
+	# Watch them.
+	option = {
+		name = cult.0303.a
+		cult_their_exposure_gain_effect = { WHO = scope:cult_suspect VALUE = 5 }
+		ai_chance = { base = 35 }
+	}
+
+	# Examine them on the faith.
+	option = {
+		name = cult.0303.b
+		trigger = {
+			is_imprisoned = no
+			scope:cult_suspect = {
+				is_imprisoned = no
+				OR = {
+					any_liege_or_above = { this = root }
+					is_foreign_court_guest_of = root
+					is_pool_guest_of = root
+				}
+			}
+		}
+		cult_examine_suspect_effect = { SUSPECT = scope:cult_suspect }
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 learning >= 12 }
+			modifier = { add = 20 has_trait = zealous }
+		}
+	}
+
+	# Demand a confession.
+	option = {
+		name = cult.0303.c
+		trigger = {
+			is_imprisoned = no
+			scope:cult_suspect = {
+				is_imprisoned = no
+				OR = {
+					any_liege_or_above = { this = root }
+					is_foreign_court_guest_of = root
+					is_pool_guest_of = root
+					AND = {
+						exists = scope:cult_head
+						scope:cult_head = root
+						faith = root.faith
+					}
+				}
+			}
+		}
+		save_scope_as = cult_inquisitor
+		custom_tooltip = cult.0303.c.tt
+		scope:cult_suspect = { trigger_event = { id = cult.0308 days = 3 } }
+		ai_chance = {
+			base = 25
+			modifier = { add = 20 has_trait = zealous }
+			modifier = { add = 10 has_trait = arrogant }
+		}
+	}
+
+	# Ignore it.
+	option = {
+		name = cult.0303.d
+		ai_chance = {
+			base = 15
+			modifier = { add = 20 has_trait = trusting }
+			modifier = { add = 15 has_trait = cynical }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0305 -- the hunter's court finds a secret
+# =====================================================================================
+
+cult.0305 = {
+	type = character_event
+	title = cult.0305.t
+	desc = cult.0305.desc
+	theme = witchcraft
+	override_background = { reference = study }
+	left_portrait = {
+		character = root
+		animation = schadenfreude
+	}
+	right_portrait = {
+		character = scope:cult_found_member
+		animation = worry
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:cult_spymaster }
+		character = scope:cult_spymaster
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		exists = scope:cult_found_member
+		scope:cult_found_member = {
+			is_alive = yes
+			has_trait = cult_member
+			any_secret = { secret_type = secret_cult_member }
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cp:councillor_spymaster ?= { save_scope_as = cult_spymaster }
+		cult_reveal_secret_to_root_effect = { WHO = scope:cult_found_member }
+		scope:cult_found_member = {
+			random_secret = {
+				limit = { secret_type = secret_cult_member }
+				save_scope_as = cult_found_secret
+			}
+		}
+	}
+
+	# Tell the faithful.
+	option = {
+		name = cult.0305.a
+		trigger = { exists = scope:cult_found_secret }
+		scope:cult_found_secret = { expose_secret = root }
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = zealous }
+			modifier = { add = 15 has_trait = wrathful }
+		}
+	}
+
+	# Keep it as leverage.
+	option = {
+		name = cult.0305.b
+		if = {
+			limit = {
+				exists = scope:cult_found_secret
+				scope:cult_found_secret = { is_criminal_for = scope:cult_found_member }
+				can_add_hook = {
+					target = scope:cult_found_member
+					type = strong_blackmail_hook
+				}
+			}
+			add_hook = {
+				type = strong_blackmail_hook
+				target = scope:cult_found_member
+				secret = scope:cult_found_secret
+			}
+		}
+		else_if = {
+			limit = {
+				can_add_hook = {
+					target = scope:cult_found_member
+					type = suspicious_activity_hook
+				}
+			}
+			add_hook = {
+				type = suspicious_activity_hook
+				target = scope:cult_found_member
+			}
+		}
+		else = {
+			custom_tooltip = cult.0305.b.nohook_tt
+		}
+		stress_impact = { zealous = minor_stress_impact_gain }
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = deceitful }
+			modifier = { add = 15 has_trait = cynical }
+		}
+	}
+
+	# Offer absolution for names.
+	option = {
+		name = cult.0305.c
+		trigger = {
+			scope:cult_found_member = {
+				NOT = { cult_is_hierophant_trigger = yes }
+			}
+		}
+		save_scope_as = cult_inquisitor
+		custom_tooltip = cult.0305.c.tt
+		scope:cult_found_member = { trigger_event = { id = cult.0307 days = 3 } }
+		ai_chance = {
+			base = 25
+			modifier = { add = 20 learning >= 12 }
+			modifier = { add = 10 has_trait = forgiving }
+		}
+	}
+
+	# Watch them.
+	option = {
+		name = cult.0305.d
+		cult_their_exposure_gain_effect = { WHO = scope:cult_found_member VALUE = 5 }
+		ai_chance = { base = 10 }
+	}
+}
+
+# =====================================================================================
+#  cult.0306 -- the hunter, when a member is exposed
+# =====================================================================================
+
+cult.0306 = {
+	type = character_event
+	title = cult.0306.t
+	desc = {
+		desc = cult.0306.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:cult_exposed_member = { is_imprisoned_by = root } }
+				desc = cult.0306.desc_prisoner
+			}
+			triggered_desc = {
+				trigger = {
+					scope:cult_exposed_member = {
+						OR = {
+							any_liege_or_above = { this = root }
+							is_foreign_court_guest_of = root
+							is_pool_guest_of = root
+						}
+					}
+				}
+				desc = cult.0306.desc_inside
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_head
+					scope:cult_head = root
+				}
+				desc = cult.0306.desc_outside_head
+			}
+			desc = cult.0306.desc_outside
+		}
+	}
+	theme = dread
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:cult_exposed_member
+		animation = fear
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		exists = scope:cult_exposed_member
+		scope:cult_exposed_member = {
+			is_alive = yes
+			has_trait = cult_member
+		}
+		NOT = { scope:cult_exposed_member = root }
+	}
+	immediate = { cult_save_scopes_effect = yes }
+
+	# Arrest them for trial.
+	option = {
+		name = cult.0306.a
+		trigger = {
+			is_imprisoned = no
+			scope:cult_exposed_member = {
+				is_imprisoned = no
+				OR = {
+					any_liege_or_above = { this = root }
+					is_foreign_court_guest_of = root
+					is_pool_guest_of = root
+				}
+			}
+		}
+		cult_arrest_member_effect = { WHO = scope:cult_exposed_member }
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = zealous }
+			modifier = { add = 20 has_trait = wrathful }
+		}
+	}
+
+	# Already in the prison: bring them to trial.
+	option = {
+		name = cult.0306.b
+		trigger = {
+			scope:cult_exposed_member = { is_imprisoned_by = root }
+		}
+		scope:cult_exposed_member = { save_scope_as = cult_accused }
+		custom_tooltip = cult_trial_follows_tt
+		hidden_effect = { trigger_event = { id = cult.0309 days = 3 } }
+		ai_chance = { base = 60 }
+	}
+
+	# Excommunicate them (the head of the faith only).
+	option = {
+		name = cult.0306.c
+		trigger = {
+			exists = scope:cult_head
+			scope:cult_head = root
+			faith = { has_doctrine = doctrine_spiritual_head }
+			piety >= major_piety_value
+			scope:cult_exposed_member = {
+				faith = root.faith
+				NOT = { has_trait = excommunicated }
+				NOT = { has_character_modifier = excommunication_recently_lifted }
+			}
+		}
+		show_as_unavailable = {
+			exists = scope:cult_head
+			scope:cult_head = root
+		}
+		cult_excommunicate_effect = { WHO = scope:cult_exposed_member }
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = zealous }
+		}
+	}
+
+	# Demand public penance.
+	option = {
+		name = cult.0306.d
+		trigger = {
+			scope:cult_exposed_member = {
+				OR = {
+					is_imprisoned_by = root
+					AND = {
+						is_imprisoned = no
+						OR = {
+							any_liege_or_above = { this = root }
+							is_foreign_court_guest_of = root
+							is_pool_guest_of = root
+						}
+					}
+				}
+			}
+		}
+		cult_public_penance_effect = { WHO = scope:cult_exposed_member }
+		ai_chance = {
+			base = 20
+			modifier = { add = 25 has_trait = forgiving }
+			modifier = { add = 15 has_trait = compassionate }
+		}
+	}
+
+	# Condemn them from every pulpit.
+	option = {
+		name = cult.0306.e
+		add_opinion = {
+			target = scope:cult_exposed_member
+			modifier = coup_plotter_opinion
+		}
+		scope:cult_exposed_member = { add_prestige = major_prestige_loss }
+		save_scope_as = cult_seeker
+		custom_tooltip = cult.0306.e.tt
+		hidden_effect = {
+			every_in_global_list = {
+				variable = cult_roster
+				limit = {
+					is_alive = yes
+					has_trait = cult_member
+					NOT = { this = scope:cult_seeker }
+					NOT = { this = scope:cult_exposed_member }
+					OR = {
+						any_liege_or_above = { this = scope:cult_seeker }
+						is_foreign_court_guest_of = scope:cult_seeker
+						is_pool_guest_of = scope:cult_seeker
+					}
+				}
+				cult_exposure_gain_effect = { VALUE = 5 }
+			}
+		}
+		ai_chance = { base = 25 }
+	}
+
+	# Offer absolution for names.
+	option = {
+		name = cult.0306.f
+		trigger = {
+			scope:cult_exposed_member = {
+				NOT = { cult_is_hierophant_trigger = yes }
+			}
+		}
+		save_scope_as = cult_inquisitor
+		custom_tooltip = cult.0306.f.tt
+		scope:cult_exposed_member = { trigger_event = { id = cult.0307 days = 3 } }
+		ai_chance = {
+			base = 15
+			modifier = { add = 20 learning >= 12 }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0307 -- absolution for names
+# =====================================================================================
+
+cult.0307 = {
+	type = character_event
+	title = cult.0307.t
+	desc = cult.0307.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:cult_inquisitor
+		animation = personality_zealous
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		exists = scope:cult_inquisitor
+		scope:cult_inquisitor = { is_alive = yes }
+		NOT = { cult_is_hierophant_trigger = yes }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		save_scope_as = cult_absolved
+	}
+
+	# Take the absolution.
+	option = {
+		name = cult.0307.a
+		cult_confess_and_name_effect = { TO = scope:cult_inquisitor }
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			brave = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			modifier = { add = 30 has_trait = craven }
+			modifier = { add = 15 has_trait = deceitful }
+			modifier = { add = -20 has_trait = honest }
+			modifier = { add = -10 cult_rank_at_least_trigger = { RANK = 25 } }
+			modifier = { add = -15 cult_rank_at_least_trigger = { RANK = 50 } }
+		}
+	}
+
+	# Refuse.
+	option = {
+		name = cult.0307.b
+		scope:cult_inquisitor = {
+			add_opinion = {
+				target = root
+				modifier = treachery_opinion
+			}
+			hidden_effect = {
+				if = {
+					limit = { is_ai = no }
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = cult.0307.b.toast
+						left_icon = root
+					}
+				}
+			}
+		}
+		cult_exposure_gain_effect = { VALUE = 5 }
+		cult_power_gain_effect = { VALUE = 15 }
+		ai_chance = {
+			base = 50
+			modifier = { add = 20 has_trait = brave }
+			modifier = { add = 20 cult_rank_at_least_trigger = { RANK = 50 } }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0308 -- the hunter demands a confession
+# =====================================================================================
+
+cult.0308 = {
+	type = character_event
+	title = cult.0308.t
+	desc = cult.0308.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	right_portrait = {
+		character = scope:cult_inquisitor
+		animation = personality_zealous
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		exists = scope:cult_inquisitor
+		scope:cult_inquisitor = { is_alive = yes }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		save_scope_as = cult_questioned
+	}
+
+	# Confess, and name the others.
+	option = {
+		name = cult.0308.a
+		trigger = {
+			NOT = { cult_is_hierophant_trigger = yes }
+		}
+		add_prestige = medium_prestige_loss
+		cult_confess_and_name_effect = { TO = scope:cult_inquisitor }
+		stress_impact = {
+			brave = medium_stress_impact_gain
+			arrogant = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 15
+			modifier = { add = 30 has_trait = craven }
+			modifier = { add = -15 cult_rank_at_least_trigger = { RANK = 50 } }
+		}
+	}
+
+	# Swear on the relics that it is all lies.
+	option = {
+		name = cult.0308.b
+		duel = {
+			skill = intrigue
+			target = scope:cult_inquisitor
+			50 = {
+				desc = cult.0308.b.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -45
+				}
+				modifier = { add = 10 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0308.b.success
+					left_icon = scope:cult_inquisitor
+				}
+				cult_exposure_loss_effect = { VALUE = 5 }
+				scope:cult_inquisitor = {
+					hidden_effect = {
+						if = {
+							limit = { is_ai = no }
+							send_interface_toast = {
+								type = event_toast_effect_neutral
+								title = cult.0308.b.success_them
+								left_icon = root
+							}
+						}
+					}
+				}
+			}
+			50 = {
+				desc = cult.0308.b.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -45
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0308.b.failure
+					left_icon = scope:cult_inquisitor
+					scope:cult_inquisitor = {
+						add_opinion = {
+							target = root
+							modifier = treachery_opinion
+						}
+					}
+				}
+				cult_exposure_gain_effect = { VALUE = 8 }
+				scope:cult_inquisitor = {
+					hidden_effect = {
+						if = {
+							limit = { is_ai = no }
+							send_interface_toast = {
+								type = event_toast_effect_good
+								title = cult.0308.b.failure_them
+								left_icon = root
+							}
+						}
+					}
+				}
+			}
+		}
+		stress_impact = { honest = medium_stress_impact_gain }
+		ai_chance = {
+			base = 40
+			modifier = { add = 25 has_trait = deceitful }
+			modifier = { add = 10 intrigue >= 12 }
+		}
+	}
+
+	# Refuse to answer.
+	option = {
+		name = cult.0308.c
+		cult_exposure_gain_effect = { VALUE = 5 }
+		cult_power_gain_effect = { VALUE = 10 }
+		scope:cult_inquisitor = {
+			add_opinion = {
+				target = root
+				modifier = suspicion_opinion
+				opinion = -20
+			}
+			hidden_effect = {
+				if = {
+					limit = { is_ai = no }
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = cult.0308.c.toast
+						left_icon = root
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = stubborn }
+			modifier = { add = 15 has_trait = arrogant }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0309 -- the trial for heresy
+# =====================================================================================
+
+cult.0309 = {
+	type = character_event
+	title = cult.0309.t
+	desc = cult.0309.desc
+	theme = dungeon
+	override_background = { reference = dungeon }
+	left_portrait = {
+		character = root
+		animation = personality_zealous
+	}
+	right_portrait = {
+		character = scope:cult_accused
+		animation = prisondungeon
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:cult_chaplain }
+		character = scope:cult_chaplain
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		exists = scope:cult_accused
+		scope:cult_accused = {
+			is_alive = yes
+			has_trait = cult_member
+			is_imprisoned_by = root
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cp:councillor_court_chaplain ?= {
+			if = {
+				limit = { NOT = { has_trait = cult_member } }
+				save_scope_as = cult_chaplain
+			}
+		}
+	}
+
+	# The sentence for heresy is death.
+	option = {
+		name = cult.0309.a
+		add_piety = minor_piety_gain
+		add_dread = medium_dread_gain
+		save_scope_as = cult_seeker
+		execute_prisoner_effect = {
+			VICTIM = scope:cult_accused
+			EXECUTIONER = root
+		}
+		custom_tooltip = cult.0309.a.tt
+		hidden_effect = {
+			every_in_global_list = {
+				variable = cult_roster
+				limit = {
+					is_alive = yes
+					has_trait = cult_member
+					NOT = { this = scope:cult_accused }
+					OR = {
+						any_liege_or_above = { this = scope:cult_seeker }
+						is_foreign_court_guest_of = scope:cult_seeker
+						is_pool_guest_of = scope:cult_seeker
+					}
+				}
+				cult_exposure_gain_effect = { VALUE = 5 }
+			}
+		}
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			forgiving = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			modifier = { add = 25 has_trait = zealous }
+			modifier = { add = 20 has_trait = wrathful }
+			modifier = { add = 20 has_trait = sadistic }
+		}
+	}
+
+	# Public penance, then release.
+	option = {
+		name = cult.0309.b
+		cult_public_penance_effect = { WHO = scope:cult_accused }
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = forgiving }
+			modifier = { add = 15 has_trait = compassionate }
+		}
+	}
+
+	# Keep them in the dungeon until they repent.
+	option = {
+		name = cult.0309.c
+		add_piety = minor_piety_gain
+		custom_tooltip = cult.0309.c.tt
+		ai_chance = {
+			base = 25
+			modifier = { add = 15 has_trait = patient }
+		}
+	}
+
+	# Absolution for names.
+	option = {
+		name = cult.0309.d
+		trigger = {
+			scope:cult_accused = {
+				NOT = { cult_is_hierophant_trigger = yes }
+			}
+		}
+		save_scope_as = cult_inquisitor
+		custom_tooltip = cult.0309.d.tt
+		scope:cult_accused = { trigger_event = { id = cult.0307 days = 2 } }
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 learning >= 12 }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0310 -- Root Out Heresy names someone
+# =====================================================================================
+
+cult.0310 = {
+	type = character_event
+	title = cult.0310.t
+	desc = cult.0310.desc
+	theme = faith
+	override_background = { reference = dungeon }
+	left_portrait = {
+		character = root
+		animation = schadenfreude
+	}
+	right_portrait = {
+		character = scope:cult_named
+		animation = fear
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		exists = scope:cult_named
+		scope:cult_named = {
+			is_alive = yes
+			has_trait = cult_member
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_reveal_secret_to_root_effect = { WHO = scope:cult_named }
+		scope:cult_named = {
+			random_secret = {
+				limit = { secret_type = secret_cult_member }
+				save_scope_as = cult_named_secret
+			}
+		}
+	}
+
+	# Examine them.
+	option = {
+		name = cult.0310.a
+		trigger = {
+			is_imprisoned = no
+			scope:cult_named = { is_imprisoned = no }
+		}
+		cult_examine_suspect_effect = { SUSPECT = scope:cult_named }
+		ai_chance = { base = 30 }
+	}
+
+	# Expose them.
+	option = {
+		name = cult.0310.b
+		trigger = { exists = scope:cult_named_secret }
+		scope:cult_named_secret = { expose_secret = root }
+		ai_chance = { base = 30 }
+	}
+
+	# Demand a confession.
+	option = {
+		name = cult.0310.c
+		trigger = {
+			scope:cult_named = { is_imprisoned = no }
+		}
+		save_scope_as = cult_inquisitor
+		custom_tooltip = cult.0310.c.tt
+		scope:cult_named = { trigger_event = { id = cult.0308 days = 3 } }
+		ai_chance = { base = 20 }
+	}
+
+	# Offer absolution for names.
+	option = {
+		name = cult.0310.d
+		trigger = {
+			scope:cult_named = {
+				NOT = { cult_is_hierophant_trigger = yes }
+			}
+		}
+		save_scope_as = cult_inquisitor
+		custom_tooltip = cult.0310.d.tt
+		scope:cult_named = { trigger_event = { id = cult.0307 days = 3 } }
+		ai_chance = { base = 15 }
+	}
+
+	# Watch them.
+	option = {
+		name = cult.0310.e
+		cult_their_exposure_gain_effect = { WHO = scope:cult_named VALUE = 5 }
+		ai_chance = { base = 10 }
+	}
+}
+
+# =====================================================================================
+#  cult.0312 -- to each member caught in the search
+# =====================================================================================
+
+cult.0312 = {
+	type = character_event
+	title = cult.0312.t
+	desc = cult.0312.desc
+	theme = faith
+	override_background = { reference = courtyard }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_seeker }
+		character = scope:cult_seeker
+		animation = personality_zealous
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		exists = scope:cult_seeker
+	}
+	immediate = { cult_save_scopes_effect = yes }
+
+	# Go quiet.
+	option = {
+		name = cult.0312.a
+		cult_exposure_loss_effect = { VALUE = 4 }
+		cult_power_spend_effect = { VALUE = 10 }
+		ai_chance = { base = 50 }
+	}
+
+	# Carry on.
+	option = {
+		name = cult.0312.b
+		ai_chance = { base = 50 }
+	}
+}
+
+# =====================================================================================
+#  The hunter's year -- cult.0320-0324
+# =====================================================================================
+
+# The Confessor's Report: a priest will break the seal of confession, for a price.
+cult.0320 = {
+	type = character_event
+	title = cult.0320.t
+	desc = cult.0320.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:cult_chaplain }
+		character = scope:cult_chaplain
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		cult_is_hunter_trigger = yes
+		NOT = { has_character_flag = cult_seen_0320 }
+		any_in_global_list = {
+			variable = cult_roster
+			is_alive = yes
+			is_adult = yes
+			NOT = { this = root }
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_seen_0320 years = 6 }
+		cp:councillor_court_chaplain ?= {
+			if = {
+				limit = { NOT = { has_trait = cult_member } }
+				save_scope_as = cult_chaplain
+			}
+		}
+		cult_pick_mark_anywhere_effect = yes
+	}
+
+	# Take the name, and answer for the seal.
+	option = {
+		name = cult.0320.a
+		trigger = { exists = scope:cult_mark }
+		add_piety = minor_piety_loss
+		random_list = {
+			70 = {
+				desc = cult.0320.a.success
+				modifier = { add = 10 learning >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0320.a.success
+					left_icon = scope:cult_mark
+				}
+				cult_their_exposure_gain_effect = { WHO = scope:cult_mark VALUE = 10 }
+				custom_tooltip = cult_secret_revealed_tt
+				hidden_effect = { cult_reveal_secret_to_root_effect = { WHO = scope:cult_mark } }
+			}
+			30 = {
+				desc = cult.0320.a.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0320.a.failure
+					left_icon = root
+				}
+			}
+		}
+		stress_impact = { honest = minor_stress_impact_gain }
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = paranoid }
+			modifier = { add = -20 has_trait = honest }
+		}
+	}
+
+	# Keep the seal, but have the penitent watched.
+	option = {
+		name = cult.0320.b
+		trigger = { exists = scope:cult_mark }
+		random_list = {
+			40 = {
+				desc = cult.0320.b.success
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0320.b.success
+					left_icon = scope:cult_mark
+				}
+				cult_their_exposure_gain_effect = { WHO = scope:cult_mark VALUE = 6 }
+			}
+			60 = {
+				desc = cult.0320.b.failure
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0320.b.failure
+					left_icon = root
+				}
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# The seal is sacred.
+	option = {
+		name = cult.0320.c
+		add_piety = minor_piety_gain
+		ai_chance = {
+			base = 20
+			modifier = { add = 25 has_trait = honest }
+			modifier = { add = 15 has_trait = zealous }
+		}
+	}
+}
+
+# A Desecrated Shrine: a holy place in the realm found defiled.
+cult.0321 = {
+	type = character_event
+	title = cult.0321.t
+	desc = cult.0321.desc
+	theme = faith
+	override_background = { reference = holy_site_generic }
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		cult_is_hunter_trigger = yes
+		NOT = { has_character_flag = cult_seen_0321 }
+		exists = capital_county
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_seen_0321 years = 6 }
+		random_sub_realm_county = {
+			limit = { has_county_modifier = cult_county_tainted }
+			save_scope_as = cult_shrine_county
+		}
+		if = {
+			limit = { NOT = { exists = scope:cult_shrine_county } }
+			random_sub_realm_county = {
+				limit = { faith = global_var:cult_host_faith }
+				save_scope_as = cult_shrine_county
+			}
+		}
+		if = {
+			limit = { NOT = { exists = scope:cult_shrine_county } }
+			capital_county = { save_scope_as = cult_shrine_county }
+		}
+		cult_pick_mark_in_realm_effect = yes
+	}
+
+	# Reconsecrate it.
+	option = {
+		name = cult.0321.a
+		trigger = { gold >= 50 }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = 50
+		add_piety = minor_piety_gain
+		scope:cult_shrine_county = {
+			if = {
+				limit = { has_county_modifier = cult_county_tainted }
+				remove_county_modifier = cult_county_tainted
+			}
+		}
+		custom_tooltip = cult.0321.a.tt
+		hidden_effect = { cult_rot_refresh_effect = yes }
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = zealous }
+		}
+	}
+
+	# Hunt the defilers.
+	option = {
+		name = cult.0321.b
+		trigger = { exists = scope:cult_mark }
+		random_list = {
+			50 = {
+				desc = cult.0321.b.success
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0321.b.success
+					left_icon = scope:cult_mark
+				}
+				cult_their_exposure_gain_effect = { WHO = scope:cult_mark VALUE = 8 }
+			}
+			50 = {
+				desc = cult.0321.b.failure
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0321.b.failure
+					left_icon = root
+				}
+			}
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Fine the village that let it happen.
+	option = {
+		name = cult.0321.c
+		add_gold = 20
+		add_dread = minor_dread_gain
+		stress_impact = { compassionate = minor_stress_impact_gain }
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = greedy }
+			modifier = { add = 15 has_trait = wrathful }
+		}
+	}
+}
+
+# The Priest Who Prays Wrongly: the words of the liturgy, said backwards.
+cult.0322 = {
+	type = character_event
+	title = cult.0322.t
+	desc = cult.0322.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = disbelief
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		cult_is_hunter_trigger = yes
+		NOT = { has_character_flag = cult_seen_0322 }
+		exists = capital_county
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_seen_0322 years = 6 }
+		random_sub_realm_county = {
+			limit = {
+				faith = global_var:cult_host_faith
+				NOT = { this = root.capital_county }
+			}
+			save_scope_as = cult_priest_county
+		}
+		if = {
+			limit = { NOT = { exists = scope:cult_priest_county } }
+			capital_county = { save_scope_as = cult_priest_county }
+		}
+		cult_pick_mark_in_realm_effect = yes
+	}
+
+	# Defrock him.
+	option = {
+		name = cult.0322.a
+		trigger = { gold >= 25 }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = 25
+		scope:cult_priest_county = {
+			if = {
+				limit = { has_county_modifier = cult_county_tainted }
+				remove_county_modifier = cult_county_tainted
+			}
+		}
+		custom_tooltip = cult.0322.a.tt
+		hidden_effect = { cult_rot_refresh_effect = yes }
+		ai_chance = { base = 40 }
+	}
+
+	# Ask who taught him.
+	option = {
+		name = cult.0322.b
+		trigger = { exists = scope:cult_mark }
+		random_list = {
+			50 = {
+				desc = cult.0322.b.success
+				modifier = { add = 15 learning >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0322.b.success
+					left_icon = scope:cult_mark
+				}
+				cult_their_exposure_gain_effect = { WHO = scope:cult_mark VALUE = 8 }
+			}
+			50 = {
+				desc = cult.0322.b.failure
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0322.b.failure
+					left_icon = root
+				}
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# Leave it to the bishop.
+	option = {
+		name = cult.0322.c
+		scope:cult_priest_county = {
+			add_county_modifier = {
+				modifier = cult_county_tainted
+				years = 5
+			}
+		}
+		custom_tooltip = cult.0322.c.tt
+		hidden_effect = { cult_rot_refresh_effect = yes }
+		ai_chance = {
+			base = 15
+			modifier = { add = 20 has_trait = lazy }
+			modifier = { add = 15 has_trait = content }
+		}
+	}
+}
+
+# A Witch Accused: the villagers bring a woman to the church. Guilty or not.
+cult.0323 = {
+	type = character_event
+	title = cult.0323.t
+	desc = cult.0323.desc
+	theme = witchcraft
+	override_background = { reference = village }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		cult_is_hunter_trigger = yes
+		NOT = { has_character_flag = cult_seen_0323 }
+		exists = capital_county
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_seen_0323 years = 6 }
+		random_sub_realm_county = {
+			limit = { faith = global_var:cult_host_faith }
+			save_scope_as = cult_witch_county
+		}
+		if = {
+			limit = { NOT = { exists = scope:cult_witch_county } }
+			capital_county = { save_scope_as = cult_witch_county }
+		}
+		cult_pick_mark_in_realm_effect = yes
+	}
+
+	# Try her before the church.
+	option = {
+		name = cult.0323.a
+		random_list = {
+			40 = {
+				trigger = { exists = scope:cult_mark }
+				desc = cult.0323.a.lead
+				modifier = { add = 15 learning >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0323.a.lead
+					left_icon = scope:cult_mark
+				}
+				cult_their_exposure_gain_effect = { WHO = scope:cult_mark VALUE = 8 }
+			}
+			30 = {
+				desc = cult.0323.a.innocent
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0323.a.innocent
+					left_icon = root
+					add_piety = minor_piety_gain
+				}
+			}
+			30 = {
+				desc = cult.0323.a.nothing
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0323.a.nothing
+					left_icon = root
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = just }
+			modifier = { add = 15 has_trait = zealous }
+		}
+	}
+
+	# Let the villagers deal with her.
+	option = {
+		name = cult.0323.b
+		add_dread = minor_dread_gain
+		custom_tooltip = cult.0323.b.tt
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			just = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 25 has_trait = callous }
+			modifier = { add = 20 has_trait = sadistic }
+		}
+	}
+
+	# Take her under my protection.
+	option = {
+		name = cult.0323.c
+		add_piety = minor_piety_loss
+		custom_tooltip = cult.0323.c.tt
+		stress_impact = { zealous = minor_stress_impact_gain }
+		ai_chance = {
+			base = 20
+			modifier = { add = 25 has_trait = compassionate }
+			modifier = { add = 10 has_trait = cynical }
+		}
+	}
+}
+
+# Black Candles: a servant brings what was found in a lord's private chapel.
+cult.0324 = {
+	type = character_event
+	title = cult.0324.t
+	desc = cult.0324.desc
+	theme = witchcraft
+	override_background = { reference = study }
+	left_portrait = {
+		character = root
+		animation = disgust
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_mark }
+		character = scope:cult_mark
+		animation = idle
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		cult_is_hunter_trigger = yes
+		NOT = { has_character_flag = cult_seen_0324 }
+		save_temporary_scope_as = cult_reader
+		any_in_global_list = {
+			variable = cult_roster
+			is_alive = yes
+			is_adult = yes
+			NOT = { this = scope:cult_reader }
+			any_liege_or_above = { this = scope:cult_reader }
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_seen_0324 years = 6 }
+		cult_pick_mark_in_realm_effect = yes
+	}
+
+	# Confront them with it.
+	option = {
+		name = cult.0324.a
+		trigger = {
+			exists = scope:cult_mark
+			is_imprisoned = no
+			scope:cult_mark = { is_imprisoned = no }
+		}
+		cult_examine_suspect_effect = { SUSPECT = scope:cult_mark }
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = zealous }
+		}
+	}
+
+	# Keep it, and say nothing.
+	option = {
+		name = cult.0324.b
+		trigger = { exists = scope:cult_mark }
+		cult_their_exposure_gain_effect = { WHO = scope:cult_mark VALUE = 8 }
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = patient }
+		}
+	}
+
+	# Burn it. Servants invent things.
+	option = {
+		name = cult.0324.c
+		ai_chance = {
+			base = 10
+			modifier = { add = 20 has_trait = trusting }
+		}
+	}
+}
+
+# =====================================================================================
+#  A member's year under suspicion -- cult.0330-0333 (exposure 10+)
+# =====================================================================================
+
+# Public Penance: the local priest suggests a way to quiet the talk.
+cult.0330 = {
+	type = character_event
+	title = cult.0330.t
+	desc = cult.0330.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = shame
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_seen_0330 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_seen_0330 years = 5 }
+	}
+
+	# Walk barefoot to the altar.
+	option = {
+		name = cult.0330.a
+		add_prestige = medium_prestige_loss
+		cult_exposure_loss_effect = { VALUE = 6 }
+		stress_impact = {
+			arrogant = medium_stress_impact_gain
+			base = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = humble }
+			modifier = { add = -20 has_trait = arrogant }
+		}
+	}
+
+	# Confess a lesser sin in private.
+	option = {
+		name = cult.0330.b
+		add_piety = minor_piety_loss
+		random_list = {
+			60 = {
+				desc = cult.0330.b.success
+				modifier = { add = 10 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0330.b.success
+					left_icon = root
+				}
+				cult_exposure_loss_effect = { VALUE = 3 }
+			}
+			40 = {
+				desc = cult.0330.b.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0330.b.failure
+					left_icon = root
+				}
+				cult_exposure_gain_effect = { VALUE = 2 }
+			}
+		}
+		ai_chance = { base = 35 }
+	}
+
+	# I have nothing to repent.
+	option = {
+		name = cult.0330.c
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = arrogant }
+			modifier = { add = 15 has_trait = stubborn }
+		}
+	}
+}
+
+# A Showy Donation: the church is building, and everyone will see who gave.
+cult.0331 = {
+	type = character_event
+	title = cult.0331.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_head
+					NOT = { scope:cult_head = root }
+				}
+				desc = cult.0331.desc
+			}
+			desc = cult.0331.desc_nohead
+		}
+	}
+	theme = stewardship
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:cult_head
+			NOT = { scope:cult_head = root }
+		}
+		character = scope:cult_head
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_seen_0331 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_seen_0331 years = 5 }
+	}
+
+	# A generous gift, in public.
+	option = {
+		name = cult.0331.a
+		trigger = { gold >= 100 }
+		show_as_unavailable = { always = yes }
+		if = {
+			limit = {
+				exists = scope:cult_head
+				NOT = { scope:cult_head = root }
+			}
+			pay_short_term_gold = {
+				target = scope:cult_head
+				gold = 100
+			}
+		}
+		else = {
+			remove_short_term_gold = 100
+		}
+		add_piety = minor_piety_gain
+		cult_exposure_loss_effect = { VALUE = 8 }
+		stress_impact = { greedy = medium_stress_impact_gain }
+		ai_chance = {
+			base = 40
+			modifier = { add = -25 has_trait = greedy }
+			modifier = { add = 15 has_trait = generous }
+		}
+	}
+
+	# Something for the local priest.
+	option = {
+		name = cult.0331.b
+		trigger = { gold >= 30 }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = 30
+		cult_exposure_loss_effect = { VALUE = 3 }
+		ai_chance = { base = 35 }
+	}
+
+	# Not one coin for the church.
+	option = {
+		name = cult.0331.c
+		ai_chance = {
+			base = 25
+			modifier = { add = 25 has_trait = greedy }
+		}
+	}
+}
+
+# A Scapegoat: the talk could be pointed at someone else.
+cult.0332 = {
+	type = character_event
+	title = cult.0332.t
+	desc = cult.0332.desc
+	theme = witchcraft
+	override_background = { reference = courtyard }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_scapegoat }
+		character = scope:cult_scapegoat
+		animation = idle
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_seen_0332 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_seen_0332 years = 5 }
+		if = {
+			limit = { is_ruler = yes }
+			random_courtier = {
+				limit = {
+					is_adult = yes
+					is_imprisoned = no
+					NOT = { has_trait = cult_member }
+					NOT = { is_close_family_of = root }
+					NOT = { is_spouse_of = root }
+				}
+				save_scope_as = cult_scapegoat
+			}
+		}
+	}
+
+	# Denounce the courtier.
+	option = {
+		name = cult.0332.a
+		trigger = { exists = scope:cult_scapegoat }
+		scope:cult_scapegoat = {
+			add_opinion = {
+				target = root
+				modifier = accused_crime_opinion
+			}
+			add_prestige = medium_prestige_loss
+		}
+		cult_exposure_loss_effect = { VALUE = 8 }
+		cult_corrupt_soul_effect = yes
+		stress_impact = {
+			just = medium_stress_impact_gain
+			honest = minor_stress_impact_gain
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = deceitful }
+			modifier = { add = 20 has_trait = callous }
+			modifier = { add = -20 has_trait = just }
+		}
+	}
+
+	# Point the village at the herbwoman.
+	option = {
+		name = cult.0332.b
+		cult_exposure_loss_effect = { VALUE = 4 }
+		cult_corrupt_soul_effect = yes
+		custom_tooltip = cult.0332.b.tt
+		stress_impact = { compassionate = medium_stress_impact_gain }
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = callous }
+		}
+	}
+
+	# No. I will carry it myself.
+	option = {
+		name = cult.0332.c
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = compassionate }
+			modifier = { add = 15 has_trait = just }
+		}
+	}
+}
+
+# The Chaplain Notices: your own chaplain has seen you refuse the sacrament.
+cult.0333 = {
+	type = character_event
+	title = cult.0333.t
+	desc = cult.0333.desc
+	theme = faith
+	override_background = { reference = sitting_room }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:cult_chaplain
+		animation = chaplain
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_seen_0333 }
+		exists = cp:councillor_court_chaplain
+		cp:councillor_court_chaplain = {
+			NOT = { has_trait = cult_member }
+			NOT = { this = root }
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_seen_0333 years = 5 }
+		cp:councillor_court_chaplain = { save_scope_as = cult_chaplain }
+	}
+
+	# Take the sacrament from his hands.
+	option = {
+		name = cult.0333.a
+		cult_exposure_loss_effect = { VALUE = 5 }
+		stress_impact = { base = medium_stress_impact_gain }
+		ai_chance = { base = 40 }
+	}
+
+	# Confess a lesser sin to him.
+	option = {
+		name = cult.0333.b
+		random_list = {
+			60 = {
+				desc = cult.0333.b.success
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0333.b.success
+					left_icon = scope:cult_chaplain
+				}
+				cult_exposure_loss_effect = { VALUE = 3 }
+			}
+			40 = {
+				desc = cult.0333.b.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0333.b.failure
+					left_icon = scope:cult_chaplain
+				}
+				cult_exposure_gain_effect = { VALUE = 3 }
+			}
+		}
+		ai_chance = { base = 35 }
+	}
+
+	# Be too busy for him.
+	option = {
+		name = cult.0333.c
+		random_list = {
+			50 = {
+				desc = cult.0333.c.success
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0333.c.success
+					left_icon = root
+				}
+			}
+			50 = {
+				desc = cult.0333.c.failure
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0333.c.failure
+					left_icon = scope:cult_chaplain
+				}
+				cult_exposure_gain_effect = { VALUE = 4 }
+			}
+		}
+		ai_chance = { base = 25 }
+	}
+}

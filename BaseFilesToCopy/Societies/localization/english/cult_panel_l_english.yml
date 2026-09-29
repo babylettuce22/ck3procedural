@@ -1,0 +1,36 @@
+﻿l_english:
+
+ CULT_PANEL_TITLE:0 "$cult_society_name$"
+ CULT_PANEL_AIM:0 "Sworn to #high $cult_devil_name$#!, inside #high $cult_host_name$#!, the faith that calls $cult_devil_name$ its enemy. The cult means to hollow the church out from within: turn its priests, hold its holy places, swear its head. Once it is captured, it can be turned inside out."
+ CULT_PANEL_AIM_PUBLIC:0 "Now #high $cult_society_name_public$#!. $cult_host_name$ has been turned over: $cult_unveil_list$ The cult's work is to keep it that way."
+
+ CULT_PANEL_HIEROPHANT:0 "THE HIEROPHANT"
+ CULT_PANEL_HEAD:0 "HEAD OF THE FAITH"
+ CULT_PANEL_HUNTER:0 "THE HUNTER"
+
+ CULT_PANEL_SUPPORT_LABEL:0 "ROT"
+ CULT_PANEL_LAND_LABEL:0 "HOLY SITES HELD"
+ CULT_PANEL_SUPPORT_NEXT:0 "The rot comes from holy sites in sworn hands, court chaplains who are sworn, tainted counties and the number of the Faithless; a sworn head of the faith adds #high 20#!. The church is #high captured#! when its head is sworn (or, with no head, when the Faithless hold half its holy sites). A captured church with #high 60#! rot can be unveiled."
+
+ CULT_PANEL_STANDING_LABEL:0 "STANDING"
+ CULT_RANK_0:0 "Initiate"
+ CULT_RANK_1:0 "Adept"
+ CULT_RANK_2:0 "Magister"
+ CULT_RANK_3:0 "Hierarch"
+ CULT_PANEL_FAVOUR_LABEL:0 "DARK POWER"
+ CULT_PANEL_EXPOSURE_LABEL:0 "EXPOSURE"
+
+ CULT_PANEL_NEXT_HEADER:0 "WHAT YOU CAN DO"
+ CULT_PANEL_CHARGE:0 "#weak Your charge:#! [GetPlayer.Custom('CultCurrentCharge')]"
+ CULT_PANEL_ACTION_UNVEIL:0 "The Unveiling (decision) — the Hierophant or a sworn head of the faith, church captured, 60 rot"
+ CULT_PANEL_ACTION_OFFER:0 "An Offering in the Dark (decision) — 100 gold for dark power"
+ CULT_PANEL_ACTION_MASS:0 "Hold a Black Mass (activity) — Magister or Hierophant"
+ CULT_PANEL_ACTION_DESECRATE:0 "Make a Pilgrimage of Defilement to a holy site (activity)"
+ CULT_PANEL_POWERS_HINT:0 "Right-click a character for the cult's powers: sounding out and initiating the faithless, turning priests, curses and sacrifice. Higher standing unlocks more."
+
+ CULT_PANEL_ROSTER_HEADER:0 "THE FAITHLESS YOU KNOW"
+ CULT_PANEL_ROSTER_EMPTY:0 "No one you know of. Magisters and above know the whole circle."
+ CULT_ROSTER_HEAD:0 "Head of Faith"
+ CULT_ROSTER_HIEROPHANT:0 "Hierophant"
+ CULT_ROSTER_SUSPECT:0 "whispered about"
+ CULT_ROSTER_VERY_SUSPECT:0 "suspected heretic"

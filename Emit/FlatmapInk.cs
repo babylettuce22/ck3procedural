@@ -154,13 +154,21 @@ public static class FlatmapInk
             // Measured at a round size, then scaled: advance grows in step with the size.
             var probe = new SixLabors.Fonts.TextOptions(family.CreateFont(100f)) { Tracking = tracking };
             double per100 = SixLabors.Fonts.TextMeasurer.MeasureAdvance(landmark.Name, probe).Width;
-            double cap = (landmark.Kind is "basin" or "sea" ? 30 : 24) * k;
+            bool round = landmark.Kind is "basin" or "sea";
+            double cap = (round ? 44 : 34) * k;
             double size = Math.Min(cap, 100 * 0.8 * length / Math.Max(1, per100));
             if (size < 10 * k) continue;
 
+            // Then spaced out along the line, as an old map spreads a range's name along the range:
+            // a long feature's letters stand wide apart over half its length, an arch's closer.
+            double natural = per100 * size / 100;
+            double wanted = Math.Max(natural, (round ? 0.7 : 0.5) * length);
+            int gaps = Math.Max(1, landmark.Name.Length - 1);
+            double spread = Math.Min((wanted - natural) / (gaps * size), round ? 0.5 : 2.2);
+
             var options = new SixLabors.Fonts.TextOptions(family.CreateFont((float)size))
             {
-                Tracking = tracking,
+                Tracking = tracking + (float)spread,
                 VerticalAlignment = SixLabors.Fonts.VerticalAlignment.Center,
             };
             double width = SixLabors.Fonts.TextMeasurer.MeasureAdvance(landmark.Name, options).Width;

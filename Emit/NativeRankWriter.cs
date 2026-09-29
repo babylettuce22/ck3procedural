@@ -64,9 +64,6 @@ public static class NativeRankWriter
         IReadOnlyList<string>? NameLists = null, IReadOnlyList<string>? Religions = null,
         string? Flag = null);
 
-    /// <summary>One tooltip: the concept key, its English name and its description.</summary>
-    private sealed record Concept(string Key, string Name, string Description);
-
     public static void WriteAll(string modDir, CultureMap cultures, FaithMap faiths, bool tooltips)
     {
         string entriesPath = Path.Combine(modDir, "common", "flavorization", "zz_gen_native_ranks.txt");
@@ -79,7 +76,7 @@ public static class NativeRankWriter
         var natives = cultures.Cultures.Where(c => c.NativeRanks is { IsEmpty: false }).ToList();
 
         var built = new List<Entry>();
-        var concepts = new SortedDictionary<string, Concept>(StringComparer.Ordinal);
+        var concepts = new ConceptTooltips();
         var flags = new Flags();
 
         foreach (var culture in natives) Culture(culture, built, concepts, tooltips, flags);
@@ -101,7 +98,7 @@ public static class NativeRankWriter
         foreach (var entry in entries) loc.AddBuilt(entry.Key, entry.Text);
         loc.Write(locPath);
 
-        if (tooltips) WriteConcepts(conceptsPath, conceptLocPath, concepts.Values);
+        if (tooltips) concepts.Write(conceptsPath, conceptLocPath, ConceptsComment);
         else
         {
             if (File.Exists(conceptsPath)) File.Delete(conceptsPath);
@@ -185,7 +182,7 @@ public static class NativeRankWriter
     }
 
     /// <summary>Every entry one culture's words need: by government, then each variant.</summary>
-    private static void Culture(Culture culture, List<Entry> into, IDictionary<string, Concept> concepts,
+    private static void Culture(Culture culture, List<Entry> into, ConceptTooltips concepts,
         bool tooltips, Flags flags)
     {
         var ranks = culture.NativeRanks!;
@@ -274,7 +271,7 @@ public static class NativeRankWriter
     /// borrowed word would only be its own again with a sound changed.
     /// </summary>
     private static void Sacred(Religion religion, List<Culture> natives, List<Entry> into,
-        IDictionary<string, Concept> concepts, bool tooltips)
+        ConceptTooltips concepts, bool tooltips)
     {
         if (religion.SacredRanks is not { IsEmpty: false } sacred) return;
 
@@ -333,7 +330,7 @@ public static class NativeRankWriter
     // --- Text ----------------------------------------------------------------------------------
 
     private static string Holder(NativeRanks ranks, NativeTitles.HolderRank rank, string gender, bool tooltips,
-        bool sacred, IDictionary<string, Concept> concepts)
+        bool sacred, ConceptTooltips concepts)
     {
         var word = ranks.Holders[rank.Word];
         bool female = gender == "female";
@@ -344,19 +341,17 @@ public static class NativeRankWriter
         // One concept per English style, so a Queen's tooltip says Queen; the feminine shares the
         // masculine's where English uses one word for both.
         string key = $"gen_rank_{rank.Id}{(female && rank.Female != rank.Male ? "_female" : "")}{(sacred ? "_sacred" : "")}";
-        concepts.TryAdd(key, new Concept(key, english, Describe(rank.Explanation, sacred)));
-        return Linked(key, text);
+        return concepts.Link(key, english, Describe(rank.Explanation, sacred), text);
     }
 
     private static string Realm(NativeRanks ranks, NativeTitles.RealmRank rank, bool tooltips, bool sacred,
-        IDictionary<string, Concept> concepts)
+        ConceptTooltips concepts)
     {
         string text = ranks.Realms[rank.Word];
         if (!tooltips) return text;
 
         string key = $"gen_realm_{rank.Id}{(sacred ? "_sacred" : "")}";
-        concepts.TryAdd(key, new Concept(key, rank.English, Describe(rank.Explanation, sacred)));
-        return Linked(key, text);
+        return concepts.Link(key, rank.English, Describe(rank.Explanation, sacred), text);
     }
 
     /// <summary>
@@ -369,14 +364,6 @@ public static class NativeRankWriter
         => !sacred ? explanation
          : explanation.Length > 0 ? $"{explanation} Borrowed from the faith's holy tongue."
          : "Borrowed from the faith's holy tongue.";
-
-    /// <summary>
-    /// The word as a link to its concept: shown as written, glossed on hover. A word with a quote
-    /// in it would end the argument early, so it is left plain — none of the generator's spellings
-    /// has one, and a plain word is the safe way to be wrong.
-    /// </summary>
-    private static string Linked(string concept, string word)
-        => word.Contains('\'') ? word : $"[Concept('{concept}','{word}')|E]";
 
     // --- Files ---------------------------------------------------------------------------------
 
@@ -441,31 +428,15 @@ public static class NativeRankWriter
     }
 
     /// <summary>
-    /// The tooltips: one hidden concept per English rank. Hidden because they are glosses, not
-    /// rules — an encyclopedia page for "Duke" in a list of game mechanics would be noise.
+    /// The tooltips' file header: one hidden concept per English rank, written by
+    /// <see cref="ConceptTooltips"/>. Hidden because they are glosses, not rules — an encyclopedia
+    /// page for "Duke" in a list of game mechanics would be noise.
     /// </summary>
-    private static void WriteConcepts(string path, string locPath, IEnumerable<Concept> concepts)
-    {
-        var b = new JominiBuilder();
-        b.Comment("""
+    private const string ConceptsComment = """
                   Native rank tooltips: a word in a culture's own language, glossed with the
                   English rank it stands for. Referenced from gen_native_ranks_l_english.yml as
                   [Concept('key','word')|E]. Hidden from the encyclopedia.
-                  """);
-        b.Blank();
-
-        var loc = new LocFile();
-        foreach (var concept in concepts)
-        {
-            using (b.Block(concept.Key)) b.Field("shown_in_encyclopedia", "no");
-            loc.AddBuilt($"game_concept_{concept.Key}", concept.Name);
-            loc.AddBuilt($"game_concept_{concept.Key}_desc", concept.Description);
-        }
-
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        ParadoxText.WriteBom(path, b.ToString());
-        loc.Write(locPath);
-    }
+                  """;
 
     /// <summary>
     /// The runtime half: which contract or titles-held variant a ruler is entitled to, set as a

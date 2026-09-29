@@ -1,0 +1,49 @@
+﻿# The inversion cult: everyday life in the circle. cult.0200-0299, events/cult_life_events.txt.
+#
+# cult_life_pulse is listed in cult_member_yearly (00_cult_on_actions.txt): once a year, at a random
+# point, for every living member. Most years nothing happens. A player should see one of these every
+# two or three years; an AI member only ever sees the three with a mechanical point (0203 and 0211
+# can taint a county, 0213 feeds the rot in one), and less often.
+#
+# Each event sets a cult_life_seen_NNNN flag for twelve years, so a long life does not repeat.
+# Invalid events drop out of the draw (each event gates its own phase); chance_of_no_event is taken
+# before it.
+
+cult_life_pulse = {
+	trigger = {
+		cult_active_trigger = yes
+		is_adult = yes
+		is_imprisoned = no
+	}
+	random_events = {
+		chance_of_no_event = {
+			value = 60
+			if = {
+				limit = { is_ai = yes }
+				add = 25
+			}
+		}
+
+		# Hidden and hollow: the secret years
+		100 = cult.0201	# the holy day mass
+		100 = cult.0202	# the confessor's questions
+		100 = cult.0203	# the relic in the chapel (AI too)
+		100 = cult.0204	# the pilgrim at the gate
+		100 = cult.0205	# a sign in the night
+		100 = cult.0206	# a christening in the circle
+		100 = cult.0207	# the hunter's preacher
+		100 = cult.0208	# an old member wants out
+		100 = cult.0209	# a quarrel in the circle
+		100 = cult.0210	# the burning
+		100 = cult.0211	# the rebuilding fund (AI too)
+		100 = cult.0212	# the servant and the symbol
+		100 = cult.0213	# the rot in the parish (AI too)
+		100 = cult.0214	# what you have become
+		100 = cult.0215	# the sermon (hollow only)
+
+		# Unveiled
+		100 = cult.0250	# the old faithful
+		100 = cult.0251	# zealots in the streets
+		100 = cult.0252	# was it worth it
+	}
+}

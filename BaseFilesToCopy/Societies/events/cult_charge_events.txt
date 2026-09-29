@@ -1,0 +1,814 @@
+﻿# The inversion cult: charges. cult.0500-0599.
+#
+#   0501        the Hierophant gives you a charge (accept / decline)
+#   0510-0514   a charge kept: turn a priest, taint a county, defile a holy site, an offering, recruit
+#   0520        a charge's three years ran out
+#   0530-0534   a chance to do the charge in hand, one per kind
+#
+# The state and every transition are in 00_cult_charge_effects.txt; these events only show them.
+# A charge is cleared before its ending event arrives, so the endings read the saved scopes
+# (scope:cult_charge_target, scope:cult_charge_county, scope:cult_charge_kind), not the variables.
+
+namespace = cult
+
+# =====================================================================================
+#  cult.0501 -- a charge from the Hierophant
+# =====================================================================================
+
+cult.0501 = {
+	type = character_event
+	title = cult.0501.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:cult_charge_kind ?= flag:turn_priest
+					exists = scope:cult_charge_court
+				}
+				desc = cult.0501.desc_chaplain
+			}
+			triggered_desc = {
+				trigger = { scope:cult_charge_kind ?= flag:turn_priest }
+				desc = cult.0501.desc_theocrat
+			}
+			triggered_desc = {
+				trigger = { scope:cult_charge_kind ?= flag:taint }
+				desc = cult.0501.desc_taint
+			}
+			triggered_desc = {
+				trigger = { scope:cult_charge_kind ?= flag:defile_site }
+				desc = cult.0501.desc_defile_site
+			}
+			triggered_desc = {
+				trigger = { scope:cult_charge_kind ?= flag:offering }
+				desc = cult.0501.desc_offering
+			}
+			desc = cult.0501.desc_recruit
+		}
+	}
+	theme = secret
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_hierophant }
+		character = scope:cult_hierophant
+		animation = scheme
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:cult_charge_target }
+		character = scope:cult_charge_target
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_variable = cult_charge
+		has_variable = cult_charge_given
+		exists = global_var:cult_hierophant
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_charge_save_state_effect = yes
+	}
+
+	option = {
+		name = cult.0501.a
+		if = {
+			limit = { scope:cult_charge_kind ?= flag:turn_priest }
+			custom_tooltip = cult.0501.a.turn_priest_tt
+		}
+		else_if = {
+			limit = { scope:cult_charge_kind ?= flag:taint }
+			custom_tooltip = cult.0501.a.taint_tt
+		}
+		else_if = {
+			limit = { scope:cult_charge_kind ?= flag:defile_site }
+			custom_tooltip = cult.0501.a.defile_site_tt
+		}
+		else_if = {
+			limit = { scope:cult_charge_kind ?= flag:offering }
+			custom_tooltip = cult.0501.a.offering_tt
+		}
+		else = {
+			custom_tooltip = cult.0501.a.recruit_tt
+		}
+		ai_chance = { base = 100 }
+	}
+
+	option = {
+		name = cult.0501.b
+		cult_charge_penalty_effect = { POWER = 10 }
+		custom_tooltip = cult.0501.b.tt
+		hidden_effect = {
+			if = {
+				limit = { has_variable = cult_charge }
+				cult_charge_clear_effect = yes
+			}
+		}
+		ai_chance = { base = 0 }
+	}
+}
+
+# =====================================================================================
+#  cult.0510-0514 -- a charge kept
+# =====================================================================================
+
+cult.0510 = {
+	type = character_event
+	title = cult.0510.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_charge_court }
+				desc = cult.0510.desc_chaplain
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_charge_target
+					scope:cult_charge_target = { is_landed = yes }
+				}
+				desc = cult.0510.desc
+			}
+			desc = cult.0510.desc_fallback
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_charge_target }
+		character = scope:cult_charge_target
+		animation = personality_cynical
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:cult_hierophant }
+		character = scope:cult_hierophant
+	}
+	trigger = { cult_active_trigger = yes }
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0510.a
+		cult_charge_reward_effect = { POWER = 50 XP = 15 }
+	}
+}
+
+cult.0511 = {
+	type = character_event
+	title = cult.0511.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_charge_county }
+				desc = cult.0511.desc
+			}
+			desc = cult.0511.desc_fallback
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_hierophant }
+		character = scope:cult_hierophant
+		animation = admiration
+	}
+	trigger = { cult_active_trigger = yes }
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0511.a
+		cult_charge_reward_effect = { POWER = 35 XP = 10 }
+	}
+}
+
+cult.0512 = {
+	type = character_event
+	title = cult.0512.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_charge_county }
+				desc = cult.0512.desc
+			}
+			desc = cult.0512.desc_fallback
+		}
+	}
+	theme = dread
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_hierophant }
+		character = scope:cult_hierophant
+		animation = admiration
+	}
+	trigger = { cult_active_trigger = yes }
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0512.a
+		cult_charge_reward_effect = { POWER = 60 XP = 15 }
+	}
+}
+
+cult.0513 = {
+	type = character_event
+	title = cult.0513.t
+	desc = cult.0513.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = personality_content
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_hierophant }
+		character = scope:cult_hierophant
+		animation = admiration
+	}
+	trigger = { cult_active_trigger = yes }
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0513.a
+		cult_charge_reward_effect = { POWER = 20 XP = 12 }
+	}
+}
+
+cult.0514 = {
+	type = character_event
+	title = cult.0514.t
+	desc = cult.0514.desc
+	theme = intrigue
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_hierophant }
+		character = scope:cult_hierophant
+		animation = admiration
+	}
+	trigger = { cult_active_trigger = yes }
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0514.a
+		cult_charge_reward_effect = { POWER = 40 XP = 12 }
+	}
+}
+
+# =====================================================================================
+#  cult.0520 -- the three years are up
+# =====================================================================================
+
+cult.0520 = {
+	type = character_event
+	title = cult.0520.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:cult_charge_kind ?= flag:turn_priest
+					exists = scope:cult_charge_target
+				}
+				desc = cult.0520.desc_turn_priest
+			}
+			triggered_desc = {
+				trigger = {
+					scope:cult_charge_kind ?= flag:taint
+					exists = scope:cult_charge_county
+				}
+				desc = cult.0520.desc_taint
+			}
+			triggered_desc = {
+				trigger = {
+					scope:cult_charge_kind ?= flag:defile_site
+					exists = scope:cult_charge_county
+				}
+				desc = cult.0520.desc_defile_site
+			}
+			triggered_desc = {
+				trigger = { scope:cult_charge_kind ?= flag:offering }
+				desc = cult.0520.desc_offering
+			}
+			triggered_desc = {
+				trigger = { scope:cult_charge_kind ?= flag:recruit }
+				desc = cult.0520.desc_recruit
+			}
+			desc = cult.0520.desc_fallback
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = shame
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_hierophant }
+		character = scope:cult_hierophant
+		animation = disappointed
+	}
+	trigger = { cult_active_trigger = yes }
+	immediate = { cult_save_scopes_effect = yes }
+	option = {
+		name = cult.0520.a
+		cult_charge_penalty_effect = { POWER = 15 }
+		custom_tooltip = cult.0520.a.tt
+	}
+}
+
+# =====================================================================================
+#  cult.0530 -- turn a priest: the questions after prayers
+# =====================================================================================
+
+cult.0530 = {
+	type = character_event
+	title = cult.0530.t
+	desc = cult.0530.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:cult_charge_target
+		animation = thinking
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_variable = cult_charge
+		var:cult_charge = flag:turn_priest
+		exists = var:cult_charge_target
+		var:cult_charge_target = {
+			is_alive = yes
+			is_imprisoned = no
+			NOT = { has_trait = cult_member }
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_charge_save_state_effect = yes
+	}
+
+	# Tell the truth.
+	option = {
+		name = cult.0530.a
+		random_list = {
+			30 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 15 intrigue >= 16 }
+				modifier = {
+					add = 25
+					scope:cult_charge_target = { cult_sinner_trigger = yes }
+				}
+				modifier = {
+					add = 15
+					scope:cult_charge_target = { has_trait = cynical }
+				}
+				modifier = {
+					add = 20
+					scope:cult_charge_target = {
+						opinion = {
+							target = root
+							value >= 30
+						}
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0530.success
+					left_icon = root
+					right_icon = scope:cult_charge_target
+					cult_charge_swear_priest_effect = { PRIEST = scope:cult_charge_target }
+				}
+			}
+			50 = {
+				modifier = {
+					add = 25
+					scope:cult_charge_target = { has_trait = zealous }
+				}
+				modifier = {
+					add = 15
+					scope:cult_charge_target = {
+						opinion = {
+							target = root
+							value < 0
+						}
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0530.failure
+					left_icon = root
+					right_icon = scope:cult_charge_target
+					scope:cult_charge_target = {
+						add_opinion = {
+							target = root
+							modifier = cult_refused_the_offer_opinion
+						}
+					}
+					cult_exposure_gain_effect = { VALUE = 8 }
+				}
+			}
+		}
+		hidden_effect = { cult_charge_check_effect = yes }
+		ai_chance = { base = 50 }
+	}
+
+	# Let the dark make the argument.
+	option = {
+		name = cult.0530.b
+		trigger = {
+			has_variable = cult_power
+			var:cult_power >= 30
+		}
+		cult_power_spend_effect = { VALUE = 30 }
+		cult_corrupt_soul_effect = yes
+		random_list = {
+			60 = {
+				modifier = {
+					add = 25
+					scope:cult_charge_target = { cult_sinner_trigger = yes }
+				}
+				modifier = {
+					add = 15
+					scope:cult_charge_target = { has_trait = cynical }
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0530.success
+					left_icon = root
+					right_icon = scope:cult_charge_target
+					cult_charge_swear_priest_effect = { PRIEST = scope:cult_charge_target }
+				}
+			}
+			40 = {
+				modifier = {
+					add = 25
+					scope:cult_charge_target = { has_trait = zealous }
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0530.failure
+					left_icon = root
+					right_icon = scope:cult_charge_target
+					scope:cult_charge_target = {
+						add_opinion = {
+							target = root
+							modifier = cult_refused_the_offer_opinion
+						}
+					}
+					cult_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		hidden_effect = { cult_charge_check_effect = yes }
+		ai_chance = { base = 30 }
+	}
+
+	option = {
+		name = cult.0530.c
+		custom_tooltip = cult.0530.c.tt
+		ai_chance = { base = 20 }
+	}
+}
+
+# =====================================================================================
+#  cult.0531 -- taint: the parish priest in debt
+# =====================================================================================
+
+cult.0531 = {
+	type = character_event
+	title = cult.0531.t
+	desc = cult.0531.desc
+	theme = corruption
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_hierophant }
+		character = scope:cult_hierophant
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_variable = cult_charge
+		var:cult_charge = flag:taint
+		exists = var:cult_charge_county
+		var:cult_charge_county = {
+			NOT = { has_county_modifier = cult_county_tainted }
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_charge_save_state_effect = yes
+	}
+
+	option = {
+		name = cult.0531.a
+		trigger = { gold >= 40 }
+		remove_short_term_gold = 40
+		cult_charge_taint_county_effect = { COUNTY = scope:cult_charge_county }
+		cult_exposure_gain_effect = { VALUE = 5 }
+		hidden_effect = { cult_charge_check_effect = yes }
+		ai_chance = { base = 50 }
+	}
+
+	option = {
+		name = cult.0531.b
+		trigger = {
+			has_variable = cult_power
+			var:cult_power >= 20
+		}
+		cult_power_spend_effect = { VALUE = 20 }
+		cult_corrupt_soul_effect = yes
+		cult_charge_taint_county_effect = { COUNTY = scope:cult_charge_county }
+		cult_exposure_gain_effect = { VALUE = 2 }
+		hidden_effect = { cult_charge_check_effect = yes }
+		ai_chance = { base = 20 }
+	}
+
+	option = {
+		name = cult.0531.c
+		custom_tooltip = cult.0531.c.tt
+		ai_chance = { base = 30 }
+	}
+}
+
+# =====================================================================================
+#  cult.0532 -- defile a holy site: the keeper of the shrine
+# =====================================================================================
+
+cult.0532 = {
+	type = character_event
+	title = cult.0532.t
+	desc = cult.0532.desc
+	theme = dread
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_hierophant }
+		character = scope:cult_hierophant
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_variable = cult_charge
+		var:cult_charge = flag:defile_site
+		exists = var:cult_charge_county
+		var:cult_charge_county = {
+			NOT = { has_county_modifier = cult_county_tainted }
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_charge_save_state_effect = yes
+	}
+
+	# Pay the keeper to leave the doors unbarred.
+	option = {
+		name = cult.0532.a
+		trigger = { gold >= 100 }
+		remove_short_term_gold = 100
+		random_list = {
+			70 = {
+				modifier = { add = 10 intrigue >= 14 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0532.success
+					left_icon = root
+					cult_charge_taint_county_effect = { COUNTY = scope:cult_charge_county }
+					cult_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0532.failure
+					left_icon = root
+					custom_tooltip = cult.0532.failure.tt
+					cult_exposure_gain_effect = { VALUE = 12 }
+				}
+			}
+		}
+		hidden_effect = { cult_charge_check_effect = yes }
+		ai_chance = { base = 50 }
+	}
+
+	# Send the Faithless in with the dark to hide them.
+	option = {
+		name = cult.0532.b
+		trigger = {
+			has_variable = cult_power
+			var:cult_power >= 40
+		}
+		cult_power_spend_effect = { VALUE = 40 }
+		cult_corrupt_soul_effect = yes
+		random_list = {
+			85 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0532.success
+					left_icon = root
+					cult_charge_taint_county_effect = { COUNTY = scope:cult_charge_county }
+					cult_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+			15 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0532.failure
+					left_icon = root
+					custom_tooltip = cult.0532.failure.tt
+					cult_exposure_gain_effect = { VALUE = 10 }
+				}
+			}
+		}
+		hidden_effect = { cult_charge_check_effect = yes }
+		ai_chance = { base = 20 }
+	}
+
+	option = {
+		name = cult.0532.c
+		custom_tooltip = cult.0532.c.tt
+		ai_chance = { base = 30 }
+	}
+}
+
+# =====================================================================================
+#  cult.0533 -- the offering: the chapel silver
+# =====================================================================================
+
+cult.0533 = {
+	type = character_event
+	title = cult.0533.t
+	desc = cult.0533.desc
+	theme = witchcraft
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_variable = cult_charge
+		var:cult_charge = flag:offering
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_charge_save_state_effect = yes
+	}
+
+	# Melt it as it is.
+	option = {
+		name = cult.0533.a
+		cult_power_gain_effect = { VALUE = 40 }
+		add_piety = -50
+		cult_exposure_gain_effect = { VALUE = 5 }
+		cult_corrupt_soul_effect = yes
+		hidden_effect = { cult_charge_check_effect = yes }
+		ai_chance = { base = 30 }
+	}
+
+	# Have it copied in tin first, so the altar is never bare.
+	option = {
+		name = cult.0533.b
+		trigger = { gold >= 60 }
+		remove_short_term_gold = 60
+		cult_power_gain_effect = { VALUE = 40 }
+		cult_exposure_gain_effect = { VALUE = 1 }
+		cult_corrupt_soul_effect = yes
+		hidden_effect = { cult_charge_check_effect = yes }
+		ai_chance = { base = 50 }
+	}
+
+	option = {
+		name = cult.0533.c
+		custom_tooltip = cult.0533.c.tt
+		ai_chance = { base = 20 }
+	}
+}
+
+# =====================================================================================
+#  cult.0534 -- recruit: a likely sinner
+# =====================================================================================
+
+cult.0534 = {
+	type = character_event
+	title = cult.0534.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:cult_charge_recruit = { cult_sinner_trigger = yes } }
+				desc = cult.0534.desc_sinner
+			}
+			desc = cult.0534.desc
+		}
+	}
+	theme = intrigue
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:cult_charge_recruit
+		animation = thinking
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_variable = cult_charge
+		var:cult_charge = flag:recruit
+		OR = {
+			any_vassal = { cult_charge_recruit_candidate_trigger = yes }
+			any_courtier = {
+				is_adult = yes
+				cult_charge_recruit_candidate_trigger = yes
+			}
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_charge_pick_recruit_effect = yes
+	}
+
+	option = {
+		name = cult.0534.a
+		random_list = {
+			40 = {
+				modifier = {
+					add = 30
+					scope:cult_charge_recruit = {
+						opinion = {
+							target = root
+							value >= 30
+						}
+					}
+				}
+				modifier = {
+					add = 30
+					scope:cult_charge_recruit = { cult_sinner_trigger = yes }
+				}
+				modifier = { add = 10 intrigue >= 14 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0534.a.success
+					left_icon = root
+					right_icon = scope:cult_charge_recruit
+					scope:cult_charge_recruit = {
+						cult_swear_in_effect = { RANK = 0 }
+						add_opinion = {
+							target = root
+							modifier = cult_brought_me_in_opinion
+						}
+					}
+				}
+			}
+			60 = {
+				modifier = {
+					add = 30
+					scope:cult_charge_recruit = {
+						opinion = {
+							target = root
+							value < 0
+						}
+					}
+				}
+				modifier = {
+					add = 20
+					scope:cult_charge_recruit = { has_trait = zealous }
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0534.a.failure
+					left_icon = root
+					right_icon = scope:cult_charge_recruit
+					scope:cult_charge_recruit = {
+						add_character_flag = {
+							flag = cult_refused_recently
+							years = 5
+						}
+						add_opinion = {
+							target = root
+							modifier = cult_refused_the_offer_opinion
+						}
+					}
+					cult_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		hidden_effect = { cult_charge_check_effect = yes }
+		ai_chance = { base = 60 }
+	}
+
+	option = {
+		name = cult.0534.b
+		ai_chance = { base = 40 }
+	}
+}

@@ -4,7 +4,7 @@
 
  restor_charge_line_win_over:0 "Win over [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetTitledFirstName] to House $restor_house_name$ [ROOT.Char.Custom('RestorChargeDeadline')]"
  restor_charge_line_war_chest:0 "Give 100 gold to the cause [ROOT.Char.Custom('RestorChargeDeadline')]"
- restor_charge_line_stir:0 "Stir the old loyalties in [ROOT.Char.MakeScope.Var('restor_charge_target').Title.GetNameNoTier] [ROOT.Char.Custom('RestorChargeDeadline')]"
+ restor_charge_line_stir:0 "Stir the old loyalties in [ROOT.Char.MakeScope.Var('restor_charge_county').Title.GetNameNoTier] [ROOT.Char.Custom('RestorChargeDeadline')]"
  restor_charge_line_shelter:0 "Bring [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetTitledFirstName] to your court [ROOT.Char.Custom('RestorChargeDeadline')]"
  restor_charge_line_recruit:0 "Swear someone new into $restor_society_name$ [ROOT.Char.Custom('RestorChargeDeadline')]"
  restor_charge_line_none:0 "No charge from the Keeper."
@@ -21,11 +21,11 @@
  # ---- Decisions ---------------------------------------------------------------------------------
 
  restor_stir_the_county_decision:0 "Stir the Old Loyalties"
- restor_stir_the_county_decision_desc:0 "The Keeper has asked you to stir [ROOT.Char.MakeScope.Var('restor_charge_target').Title.GetNameNoTier]. Pay a few priests and headmen to say House $restor_house_name$'s name again, and to keep saying it."
- restor_stir_the_county_decision_tooltip:0 "Stir [ROOT.Char.MakeScope.Var('restor_charge_target').Title.GetNameNoTier] for House $restor_house_name$."
+ restor_stir_the_county_decision_desc:0 "The Keeper has asked you to stir [ROOT.Char.MakeScope.Var('restor_charge_county').Title.GetNameNoTier]. Pay a few priests and headmen to say House $restor_house_name$'s name again, and to keep saying it."
+ restor_stir_the_county_decision_tooltip:0 "Stir [ROOT.Char.MakeScope.Var('restor_charge_county').Title.GetNameNoTier] for House $restor_house_name$."
  restor_stir_the_county_decision_confirm:0 "Pay them"
- restor_stir_the_county_reach_tt:0 "You hold [ROOT.Char.MakeScope.Var('restor_charge_target').Title.GetNameNoTier], a county next to it or a county of the same duchy, or you are there in person"
- restor_stir_the_county_not_stirred_tt:0 "[ROOT.Char.MakeScope.Var('restor_charge_target').Title.GetNameNoTier] is not stirred already"
+ restor_stir_the_county_reach_tt:0 "You hold [ROOT.Char.MakeScope.Var('restor_charge_county').Title.GetNameNoTier], a county next to it or a county of the same duchy, or you are there in person"
+ restor_stir_the_county_not_stirred_tt:0 "[ROOT.Char.MakeScope.Var('restor_charge_county').Title.GetNameNoTier] is not stirred already"
 
  restor_speak_for_the_heir_decision:0 "Speak for the Heir"
  restor_speak_for_the_heir_decision_desc:0 "The Keeper wants [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetTitledFirstName] on the side of House $restor_house_name$. Write to [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetHerHim], visit, flatter, remind [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetHerHim] of what the old kings did for [ROOT.Char.MakeScope.Var('restor_charge_target').Char.GetHerHis] family. A little at a time."

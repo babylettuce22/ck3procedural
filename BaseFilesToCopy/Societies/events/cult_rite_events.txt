@@ -1,0 +1,1719 @@
+﻿namespace = cult
+
+# The inversion cult: the Black Mass and the Pilgrimage of Defilement. cult.0900-0999.
+#
+# THE BLACK MASS (common/activities/activity_types/00_cult_mass_activity.txt)
+#   0901   host, day 1       The Black Mass: what the Mass is for (Invoke, Profane, Initiate)
+#   0902   host              The Profanation: which counties to taint
+#   0903   host              The Initiation: raise one of the circle, or swear in a courtier
+#   0904   host, day 6       An Empty Place: judge a member who was asked and stayed away
+#   0905   each guest        Arrival: who is in the chapel, and who is not
+#   0906   each guest        what the host decided
+#   0907   the absentee      named before the circle, or excused
+#   0908   host, half the time, secret phases only   Talk in Town
+#
+# THE PILGRIMAGE OF DEFILEMENT (common/activities/activity_types/00_cult_defilement_activity.txt)
+#   0910   host, day 1       Setting Out: the pilgrim's robe
+#   0911   each guest        On the Pilgrim Road
+#   0912   host, day 10      Among the Faithful: careful or hasty
+#   0913   host, day 18      Seen at the Shrine: the site's priest, or the hunter's people
+#   0914   host, day 26      Home: the ONLY event of the Pilgrimage that pays
+#   0915   host              The Stolen Relic: burn it, or "find" it
+#   0916   the site's holder (a player)   The Shrine Defiled / A Relic Stolen
+#
+# scope:activity and scope:host ride along from the activity's phase block. Every read of
+# scope:activity is guarded (`?=`, or `exists`), so any of these can be fired from the DebugPanel
+# outside an activity: each then degrades to the host alone.
+
+# =====================================================================================
+#  THE BLACK MASS
+# =====================================================================================
+
+# ---- cult.0901 -- The Black Mass ---------------------------------------------------------------
+#
+# The host chooses the purpose after seeing who came: Profane needs host-faith land in or next to
+# the chapel's lords, Initiate needs somebody to raise or a courtier to bring. Invoke is always
+# there. A member who stayed away is judged on day six (cult.0904) whatever is chosen.
+cult.0901 = {
+	type = character_event
+	title = cult.0901.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:cult_mass_count > 0
+					cult_unveiled_trigger = yes
+				}
+				desc = cult.0901.desc_open
+			}
+			triggered_desc = {
+				trigger = { scope:cult_mass_count > 0 }
+				desc = cult.0901.desc
+			}
+			desc = cult.0901.desc_alone
+		}
+		triggered_desc = {
+			trigger = { exists = scope:cult_absentee }
+			desc = cult.0901.desc_absent
+		}
+		desc = cult.0901.desc_end
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_absentee }
+		character = scope:cult_absentee
+		animation = worry
+	}
+	trigger = { cult_active_trigger = yes }
+
+	immediate = {
+		cult_save_scopes_effect = yes
+
+		save_scope_value_as = {
+			name = cult_mass_count
+			value = {
+				value = 0
+				if = {
+					limit = { exists = scope:activity }
+					scope:activity = {
+						every_attending_character = {
+							limit = { NOT = { this = root } }
+							add = 1
+						}
+					}
+				}
+			}
+		}
+
+		# Who is here.
+		if = {
+			limit = { exists = scope:activity }
+			scope:activity = {
+				every_attending_character = { add_to_list = cult_mass_present }
+			}
+		}
+
+		# Who was asked and is not. The activity's own record first; failing that, a sworn member
+		# of the host's court or realm.
+		if = {
+			limit = {
+				exists = scope:activity
+				scope:activity = { has_variable_list = cult_mass_invited }
+			}
+			scope:activity = {
+				random_in_list = {
+					variable = cult_mass_invited
+					limit = {
+						is_alive = yes
+						has_trait = cult_member
+						NOT = { this = root }
+						NOT = { is_in_list = cult_mass_present }
+					}
+					save_scope_as = cult_absentee
+				}
+			}
+		}
+		if = {
+			limit = { NOT = { exists = scope:cult_absentee } }
+			random_courtier = {
+				limit = {
+					is_adult = yes
+					has_trait = cult_member
+					NOT = { is_in_list = cult_mass_present }
+				}
+				save_scope_as = cult_absentee
+			}
+		}
+		if = {
+			limit = { NOT = { exists = scope:cult_absentee } }
+			random_vassal_or_below = {
+				limit = {
+					is_adult = yes
+					has_trait = cult_member
+					NOT = { is_in_list = cult_mass_present }
+				}
+				save_scope_as = cult_absentee
+			}
+		}
+
+		# Whether the Profanation has anywhere to reach, and the Initiation anyone to raise.
+		cult_mass_profane_lists_effect = yes
+		cult_mass_profane_counts_effect = yes
+		cult_mass_find_initiates_effect = yes
+	}
+
+	# Invoke.
+	option = {
+		name = cult.0901.a
+		custom_tooltip = cult.0901.a.tt
+		cult_mass_invoke_effect = { POWER = 20 XP = 3 }
+		hidden_effect = {
+			cult_mass_tell_guests_effect = { PURPOSE = invoke }
+			if = {
+				limit = { exists = scope:cult_absentee }
+				trigger_event = { id = cult.0904 days = 6 }
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = ambitious }
+			modifier = { add = 20 has_trait = arrogant }
+		}
+	}
+
+	# Profane.
+	option = {
+		name = cult.0901.b
+		trigger = {
+			OR = {
+				scope:cult_profane_own_count > 0
+				scope:cult_profane_near_count > 0
+			}
+		}
+		custom_tooltip = cult.0901.b.tt
+		hidden_effect = {
+			trigger_event = { id = cult.0902 days = 2 }
+			if = {
+				limit = { exists = scope:cult_absentee }
+				trigger_event = { id = cult.0904 days = 6 }
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = callous }
+			modifier = { add = 20 has_trait = sadistic }
+			modifier = { add = -20 has_trait = craven }
+		}
+	}
+
+	# Initiate.
+	option = {
+		name = cult.0901.c
+		trigger = {
+			OR = {
+				exists = scope:cult_mass_candidate
+				exists = scope:cult_mass_recruit
+			}
+		}
+		custom_tooltip = cult.0901.c.tt
+		hidden_effect = {
+			trigger_event = { id = cult.0903 days = 2 }
+			if = {
+				limit = { exists = scope:cult_absentee }
+				trigger_event = { id = cult.0904 days = 6 }
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = gregarious }
+			modifier = { add = 20 cult_is_hierophant_trigger = yes }
+		}
+	}
+}
+
+# ---- cult.0902 -- The Profanation --------------------------------------------------------------
+#
+# One county per landed member at the Mass (one at least, five at most), chosen from the host
+# faith's counties that are not yet tainted. Their own land is the safer choice and costs their own
+# subjects' goodwill; their neighbours' land costs someone else that goodwill, and the host a good
+# deal more exposure.
+cult.0902 = {
+	type = character_event
+	title = cult.0902.t
+	desc = cult.0902.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = personality_callous
+	}
+	trigger = { cult_active_trigger = yes }
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_profane_lists_effect = yes
+		cult_mass_profane_counts_effect = yes
+	}
+
+	# Our own land.
+	option = {
+		name = cult.0902.a
+		trigger = { scope:cult_profane_own_count > 0 }
+		custom_tooltip = cult.0902.a.tt
+		cult_exposure_gain_effect = { VALUE = 2 }
+		hidden_effect = {
+			cult_mass_profane_lists_effect = yes
+			cult_mass_taint_list_effect = { LIST = cult_mass_own }
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = cult.0902.toast
+				left_icon = root
+				custom_tooltip = cult.0902.toast.tt
+			}
+			cult_mass_tell_guests_effect = { PURPOSE = profane }
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 20 has_trait = craven }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Our neighbours' land.
+	option = {
+		name = cult.0902.b
+		trigger = { scope:cult_profane_near_count > 0 }
+		custom_tooltip = cult.0902.b.tt
+		cult_exposure_gain_effect = { VALUE = 5 }
+		hidden_effect = {
+			cult_mass_profane_lists_effect = yes
+			cult_mass_taint_list_effect = { LIST = cult_mass_near }
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = cult.0902.toast
+				left_icon = root
+				custom_tooltip = cult.0902.toast.tt
+			}
+			cult_mass_tell_guests_effect = { PURPOSE = profane }
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 25 has_trait = brave }
+			modifier = { add = 15 has_trait = ambitious }
+		}
+	}
+
+	# Not yet.
+	option = {
+		name = cult.0902.c
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 2
+		}
+		hidden_effect = {
+			cult_mass_tell_guests_effect = { PURPOSE = quiet }
+		}
+		ai_chance = {
+			base = 10
+			modifier = { add = 30 has_trait = craven }
+		}
+	}
+}
+
+# ---- cult.0903 -- The Initiation ---------------------------------------------------------------
+#
+# scope:cult_mass_candidate and scope:cult_mass_recruit come from cult.0901 (found again here if the
+# event was fired from the console). The recruit is a courtier the host brought down to the chapel
+# under some pretext; sworn in on the spot, they owe the host for it.
+cult.0903 = {
+	type = character_event
+	title = cult.0903.t
+	desc = {
+		desc = cult.0903.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_mass_candidate }
+				desc = cult.0903.desc_candidate
+			}
+			desc = cult.0903.desc_nocandidate
+		}
+		triggered_desc = {
+			trigger = { exists = scope:cult_mass_recruit }
+			desc = cult.0903.desc_recruit
+		}
+		desc = cult.0903.desc_end
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_mass_candidate }
+		character = scope:cult_mass_candidate
+		animation = happiness
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:cult_mass_recruit }
+		character = scope:cult_mass_recruit
+	}
+	trigger = { cult_active_trigger = yes }
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		if = {
+			limit = {
+				NOT = { exists = scope:cult_mass_candidate }
+				NOT = { exists = scope:cult_mass_recruit }
+			}
+			cult_mass_find_initiates_effect = yes
+		}
+	}
+
+	# Raise them.
+	option = {
+		name = cult.0903.a
+		trigger = {
+			exists = scope:cult_mass_candidate
+			scope:cult_mass_candidate = { is_alive = yes }
+		}
+		scope:cult_mass_candidate = {
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = 15
+			}
+			add_opinion = {
+				target = root
+				modifier = cult_raised_before_the_circle_opinion
+			}
+			hidden_effect = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0903.a.toast
+					left_icon = root
+					right_icon = scope:cult_mass_candidate
+				}
+			}
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 3
+		}
+		hidden_effect = {
+			cult_mass_tell_guests_effect = { PURPOSE = raised }
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = generous }
+			modifier = { add = -30 has_trait = ambitious }
+		}
+	}
+
+	# Swear in the courtier.
+	option = {
+		name = cult.0903.b
+		trigger = {
+			exists = scope:cult_mass_recruit
+			scope:cult_mass_recruit = {
+				is_alive = yes
+				cult_recruitable_trigger = yes
+			}
+		}
+		scope:cult_mass_recruit = {
+			cult_swear_in_effect = { RANK = 0 }
+			add_opinion = {
+				target = root
+				modifier = cult_brought_me_in_opinion
+			}
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 5
+		}
+		cult_exposure_gain_effect = { VALUE = 2 }
+		hidden_effect = {
+			cult_mass_tell_guests_effect = { PURPOSE = sworn }
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 20 has_trait = ambitious }
+			modifier = { add = -30 has_trait = paranoid }
+		}
+	}
+
+	# Raise yourself.
+	option = {
+		name = cult.0903.c
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 15
+		}
+		if = {
+			limit = { exists = scope:activity }
+			scope:activity = {
+				every_attending_character = {
+					limit = { NOT = { this = root } }
+					add_opinion = {
+						target = root
+						modifier = disappointed_opinion
+						opinion = -10
+					}
+				}
+			}
+		}
+		hidden_effect = {
+			cult_mass_tell_guests_effect = { PURPOSE = self }
+		}
+		stress_impact = {
+			humble = medium_stress_impact_gain
+			generous = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 40 has_trait = ambitious }
+			modifier = { add = 25 has_trait = arrogant }
+			modifier = { add = -40 has_trait = humble }
+		}
+	}
+
+	# Nobody.
+	option = {
+		name = cult.0903.d
+		hidden_effect = {
+			cult_mass_tell_guests_effect = { PURPOSE = quiet }
+		}
+		ai_chance = {
+			base = 5
+		}
+	}
+}
+
+# ---- cult.0904 -- An Empty Place ---------------------------------------------------------------
+#
+# scope:cult_absentee comes from cult.0901. Naming them costs the absent member standing and makes
+# an enemy of them; letting it go earns some gratitude. Either way the absentee is told (cult.0907).
+cult.0904 = {
+	type = character_event
+	title = cult.0904.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_absentee
+					scope:cult_absentee = { is_alive = yes }
+				}
+				desc = cult.0904.desc
+			}
+			desc = cult.0904.desc_none
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = disapproval
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_absentee }
+		character = scope:cult_absentee
+		animation = shame
+	}
+	trigger = { cult_active_trigger = yes }
+
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	# Name them.
+	option = {
+		name = cult.0904.a
+		trigger = {
+			exists = scope:cult_absentee
+			scope:cult_absentee = { is_alive = yes }
+		}
+		scope:cult_absentee = {
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = -15
+			}
+			add_opinion = {
+				target = root
+				modifier = cult_shamed_before_the_circle_opinion
+			}
+		}
+		add_opinion = {
+			target = scope:cult_absentee
+			modifier = cult_failed_charge_opinion
+		}
+		if = {
+			limit = { exists = scope:activity }
+			scope:activity = {
+				every_attending_character = {
+					limit = {
+						NOT = { this = root }
+						has_trait = cult_member
+					}
+					add_trait_xp = {
+						trait = cult_member
+						track = cult_rank
+						value = 3
+					}
+				}
+			}
+		}
+		hidden_effect = {
+			save_scope_value_as = { name = cult_judged_harshly value = yes }
+			scope:cult_absentee = { trigger_event = { id = cult.0907 days = 5 } }
+		}
+		stress_impact = {
+			forgiving = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = vengeful }
+			modifier = { add = 15 has_trait = arbitrary }
+			modifier = { add = -40 has_trait = forgiving }
+		}
+	}
+
+	# Let it go.
+	option = {
+		name = cult.0904.b
+		trigger = {
+			exists = scope:cult_absentee
+			scope:cult_absentee = { is_alive = yes }
+		}
+		scope:cult_absentee = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 10
+			}
+		}
+		hidden_effect = {
+			scope:cult_absentee = { trigger_event = { id = cult.0907 days = 5 } }
+		}
+		stress_impact = {
+			vengeful = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 40 has_trait = forgiving }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Nobody to judge. `fallback`, so the event can never render with no way to close it.
+	option = {
+		name = cult.0904.c
+		fallback = yes
+	}
+}
+
+# ---- cult.0905 -- Arrival (each guest) ---------------------------------------------------------
+cult.0905 = {
+	type = character_event
+	title = cult.0905.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:host }
+				desc = cult.0905.desc
+			}
+			desc = cult.0905.desc_nohost
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_hierophant
+					exists = scope:host
+					NOT = { scope:cult_hierophant = scope:host }
+					NOT = { scope:cult_hierophant = root }
+					exists = scope:activity
+					scope:activity = {
+						any_attending_character = { this = scope:cult_hierophant }
+					}
+				}
+				desc = cult.0905.desc_hierophant_here
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_hierophant
+					exists = scope:host
+					NOT = { scope:cult_hierophant = scope:host }
+					NOT = { scope:cult_hierophant = root }
+				}
+				desc = cult.0905.desc_hierophant_away
+			}
+		}
+		triggered_desc = {
+			trigger = {
+				exists = scope:cult_head
+				NOT = { scope:cult_head = root }
+				exists = scope:activity
+				scope:activity = {
+					any_attending_character = { this = scope:cult_head }
+				}
+			}
+			desc = cult.0905.desc_head_here
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_unveiled_trigger = yes }
+				desc = cult.0905.desc_end_open
+			}
+			desc = cult.0905.desc_end
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:host }
+		character = scope:host
+		animation = scheme
+	}
+	trigger = { cult_active_trigger = yes }
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		save_scope_value_as = {
+			name = cult_mass_count
+			value = {
+				value = 0
+				if = {
+					limit = { exists = scope:activity }
+					scope:activity = {
+						every_attending_character = {
+							limit = { NOT = { this = root } }
+							add = 1
+						}
+					}
+				}
+			}
+		}
+	}
+
+	# Say the responses loudest of all.
+	option = {
+		name = cult.0905.a
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 3
+		}
+		cult_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = ambitious }
+			modifier = { add = 20 has_trait = zealous }
+		}
+	}
+
+	# Keep to the back.
+	option = {
+		name = cult.0905.b
+		cult_exposure_loss_effect = { VALUE = 1 }
+		stress_impact = {
+			shy = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 40 has_trait = paranoid }
+			modifier = { add = 25 has_trait = shy }
+		}
+	}
+}
+
+# ---- cult.0906 -- What the Mass was for (each guest) ---------------------------------------------
+cult.0906 = {
+	type = character_event
+	title = cult.0906.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:activity.var:cult_mass_purpose ?= flag:invoke }
+				desc = cult.0906.desc_invoke
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity.var:cult_mass_purpose ?= flag:profane
+					exists = scope:cult_tainted_now
+				}
+				desc = cult.0906.desc_profane
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity.var:cult_mass_purpose ?= flag:raised
+					exists = scope:cult_mass_candidate
+					NOT = { scope:cult_mass_candidate = root }
+				}
+				desc = cult.0906.desc_raised
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity.var:cult_mass_purpose ?= flag:raised
+					exists = scope:cult_mass_candidate
+				}
+				desc = cult.0906.desc_raised_you
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity.var:cult_mass_purpose ?= flag:sworn
+					exists = scope:cult_mass_recruit
+				}
+				desc = cult.0906.desc_sworn
+			}
+			triggered_desc = {
+				trigger = { scope:activity.var:cult_mass_purpose ?= flag:self }
+				desc = cult.0906.desc_self
+			}
+			desc = cult.0906.desc_quiet
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = { exists = scope:host }
+		character = scope:host
+		animation = personality_bold
+	}
+	trigger = {
+		cult_active_trigger = yes
+		exists = scope:host
+		exists = scope:activity
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+	option = {
+		name = cult.0906.a
+	}
+}
+
+# ---- cult.0907 -- Named Before the Circle (the absentee) ------------------------------------------
+cult.0907 = {
+	type = character_event
+	title = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_judged_harshly }
+				desc = cult.0907.t
+			}
+			desc = cult.0907.t_forgiven
+		}
+	}
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_judged_harshly }
+				desc = cult.0907.desc
+			}
+			desc = cult.0907.desc_forgiven
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = shame
+	}
+	right_portrait = {
+		trigger = { exists = scope:host }
+		character = scope:host
+		animation = disapproval
+	}
+	trigger = {
+		cult_active_trigger = yes
+		has_trait = cult_member
+		exists = scope:host
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	# Apologise, with a gift.
+	option = {
+		name = cult.0907.a
+		trigger = {
+			exists = scope:cult_judged_harshly
+			gold >= 25
+		}
+		pay_short_term_gold = {
+			target = scope:host
+			gold = 25
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 5
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = humble }
+			modifier = { add = -30 has_trait = arrogant }
+		}
+	}
+
+	# Let them think what they like.
+	option = {
+		name = cult.0907.b
+		trigger = { exists = scope:cult_judged_harshly }
+		stress_impact = {
+			humble = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = arrogant }
+			modifier = { add = 20 has_trait = stubborn }
+		}
+	}
+
+	# Excused.
+	option = {
+		name = cult.0907.c
+		trigger = { NOT = { exists = scope:cult_judged_harshly } }
+	}
+}
+
+# ---- cult.0908 -- Talk in Town (host, half the time, secret phases only) ------------------------
+#
+# Lights in the chapel at midnight, singing heard from under the floor, riders arriving after dark.
+# The host decides what the town is told; the story may or may not hold, and either way the host
+# is told which.
+cult.0908 = {
+	type = character_event
+	title = cult.0908.t
+	desc = {
+		desc = cult.0908.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_hunter }
+				desc = cult.0908.desc_hunter
+			}
+			desc = cult.0908.desc_nohunter
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	trigger = { cult_secret_phase_trigger = yes }
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	# A vigil for the dead.
+	option = {
+		name = cult.0908.a
+		random_list = {
+			60 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 15 intrigue >= 16 }
+				modifier = { add = 10 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0908.a.success
+					left_icon = root
+					custom_tooltip = cult.0908.a.success.tt
+				}
+			}
+			40 = {
+				modifier = { add = 15 has_trait = honest }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0908.a.failure
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = deceitful }
+			modifier = { add = -30 has_trait = honest }
+		}
+	}
+
+	# Pay them to talk about something else.
+	option = {
+		name = cult.0908.b
+		trigger = { gold >= 25 }
+		remove_short_term_gold = 25
+		custom_tooltip = cult.0908.b.tt
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = paranoid }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Let them talk.
+	option = {
+		name = cult.0908.c
+		cult_exposure_gain_effect = { VALUE = 2 }
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = brave }
+		}
+	}
+}
+
+# =====================================================================================
+#  THE PILGRIMAGE OF DEFILEMENT
+# =====================================================================================
+#
+# The purpose is the planner's option (cult_defilement_purpose). Every event reads it in the order
+# relic -> sign -> defile, with defile as the bare fallback, so a missing option can never produce
+# an empty desc. The beats set character flags; only cult.0914 reads them and pays.
+#
+#   cult_defilement_careful / cult_defilement_hasty     set at 0912
+#   cult_defilement_clean / cult_defilement_abandoned   set at 0913
+#   var:cult_defilement_witness                         the witness, set at 0913 when there is one
+#
+# All are cleared at the top of 0914 after being copied into saved scope values, so a later
+# Pilgrimage can never be paid by an earlier one's flags.
+
+# ---- cult.0910 -- Setting Out --------------------------------------------------------------------
+cult.0910 = {
+	type = character_event
+	title = cult.0910.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = cult_defilement_purpose option = cult_defilement_relic }
+					}
+				}
+				desc = cult.0910.desc_relic
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = cult_defilement_purpose option = cult_defilement_sign }
+					}
+				}
+				desc = cult.0910.desc_sign
+			}
+			desc = cult.0910.desc_defile
+		}
+	}
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	trigger = { cult_active_trigger = yes }
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		# Nothing from an earlier Pilgrimage survives into this one.
+		remove_character_flag = cult_defilement_careful
+		remove_character_flag = cult_defilement_hasty
+		remove_character_flag = cult_defilement_clean
+		remove_character_flag = cult_defilement_abandoned
+		remove_variable = cult_defilement_witness
+	}
+	option = {
+		name = cult.0910.a
+		custom_tooltip = cult.0910.a.tt
+	}
+}
+
+# ---- cult.0911 -- On the Pilgrim Road (each guest) -------------------------------------------------
+cult.0911 = {
+	type = character_event
+	title = cult.0911.t
+	desc = cult.0911.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:host }
+		character = scope:host
+		animation = scheme
+	}
+	trigger = {
+		cult_active_trigger = yes
+		exists = scope:host
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+	}
+	option = {
+		name = cult.0911.a
+		custom_tooltip = cult.0911.a.tt
+	}
+}
+
+# ---- cult.0912 -- Among the Faithful ----------------------------------------------------------------
+cult.0912 = {
+	type = character_event
+	title = cult.0912.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = cult_defilement_purpose option = cult_defilement_relic }
+					}
+				}
+				desc = cult.0912.desc_relic
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = cult_defilement_purpose option = cult_defilement_sign }
+					}
+				}
+				desc = cult.0912.desc_sign
+			}
+			desc = cult.0912.desc_defile
+		}
+	}
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = prayer
+	}
+	trigger = { cult_active_trigger = yes }
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+	}
+
+	# Carefully.
+	option = {
+		name = cult.0912.a
+		add_character_flag = {
+			flag = cult_defilement_careful
+			months = 6
+		}
+		custom_tooltip = cult.0912.a.tt
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = patient }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Quickly.
+	option = {
+		name = cult.0912.b
+		add_character_flag = {
+			flag = cult_defilement_hasty
+			months = 6
+		}
+		custom_tooltip = cult.0912.b.tt
+		stress_impact = {
+			patient = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 40 has_trait = impatient }
+			modifier = { add = 20 has_trait = brave }
+		}
+	}
+}
+
+# ---- cult.0913 -- Seen at the Shrine -----------------------------------------------------------------
+#
+# Someone sees more than they should. First choice: the priest of the site's own lord (the site's
+# holder's court chaplain). Failing that, one of the hunter's people on the pilgrimage. Failing that,
+# one of the site's lord's courtiers. The witness is remembered on the host
+# (var:cult_defilement_witness) so cult.0914 can decide whether they talk.
+cult.0913 = {
+	type = character_event
+	title = cult.0913.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_witness
+					exists = scope:cult_witness_priest
+					exists = scope:cult_defilement_county.holder
+				}
+				desc = cult.0913.desc_priest
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_witness
+					exists = scope:cult_witness_hunter
+					exists = scope:cult_hunter
+				}
+				desc = cult.0913.desc_hunter
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:cult_witness
+					exists = scope:cult_defilement_county.holder
+				}
+				desc = cult.0913.desc_named
+			}
+			desc = cult.0913.desc_unnamed
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_character_flag = cult_defilement_careful }
+				desc = cult.0913.desc_careful
+			}
+			desc = cult.0913.desc_hasty
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_witness }
+		character = scope:cult_witness
+		animation = disbelief
+	}
+	trigger = { cult_active_trigger = yes }
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+
+		# The site's own priest.
+		if = {
+			limit = {
+				exists = scope:cult_defilement_county
+				exists = scope:cult_defilement_county.holder
+				scope:cult_defilement_county.holder = {
+					NOT = { this = root }
+					exists = cp:councillor_court_chaplain
+					cp:councillor_court_chaplain = {
+						is_adult = yes
+						NOT = { has_trait = cult_member }
+						NOT = { this = root }
+					}
+				}
+			}
+			scope:cult_defilement_county.holder.cp:councillor_court_chaplain = { save_scope_as = cult_witness }
+			save_scope_value_as = { name = cult_witness_priest value = yes }
+		}
+		# One of the hunter's people, walking with the pilgrims.
+		if = {
+			limit = {
+				NOT = { exists = scope:cult_witness }
+				exists = scope:cult_hunter
+				NOT = { scope:cult_hunter = root }
+			}
+			scope:cult_hunter = {
+				random_courtier = {
+					limit = {
+						is_adult = yes
+						NOT = { has_trait = cult_member }
+						NOT = { this = root }
+					}
+					save_scope_as = cult_witness
+				}
+			}
+			if = {
+				limit = { exists = scope:cult_witness }
+				save_scope_value_as = { name = cult_witness_hunter value = yes }
+			}
+		}
+		# Someone at the site's lord's court.
+		if = {
+			limit = {
+				NOT = { exists = scope:cult_witness }
+				exists = scope:cult_defilement_county
+				exists = scope:cult_defilement_county.holder
+				scope:cult_defilement_county.holder = {
+					NOT = { this = root }
+					NOT = { has_trait = cult_member }
+				}
+			}
+			scope:cult_defilement_county.holder = {
+				random_courtier = {
+					limit = {
+						is_adult = yes
+						NOT = { has_trait = cult_member }
+						NOT = { this = root }
+					}
+					save_scope_as = cult_witness
+				}
+			}
+		}
+		if = {
+			limit = { exists = scope:cult_witness }
+			set_variable = {
+				name = cult_defilement_witness
+				value = scope:cult_witness
+				months = 6
+			}
+		}
+	}
+
+	# Deal with it quietly (careful only).
+	option = {
+		name = cult.0913.a
+		trigger = { has_character_flag = cult_defilement_careful }
+		add_character_flag = {
+			flag = cult_defilement_clean
+			months = 6
+		}
+		custom_tooltip = cult.0913.clean.tt
+		ai_chance = {
+			base = 80
+		}
+	}
+
+	# Pay them.
+	option = {
+		name = {
+			trigger = { exists = scope:cult_witness }
+			text = cult.0913.b
+		}
+		name = {
+			trigger = { NOT = { exists = scope:cult_witness } }
+			text = cult.0913.b_unnamed
+		}
+		trigger = { gold >= 30 }
+		if = {
+			limit = { exists = scope:cult_witness }
+			pay_short_term_gold = {
+				target = scope:cult_witness
+				gold = 30
+			}
+		}
+		else = {
+			remove_short_term_gold = 30
+		}
+		add_character_flag = {
+			flag = cult_defilement_clean
+			months = 6
+		}
+		custom_tooltip = cult.0913.clean.tt
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = generous }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Press on (hasty only).
+	option = {
+		name = cult.0913.c
+		trigger = { NOT = { has_character_flag = cult_defilement_careful } }
+		custom_tooltip = cult.0913.c.tt
+		stress_impact = {
+			paranoid = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = brave }
+		}
+	}
+
+	# Turn back.
+	option = {
+		name = cult.0913.d
+		add_character_flag = {
+			flag = cult_defilement_abandoned
+			months = 6
+		}
+		custom_tooltip = cult.0913.d.tt
+		ai_chance = {
+			base = 5
+			modifier = { add = 40 has_trait = craven }
+		}
+	}
+}
+
+# ---- cult.0914 -- Home -----------------------------------------------------------------------------
+#
+# The only event of the Pilgrimage that pays. Exposure:
+#
+#   the purpose       Defile 4, Relic 3, Sign 1
+#   haste             +2
+#   the witness       left unhandled: +3, and even odds that they talk (+3 more, and they learn the
+#                     secret if the member has one)
+#   turned back       1 in all, and nothing paid
+#
+# Haste buys a bigger result: a second county tainted, more power and a heavier loss for the site's
+# lord, a stronger sign.
+cult.0914 = {
+	type = character_event
+	title = cult.0914.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_abandoned }
+				desc = cult.0914.desc_abandoned
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = cult_defilement_purpose option = cult_defilement_relic }
+					}
+				}
+				desc = cult.0914.desc_relic
+			}
+			triggered_desc = {
+				trigger = {
+					scope:activity ?= {
+						has_activity_option = { category = cult_defilement_purpose option = cult_defilement_sign }
+					}
+				}
+				desc = cult.0914.desc_sign
+			}
+			desc = cult.0914.desc_defile
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_abandoned }
+				desc = cult.0914.desc_blank
+			}
+			triggered_desc = {
+				trigger = { exists = scope:cult_clean }
+				desc = cult.0914.desc_clean
+			}
+			desc = cult.0914.desc_messy
+		}
+	}
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:cult_witness
+			NOT = { exists = scope:cult_clean }
+			NOT = { exists = scope:cult_abandoned }
+		}
+		character = scope:cult_witness
+		animation = scheme
+	}
+	trigger = { cult_active_trigger = yes }
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+
+		# Snapshot, then clear. The options read the saved values, never the flags.
+		if = {
+			limit = { has_character_flag = cult_defilement_abandoned }
+			save_scope_value_as = { name = cult_abandoned value = yes }
+		}
+		if = {
+			limit = { has_character_flag = cult_defilement_clean }
+			save_scope_value_as = { name = cult_clean value = yes }
+		}
+		if = {
+			limit = { has_character_flag = cult_defilement_hasty }
+			save_scope_value_as = { name = cult_hasty value = yes }
+		}
+		if = {
+			limit = {
+				exists = var:cult_defilement_witness
+				var:cult_defilement_witness = { is_alive = yes }
+			}
+			var:cult_defilement_witness = { save_scope_as = cult_witness }
+		}
+		remove_character_flag = cult_defilement_careful
+		remove_character_flag = cult_defilement_hasty
+		remove_character_flag = cult_defilement_clean
+		remove_character_flag = cult_defilement_abandoned
+		remove_variable = cult_defilement_witness
+	}
+
+	# ---- Turned back ----
+	option = {
+		name = cult.0914.a
+		trigger = { exists = scope:cult_abandoned }
+		custom_tooltip = cult.0914.a.tt
+		cult_exposure_gain_effect = { VALUE = 1 }
+	}
+
+	# ---- Defiled the shrine ----
+	option = {
+		name = cult.0914.b
+		trigger = {
+			NOT = { exists = scope:cult_abandoned }
+			NOR = {
+				scope:activity ?= {
+					has_activity_option = { category = cult_defilement_purpose option = cult_defilement_relic }
+				}
+				scope:activity ?= {
+					has_activity_option = { category = cult_defilement_purpose option = cult_defilement_sign }
+				}
+			}
+		}
+		if = {
+			limit = { exists = scope:cult_defilement_county }
+			scope:cult_defilement_county = {
+				add_county_modifier = {
+					modifier = cult_county_tainted
+					years = 10
+				}
+			}
+			if = {
+				limit = { exists = scope:cult_hasty }
+				custom_tooltip = cult.0914.b.hasty_tt
+				hidden_effect = {
+					scope:cult_defilement_county = {
+						random_neighboring_county = {
+							limit = {
+								faith = global_var:cult_host_faith
+								NOT = { has_county_modifier = cult_county_tainted }
+							}
+							add_county_modifier = {
+								modifier = cult_county_tainted
+								years = 10
+							}
+						}
+					}
+				}
+			}
+		}
+		custom_tooltip = cult.0914.rot_tt
+		hidden_effect = { cult_rot_refresh_effect = yes }
+		cult_power_gain_effect = { VALUE = 15 }
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 8
+		}
+		cult_corrupt_soul_effect = yes
+		cult_exposure_gain_effect = { VALUE = 4 }
+		cult_defilement_consequences_effect = yes
+		hidden_effect = {
+			cult_defilement_tell_holder_effect = { WHAT = defile }
+		}
+	}
+
+	# ---- Stole a relic ----
+	option = {
+		name = cult.0914.c
+		trigger = {
+			NOT = { exists = scope:cult_abandoned }
+			scope:activity ?= {
+				has_activity_option = { category = cult_defilement_purpose option = cult_defilement_relic }
+			}
+		}
+		if = {
+			limit = { exists = scope:cult_hasty }
+			cult_power_gain_effect = { VALUE = 45 }
+		}
+		else = {
+			cult_power_gain_effect = { VALUE = 30 }
+		}
+		if = {
+			limit = {
+				exists = scope:cult_defilement_county.holder
+				NOT = { scope:cult_defilement_county.holder = root }
+			}
+			scope:cult_defilement_county.holder = {
+				if = {
+					limit = { exists = scope:cult_hasty }
+					add_piety = -150
+				}
+				else = {
+					add_piety = -100
+				}
+			}
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 8
+		}
+		cult_corrupt_soul_effect = yes
+		cult_exposure_gain_effect = { VALUE = 3 }
+		cult_defilement_consequences_effect = yes
+		hidden_effect = {
+			trigger_event = { id = cult.0915 days = 2 }
+			cult_defilement_tell_holder_effect = { WHAT = relic }
+		}
+	}
+
+	# ---- Left a sign ----
+	option = {
+		name = cult.0914.d
+		trigger = {
+			NOT = { exists = scope:cult_abandoned }
+			scope:activity ?= {
+				has_activity_option = { category = cult_defilement_purpose option = cult_defilement_sign }
+			}
+		}
+		if = {
+			limit = { exists = scope:cult_hasty }
+			cult_power_gain_effect = { VALUE = 15 }
+		}
+		else = {
+			cult_power_gain_effect = { VALUE = 10 }
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 6
+		}
+		cult_exposure_gain_effect = { VALUE = 1 }
+		cult_defilement_consequences_effect = yes
+	}
+}
+
+# ---- cult.0915 -- The Stolen Relic -----------------------------------------------------------------
+#
+# The relic is in the host's baggage. Burn it before the devil, or bring it back to the shrine and
+# be thanked for finding it.
+cult.0915 = {
+	type = character_event
+	title = cult.0915.t
+	desc = cult.0915.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:cult_defilement_county.holder
+			NOT = { scope:cult_defilement_county.holder = root }
+		}
+		character = scope:cult_defilement_county.holder
+		animation = worry
+	}
+	trigger = { cult_active_trigger = yes }
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	# Burn it.
+	option = {
+		name = cult.0915.a
+		cult_power_gain_effect = { VALUE = 15 }
+		cult_corrupt_soul_effect = yes
+		stress_impact = {
+			zealous = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = callous }
+			modifier = { add = 20 has_trait = sadistic }
+		}
+	}
+
+	# "Find" it.
+	option = {
+		name = cult.0915.b
+		add_piety = 100
+		cult_exposure_loss_effect = { VALUE = 2 }
+		if = {
+			limit = {
+				exists = scope:cult_defilement_county.holder
+				NOT = { scope:cult_defilement_county.holder = root }
+			}
+			scope:cult_defilement_county.holder = {
+				add_opinion = {
+					target = root
+					modifier = grateful_opinion
+					opinion = 15
+				}
+			}
+		}
+		stress_impact = {
+			honest = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = deceitful }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+}
+
+# ---- cult.0916 -- The Shrine Defiled / A Relic Stolen (the site's holder, a player) ----------------
+#
+# scope:cult_defiler, scope:cult_defiled_what and scope:cult_defilement_county from cult.0914 (via
+# cult_defilement_tell_holder_effect). The holder never learns who it was; a search only finds the
+# trail if the pilgrim left one (scope:cult_clean unset).
+cult.0916 = {
+	type = character_event
+	title = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:cult_defiled_what ?= flag:relic }
+				desc = cult.0916.t_relic
+			}
+			desc = cult.0916.t_defile
+		}
+	}
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:cult_defiled_what ?= flag:relic }
+				desc = cult.0916.desc_relic
+			}
+			desc = cult.0916.desc_defile
+		}
+	}
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = rage
+	}
+	trigger = {
+		cult_active_trigger = yes
+		exists = scope:cult_defilement_county
+		exists = scope:cult_defiler
+		NOT = { has_trait = cult_member }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+	}
+
+	# Find whoever did this.
+	option = {
+		name = cult.0916.a
+		if = {
+			limit = { exists = scope:cult_clean }
+			custom_tooltip = cult.0916.a.cold_tt
+		}
+		else = {
+			custom_tooltip = cult.0916.a.trail_tt
+			hidden_effect = {
+				scope:cult_defiler = { cult_exposure_gain_effect = { VALUE = 2 } }
+			}
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = zealous }
+		}
+	}
+
+	# Have the shrine purified (defiled only).
+	option = {
+		name = cult.0916.b
+		trigger = {
+			NOT = { scope:cult_defiled_what ?= flag:relic }
+			gold >= 50
+			scope:cult_defilement_county = { has_county_modifier = cult_county_tainted }
+		}
+		remove_short_term_gold = 50
+		scope:cult_defilement_county = {
+			remove_county_modifier = cult_county_tainted
+		}
+		hidden_effect = { cult_rot_refresh_effect = yes }
+		ai_chance = {
+			base = 30
+		}
+	}
+
+	# Pray.
+	option = {
+		name = cult.0916.c
+		ai_chance = {
+			base = 20
+		}
+	}
+}

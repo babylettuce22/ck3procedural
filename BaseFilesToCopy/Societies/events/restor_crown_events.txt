@@ -69,6 +69,7 @@ restor.0702 = {
 		animation = personality_bold
 	}
 	trigger = {
+		is_ai = no
 		exists = scope:restor_king
 		NOT = { this = scope:restor_king }
 	}
@@ -126,6 +127,7 @@ restor.0712 = {
 		trigger = { exists = global_var:restor_crown.holder }
 		character = global_var:restor_crown.holder
 	}
+	trigger = { is_ai = no }	# informational
 	option = {
 		name = restor.0712.a
 	}
@@ -157,6 +159,7 @@ restor.0801 = {
 		character = scope:restor_new_holder
 		animation = personality_bold
 	}
+	trigger = { is_ai = no }	# informational
 	immediate = { restor_save_scopes_effect = yes }
 	option = {
 		name = restor.0801.a
@@ -196,7 +199,10 @@ restor.0810 = {
 		}
 		character = scope:restor_pretender
 	}
-	trigger = { exists = global_var:restor_pretender }
+	trigger = {
+		is_ai = no
+		exists = global_var:restor_pretender
+	}
 	immediate = { restor_save_scopes_effect = yes }
 	option = {
 		name = restor.0810.a
@@ -334,7 +340,10 @@ restor.0820 = {
 		}
 		character = scope:restor_keeper
 	}
-	trigger = { exists = global_var:restor_keeper }
+	trigger = {
+		is_ai = no
+		exists = global_var:restor_keeper
+	}
 	immediate = { restor_save_scopes_effect = yes }
 	option = {
 		name = restor.0820.a

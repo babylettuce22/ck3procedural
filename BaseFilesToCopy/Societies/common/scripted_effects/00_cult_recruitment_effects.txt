@@ -1,0 +1,407 @@
+﻿# The inversion cult: recruitment. Sounding out, offering the oath, and the answers. cult.0100-0199.
+#
+# The Restorationists' courtship in two steps, turned to the cult's purpose. First a member SOUNDS
+# OUT a soul of the host faith -- the answer is sympathetic, cold, or dangerous. Then, to the
+# sympathetic (or on an Adept's own judgement) the member OFFERS THE OATH -- accepted, refused, or
+# reported. The host's sins pull toward the circle; its virtues push away (00_cult_recruitment_values).
+#
+# One set of odds, in one place. Whoever asks -- a player through the interaction, an AI member
+# through the interaction or the yearly pulse -- the answer comes from:
+#   a PLAYER being asked     their own choice, in cult.0101 / cult.0110
+#   an AI being asked        the rolls below, weighted by cult_recruit_pull_value / _push_value
+# and is then applied by the answer effects, which tell a PLAYER recruiter by event and settle an AI
+# recruiter's side silently. So an AI asking an AI raises no event at all.
+#
+# Scopes, set by whoever starts the exchange and carried through every event of it:
+#   scope:cult_recruiter   the member asking
+#   scope:cult_recruit     the one being asked
+#   scope:cult_confessor   whom the one being asked would take a warning or a report to: their own
+#                          (or their liege's) court chaplain, else the hunter. May be one of the
+#                          circle without the recruit knowing. See cult_recruit_find_confessor_effect.
+
+# =====================================================================================
+#  Starting an exchange -- scope:cult_recruiter and scope:cult_recruit already saved
+# =====================================================================================
+
+cult_sound_out_start_effect = {
+	scope:cult_recruit = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = cult.0101 days = { 3 10 } }
+		}
+		else = {
+			cult_sound_out_roll_effect = yes
+		}
+	}
+}
+
+cult_offer_oath_start_effect = {
+	scope:cult_recruit = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = cult.0110 days = { 3 10 } }
+		}
+		else = {
+			cult_offer_oath_roll_effect = yes
+		}
+	}
+}
+
+# =====================================================================================
+#  Whom a warning goes to -- THIS is the one being asked
+# =====================================================================================
+#
+# A priest first: the chaplain of their own court, else of their liege's. Never the recruit or the
+# recruiter themselves. Failing a priest, the hunter. Saved as scope:cult_confessor, or not at all.
+
+cult_recruit_find_confessor_effect = {
+	if = {
+		limit = {
+			exists = cp:councillor_court_chaplain
+			NOT = { cp:councillor_court_chaplain = scope:cult_recruit }
+			NOT = { cp:councillor_court_chaplain = scope:cult_recruiter }
+		}
+		cp:councillor_court_chaplain = { save_scope_as = cult_confessor }
+	}
+	else_if = {
+		limit = {
+			exists = liege
+			liege = {
+				exists = cp:councillor_court_chaplain
+				NOT = { cp:councillor_court_chaplain = scope:cult_recruit }
+				NOT = { cp:councillor_court_chaplain = scope:cult_recruiter }
+			}
+		}
+		liege = {
+			cp:councillor_court_chaplain = { save_scope_as = cult_confessor }
+		}
+	}
+	else_if = {
+		limit = {
+			exists = global_var:cult_hunter
+			NOT = { global_var:cult_hunter = scope:cult_recruit }
+			NOT = { global_var:cult_hunter = scope:cult_recruiter }
+		}
+		global_var:cult_hunter = { save_scope_as = cult_confessor }
+	}
+}
+
+# =====================================================================================
+#  The AI's answers -- THIS is the one being asked
+# =====================================================================================
+
+cult_sound_out_roll_effect = {
+	save_scope_as = cult_recruit
+	random_list = {
+		10 = {
+			modifier = { add = cult_recruit_pull_value }
+			cult_sound_out_sympathetic_effect = yes
+		}
+		35 = {
+			modifier = {
+				add = 15
+				has_trait = content
+			}
+			modifier = {
+				add = 10
+				has_trait = craven
+			}
+			cult_sound_out_cold_effect = yes
+		}
+		5 = {
+			modifier = { add = cult_recruit_push_value }
+			cult_sound_out_dangerous_effect = yes
+		}
+	}
+}
+
+cult_offer_oath_roll_effect = {
+	save_scope_as = cult_recruit
+	random_list = {
+		5 = {
+			modifier = { add = cult_recruit_pull_value }
+			modifier = {
+				add = 50
+				has_character_flag = cult_sounded_sympathetic
+			}
+			cult_oath_accepted_effect = yes
+		}
+		30 = {
+			modifier = {
+				add = 15
+				has_trait = content
+			}
+			modifier = {
+				add = 10
+				has_trait = craven
+			}
+			modifier = {
+				add = 30
+				has_trait = zealous
+			}
+			cult_oath_refused_effect = yes
+		}
+		0 = {
+			modifier = { add = cult_recruit_report_value }
+			cult_oath_reported_effect = yes
+		}
+	}
+}
+
+# =====================================================================================
+#  The answers to being sounded out -- THIS is the one who was asked
+# =====================================================================================
+
+cult_sound_out_sympathetic_effect = {
+	save_scope_as = cult_recruit
+	add_character_flag = {
+		flag = cult_sounded_sympathetic
+		years = 5
+	}
+	scope:cult_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = cult.0102 days = { 5 12 } }
+		}
+	}
+	# An AI member who has found a willing player does not leave them waiting: the offer follows.
+	if = {
+		limit = {
+			is_ai = no
+			scope:cult_recruiter = { is_ai = yes }
+		}
+		trigger_event = { id = cult.0110 days = { 20 40 } }
+	}
+}
+
+cult_sound_out_cold_effect = {
+	save_scope_as = cult_recruit
+	scope:cult_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = cult.0103 days = { 5 12 } }
+		}
+		else = {
+			cult_exposure_gain_effect = { VALUE = 2 }
+		}
+	}
+}
+
+# A warning: they say they will take it to their priest or to the hunter.
+cult_sound_out_dangerous_effect = {
+	save_scope_as = cult_recruit
+	cult_recruit_find_confessor_effect = yes
+	scope:cult_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = cult.0104 days = { 5 12 } }
+		}
+		else = {
+			cult_exposure_gain_effect = { VALUE = cult_recruit_warning_exposure_value }
+		}
+	}
+}
+
+# =====================================================================================
+#  The answers to the oath -- THIS is the one who was asked
+# =====================================================================================
+
+cult_oath_accepted_effect = {
+	save_scope_as = cult_recruit
+	cult_swear_in_effect = { RANK = 0 }
+	if = {
+		limit = { has_character_flag = cult_sounded_sympathetic }
+		remove_character_flag = cult_sounded_sympathetic
+	}
+	add_opinion = {
+		target = scope:cult_recruiter
+		modifier = cult_brought_me_in_opinion
+	}
+	if = {
+		limit = { is_ai = no }
+		trigger_event = { id = cult.0115 days = 2 }
+	}
+	scope:cult_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = cult.0111 days = { 3 8 } }
+		}
+		else = {
+			cult_recruiter_reward_effect = yes
+		}
+	}
+	cult_recruit_sworn_chaplain_effect = yes
+}
+
+cult_oath_refused_effect = {
+	save_scope_as = cult_recruit
+	cult_recruit_turned_away_effect = yes
+	scope:cult_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = cult.0112 days = { 3 8 } }
+		}
+		else = {
+			cult_exposure_gain_effect = { VALUE = 15 }
+			# Half of the AI buy the silence when they can afford to, as a player can in cult.0112.
+			if = {
+				limit = { gold >= medium_gold_value }
+				random = {
+					chance = 50
+					pay_short_term_gold = {
+						target = scope:cult_recruit
+						gold = medium_gold_value
+					}
+					cult_exposure_loss_effect = { VALUE = 10 }
+				}
+			}
+		}
+	}
+}
+
+cult_oath_reported_effect = {
+	save_scope_as = cult_recruit
+	cult_recruit_turned_away_effect = yes
+	cult_recruit_find_confessor_effect = yes
+	scope:cult_recruiter = {
+		if = {
+			limit = { is_ai = no }
+			trigger_event = { id = cult.0113 days = { 3 8 } }
+		}
+		else = {
+			cult_exposure_gain_effect = { VALUE = cult_recruit_report_exposure_value }
+		}
+	}
+}
+
+# What a refusal leaves on the one who refused, either way.
+cult_recruit_turned_away_effect = {
+	if = {
+		limit = { has_character_flag = cult_sounded_sympathetic }
+		remove_character_flag = cult_sounded_sympathetic
+	}
+	add_character_flag = {
+		flag = cult_refused_recently
+		years = 5
+	}
+	add_opinion = {
+		target = scope:cult_recruiter
+		modifier = cult_refused_the_offer_opinion
+	}
+}
+
+# =====================================================================================
+#  After an oath -- THIS is the new member
+# =====================================================================================
+
+# A chaplain sworn changes the rot at once: every confession in that court now goes to the circle.
+cult_recruit_sworn_chaplain_effect = {
+	if = {
+		limit = { cult_recruit_is_chaplain_trigger = yes }
+		cult_rot_refresh_effect = yes
+	}
+}
+
+# =====================================================================================
+#  The recruiter's reward -- THIS is the recruiter; scope:cult_recruit is the new member
+# =====================================================================================
+
+cult_recruiter_reward_effect = {
+	if = {
+		limit = {
+			exists = scope:cult_recruit
+			scope:cult_recruit = { cult_recruit_is_chaplain_trigger = yes }
+		}
+		cult_power_gain_effect = { VALUE = 40 }
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 12
+		}
+		cult_exposure_gain_effect = { VALUE = 8 }
+	}
+	else = {
+		cult_power_gain_effect = { VALUE = 25 }
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 8
+		}
+		cult_exposure_gain_effect = { VALUE = 5 }
+	}
+	# A count of everyone this member has sworn in, for the recruit charge and anything else that
+	# wants to know. Read with has_variable first.
+	hidden_effect = {
+		if = {
+			limit = { NOT = { has_variable = cult_recruits } }
+			set_variable = { name = cult_recruits value = 0 }
+		}
+		change_variable = { name = cult_recruits add = 1 }
+	}
+}
+
+# =====================================================================================
+#  Finding someone to ask -- scope:cult_recruiter saved
+# =====================================================================================
+
+# Fills the temporary list cult_candidates: rulers of the host faith within reach, and the court
+# chaplains who keep their consciences.
+cult_recruit_gather_candidates_effect = {
+	every_ruler = {
+		limit = { faith = global_var:cult_host_faith }
+		if = {
+			limit = { cult_recruit_candidate_trigger = yes }
+			add_to_temporary_list = cult_candidates
+		}
+		if = {
+			limit = {
+				exists = cp:councillor_court_chaplain
+				cp:councillor_court_chaplain = {
+					NOT = { is_in_list = cult_candidates }
+					cult_recruit_candidate_trigger = yes
+				}
+			}
+			cp:councillor_court_chaplain = { add_to_temporary_list = cult_candidates }
+		}
+	}
+}
+
+# An AI member's approach, from the yearly pulse. THIS is the recruiter. Picks one candidate,
+# weighted toward the likeliest, and takes the next step with them: the oath to someone already
+# known to be sympathetic, else a sounding-out. A player candidate gets the events; an AI one the
+# roll. Either way the recruiter waits three years before trying again.
+cult_recruit_ai_approach_effect = {
+	save_scope_as = cult_recruiter
+	cult_recruit_gather_candidates_effect = yes
+	random_in_list = {
+		list = cult_candidates
+		weight = {
+			base = 1
+			modifier = { add = cult_recruit_candidate_value }
+		}
+		save_scope_as = cult_recruit
+		scope:cult_recruiter = {
+			add_character_flag = {
+				flag = cult_recruited_lately
+				years = 3
+			}
+		}
+		if = {
+			limit = { has_character_flag = cult_sounded_sympathetic }
+			cult_offer_oath_start_effect = yes
+		}
+		else = {
+			cult_sound_out_start_effect = yes
+		}
+	}
+}
+
+# The unveiled church: THIS joins it openly. No oath in the dark, no exposure.
+cult_recruit_join_church_effect = {
+	cult_swear_in_effect = { RANK = 0 }
+	if = {
+		limit = { has_character_flag = cult_sounded_sympathetic }
+		remove_character_flag = cult_sounded_sympathetic
+	}
+	cult_recruit_sworn_chaplain_effect = yes
+}

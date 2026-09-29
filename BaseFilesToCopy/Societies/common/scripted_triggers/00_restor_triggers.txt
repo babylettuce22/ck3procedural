@@ -65,6 +65,7 @@ restor_can_succeed_trigger = {
 # (at any depth of their realm) some of the crown's land -- or wearing the crown itself.
 restor_valid_usurper_trigger = {
 	is_alive = yes
+	NOT = { has_character_flag = about_to_die_but_not_dead_yet_flag }
 	NOT = { restor_of_the_blood_trigger = yes }
 	NOT = { restor_is_pretender_trigger = yes }
 	NOT = { has_trait = restor_member }
@@ -97,6 +98,7 @@ restor_recruitable_trigger = {
 	is_adult = yes
 	is_imprisoned = no
 	NOT = { has_trait = restor_member }
+	NOT = { has_trait = cult_member }
 	NOT = { restor_is_usurper_trigger = yes }
 	NOT = { has_character_flag = restor_refused_recently }
 }

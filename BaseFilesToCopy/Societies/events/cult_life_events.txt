@@ -1,0 +1,2061 @@
+﻿# The inversion cult: everyday life in the circle. cult.0200-0299.
+#
+# Fired by cult_life_pulse (common/on_action/00_cult_life_on_actions.txt), once a year at most and
+# usually not at all. These are what it is like to worship the Adversary inside a pious court: the
+# forms of the church kept every day by people who mean none of it, and what that costs them.
+#
+#   Hidden and hollow (secret)
+#   0201   the holy day mass; the sacrament from a priest who may be sworn                   (random)
+#   0202   your confessor asks questions you cannot answer                                    (random)
+#   0203   a relic of the high god in your chapel -- AI too                                   (random)
+#   0204   a pilgrim at the gate, bound for a shrine the circle holds                         (random)
+#   0205   a sign in the night, or a dream                                                    (random)
+#   0206   a member asks you to stand sponsor at a christening
+#   0207   the hunter's preacher comes to your court                                          (random)
+#   0208   an old member wants to leave the circle                                            (random)
+#   0209   two of the Faithless quarrel over who serves the dark better                       (random)
+#   0210   a heretic is burned in the square, and the circle watches                          (random)
+#   0211   the bishop asks for money to rebuild the house of worship -- AI too                (random)
+#   0212   a servant finds an inverted symbol among your things                               (random)
+#   0213   the rot reaches a parish of yours -- AI too
+#   0214   a quiet night: what you have become; stay, or walk away                            (random)
+#   0215   hollow only: the sworn head of the faith preaches                                  (random)
+#
+#   Unveiled
+#   0250   one of the old faithful at your court will not kneel
+#   0251   zealots of the old faith riot in your capital                                      (random)
+#   0252   was it worth it                                                                    (random)
+#
+# Every option with a roll ends each branch in a toast. Each event's immediate sets a twelve-year
+# cult_life_seen_NNNN flag that its trigger reads, so a long life does not repeat itself. Anything
+# that changes the map (a county tainted, a chaplain sworn) is followed by cult_rot_refresh_effect.
+
+namespace = cult
+
+# =====================================================================================
+#  cult.0201 -- The Holy Day
+# =====================================================================================
+
+cult.0201 = {
+	type = character_event
+	title = cult.0201.t
+	desc = {
+		desc = cult.0201.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_life_chaplain }
+				desc = cult.0201.desc_sworn_priest
+			}
+			desc = cult.0201.desc_priest
+		}
+	}
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = prayer
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_life_chaplain }
+		character = scope:cult_life_chaplain
+		animation = chaplain
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_ai = no
+		exists = global_var:cult_host_faith
+		NOT = { has_character_flag = cult_life_seen_0201 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0201 years = 12 }
+		cp:councillor_court_chaplain ?= {
+			if = {
+				limit = { has_trait = cult_member }
+				save_scope_as = cult_life_chaplain
+			}
+		}
+	}
+
+	# Take it, and mean none of it.
+	option = {
+		name = cult.0201.a
+		add_piety = minor_piety_gain
+		cult_exposure_loss_effect = { VALUE = 2 }
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+	}
+
+	# Take it, and say the other words.
+	option = {
+		name = cult.0201.b
+		cult_power_gain_effect = { VALUE = 10 }
+		cult_corrupt_soul_effect = yes
+		random_list = {
+			75 = {
+				modifier = { add = 20 exists = scope:cult_life_chaplain }
+				modifier = { add = 10 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0201.b.unheard
+					left_icon = root
+					custom_tooltip = cult.0201.b.unheard.tt
+				}
+			}
+			25 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0201.b.heard
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+	}
+
+	# A fever, and bed.
+	option = {
+		name = cult.0201.c
+		add_piety = minor_piety_loss
+		random_list = {
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0201.c.believed
+					left_icon = root
+					custom_tooltip = cult.0201.c.believed.tt
+				}
+			}
+			40 = {
+				modifier = { add = 20 has_trait = zealous }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0201.c.noted
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0202 -- The Confessor's Questions
+# =====================================================================================
+
+cult.0202 = {
+	type = character_event
+	title = cult.0202.t
+	desc = cult.0202.desc
+	theme = faith
+	override_background = { reference = study }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:cult_life_confessor
+		animation = chaplain
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_ai = no
+		exists = cp:councillor_court_chaplain
+		cp:councillor_court_chaplain = {
+			is_ai = yes
+			NOT = { has_trait = cult_member }
+		}
+		NOT = { has_character_flag = cult_life_seen_0202 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0202 years = 12 }
+		cp:councillor_court_chaplain = { save_scope_as = cult_life_confessor }
+	}
+
+	# Lie, and lie well.
+	option = {
+		name = cult.0202.a
+		random_list = {
+			60 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 15 has_trait = deceitful }
+				modifier = { add = -20 has_trait = honest }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0202.a.satisfied
+					left_icon = scope:cult_life_confessor
+					custom_tooltip = cult.0202.a.satisfied.tt
+				}
+			}
+			40 = {
+				modifier = { add = 15 scope:cult_life_confessor = { learning >= 15 } }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0202.a.doubts
+					left_icon = scope:cult_life_confessor
+					cult_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		stress_impact = {
+			honest = medium_stress_impact_gain
+		}
+	}
+
+	# Give them a smaller sin.
+	option = {
+		name = cult.0202.b
+		add_piety = minor_piety_gain
+		add_prestige = minor_prestige_loss
+		cult_exposure_loss_effect = { VALUE = 2 }
+		stress_impact = {
+			arrogant = minor_stress_impact_gain
+		}
+	}
+
+	# Bring the confessor into the circle.
+	option = {
+		name = cult.0202.c
+		trigger = {
+			scope:cult_life_confessor = { cult_recruitable_trigger = yes }
+		}
+		random_list = {
+			35 = {
+				modifier = { add = 20 scope:cult_life_confessor = { cult_sinner_trigger = yes } }
+				modifier = { add = 15 scope:cult_life_confessor = { has_trait = cynical } }
+				modifier = { add = 10 scope:cult_life_confessor = { opinion = { target = root value >= 50 } } }
+				modifier = { add = -25 scope:cult_life_confessor = { has_trait = zealous } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0202.c.sworn
+					left_icon = scope:cult_life_confessor
+					scope:cult_life_confessor = {
+						cult_swear_in_effect = { RANK = 0 }
+						add_opinion = {
+							target = root
+							modifier = cult_brought_me_in_opinion
+						}
+					}
+					add_trait_xp = {
+						trait = cult_member
+						track = cult_rank
+						value = 3
+					}
+					custom_tooltip = cult.0202.c.sworn.tt
+					hidden_effect = { cult_rot_refresh_effect = yes }
+				}
+			}
+			65 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0202.c.refused
+					left_icon = scope:cult_life_confessor
+					scope:cult_life_confessor = {
+						add_character_flag = { flag = cult_refused_recently years = 5 }
+						add_opinion = {
+							target = root
+							modifier = cult_refused_the_offer_opinion
+						}
+					}
+					cult_exposure_gain_effect = { VALUE = 8 }
+				}
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0203 -- The Relic in the Chapel (AI too)
+# =====================================================================================
+
+cult.0203 = {
+	type = character_event
+	title = cult.0203.t
+	desc = cult.0203.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = disbelief
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_landed = yes
+		exists = capital_county
+		capital_county = {
+			NOT = { has_county_modifier = cult_county_tainted }
+		}
+		NOT = { has_character_flag = cult_life_seen_0203 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0203 years = 12 }
+		capital_county = { save_scope_as = cult_life_county }
+	}
+
+	# Kneel and kiss it.
+	option = {
+		name = cult.0203.a
+		add_piety = minor_piety_gain
+		cult_exposure_loss_effect = { VALUE = 2 }
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			arrogant = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = craven }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Defile it, quietly.
+	option = {
+		name = cult.0203.b
+		cult_power_gain_effect = { VALUE = 10 }
+		cult_corrupt_soul_effect = yes
+		scope:cult_life_county = {
+			add_county_modifier = {
+				modifier = cult_county_tainted
+				years = 10
+			}
+		}
+		custom_tooltip = cult_life_tainted_rot_tt
+		hidden_effect = { cult_rot_refresh_effect = yes }
+		random_list = {
+			75 = {
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0203.b.unnoticed
+					left_icon = root
+					right_icon = scope:cult_life_county
+					custom_tooltip = cult.0203.b.unnoticed.tt
+				}
+			}
+			25 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0203.b.noticed
+					left_icon = root
+					right_icon = scope:cult_life_county
+					cult_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = brave }
+			modifier = { add = 20 has_trait = cynical }
+			modifier = { add = 20 cult_rank_at_least_trigger = { RANK = 50 } }
+			modifier = { add = -25 has_trait = craven }
+		}
+	}
+
+	# Send it to the cathedral.
+	option = {
+		name = cult.0203.c
+		add_piety = medium_piety_gain
+		add_prestige = minor_prestige_loss
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = humble }
+			modifier = { add = 20 has_trait = content }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0204 -- The Pilgrim at the Gate
+# =====================================================================================
+
+cult.0204 = {
+	type = character_event
+	title = cult.0204.t
+	desc = cult.0204.desc
+	theme = faith
+	override_background = { reference = courtyard }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_ai = no
+		is_landed = yes
+		global_var:cult_host_faith = {
+			any_holy_site = {
+				county = { cult_sworn_county_trigger = yes }
+			}
+		}
+		NOT = { has_character_flag = cult_life_seen_0204 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0204 years = 12 }
+		global_var:cult_host_faith = {
+			random_holy_site = {
+				limit = {
+					county = { cult_sworn_county_trigger = yes }
+				}
+				county = { save_scope_as = cult_life_site }
+			}
+		}
+	}
+
+	# Bless the journey.
+	option = {
+		name = cult.0204.a
+		add_piety = minor_piety_gain
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+			honest = minor_stress_impact_gain
+		}
+	}
+
+	# Warn them off.
+	option = {
+		name = cult.0204.b
+		random_list = {
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0204.b.turns_back
+					left_icon = root
+					right_icon = scope:cult_life_site
+					custom_tooltip = cult.0204.b.turns_back.tt
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0204.b.goes_on
+					left_icon = root
+					right_icon = scope:cult_life_site
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_loss
+		}
+	}
+
+	# A gift for the shrine's keepers.
+	option = {
+		name = cult.0204.c
+		cult_power_gain_effect = { VALUE = 5 }
+		cult_corrupt_soul_effect = yes
+		random_list = {
+			80 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0204.c.delivered
+					left_icon = root
+					right_icon = scope:cult_life_site
+					add_trait_xp = {
+						trait = cult_member
+						track = cult_rank
+						value = 3
+					}
+				}
+			}
+			20 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0204.c.opened
+					left_icon = root
+					right_icon = scope:cult_life_site
+					cult_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0205 -- A Sign in the Night
+# =====================================================================================
+
+cult.0205 = {
+	type = character_event
+	title = cult.0205.t
+	desc = cult.0205.desc
+	theme = dread
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_ai = no
+		NOT = { has_character_flag = cult_life_seen_0205 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0205 years = 12 }
+	}
+
+	# It is a sign.
+	option = {
+		name = cult.0205.a
+		cult_power_gain_effect = { VALUE = 10 }
+		cult_corrupt_soul_effect = yes
+		stress_impact = {
+			craven = minor_stress_impact_gain
+			cynical = minor_stress_impact_gain
+		}
+	}
+
+	# A dream.
+	option = {
+		name = cult.0205.b
+		stress_impact = {
+			paranoid = minor_stress_impact_gain
+			zealous = minor_stress_impact_gain
+		}
+	}
+
+	# Pray, the old way.
+	option = {
+		name = cult.0205.c
+		random_list = {
+			50 = {
+				modifier = { add = 15 learning >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0205.c.calm
+					left_icon = root
+					add_stress = minor_stress_loss
+				}
+			}
+			50 = {
+				modifier = { add = 15 cult_rank_at_least_trigger = { RANK = 50 } }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0205.c.no_words
+					left_icon = root
+					add_stress = minor_stress_gain
+				}
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0206 -- A Christening in the Circle
+# =====================================================================================
+
+cult.0206 = {
+	type = character_event
+	title = cult.0206.t
+	desc = cult.0206.desc
+	theme = family
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:cult_life_parent
+		animation = worry
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_ai = no
+		any_in_global_list = {
+			variable = cult_roster
+			is_alive = yes
+			is_adult = yes
+			is_ai = yes
+			is_imprisoned = no
+			NOT = { this = root }
+			any_child = {
+				is_alive = yes
+				age < 2
+			}
+		}
+		NOT = { has_character_flag = cult_life_seen_0206 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0206 years = 12 }
+		random_in_global_list = {
+			variable = cult_roster
+			limit = {
+				is_alive = yes
+				is_adult = yes
+				is_ai = yes
+				is_imprisoned = no
+				NOT = { this = root }
+				any_child = {
+					is_alive = yes
+					age < 2
+				}
+			}
+			save_scope_as = cult_life_parent
+			random_child = {
+				limit = {
+					is_alive = yes
+					age < 2
+				}
+				save_scope_as = cult_life_infant
+			}
+		}
+	}
+
+	# I promise.
+	option = {
+		name = cult.0206.a
+		add_piety = minor_piety_gain
+		scope:cult_life_parent = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_kept_my_child_out_opinion
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_loss
+		}
+	}
+
+	# Sponsor, but promise nothing.
+	option = {
+		name = cult.0206.b
+		add_piety = minor_piety_gain
+		scope:cult_life_parent = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_stood_sponsor_opinion
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+	}
+
+	# Find someone else.
+	option = {
+		name = cult.0206.c
+		scope:cult_life_parent = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_refused_sponsor_opinion
+			}
+		}
+		cult_exposure_loss_effect = { VALUE = 1 }
+		stress_impact = {
+			gregarious = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0207 -- The Hunter's Preacher
+# =====================================================================================
+
+cult.0207 = {
+	type = character_event
+	title = cult.0207.t
+	desc = cult.0207.desc
+	theme = intrigue
+	override_background = { reference = throne_room }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	right_portrait = {
+		character = scope:cult_hunter
+		animation = personality_zealous
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_ai = no
+		is_landed = yes
+		exists = global_var:cult_hunter
+		NOT = { cult_is_hunter_trigger = yes }
+		NOT = { has_character_flag = cult_life_seen_0207 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0207 years = 12 }
+	}
+
+	# Front row.
+	option = {
+		name = cult.0207.a
+		add_piety = minor_piety_gain
+		cult_exposure_loss_effect = { VALUE = 3 }
+		stress_impact = {
+			base = minor_stress_impact_gain
+			arrogant = minor_stress_impact_gain
+		}
+	}
+
+	# Feed him and send him on.
+	option = {
+		name = cult.0207.b
+		random_list = {
+			60 = {
+				modifier = { add = 15 diplomacy >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0207.b.moves_on
+					left_icon = root
+					custom_tooltip = cult.0207.b.moves_on.tt
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0207.b.writes
+					left_icon = root
+					right_icon = scope:cult_hunter
+					cult_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+	}
+
+	# Let the circle deal with him.
+	option = {
+		name = cult.0207.c
+		trigger = {
+			cult_rank_at_least_trigger = { RANK = 25 }
+			has_variable = cult_power
+			var:cult_power >= 10
+		}
+		cult_power_spend_effect = { VALUE = 10 }
+		cult_corrupt_soul_effect = yes
+		random_list = {
+			70 = {
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0207.c.disgraced
+					left_icon = root
+					cult_exposure_loss_effect = { VALUE = 3 }
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0207.c.stubborn
+					left_icon = root
+					right_icon = scope:cult_hunter
+					cult_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0208 -- One Who Wants Out
+# =====================================================================================
+
+cult.0208 = {
+	type = character_event
+	title = cult.0208.t
+	desc = cult.0208.desc
+	theme = secret
+	override_background = { reference = sitting_room }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:cult_life_leaver
+		animation = shame
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_ai = no
+		any_in_global_list = {
+			variable = cult_roster
+			is_alive = yes
+			is_ai = yes
+			is_imprisoned = no
+			age >= 50
+			NOT = { this = root }
+			NOT = { cult_is_hierophant_trigger = yes }
+		}
+		NOT = { has_character_flag = cult_life_seen_0208 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0208 years = 12 }
+		random_in_global_list = {
+			variable = cult_roster
+			limit = {
+				is_alive = yes
+				is_ai = yes
+				is_imprisoned = no
+				age >= 50
+				NOT = { this = root }
+				NOT = { cult_is_hierophant_trigger = yes }
+			}
+			save_scope_as = cult_life_leaver
+		}
+	}
+
+	# Go, then.
+	option = {
+		name = cult.0208.a
+		scope:cult_life_leaver = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_let_me_go_opinion
+			}
+			cult_leave_effect = yes
+		}
+		custom_tooltip = cult.0208.a.tt
+		random_list = {
+			70 = {
+				modifier = { add = 15 scope:cult_life_leaver = { has_trait = deceitful } }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0208.a.silent
+					left_icon = scope:cult_life_leaver
+					custom_tooltip = cult.0208.a.silent.tt
+				}
+			}
+			30 = {
+				modifier = { add = 20 scope:cult_life_leaver = { has_trait = honest } }
+				modifier = { add = 15 scope:cult_life_leaver = { has_trait = zealous } }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0208.a.confesses
+					left_icon = scope:cult_life_leaver
+					cult_exposure_gain_effect = { VALUE = 6 }
+				}
+			}
+		}
+		stress_impact = {
+			paranoid = minor_stress_impact_gain
+		}
+	}
+
+	# Talk them round.
+	option = {
+		name = cult.0208.b
+		random_list = {
+			55 = {
+				modifier = { add = 15 diplomacy >= 12 }
+				modifier = { add = 15 scope:cult_life_leaver = { opinion = { target = root value >= 30 } } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0208.b.stays
+					left_icon = scope:cult_life_leaver
+					custom_tooltip = cult.0208.b.stays.tt
+				}
+			}
+			45 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0208.b.leaves
+					left_icon = scope:cult_life_leaver
+					scope:cult_life_leaver = { cult_leave_effect = yes }
+					custom_tooltip = cult.0208.a.tt
+					cult_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+	}
+
+	# Remind them what happens to those who leave.
+	option = {
+		name = cult.0208.c
+		scope:cult_life_leaver = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_threatened_me_opinion
+			}
+		}
+		custom_tooltip = cult.0208.c.tt
+		add_dread = minor_dread_gain
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 3
+		}
+		cult_corrupt_soul_effect = yes
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			just = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0209 -- A Quarrel in the Circle
+# =====================================================================================
+
+cult.0209 = {
+	type = character_event
+	title = cult.0209.t
+	desc = {
+		desc = cult.0209.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_is_hierophant_trigger = yes }
+				desc = cult.0209.desc_hierophant
+			}
+			triggered_desc = {
+				trigger = { exists = scope:cult_hierophant }
+				desc = cult.0209.desc_asked
+			}
+			desc = cult.0209.desc_alone
+		}
+	}
+	theme = unfriendly
+	override_background = { reference = council_chamber }
+	left_portrait = {
+		character = scope:cult_life_quarrel_a
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:cult_life_quarrel_b
+		animation = disapproval
+	}
+	lower_left_portrait = {
+		trigger = {
+			exists = scope:cult_hierophant
+			NOT = { scope:cult_hierophant = root }
+		}
+		character = scope:cult_hierophant
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_ai = no
+		any_in_global_list = {
+			variable = cult_roster
+			count >= 2
+			is_alive = yes
+			is_adult = yes
+			is_ai = yes
+			NOT = { this = root }
+		}
+		NOT = { has_character_flag = cult_life_seen_0209 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0209 years = 12 }
+		random_in_global_list = {
+			variable = cult_roster
+			limit = {
+				is_alive = yes
+				is_adult = yes
+				is_ai = yes
+				NOT = { this = root }
+			}
+			save_scope_as = cult_life_quarrel_a
+		}
+		random_in_global_list = {
+			variable = cult_roster
+			limit = {
+				is_alive = yes
+				is_adult = yes
+				is_ai = yes
+				NOT = { this = root }
+				NOT = { this = scope:cult_life_quarrel_a }
+			}
+			save_scope_as = cult_life_quarrel_b
+		}
+	}
+
+	# A is right: B is too soft.
+	option = {
+		name = cult.0209.a
+		scope:cult_life_quarrel_a = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_took_my_side_opinion
+			}
+		}
+		scope:cult_life_quarrel_b = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_took_their_side_opinion
+			}
+		}
+		if = {
+			limit = {
+				scope:cult_life_quarrel_b = { can_set_relation_rival_trigger = { CHARACTER = root } }
+			}
+			random_list = {
+				70 = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = cult.0209.b_accepts
+						left_icon = scope:cult_life_quarrel_b
+						custom_tooltip = cult.0209.b_accepts.tt
+					}
+				}
+				30 = {
+					modifier = { add = 20 scope:cult_life_quarrel_b = { has_trait = vengeful } }
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = cult.0209.b_rival
+						left_icon = scope:cult_life_quarrel_b
+						scope:cult_life_quarrel_b = {
+							set_relation_rival = {
+								target = root
+								reason = cult_life_rival_quarrel
+							}
+						}
+					}
+				}
+			}
+		}
+		else = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = cult.0209.b_accepts
+				left_icon = scope:cult_life_quarrel_b
+				custom_tooltip = cult.0209.b_accepts.tt
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+	}
+
+	# B is right: A will get us all burned.
+	option = {
+		name = cult.0209.b
+		scope:cult_life_quarrel_b = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_took_my_side_opinion
+			}
+		}
+		scope:cult_life_quarrel_a = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_took_their_side_opinion
+			}
+		}
+		cult_exposure_loss_effect = { VALUE = 1 }
+		if = {
+			limit = {
+				scope:cult_life_quarrel_a = { can_set_relation_rival_trigger = { CHARACTER = root } }
+			}
+			random_list = {
+				70 = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = cult.0209.a_accepts
+						left_icon = scope:cult_life_quarrel_a
+						custom_tooltip = cult.0209.a_accepts.tt
+					}
+				}
+				30 = {
+					modifier = { add = 20 scope:cult_life_quarrel_a = { has_trait = vengeful } }
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = cult.0209.a_rival
+						left_icon = scope:cult_life_quarrel_a
+						scope:cult_life_quarrel_a = {
+							set_relation_rival = {
+								target = root
+								reason = cult_life_rival_quarrel
+							}
+						}
+					}
+				}
+			}
+		}
+		else = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = cult.0209.a_accepts
+				left_icon = scope:cult_life_quarrel_a
+				custom_tooltip = cult.0209.a_accepts.tt
+			}
+		}
+	}
+
+	# Both of you, stop.
+	option = {
+		name = cult.0209.c
+		scope:cult_life_quarrel_a = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_scolded_me_opinion
+			}
+		}
+		scope:cult_life_quarrel_b = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_scolded_me_opinion
+			}
+		}
+		if = {
+			limit = {
+				exists = scope:cult_hierophant
+				NOT = { scope:cult_hierophant = root }
+			}
+			scope:cult_hierophant = {
+				add_opinion = {
+					target = root
+					modifier = cult_life_kept_the_peace_opinion
+				}
+			}
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 2
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0210 -- The Burning
+# =====================================================================================
+
+cult.0210 = {
+	type = character_event
+	title = cult.0210.t
+	desc = cult.0210.desc
+	theme = dread
+	override_background = { reference = gallows }
+	left_portrait = {
+		character = root
+		animation = stress
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_ai = no
+		NOT = { has_character_flag = cult_life_seen_0210 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0210 years = 12 }
+	}
+
+	# Front of the crowd.
+	option = {
+		name = cult.0210.a
+		add_piety = minor_piety_gain
+		cult_exposure_loss_effect = { VALUE = 3 }
+		cult_corrupt_soul_effect = yes
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			just = minor_stress_impact_gain
+		}
+	}
+
+	# At the back, silent.
+	option = {
+		name = cult.0210.b
+		random_list = {
+			70 = {
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0210.b.unnoticed
+					left_icon = root
+					custom_tooltip = cult.0210.b.unnoticed.tt
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0210.b.noticed
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+	}
+
+	# Mercy.
+	option = {
+		name = cult.0210.c
+		add_piety = minor_piety_loss
+		cult_exposure_gain_effect = { VALUE = 4 }
+		stress_impact = {
+			compassionate = medium_stress_impact_loss
+			just = minor_stress_impact_loss
+			callous = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0211 -- The Rebuilding (AI too)
+# =====================================================================================
+
+cult.0211 = {
+	type = character_event
+	title = cult.0211.t
+	desc = cult.0211.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_landed = yes
+		exists = capital_county
+		gold >= minor_gold_value
+		NOT = { has_character_flag = cult_life_seen_0211 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0211 years = 12 }
+		capital_county = { save_scope_as = cult_life_county }
+	}
+
+	# Generously.
+	option = {
+		name = cult.0211.a
+		trigger = { gold >= medium_gold_value }
+		remove_short_term_gold = medium_gold_value
+		add_piety = medium_piety_gain
+		cult_exposure_loss_effect = { VALUE = 3 }
+		stress_impact = {
+			base = minor_stress_impact_gain
+			greedy = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = generous }
+			modifier = { add = 20 has_trait = paranoid }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# A token sum.
+	option = {
+		name = cult.0211.b
+		remove_short_term_gold = minor_gold_value
+		random_list = {
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0211.b.accepted
+					left_icon = root
+					custom_tooltip = cult.0211.b.accepted.tt
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0211.b.remarked
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = greedy }
+		}
+	}
+
+	# Pay, and choose the masons.
+	option = {
+		name = cult.0211.c
+		trigger = {
+			gold >= medium_gold_value
+			scope:cult_life_county = {
+				NOT = { has_county_modifier = cult_county_tainted }
+			}
+		}
+		remove_short_term_gold = medium_gold_value
+		cult_power_gain_effect = { VALUE = 10 }
+		cult_corrupt_soul_effect = yes
+		scope:cult_life_county = {
+			add_county_modifier = {
+				modifier = cult_county_tainted
+				years = 15
+			}
+		}
+		custom_tooltip = cult_life_tainted_rot_tt
+		hidden_effect = { cult_rot_refresh_effect = yes }
+		random_list = {
+			80 = {
+				modifier = { add = 10 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0211.c.laid
+					left_icon = root
+					right_icon = scope:cult_life_county
+					custom_tooltip = cult.0211.c.laid.tt
+				}
+			}
+			20 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0211.c.found
+					left_icon = root
+					right_icon = scope:cult_life_county
+					cult_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 25
+			modifier = { add = 25 cult_rank_at_least_trigger = { RANK = 50 } }
+			modifier = { add = 15 has_trait = cynical }
+			modifier = { add = -20 has_trait = craven }
+		}
+	}
+
+	# Refuse.
+	option = {
+		name = cult.0211.d
+		add_piety = minor_piety_loss
+		cult_exposure_gain_effect = { VALUE = 4 }
+		ai_chance = {
+			base = 5
+			modifier = { add = 25 has_trait = greedy }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0212 -- What the Servant Found
+# =====================================================================================
+
+cult.0212 = {
+	type = character_event
+	title = cult.0212.t
+	desc = cult.0212.desc
+	theme = secret
+	override_background = { reference = bedchamber }
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_ai = no
+		is_landed = yes
+		NOT = { has_character_flag = cult_life_seen_0212 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0212 years = 12 }
+	}
+
+	# Pay for silence.
+	option = {
+		name = cult.0212.a
+		trigger = { gold >= minor_gold_value }
+		remove_short_term_gold = minor_gold_value
+		random_list = {
+			65 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0212.a.forgets
+					left_icon = root
+					custom_tooltip = cult.0212.a.forgets.tt
+				}
+			}
+			35 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0212.a.talks
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+	}
+
+	# It is a ward.
+	option = {
+		name = cult.0212.b
+		random_list = {
+			55 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 10 learning >= 12 }
+				modifier = { add = 15 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0212.b.believed
+					left_icon = root
+					custom_tooltip = cult.0212.b.believed.tt
+				}
+			}
+			45 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0212.b.doubted
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+	}
+
+	# Leave it to the circle.
+	option = {
+		name = cult.0212.c
+		trigger = {
+			cult_rank_at_least_trigger = { RANK = 25 }
+			has_variable = cult_power
+			var:cult_power >= 10
+		}
+		cult_power_spend_effect = { VALUE = 10 }
+		custom_tooltip = cult.0212.c.tt
+		cult_exposure_loss_effect = { VALUE = 1 }
+		cult_corrupt_soul_effect = yes
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			just = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0213 -- The Parish (AI too)
+# =====================================================================================
+
+cult.0213 = {
+	type = character_event
+	title = cult.0213.t
+	desc = cult.0213.desc
+	theme = corruption
+	override_background = { reference = village }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_landed = yes
+		exists = global_var:cult_rot
+		global_var:cult_rot >= 25
+		any_held_county = {
+			NOT = { has_county_modifier = cult_county_tainted }
+		}
+		NOT = { has_character_flag = cult_life_seen_0213 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0213 years = 12 }
+		random_held_county = {
+			limit = {
+				NOT = { has_county_modifier = cult_county_tainted }
+			}
+			save_scope_as = cult_life_county
+		}
+	}
+
+	# Feed it.
+	option = {
+		name = cult.0213.a
+		cult_power_gain_effect = { VALUE = 5 }
+		cult_corrupt_soul_effect = yes
+		scope:cult_life_county = {
+			add_county_modifier = {
+				modifier = cult_county_tainted
+				years = 10
+			}
+		}
+		custom_tooltip = cult_life_tainted_rot_tt
+		hidden_effect = { cult_rot_refresh_effect = yes }
+		ai_chance = {
+			base = 50
+			modifier = { add = 20 cult_rank_at_least_trigger = { RANK = 25 } }
+			modifier = { add = 15 has_trait = ambitious }
+		}
+	}
+
+	# Leave it be.
+	option = {
+		name = cult.0213.b
+		stress_impact = {
+			ambitious = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = lazy }
+			modifier = { add = 20 has_trait = content }
+		}
+	}
+
+	# Send a new priest, loudly.
+	option = {
+		name = cult.0213.c
+		add_piety = minor_piety_gain
+		cult_exposure_loss_effect = { VALUE = 3 }
+		stress_impact = {
+			ambitious = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = paranoid }
+			modifier = { add = 20 has_trait = craven }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0214 -- What You Have Become
+# =====================================================================================
+
+cult.0214 = {
+	type = character_event
+	title = cult.0214.t
+	desc = cult.0214.desc
+	theme = mental_health
+	override_background = { reference = bedchamber }
+	left_portrait = {
+		character = root
+		animation = stress
+	}
+
+	trigger = {
+		cult_secret_phase_trigger = yes
+		is_ai = no
+		NOT = { cult_is_hierophant_trigger = yes }
+		NOT = { has_character_flag = cult_life_seen_0214 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0214 years = 12 }
+	}
+
+	# It was worth it.
+	option = {
+		name = cult.0214.a
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 5
+		}
+		cult_corrupt_soul_effect = yes
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+			honest = minor_stress_impact_gain
+		}
+	}
+
+	# Pray, once, the way you used to.
+	option = {
+		name = cult.0214.b
+		random_list = {
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0214.b.sleep
+					left_icon = root
+					add_stress = medium_stress_loss
+				}
+			}
+			40 = {
+				modifier = { add = 15 cult_rank_at_least_trigger = { RANK = 50 } }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.0214.b.silence
+					left_icon = root
+					add_stress = minor_stress_loss
+				}
+			}
+		}
+	}
+
+	# Done with it.
+	option = {
+		name = cult.0214.c
+		custom_tooltip = cult.0214.c.tt
+		if = {
+			limit = { exists = scope:cult_hierophant }
+			scope:cult_hierophant = {
+				add_opinion = {
+					target = root
+					modifier = cult_life_walked_away_opinion
+				}
+			}
+		}
+		add_stress = medium_stress_loss
+		cult_leave_effect = yes
+		stress_impact = {
+			paranoid = medium_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0215 -- The Sermon (hollow only)
+# =====================================================================================
+
+cult.0215 = {
+	type = character_event
+	title = cult.0215.t
+	desc = cult.0215.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = prayer
+	}
+	right_portrait = {
+		character = scope:cult_head
+		animation = chaplain
+	}
+
+	trigger = {
+		cult_hollow_trigger = yes
+		is_ai = no
+		exists = global_var:cult_host_faith.religious_head
+		global_var:cult_host_faith.religious_head = {
+			has_trait = cult_member
+			NOT = { this = root }
+		}
+		NOT = { has_character_flag = cult_life_seen_0215 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0215 years = 12 }
+	}
+
+	# Weep with them.
+	option = {
+		name = cult.0215.a
+		cult_exposure_loss_effect = { VALUE = 2 }
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			compassionate = minor_stress_impact_gain
+		}
+	}
+
+	# Allow yourself a smile.
+	option = {
+		name = cult.0215.b
+		random_list = {
+			70 = {
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0215.b.unseen
+					left_icon = root
+					add_stress = minor_stress_loss
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0215.b.seen
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+	}
+
+	# Write to the head with the circle's words.
+	option = {
+		name = cult.0215.c
+		scope:cult_head = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_praised_the_sermon_opinion
+			}
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 3
+		}
+		cult_exposure_gain_effect = { VALUE = 1 }
+	}
+}
+
+# =====================================================================================
+#  cult.0250 -- The Old Faithful (unveiled)
+# =====================================================================================
+
+cult.0250 = {
+	type = character_event
+	title = cult.0250.t
+	desc = cult.0250.desc
+	theme = unfriendly
+	override_background = { reference = throne_room }
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:cult_life_faithful
+		animation = disgust
+	}
+
+	trigger = {
+		cult_unveiled_trigger = yes
+		is_ai = no
+		is_landed = yes
+		OR = {
+			any_vassal = {
+				is_ai = yes
+				is_adult = yes
+				is_imprisoned = no
+				faith = global_var:cult_host_faith
+				NOT = { has_trait = cult_member }
+			}
+			any_courtier = {
+				is_ai = yes
+				is_adult = yes
+				is_imprisoned = no
+				faith = global_var:cult_host_faith
+				NOT = { has_trait = cult_member }
+			}
+		}
+		NOT = { has_character_flag = cult_life_seen_0250 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0250 years = 12 }
+		if = {
+			limit = {
+				any_vassal = {
+					is_ai = yes
+					is_adult = yes
+					is_imprisoned = no
+					faith = global_var:cult_host_faith
+					NOT = { has_trait = cult_member }
+				}
+			}
+			random_vassal = {
+				limit = {
+					is_ai = yes
+					is_adult = yes
+					is_imprisoned = no
+					faith = global_var:cult_host_faith
+					NOT = { has_trait = cult_member }
+				}
+				save_scope_as = cult_life_faithful
+			}
+		}
+		else = {
+			random_courtier = {
+				limit = {
+					is_ai = yes
+					is_adult = yes
+					is_imprisoned = no
+					faith = global_var:cult_host_faith
+					NOT = { has_trait = cult_member }
+				}
+				save_scope_as = cult_life_faithful
+			}
+		}
+	}
+
+	# Let them keep their prayers.
+	option = {
+		name = cult.0250.a
+		scope:cult_life_faithful = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_spared_my_prayers_opinion
+			}
+		}
+		if = {
+			limit = {
+				exists = scope:cult_hierophant
+				NOT = { scope:cult_hierophant = root }
+			}
+			scope:cult_hierophant = {
+				add_opinion = {
+					target = root
+					modifier = cult_life_soft_on_the_faithful_opinion
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_loss
+			zealous = minor_stress_impact_gain
+		}
+	}
+
+	# Make an example of them.
+	option = {
+		name = cult.0250.b
+		add_dread = medium_dread_gain
+		scope:cult_life_faithful = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_made_an_example_opinion
+			}
+		}
+		cult_corrupt_soul_effect = yes
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			forgiving = minor_stress_impact_gain
+		}
+	}
+
+	# Bring them into the circle.
+	option = {
+		name = cult.0250.c
+		trigger = {
+			scope:cult_life_faithful = { cult_recruitable_trigger = yes }
+		}
+		random_list = {
+			30 = {
+				modifier = { add = 20 scope:cult_life_faithful = { cult_sinner_trigger = yes } }
+				modifier = { add = 15 scope:cult_life_faithful = { has_trait = cynical } }
+				modifier = { add = 15 scope:cult_life_faithful = { has_trait = craven } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0250.c.kneels
+					left_icon = scope:cult_life_faithful
+					scope:cult_life_faithful = {
+						cult_swear_in_effect = { RANK = 0 }
+						add_opinion = {
+							target = root
+							modifier = cult_brought_me_in_opinion
+						}
+					}
+				}
+			}
+			70 = {
+				modifier = { add = 20 scope:cult_life_faithful = { has_trait = zealous } }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0250.c.refuses
+					left_icon = scope:cult_life_faithful
+					scope:cult_life_faithful = {
+						add_character_flag = { flag = cult_refused_recently years = 5 }
+						add_opinion = {
+							target = root
+							modifier = cult_refused_the_offer_opinion
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0251 -- Zealots in the Streets (unveiled)
+# =====================================================================================
+
+cult.0251 = {
+	type = character_event
+	title = cult.0251.t
+	desc = cult.0251.desc
+	theme = realm
+	override_background = { reference = burning_building }
+	left_portrait = {
+		character = root
+		animation = rage
+	}
+
+	trigger = {
+		cult_unveiled_trigger = yes
+		is_ai = no
+		is_landed = yes
+		exists = capital_county
+		capital_county = {
+			NOT = { has_county_modifier = cult_life_zealot_unrest_modifier }
+		}
+		NOT = { has_character_flag = cult_life_seen_0251 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0251 years = 12 }
+		capital_county = { save_scope_as = cult_life_county }
+	}
+
+	# Send the guard.
+	option = {
+		name = cult.0251.a
+		random_list = {
+			65 = {
+				modifier = { add = 15 martial >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0251.a.scattered
+					left_icon = root
+					right_icon = scope:cult_life_county
+					add_dread = minor_dread_gain
+				}
+			}
+			35 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0251.a.bloody
+					left_icon = root
+					right_icon = scope:cult_life_county
+					add_dread = medium_dread_gain
+					add_prestige = minor_prestige_loss
+					scope:cult_life_county = {
+						add_county_modifier = {
+							modifier = cult_life_zealot_unrest_modifier
+							years = 5
+						}
+					}
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+	}
+
+	# Let them shout.
+	option = {
+		name = cult.0251.b
+		scope:cult_life_county = {
+			add_county_modifier = {
+				modifier = cult_life_zealot_unrest_modifier
+				years = 3
+			}
+		}
+		stress_impact = {
+			wrathful = minor_stress_impact_gain
+			arrogant = minor_stress_impact_gain
+		}
+	}
+
+	# Pay the ringleaders.
+	option = {
+		name = cult.0251.c
+		trigger = { gold >= minor_gold_value }
+		remove_short_term_gold = minor_gold_value
+		add_prestige = miniscule_prestige_loss
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.0252 -- Was It Worth It (unveiled)
+# =====================================================================================
+
+cult.0252 = {
+	type = character_event
+	title = cult.0252.t
+	desc = cult.0252.desc
+	theme = mental_health
+	override_background = { reference = study }
+	left_portrait = {
+		character = root
+		animation = pondering
+	}
+
+	trigger = {
+		cult_unveiled_trigger = yes
+		is_ai = no
+		NOT = { has_character_flag = cult_life_seen_0252 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_life_seen_0252 years = 12 }
+	}
+
+	# Every bit of it.
+	option = {
+		name = cult.0252.a
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 5
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+			honest = minor_stress_impact_gain
+		}
+	}
+
+	# I don't know any more.
+	option = {
+		name = cult.0252.b
+		add_stress = minor_stress_loss
+		add_piety = minor_piety_loss
+	}
+
+	# A candle, the old way.
+	option = {
+		name = cult.0252.c
+		random_list = {
+			70 = {
+				modifier = { add = 10 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.0252.c.unseen
+					left_icon = root
+					add_stress = medium_stress_loss
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.0252.c.seen
+					left_icon = root
+					add_stress = minor_stress_loss
+					add_prestige = minor_prestige_loss
+					if = {
+						limit = {
+							exists = scope:cult_hierophant
+							NOT = { scope:cult_hierophant = root }
+						}
+						scope:cult_hierophant = {
+							add_opinion = {
+								target = root
+								modifier = cult_life_prayed_the_old_way_opinion
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

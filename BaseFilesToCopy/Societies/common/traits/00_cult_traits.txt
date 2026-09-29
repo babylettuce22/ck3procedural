@@ -1,0 +1,63 @@
+﻿# Membership of the inversion cult, and its ladder. Same shape as restor_member (see its file).
+#
+#     0 Initiate       25 Adept       50 Magister       75 Hierarch
+#
+# The Hierophant is not a rung: it is global_var:cult_hierophant, the cult's leader.
+#
+# The trait describes the cult by the name of what it serves -- the host faith's own devil, through
+# the generated $cult_devil_name$ -- and changes once the faith has been unveiled.
+
+cult_member = {
+	category = fame
+
+	icon = "witch.dds"
+
+	intrigue = 1
+	same_opinion = 20
+
+	shown_in_ruler_designer = no
+	ruler_designer_cost = 10
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { NOT = { exists = this } }
+				desc = trait_cult_member_desc
+			}
+			triggered_desc = {
+				trigger = { cult_unveiled_trigger = yes }
+				desc = trait_cult_member_public_desc
+			}
+			desc = trait_cult_member_character_desc
+		}
+	}
+
+	ai_honor = medium_negative_ai_value
+	ai_boldness = low_positive_ai_value
+	ai_zeal = medium_negative_ai_value
+
+	tracks = {
+		cult_rank = {
+			25 = {
+				intrigue = 1
+			}
+			50 = {
+				intrigue = 1
+				learning = 1
+				dread_baseline_add = 5
+			}
+			75 = {
+				intrigue = 1
+				learning = 1
+				dread_baseline_add = 10
+				monthly_piety = 0.5
+			}
+			100 = {
+				intrigue = 2
+				learning = 2
+				dread_baseline_add = 15
+				monthly_piety = 1
+			}
+		}
+	}
+}

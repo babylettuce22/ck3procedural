@@ -1,0 +1,177 @@
+﻿l_english:
+
+ # ---- Interactions ------------------------------------------------------------------------------
+
+ cult_turn_priest_interaction:0 "Turn a Priest"
+ cult_turn_priest_interaction_desc:0 "Offer [recipient.GetTitledFirstNameNoTooltip] gifts, then the truth, then the oath of $cult_society_name$. A priest who takes it prays for the cult from inside the church. One who does not may go to the hunter."
+ cult_offer_sacrifice_interaction:0 "Offer to $cult_devil_name$"
+ cult_offer_sacrifice_interaction_desc:0 "[recipient.GetTitledFirstNameNoTooltip] is in your dungeon, and nobody outside it needs to know what happens there. $cult_devil_name$ values an offering by what the world will miss."
+ cult_take_them_interaction:0 "Take Them"
+ cult_take_them_interaction_desc:0 "Have [recipient.GetTitledFirstNameNoTooltip] carried off by the Faithless and brought to you. Only the sworn may help. The dark power is spent when the plot begins, and is not returned if it is abandoned."
+ cult_curse_interaction:0 "Curse"
+ cult_curse_interaction_desc:0 "Name [recipient.GetTitledFirstNameNoTooltip] before the circle and ask $cult_devil_name$ to remember [recipient.GetHerHim]. What follows may be the curse, or it may be poison in a cup, or bad luck. Nobody will be able to say which."
+ cult_defile_relic_interaction:0 "Defile a Relic"
+ cult_defile_relic_interaction_desc:0 "Send the Faithless into a holy place of $cult_host_name$ in [recipient.GetTitledFirstNameNoTooltip]'s realm, to foul what the faithful keep there. The shrine is ruined as a place of prayer, and [recipient.GetFirstNameNoTooltip] answers for it."
+ cult_whisper_to_the_see_interaction:0 "Whisper to the See"
+ cult_whisper_to_the_see_interaction_desc:0 "Go to [recipient.GetTitledFirstNameNoTooltip], head of $cult_host_name$, and offer [recipient.GetHerHim] the oath of $cult_society_name$. If [recipient.GetSheHe] takes it, the church belongs to the cult. The more of the church is already rotten around [recipient.GetHerHim], the likelier [recipient.GetSheHe] is to listen."
+
+ # ---- Requirements ------------------------------------------------------------------------------
+
+ cult_power_needs_adept_tt:0 "You are at least an #high Adept#! of the circle"
+ cult_power_needs_magister_tt:0 "You are at least a #high Magister#! of the circle"
+ cult_power_needs_hierarch_tt:0 "You are a #high Hierarch#! of the circle, or its Hierophant"
+ cult_power_power_30_tt:0 "You have at least #high 30#! dark power"
+ cult_power_power_40_tt:0 "You have at least #high 40#! dark power"
+ cult_power_power_60_tt:0 "You have at least #high 60#! dark power"
+ cult_power_power_100_tt:0 "You have at least #high 100#! dark power"
+ cult_power_power_150_tt:0 "You have at least #high 150#! dark power"
+ cult_power_refused_recently_tt:0 "Has not refused the cult in the last five years"
+ cult_whisper_rot_tt:0 "The rot in $cult_host_name$ is at least #high 40#!"
+ cult_take_them_needs_member_tt:0 "You are sworn to $cult_society_name$"
+ cult_take_them_no_great_lords_tt:0 "Is not a duke or greater. A lord that great is missed at once."
+
+ # ---- Effects -----------------------------------------------------------------------------------
+
+ cult_power_rot_refresh_tt:0 "The rot in $cult_host_name$ is counted again"
+ cult_turn_priest_player_tt:0 "[cult_priest.GetTitledFirstName] decides how to answer"
+ cult_power_priest_sympathetic_tt:0 "[cult_priest.GetFirstNameNoTooltip] will listen if the circle offers [cult_priest.GetHerHim] the oath in the next five years"
+ cult_power_priest_to_hunter_tt:0 "[cult_hunter.GetTitledFirstName] hears of the approach"
+ cult_power_see_captured_tt:0 "The head of $cult_host_name$ is sworn, and the church is the cult's. At #high 60#! rot it can be unveiled."
+ cult_power_see_wavered_tt:0 "[cult_see_head.GetFirstNameNoTooltip] will be much likelier to take the oath if asked again in the next five years"
+ cult_power_see_to_head_tt:0 "[cult_see_head.GetTitledFirstName] knows who came to [cult_see_head.GetHerHim]"
+ cult_whisper_player_tt:0 "[cult_see_head.GetTitledFirstName] decides how to answer"
+ cult_offer_quiet_tt:0 "Nobody asks what became of the prisoner"
+ cult_curse_nothing_tt:0 "Nothing happens"
+ cult_defile_interrupted_tt:0 "The Faithless are disturbed before they can do anything"
+ cult_take_them_started_toast:0 "The Faithless Are Sent"
+
+ # ---- The cult's abduction scheme ---------------------------------------------------------------
+
+ cult_abduct:0 "Take Them"
+ cult_abduct_action:0 "Take Them"
+ cult_abduct_desc:0 "The Faithless are watching the roads and the doors. When the moment comes, the target will be taken and brought to you."
+ cult_abduct_success_desc:0 "The Faithless will have the target, and nobody who matters will see it done."
+ cult_abduct_discovery_desc:0 "Someone has noticed who has been watching the roads."
+ cult_abduct_invalidated_title:0 "The Plot Falls Apart"
+ cult_abduct_invalidated_imprisoned_tt:0 "[target.GetFirstNameNoTooltip] is already a prisoner of [other_imprisoner.GetTitledFirstName]"
+ cult_abduct_invalidated_range_tt:0 "[target.GetFirstNameNoTooltip] is out of reach"
+
+ # ---- The death reason --------------------------------------------------------------------------
+
+ death_cult_sacrifice:0 "died in captivity"
+ death_cult_sacrifice_killer:0 "was given to $cult_devil_name$ in [TARGET_CHARACTER.GetUINamePossessive] dungeon"
+
+ # ---- cult.0401-0405: Turn a Priest -------------------------------------------------------------
+
+ cult.0401.t:0 "A Priest Turned"
+ cult.0401.desc:0 "[cult_priest.GetTitledFirstName] listened to all of it: the gifts, then the questions, then what the circle really prays to. At the end [cult_priest.GetSheHe] was quiet for a long time.\n\nThen [cult_priest.GetSheHe] knelt and swore to $cult_devil_name$, in the same words [cult_priest.GetSheHe] once used to swear to [cult_faith.HighGodName]. Tomorrow [cult_priest.GetSheHe] will lead the prayers of $cult_host_name$ as usual."
+ cult.0401.a:0 "One more voice in the choir."
+ cult.0401.a.tt:0 "[cult_priest.GetFirstNameNoTooltip] is sworn to $cult_society_name$"
+
+ cult.0402.t:0 "Gifts Accepted"
+ cult.0402.desc:0 "[cult_priest.GetTitledFirstName] took the silver, the wine and the favours, and thanked you for every one. When the talk turned to $cult_devil_name$, [cult_priest.GetSheHe] went pale and would not hear any more.\n\nBut [cult_priest.GetSheHe] has not gone to anyone either. A priest who takes gifts from the Faithless and says nothing has already chosen a side, whether [cult_priest.GetSheHe] knows it or not."
+ cult.0402.a:0 "I'll ask again when [cult_priest.GetSheHe] is ready."
+ cult.0402.a.tt:0 "You have a hook on [cult_priest.GetFirstNameNoTooltip], and [cult_priest.GetSheHe] will listen if the circle offers the oath in the next five years"
+
+ cult.0403.t:0 "The Priest Talks"
+ cult.0403.desc:0 "[cult_priest.GetTitledFirstName] heard what you were offering and walked out without a word. By evening [cult_priest.GetSheHe] had written down everything you said, and sent it on.\n\nThe letter does not use the word $cult_devil_name$. It does not need to. It says who came, and what they asked."
+ cult.0403.desc_hunter:0 "[cult_priest.GetTitledFirstName] heard what you were offering and walked out without a word. By evening [cult_priest.GetSheHe] had written down everything you said, and sent it to [cult_hunter.GetTitledFirstName].\n\nThe letter does not use the word $cult_devil_name$. It does not need to. It says who came, and what they asked."
+ cult.0403.a:0 "I misjudged [cult_priest.GetHerHim]. I won't again."
+
+ cult.0404.t:0 "A Priest's Report"
+ cult.0404.desc:0 "[cult_priest.GetTitledFirstName] has sent you a letter, written in a hurry. [cult_priest_turner.GetTitledFirstName] came to [cult_priest.GetHerHim] with gifts, [cult_priest.GetSheHe] writes, and then with questions about [cult_priest.GetHerHis] faith, and then with an offer [cult_priest.GetSheHe] will not repeat on paper.\n\n[cult_priest.GetSheHe|U] refused. [cult_priest.GetSheHe|U] thinks you should know that someone is buying priests of $cult_host_name$."
+ cult.0404.a:0 "Reward the priest for [cult_priest.GetHerHis] faith."
+ cult.0404.b:0 "I will keep an eye on [cult_priest_turner.GetFirstNameNoTooltip]."
+
+ cult.0405.t:0 "A Generous Friend"
+ cult.0405.desc:0 "For months [cult_priest_turner.GetTitledFirstName] has been generous with you: silver for your [cult_faith.HouseOfWorship], wine at [cult_priest_turner.GetHerHis] table, a word in the right ear. Tonight [cult_priest_turner.GetSheHe] told you why.\n\n[cult_priest_turner.GetSheHe|U] belongs to $cult_society_name$, who pray to $cult_devil_name$ from inside $cult_host_name$, and [cult_priest_turner.GetSheHe] wants you with them. [cult_priest_turner.GetSheHe|U] says half the church is already theirs."
+ cult.0405.a:0 "Then I will not be left outside."
+ cult.0405.b:0 "I will keep your gifts, and your secret. Nothing more."
+ cult.0405.c:0 "Get out. Everyone will hear of this."
+
+ # ---- cult.0410-0412: Offer to the master -------------------------------------------------------
+
+ cult.0410.t:0 "The Offering"
+ cult.0410.desc:0 "[cult_offering.GetTitledFirstName] is gone. Only you and two trusted servants went down to the cell that night. By morning the cell was empty and scrubbed clean.\n\nThe gaolers have been told [cult_offering.GetSheHe] died of a fever. Nobody has asked any more than that."
+ cult.0410.a:0 "Nobody ever does."
+
+ cult.0411.t:0 "Word Reaches the Circle"
+ cult.0411.desc:0 "The circle has heard what you gave $cult_devil_name$. [cult_offering.GetTitledFirstName] was not some nameless prisoner, and the Faithless know what it takes to make an offering like that.\n\nAt the last gathering, the others made room for you nearer the front."
+ cult.0411.a:0 "Let them remember it."
+ cult.0411.a.tt:0 "Your standing in the circle rises"
+
+ cult.0412.t:0 "The Gaoler Talks"
+ cult.0412.desc:0 "One of the gaolers has been drinking, and talking while he drinks. He says [cult_offering.GetTitledFirstName] did not die of any fever. He says there were candles in the cell that night, and words he did not recognise, and that you went down there yourself.\n\nMost people who hear it laugh. Not all of them."
+ cult.0412.a:0 "Find him work somewhere far from here."
+
+ # ---- cult.0420-0424: Curse ---------------------------------------------------------------------
+
+ cult.0420.t:0 "A Sickness"
+ cult.0420.desc:0 "[cult_cursed.GetTitledFirstName] has fallen ill. [cult_cursed.GetHerHis|U] physicians say it is a fever of the ordinary kind, the kind that comes and goes in every court.\n\nPerhaps it is. The circle named [cult_cursed.GetHerHim] a week ago."
+ cult.0420.a:0 "An ordinary fever. Of course."
+
+ cult.0421.t:0 "A Bad Season"
+ cult.0421.desc:0 "Nothing has gone right for [cult_cursed.GetTitledFirstName] lately. A horse went lame under [cult_cursed.GetHerHim]; a letter went astray; [cult_cursed.GetHerHis] priests found bad signs in the entrails and would not say what they meant.\n\n[cult_cursed.GetSheHe|U] is sleeping badly, they say. It could all be chance."
+ cult.0421.a:0 "Chance has never been kinder to me."
+
+ cult.0422.t:0 "Nothing"
+ cult.0422.desc:0 "A month has passed since the circle named [cult_cursed.GetTitledFirstName] before $cult_devil_name$. [cult_cursed.GetSheHe|U] has not been ill, has not been unlucky, and by every account is in excellent spirits.\n\nThe dark power spent on it is gone all the same."
+ cult.0422.a:0 "Not every prayer is answered. Not even ours."
+
+ cult.0423.t:0 "Traced Back"
+ cult.0423.desc:0 "[cult_cursed.GetTitledFirstName] has been asking questions, and has found answers. A servant who was paid to fetch a lock of [cult_cursed.GetHerHis] hair. A cook who was asked what [cult_cursed.GetSheHe] liked to drink. Both remember whose people were asking.\n\n[cult_cursed.GetSheHe|U] does not know what you were doing with them. [cult_cursed.GetSheHe|U] knows it was you."
+ cult.0423.a:0 "Let [cult_cursed.GetHerHim] wonder."
+
+ cult.0424.t:0 "Someone Wishes You Harm"
+ cult.0424.desc:0 "Your people have been careful since the strange things began. Now they have something to show you: a servant paid to steal a lock of your hair, and a cook asked what you liked to drink. Both were paid by [cult_curser.GetTitledFirstName]'s people.\n\nWhat [cult_curser.GetFirstNameNoTooltip] wanted with them, nobody will say out loud."
+ cult.0424.a:0 "I will not forget this."
+
+ # ---- cult.0430-0434: Defile a Relic ------------------------------------------------------------
+
+ cult.0430.t:0 "A Shrine Fouled"
+ cult.0430.desc:0 "The holy place in [cult_defiled_county.GetNameNoTier] has been defiled. The Faithless went in at night, and by morning the relics the faithful of $cult_host_name$ had come to pray to were broken and fouled, and the altar had been used for something that was not prayer.\n\nThe priests have closed the doors. [cult_defiled_lord.GetTitledFirstName] is blamed for not guarding it better, and nobody knows who did it."
+ cult.0430.a:0 "Let them pray somewhere else."
+ cult.0430.a.tt:0 "[cult_defiled_county.GetName] is #N Tainted#!"
+
+ cult.0431.t:0 "Sacrilege"
+ cult.0431.desc:0 "The Faithless did their work in the holy place of [cult_defiled_county.GetNameNoTier], and the pilgrims found it in the morning. The story is everywhere now: relics broken, the altar fouled, and the lord of the land doing nothing about it.\n\nPeople are saying [cult_defiled_lord.GetTitledFirstName] must have angered [cult_faith.HighGodName] somehow. [cult_defiled_lord.GetSheHe|U] cannot show [cult_defiled_lord.GetHerHis] face in a [cult_faith.HouseOfWorship] without being stared at."
+ cult.0431.a:0 "Let [cult_defiled_lord.GetHerHim] explain it."
+
+ cult.0432.t:0 "Interrupted"
+ cult.0432.desc:0 "The Faithless you sent to [cult_defiled_county.GetNameNoTier] never reached the altar. A priest was awake at an hour when priests are meant to be asleep, and your people ran before they could be seen properly.\n\nThey got away. They did nothing else."
+ cult.0432.a:0 "Another night, then."
+
+ cult.0433.t:0 "Caught in the Shrine"
+ cult.0433.desc:0 "[cult_defiled_lord.GetTitledFirstName]'s guards caught two of the Faithless inside the holy place of [cult_defiled_county.GetNameNoTier], with the relics already on the floor. One of them talked before the night was over.\n\nHe did not know much. He knew enough to say whose silver he had been paid in."
+ cult.0433.a:0 "Deny everything."
+
+ cult.0434.t:0 "The Defilers"
+ cult.0434.desc:0 "Your guards caught two men in the holy place of [cult_defiled_county.GetNameNoTier] in the middle of the night, breaking and fouling the relics the faithful of $cult_host_name$ have prayed to for generations.\n\nOne of them talked. The silver in his purse came from [cult_defiler.GetTitledFirstName]."
+ cult.0434.a:0 "[cult_defiler.GetFirstNameNoTooltip] will answer for this."
+
+ # ---- cult.0440-0444: Whisper to the See --------------------------------------------------------
+
+ cult.0440.t:0 "The See Is Ours"
+ cult.0440.desc:0 "You spoke with [cult_see_head.GetTitledFirstName] alone, in a side chapel of the great [cult_faith.HouseOfWorship], and told [cult_see_head.GetHerHim] everything. How much of the church already belonged to $cult_society_name$. Who else had sworn. What $cult_devil_name$ offers.\n\nThe head of $cult_host_name$ heard you out. Then [cult_see_head.GetSheHe] swore, with [cult_see_head.GetHerHis] hand on the book [cult_see_head.GetSheHe] has sworn on all [cult_see_head.GetHerHis] life."
+ cult.0440.a:0 "The church kneels, and does not know to whom."
+ cult.0440.a.tt:0 "[cult_see_head.GetFirstNameNoTooltip] is sworn to $cult_society_name$"
+
+ cult.0441.t:0 "Neither Yes nor No"
+ cult.0441.desc:0 "[cult_see_head.GetTitledFirstName] listened to all of it without once calling for the guards. When you had finished [cult_see_head.GetSheHe] said nothing at all. [cult_see_head.GetSheHe|U] did not take the oath, and did not send back the gifts.\n\nThe head of $cult_host_name$ has not said no. A head of the faith who does not say no has already heard too much to forget."
+ cult.0441.a:0 "Next time [cult_see_head.GetSheHe] will say yes."
+ cult.0441.a.tt:0 "You have a hook on [cult_see_head.GetFirstNameNoTooltip], and the next approach in five years is much likelier to succeed"
+
+ cult.0442.t:0 "The See Refuses"
+ cult.0442.desc:0 "[cult_see_head.GetTitledFirstName] let you speak for less than a minute. Then [cult_see_head.GetSheHe] stood, called on [cult_faith.HighGodName] to witness what [cult_see_head.GetSheHe] had heard, and had you shown out.\n\nThe head of $cult_host_name$ knows your face and your name, and knows what you are. [cult_see_head.GetSheHe|U] will not keep that to [cult_see_head.GetHerselfHimself] for long."
+ cult.0442.a:0 "Then I must be gone before [cult_see_head.GetSheHe] acts."
+
+ cult.0443.t:0 "An Offer to the See"
+ cult.0443.desc:0 "[cult_whisperer.GetTitledFirstName] came to you in private, and offered you the oath of those who pray to $cult_devil_name$ inside your own church. [cult_whisperer.GetSheHe|U] said many of your priests had already taken it.\n\nYou threw [cult_whisperer.GetHerHim] out. What [cult_whisperer.GetSheHe] said about your priests is harder to throw out."
+ cult.0443.a:0 "Denounce [cult_whisperer.GetHerHim] from every pulpit."
+ cult.0443.b:0 "Say nothing. Watch who [cult_whisperer.GetSheHe] meets."
+
+ cult.0444.t:0 "A Whisper in the Chapel"
+ cult.0444.desc:0 "[cult_whisperer.GetTitledFirstName] asked to pray with you alone, and then did not pray. Instead [cult_whisperer.GetSheHe] told you that $cult_host_name$ is rotten through: priests, holy places, lords, all sworn in secret to $cult_devil_name$ by $cult_society_name$.\n\nThe only part of the church they do not have, [cult_whisperer.GetSheHe] says, is you. [cult_whisperer.GetSheHe|U] has come to offer you the oath."
+ cult.0444.a:0 "If the church is theirs, then so am I."
+ cult.0444.b:0 "I have heard nothing tonight. Come back another time."
+ cult.0444.c:0 "In the name of [cult_faith.HighGodName], get out."

@@ -448,8 +448,8 @@ restor.0531 = {
 		restor_underground_trigger = yes
 		has_variable = restor_charge
 		var:restor_charge = flag:stir
-		exists = var:restor_charge_target
-		var:restor_charge_target = {
+		exists = var:restor_charge_county
+		var:restor_charge_county = {
 			NOT = { has_county_modifier = restor_county_stirred }
 		}
 	}

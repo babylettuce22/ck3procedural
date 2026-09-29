@@ -1,0 +1,1125 @@
+﻿# The inversion cult's powers. cult.0400-0499.
+#
+#   cult_turn_priest_interaction          Adept, 40 power       a court chaplain or theocrat of the host faith
+#   cult_offer_sacrifice_interaction      Adept                 a prisoner, given to the cult's master (any phase)
+#   cult_take_them_interaction            Magister, 100 power   the cult's own abduct scheme
+#   cult_curse_interaction                Magister, 60 power    anyone: sickness, misfortune, nothing, or traced
+#   cult_defile_relic_interaction         Adept, 30 power       a lord of the faith with a holy site in the realm
+#   cult_whisper_to_the_see_interaction   Hierarch or Hierophant, 150 power, rot 40
+#                                                               the head of the host faith: the capture attempt
+#
+# Built like the Restorationists' powers (00_restor_powers.txt): the recipient is the target, dark
+# power is a variable that `cost` cannot hold, so it is checked in a custom_tooltip and spent by
+# cult_power_spend_effect in on_accept. Membership is asserted in is_shown -- a non-member must
+# never see one of these exist -- and again in is_available for the AI. Every use calls
+# cult_corrupt_soul_effect: the soul pays too.
+#
+# Every power ends in a roll or a choice with several results, and every result is reported: an
+# event for the member who used it, and one for a player on the other end where it matters. Where a
+# power changes the map (a chaplain sworn, a holy site tainted, the head sworn) the rot is
+# recomputed at once.
+#
+# All are for the secret phases (hidden and hollow) except the offering, which the cult keeps
+# making after it is unveiled.
+
+# =====================================================================================
+#  TURN A PRIEST                                                               (Adept)
+# =====================================================================================
+#
+# A court chaplain of a ruler of the host faith, or a theocratic ruler of it. A player priest
+# answers for themselves (cult.0405); an AI priest's answer is rolled. Sworn: a chaplain in the
+# cult's hands, which the rot counts. Bribed: takes the gifts and not the oath -- a hook, and the
+# recruiters will find them willing. Reports it: exposure, and the hunter hears.
+
+cult_turn_priest_interaction = {
+	category = interaction_category_friendly
+	icon = icon_scheme_sway
+	interface_priority = 40
+	common_interaction = no
+
+	desc = cult_turn_priest_interaction_desc
+
+	auto_accept = yes
+
+	cooldown = { years = 1 }
+	cooldown_against_recipient = { years = 5 }
+
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		scope:actor = { has_trait = cult_member }
+		scope:actor != scope:recipient
+		scope:recipient = { cult_power_priest_target_trigger = yes }
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = cult_power_needs_adept_tt
+			scope:actor = { cult_rank_at_least_trigger = { RANK = 25 } }
+		}
+		custom_tooltip = {
+			text = cult_power_power_40_tt
+			scope:actor = { cult_power_has_power_trigger = { VALUE = 40 } }
+		}
+		scope:actor = { is_imprisoned = no }
+		scope:recipient = {
+			is_adult = yes
+			is_imprisoned = no
+			custom_tooltip = {
+				text = cult_power_refused_recently_tt
+				NOT = { has_character_flag = cult_refused_recently }
+			}
+		}
+	}
+
+	on_accept = {
+		scope:actor = {
+			cult_save_scopes_effect = yes
+			save_scope_as = cult_priest_turner
+			cult_power_spend_effect = { VALUE = 40 }
+			cult_exposure_gain_effect = { VALUE = 3 }
+			cult_corrupt_soul_effect = yes
+		}
+		scope:recipient = { save_scope_as = cult_priest }
+
+		if = {
+			limit = { scope:recipient = { is_ai = no } }
+			custom_tooltip = cult_turn_priest_player_tt
+			hidden_effect = {
+				scope:recipient = { trigger_event = { id = cult.0405 days = 2 } }
+			}
+		}
+		else = {
+			random_list = {
+				# Sworn. The host's sinners are the cult's saints.
+				25 = {
+					modifier = {
+						add = 25
+						scope:recipient = { cult_sinner_trigger = yes }
+					}
+					modifier = {
+						add = 20
+						scope:recipient = { has_trait = cynical }
+					}
+					modifier = {
+						add = -15
+						scope:recipient = { has_trait = zealous }
+					}
+					modifier = {
+						add = 10
+						scope:recipient = { has_trait = ambitious }
+					}
+					modifier = {
+						add = 15
+						scope:recipient = {
+							opinion = {
+								target = scope:actor
+								value >= 30
+							}
+						}
+					}
+					modifier = {
+						add = 10
+						scope:actor = { intrigue >= 12 }
+					}
+					modifier = {
+						add = 10
+						scope:actor = { learning >= 12 }
+					}
+					cult_power_priest_sworn_effect = yes
+				}
+				# Takes the gifts, not the oath.
+				40 = {
+					modifier = {
+						add = 15
+						scope:recipient = { has_trait = greedy }
+					}
+					modifier = {
+						add = -10
+						scope:recipient = { has_trait = honest }
+					}
+					cult_power_priest_bribed_effect = yes
+				}
+				# Reports it.
+				25 = {
+					modifier = {
+						add = 25
+						scope:recipient = { has_trait = zealous }
+					}
+					modifier = {
+						add = 10
+						scope:recipient = { has_trait = honest }
+					}
+					modifier = {
+						add = 10
+						scope:recipient = { has_trait = just }
+					}
+					modifier = {
+						add = -10
+						scope:recipient = { cult_sinner_trigger = yes }
+					}
+					modifier = {
+						add = -10
+						scope:actor = { intrigue >= 12 }
+					}
+					cult_power_priest_reports_effect = yes
+				}
+			}
+		}
+	}
+
+	is_available = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		cult_rank_at_least_trigger = { RANK = 25 }
+	}
+
+	ai_targets = {
+		ai_recipients = councillors
+	}
+	ai_targets = {
+		ai_recipients = realm_characters
+		max = 20
+	}
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		max = 10
+	}
+	ai_targets = {
+		ai_recipients = vassals
+		max = 10
+	}
+	ai_targets = {
+		ai_recipients = liege
+	}
+
+	ai_frequency = 36
+
+	ai_will_do = {
+		base = 5
+		modifier = {
+			add = 20
+			scope:recipient = { cult_sinner_trigger = yes }
+		}
+		modifier = {
+			add = 10
+			scope:recipient = { has_trait = cynical }
+		}
+		modifier = {
+			add = 10
+			scope:actor = { intrigue >= 12 }
+		}
+		modifier = {
+			factor = 0
+			scope:recipient = { has_trait = zealous }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = {
+				has_variable = cult_exposure
+				var:cult_exposure >= 15
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  OFFER TO THE MASTER                                                          (Adept)
+# =====================================================================================
+#
+# A prisoner is given to $cult_devil_name$. Ported from the prototype's sacrifice
+# (../../../SocietyPrototype/common/character_interactions/00_society_powers.txt):
+#
+#   * The reward is read off the victim BEFORE the death: `death` invalidates scope:recipient for
+#     everything after it, and the bug is silent (every victim scores as a nobody).
+#   * The death reason is the cult's own, public_knowledge = no (common/deathreasons/00_cult_deaths.txt):
+#     every vanilla sacrifice or execution reason tells the world who the killer was.
+#   * No tyranny or dread: the `death` effect applies none, and nobody can name the killer.
+#     Exposure is the cost instead.
+#   * Adults only.
+#
+# The fan is what comes of it afterwards: nothing (most often), the circle hears and thinks better
+# of you, or a jailer talks. Any phase: the cult keeps its altars after the Unveiling, when
+# exposure is a no-op.
+
+cult_offer_sacrifice_interaction = {
+	category = interaction_category_hostile
+	icon = icon_dead
+	interface_priority = 60
+	common_interaction = no
+
+	desc = cult_offer_sacrifice_interaction_desc
+
+	auto_accept = yes
+
+	cooldown = { years = 1 }
+
+	is_shown = {
+		cult_active_trigger = yes
+		scope:actor = { has_trait = cult_member }
+		scope:recipient = {
+			is_imprisoned_by = scope:actor
+			is_adult = yes
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = cult_power_needs_adept_tt
+			scope:actor = { cult_rank_at_least_trigger = { RANK = 25 } }
+		}
+		scope:actor = { is_imprisoned = no }
+	}
+
+	on_accept = {
+		scope:actor = {
+			cult_save_scopes_effect = yes
+			save_scope_as = cult_offerer
+		}
+		scope:recipient = { save_scope_as = cult_offering }
+
+		# ---- 1. Read the victim, while there is still a victim to read ----
+		# The master values what the world will miss: a lord, a great lord, a zealot of the host,
+		# a priest of it.
+		save_scope_value_as = {
+			name = cult_offering_worth
+			value = {
+				value = 30
+				if = {
+					limit = { scope:recipient = { highest_held_title_tier >= tier_county } }
+					add = 20
+				}
+				if = {
+					limit = { scope:recipient = { highest_held_title_tier >= tier_duchy } }
+					add = 30
+				}
+				if = {
+					limit = { scope:recipient = { has_trait = zealous } }
+					add = 20
+				}
+				if = {
+					limit = {
+						scope:recipient = {
+							faith = global_var:cult_host_faith
+							OR = {
+								has_council_position = councillor_court_chaplain
+								government_has_flag = government_is_theocracy
+							}
+						}
+					}
+					add = 20
+				}
+			}
+		}
+
+		# ---- 2. What it gives, and what it costs ----
+		scope:actor = {
+			cult_power_gain_effect = { VALUE = scope:cult_offering_worth }
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = 5
+			}
+			cult_exposure_gain_effect = { VALUE = 3 }
+			cult_corrupt_soul_effect = yes
+			stress_impact = {
+				compassionate = major_stress_impact_gain
+				forgiving = medium_stress_impact_gain
+				craven = minor_stress_impact_gain
+				sadistic = medium_stress_impact_loss
+			}
+		}
+
+		random_list = {
+			# Nobody asks.
+			55 = {
+				custom_tooltip = cult_offer_quiet_tt
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = cult.0410 days = 3 } }
+				}
+			}
+			# The circle hears of it, and thinks better of you.
+			25 = {
+				modifier = {
+					add = 15
+					scope:recipient = { highest_held_title_tier >= tier_duchy }
+				}
+				modifier = {
+					add = 10
+					scope:recipient = { has_trait = zealous }
+				}
+				scope:actor = {
+					add_trait_xp = {
+						trait = cult_member
+						track = cult_rank
+						value = 10
+					}
+					hidden_effect = {
+						trigger_event = { id = cult.0411 days = 3 }
+					}
+				}
+			}
+			# A jailer talks.
+			20 = {
+				trigger = { cult_secret_phase_trigger = yes }
+				modifier = {
+					add = 10
+					scope:recipient = { highest_held_title_tier >= tier_county }
+				}
+				modifier = {
+					add = -10
+					scope:actor = { intrigue >= 14 }
+				}
+				scope:actor = {
+					cult_exposure_gain_effect = { VALUE = 10 }
+					hidden_effect = {
+						trigger_event = { id = cult.0412 days = 5 }
+					}
+				}
+			}
+		}
+
+		# ---- 3. Only now ----
+		scope:recipient = {
+			death = {
+				killer = scope:actor
+				death_reason = death_cult_sacrifice
+			}
+		}
+	}
+
+	is_available = {
+		cult_active_trigger = yes
+		has_trait = cult_member
+		cult_rank_at_least_trigger = { RANK = 25 }
+	}
+
+	ai_targets = {
+		ai_recipients = prisoners
+	}
+
+	ai_frequency = 60
+
+	ai_will_do = {
+		base = 0
+		modifier = {
+			add = 30
+			scope:actor = { has_trait = sadistic }
+		}
+		modifier = {
+			add = 20
+			scope:actor = { has_relation_rival = scope:recipient }
+		}
+		modifier = {
+			add = 20
+			scope:recipient = { highest_held_title_tier >= tier_duchy }
+		}
+		ai_value_modifier = {
+			ai_compassion = -1
+		}
+		modifier = {
+			factor = 0
+			scope:actor = { is_close_or_extended_family_of = scope:recipient }
+		}
+		modifier = {
+			factor = 0
+			scope:recipient = { has_trait = cult_member }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = {
+				has_variable = cult_exposure
+				var:cult_exposure >= 15
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  TAKE THEM                                                                (Magister)
+# =====================================================================================
+#
+# Starts the cult's own abduct scheme (common/schemes/scheme_types/00_cult_abduct_scheme.txt),
+# which only the sworn may help with. The dark power is charged here, at the commitment; the scheme
+# refunds nothing if abandoned. Vanilla's abduction resolves it and reports every outcome.
+#
+# The AI does not use it: no ai_targets and a zero ai_will_do (the prototype's reasoning -- an AI
+# with nothing to do with a prisoner produces abductions nobody asked for).
+
+cult_take_them_interaction = {
+	category = interaction_category_hostile
+	icon = icon_scheme_abduct
+	interface_priority = 55
+	common_interaction = no
+
+	send_name = START_SCHEME
+	scheme = cult_abduct
+
+	desc = cult_take_them_interaction_desc
+
+	auto_accept = yes
+
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		scope:actor = { has_trait = cult_member }
+		scope:actor != scope:recipient
+		NOT = { scope:recipient = { is_imprisoned_by = scope:actor } }
+		NAND = {
+			has_game_rule = no_players_multiplayer_murder_schemes
+			scope:actor = { is_ai = no }
+			scope:recipient = { is_ai = no }
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = cult_power_needs_magister_tt
+			scope:actor = { cult_rank_at_least_trigger = { RANK = 50 } }
+		}
+		custom_tooltip = {
+			text = cult_power_power_100_tt
+			scope:actor = { cult_power_has_power_trigger = { VALUE = 100 } }
+		}
+		scope:actor = {
+			can_start_scheme = {
+				type = cult_abduct
+				target_character = scope:recipient
+			}
+		}
+		scope:recipient = { NOT = { has_strong_hook = scope:actor } }
+	}
+
+	on_accept = {
+		scope:actor = {
+			cult_save_scopes_effect = yes
+			cult_power_spend_effect = { VALUE = 100 }
+			cult_exposure_gain_effect = { VALUE = 3 }
+			cult_corrupt_soul_effect = yes
+			stress_impact = {
+				compassionate = medium_stress_impact_gain
+				honest = minor_stress_impact_gain
+				just = minor_stress_impact_gain
+			}
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = cult_take_them_started_toast
+				left_icon = scope:actor
+				right_icon = scope:recipient
+				begin_scheme_with_agents_effect = {
+					SCHEME_TYPE = cult_abduct
+					TARGET_TYPE = target_character
+					TARGET_SCOPE = scope:recipient
+					AGENT_1 = agent_thug
+					AGENT_2 = agent_muscle
+					AGENT_3 = agent_footpad
+					AGENT_4 = agent_infiltrator
+					AGENT_5 = agent_lookout
+				}
+			}
+		}
+	}
+
+	is_available = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		cult_rank_at_least_trigger = { RANK = 50 }
+	}
+
+	ai_will_do = {
+		base = 0
+	}
+}
+
+# =====================================================================================
+#  CURSE                                                                    (Magister)
+# =====================================================================================
+#
+# Anyone. What follows may be the curse, or poison, or luck -- the prose never says which. Sickness
+# (vanilla's own illness, through contract_disease_effect), misfortune (stress and a bad omen), or
+# nothing at all; and sometimes the victim works out who wished it on them.
+
+cult_curse_interaction = {
+	category = interaction_category_hostile
+	icon = plague
+	interface_priority = 40
+	common_interaction = no
+
+	desc = cult_curse_interaction_desc
+
+	auto_accept = yes
+
+	cooldown = { years = 2 }
+	cooldown_against_recipient = { years = 5 }
+
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		scope:actor = { has_trait = cult_member }
+		scope:actor != scope:recipient
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = cult_power_needs_magister_tt
+			scope:actor = { cult_rank_at_least_trigger = { RANK = 50 } }
+		}
+		custom_tooltip = {
+			text = cult_power_power_60_tt
+			scope:actor = { cult_power_has_power_trigger = { VALUE = 60 } }
+		}
+		scope:actor = { is_imprisoned = no }
+	}
+
+	on_accept = {
+		scope:actor = {
+			cult_save_scopes_effect = yes
+			save_scope_as = cult_curser
+			cult_power_spend_effect = { VALUE = 60 }
+			cult_exposure_gain_effect = { VALUE = 2 }
+			cult_corrupt_soul_effect = yes
+		}
+		scope:recipient = { save_scope_as = cult_cursed }
+
+		random_list = {
+			# Sickness.
+			30 = {
+				trigger = {
+					scope:recipient = { can_contract_disease_trigger = { DISEASE = ill } }
+				}
+				modifier = {
+					add = 10
+					scope:actor = { learning >= 12 }
+				}
+				scope:recipient = {
+					show_as_tooltip = { add_trait = ill }
+					hidden_effect = {
+						contract_disease_effect = {
+							DISEASE = ill
+							TREATMENT_EVENT = yes
+						}
+					}
+				}
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = cult.0420 days = 7 } }
+				}
+			}
+			# Misfortune.
+			30 = {
+				scope:recipient = {
+					add_stress = medium_stress_gain
+					add_character_modifier = {
+						modifier = bad_omen_modifier
+						years = 3
+					}
+				}
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = cult.0421 days = 7 } }
+				}
+			}
+			# Nothing.
+			25 = {
+				modifier = {
+					add = 10
+					scope:recipient = { has_trait = zealous }
+				}
+				custom_tooltip = cult_curse_nothing_tt
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = cult.0422 days = 30 } }
+				}
+			}
+			# Traced back.
+			15 = {
+				modifier = {
+					add = 10
+					scope:recipient = { has_trait = paranoid }
+				}
+				modifier = {
+					add = 10
+					scope:recipient = { intrigue >= 14 }
+				}
+				modifier = {
+					add = -5
+					scope:actor = { intrigue >= 14 }
+				}
+				scope:actor = { cult_exposure_gain_effect = { VALUE = 15 } }
+				scope:recipient = {
+					add_opinion = {
+						target = scope:actor
+						modifier = angry_opinion
+						opinion = -30
+					}
+				}
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = cult.0423 days = 7 } }
+					if = {
+						limit = { scope:recipient = { is_ai = no } }
+						scope:recipient = { trigger_event = { id = cult.0424 days = 7 } }
+					}
+				}
+			}
+		}
+	}
+
+	is_available = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		cult_rank_at_least_trigger = { RANK = 50 }
+	}
+
+	ai_targets = {
+		ai_recipients = scripted_relations
+	}
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		max = 10
+	}
+
+	ai_frequency = 60
+
+	ai_will_do = {
+		base = 0
+		modifier = {
+			add = 30
+			scope:actor = { has_relation_rival = scope:recipient }
+		}
+		modifier = {
+			add = 15
+			scope:actor = { has_relation_nemesis = scope:recipient }
+		}
+		modifier = {
+			add = 10
+			scope:recipient = { cult_is_hunter_trigger = yes }
+		}
+		modifier = {
+			add = 10
+			scope:actor = { has_trait = vengeful }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = { is_close_or_extended_family_of = scope:recipient }
+		}
+		modifier = {
+			factor = 0
+			scope:recipient = { has_trait = cult_member }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = {
+				has_variable = cult_exposure
+				var:cult_exposure >= 15
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  DEFILE A RELIC                                                              (Adept)
+# =====================================================================================
+#
+# A lord of the host faith whose realm holds one of its holy sites. The sworn get into the shrine
+# there and foul what the faithful keep in it. Quietly: the county is tainted and the lord loses
+# piety. A scandal: the same, and the shame lands on the lord. Interrupted: nothing done. Caught:
+# exposure, and the lord will not forgive it. A tainted holy site is rot.
+
+cult_defile_relic_interaction = {
+	category = interaction_category_hostile
+	icon = excommunication
+	interface_priority = 40
+	common_interaction = no
+
+	desc = cult_defile_relic_interaction_desc
+
+	auto_accept = yes
+
+	cooldown = { years = 2 }
+	cooldown_against_recipient = { years = 5 }
+
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		scope:actor = { has_trait = cult_member }
+		scope:actor != scope:recipient
+		scope:recipient = { cult_power_defile_target_trigger = yes }
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = cult_power_needs_adept_tt
+			scope:actor = { cult_rank_at_least_trigger = { RANK = 25 } }
+		}
+		custom_tooltip = {
+			text = cult_power_power_30_tt
+			scope:actor = { cult_power_has_power_trigger = { VALUE = 30 } }
+		}
+		scope:actor = { is_imprisoned = no }
+	}
+
+	on_accept = {
+		scope:actor = {
+			cult_save_scopes_effect = yes
+			save_scope_as = cult_defiler
+			cult_power_spend_effect = { VALUE = 30 }
+			cult_exposure_gain_effect = { VALUE = 4 }
+			cult_corrupt_soul_effect = yes
+		}
+		scope:recipient = { save_scope_as = cult_defiled_lord }
+
+		# Which holy place: an untainted one first.
+		global_var:cult_host_faith = {
+			random_holy_site = {
+				limit = {
+					county = {
+						cult_power_county_under_trigger = { LORD = scope:recipient }
+						NOT = { has_county_modifier = cult_county_tainted }
+					}
+				}
+				county = { save_scope_as = cult_defiled_county }
+			}
+		}
+		if = {
+			limit = { NOT = { exists = scope:cult_defiled_county } }
+			global_var:cult_host_faith = {
+				random_holy_site = {
+					limit = {
+						county = { cult_power_county_under_trigger = { LORD = scope:recipient } }
+					}
+					county = { save_scope_as = cult_defiled_county }
+				}
+			}
+		}
+
+		random_list = {
+			# Done quietly.
+			45 = {
+				modifier = {
+					add = 10
+					scope:actor = { intrigue >= 12 }
+				}
+				cult_power_defile_county_effect = yes
+				scope:recipient = { add_piety = medium_piety_loss }
+				scope:actor = {
+					add_trait_xp = {
+						trait = cult_member
+						track = cult_rank
+						value = 3
+					}
+					hidden_effect = {
+						trigger_event = { id = cult.0430 days = 5 }
+					}
+				}
+			}
+			# Done, and the shame falls on the lord.
+			20 = {
+				modifier = {
+					add = 10
+					scope:recipient = { has_trait = zealous }
+				}
+				cult_power_defile_county_effect = yes
+				scope:recipient = {
+					add_piety = major_piety_loss
+					add_prestige = minor_prestige_loss
+				}
+				scope:actor = {
+					add_trait_xp = {
+						trait = cult_member
+						track = cult_rank
+						value = 5
+					}
+					hidden_effect = {
+						trigger_event = { id = cult.0431 days = 5 }
+					}
+				}
+			}
+			# Interrupted.
+			20 = {
+				custom_tooltip = cult_defile_interrupted_tt
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = cult.0432 days = 5 } }
+				}
+			}
+			# Caught.
+			15 = {
+				modifier = {
+					add = 10
+					scope:recipient = { has_trait = paranoid }
+				}
+				modifier = {
+					add = -5
+					scope:actor = { intrigue >= 14 }
+				}
+				scope:actor = { cult_exposure_gain_effect = { VALUE = 15 } }
+				scope:recipient = {
+					add_opinion = {
+						target = scope:actor
+						modifier = cult_defiled_my_faith_opinion
+					}
+				}
+				hidden_effect = {
+					scope:actor = { trigger_event = { id = cult.0433 days = 5 } }
+					if = {
+						limit = { scope:recipient = { is_ai = no } }
+						scope:recipient = { trigger_event = { id = cult.0434 days = 5 } }
+					}
+				}
+			}
+		}
+	}
+
+	is_available = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		cult_rank_at_least_trigger = { RANK = 25 }
+	}
+
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		max = 10
+	}
+	ai_targets = {
+		ai_recipients = vassals
+		max = 10
+	}
+	ai_targets = {
+		ai_recipients = liege
+	}
+
+	ai_frequency = 48
+
+	ai_will_do = {
+		base = 5
+		modifier = {
+			add = 15
+			scope:recipient = { cult_is_hunter_trigger = yes }
+		}
+		modifier = {
+			add = 10
+			scope:actor = { has_relation_rival = scope:recipient }
+		}
+		modifier = {
+			add = 5
+			scope:actor = { intrigue >= 12 }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = { is_close_or_extended_family_of = scope:recipient }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = {
+				has_variable = cult_exposure
+				var:cult_exposure >= 15
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  WHISPER TO THE SEE                                          (Hierarch or Hierophant)
+# =====================================================================================
+#
+# The capture attempt: the head of the host faith is offered the oath. Sworn: cult_swear_in_effect
+# sees it is the head and runs the capture check -- the church is hollow. Wavers: neither answer;
+# the head keeps the gifts, the member gets a hook, and the next attempt is much likelier. Appalled:
+# +25 exposure, and the head, who is the hunter while unsworn, knows who came.
+#
+# The odds are the rot (how much of the church is already rotten around the head), the head's own
+# nature (the host's sins, cynicism, zeal) and the member's intrigue. A player head decides for
+# themselves (cult.0444).
+
+cult_whisper_to_the_see_interaction = {
+	category = interaction_category_friendly
+	icon = religious
+	interface_priority = 60
+	common_interaction = no
+
+	desc = cult_whisper_to_the_see_interaction_desc
+
+	auto_accept = yes
+
+	cooldown = { years = 2 }
+	cooldown_against_recipient = { years = 3 }
+
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		scope:actor = { has_trait = cult_member }
+		scope:actor != scope:recipient
+		scope:recipient = {
+			cult_power_is_host_head_trigger = yes
+			NOT = { has_trait = cult_member }
+			NOT = { has_trait = restor_member }
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = cult_power_needs_hierarch_tt
+			scope:actor = { cult_power_may_whisper_trigger = yes }
+		}
+		custom_tooltip = {
+			text = cult_power_power_150_tt
+			scope:actor = { cult_power_has_power_trigger = { VALUE = 150 } }
+		}
+		custom_tooltip = {
+			text = cult_whisper_rot_tt
+			exists = global_var:cult_rot
+			global_var:cult_rot >= 40
+		}
+		scope:actor = { is_imprisoned = no }
+		scope:recipient = {
+			is_imprisoned = no
+			custom_tooltip = {
+				text = cult_power_refused_recently_tt
+				NOT = { has_character_flag = cult_refused_recently }
+			}
+		}
+	}
+
+	on_accept = {
+		scope:actor = {
+			cult_save_scopes_effect = yes
+			save_scope_as = cult_whisperer
+			cult_power_spend_effect = { VALUE = 150 }
+			cult_exposure_gain_effect = { VALUE = 5 }
+			cult_corrupt_soul_effect = yes
+		}
+		scope:recipient = { save_scope_as = cult_see_head }
+
+		if = {
+			limit = { scope:recipient = { is_ai = no } }
+			custom_tooltip = cult_whisper_player_tt
+			hidden_effect = {
+				scope:recipient = { trigger_event = { id = cult.0444 days = 2 } }
+			}
+		}
+		else = {
+			random_list = {
+				# Sworn.
+				15 = {
+					modifier = {
+						add = 10
+						global_var:cult_rot >= 50
+					}
+					modifier = {
+						add = 15
+						global_var:cult_rot >= 70
+					}
+					modifier = {
+						add = 20
+						scope:recipient = { cult_sinner_trigger = yes }
+					}
+					modifier = {
+						add = 20
+						scope:recipient = { has_trait = cynical }
+					}
+					modifier = {
+						add = -15
+						scope:recipient = { has_trait = zealous }
+					}
+					modifier = {
+						add = 25
+						scope:recipient = { has_character_flag = cult_see_wavered }
+					}
+					modifier = {
+						add = 10
+						scope:actor = { intrigue >= 12 }
+					}
+					modifier = {
+						add = 10
+						scope:actor = { intrigue >= 16 }
+					}
+					modifier = {
+						add = 10
+						scope:recipient = {
+							opinion = {
+								target = scope:actor
+								value >= 40
+							}
+						}
+					}
+					cult_power_see_sworn_effect = yes
+				}
+				# Wavers.
+				40 = {
+					modifier = {
+						add = 10
+						scope:recipient = { has_trait = greedy }
+					}
+					modifier = {
+						add = 10
+						scope:recipient = { has_trait = ambitious }
+					}
+					cult_power_see_wavers_effect = yes
+				}
+				# Appalled.
+				35 = {
+					modifier = {
+						add = 25
+						scope:recipient = { has_trait = zealous }
+					}
+					modifier = {
+						add = 10
+						scope:recipient = { has_trait = honest }
+					}
+					modifier = {
+						add = 10
+						scope:recipient = { has_trait = just }
+					}
+					modifier = {
+						add = -10
+						scope:recipient = { cult_sinner_trigger = yes }
+					}
+					modifier = {
+						add = -10
+						scope:recipient = { has_trait = cynical }
+					}
+					modifier = {
+						add = -10
+						scope:actor = { intrigue >= 16 }
+					}
+					cult_power_see_appalled_effect = yes
+				}
+			}
+		}
+	}
+
+	is_available = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		cult_power_may_whisper_trigger = yes
+	}
+
+	ai_targets = {
+		ai_recipients = head_of_faith
+	}
+
+	ai_frequency = 36
+
+	ai_will_do = {
+		base = 10
+		modifier = {
+			add = 20
+			scope:actor = { cult_is_hierophant_trigger = yes }
+		}
+		modifier = {
+			add = 20
+			exists = global_var:cult_rot
+			global_var:cult_rot >= 60
+		}
+		modifier = {
+			add = 20
+			scope:recipient = { has_character_flag = cult_see_wavered }
+		}
+		modifier = {
+			add = 10
+			scope:recipient = { cult_sinner_trigger = yes }
+		}
+		modifier = {
+			factor = 0.5
+			scope:recipient = { has_trait = zealous }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = {
+				has_variable = cult_exposure
+				var:cult_exposure >= 15
+			}
+		}
+	}
+}

@@ -1,0 +1,7 @@
+﻿# The inversion cult's everyday life: marks the belonging events leave. cult.0200-0299.
+
+# cult.0251: zealots of the old faith have been in the streets of this county.
+cult_life_zealot_unrest_modifier = {
+	icon = county_modifier_opinion_negative
+	county_opinion_add = -15
+}

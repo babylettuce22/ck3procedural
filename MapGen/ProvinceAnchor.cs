@@ -15,7 +15,9 @@ namespace Ck3MapGen.MapGen;
 /// its own province every pixel is, and only pixels in the deepest fraction of that province stay
 /// in the running — which is what keeps a model off the shoreline whatever shape the province is.
 /// Among those, the flattest ground wins, with nearness to the centroid breaking ties, so the
-/// model stands on level ground near the middle rather than on the side of a mountain.
+/// model stands on level ground near the middle rather than on the side of a mountain. Ground
+/// steeper than <see cref="MapConfig.LocatorMaxSlope"/> is only taken when the province has
+/// nothing gentler: failing the core, the search widens outward before it settles for a slope.
 ///
 /// A province needs two anchors, not one: the holding stands at <see cref="Anchors.Holding"/> and
 /// anything sharing the province with it needs somewhere else to be. See
@@ -85,48 +87,134 @@ public static class ProvinceAnchor
             }
         }
 
-        var bestScore = new double[map.Count];
-        var anchor = new (double X, double Y)[map.Count];
-        Array.Fill(bestScore, double.PositiveInfinity);
-
         double fraction = Math.Clamp(cfg.LocatorInteriorFraction, 0, 1);
+        float sea = cfg.Limits.SeaLevelUpper;
 
-        for (int y = 0; y < height; y++)
+        // Steep ground is kept for when a province has nothing else (MapConfig.LocatorMaxSlope).
+        // The single-pixel slope above is fine for ranking, but a one-pixel ledge in a cliff reads
+        // flat on it, so steepness here is taken over the holding's footprint. Ground at or over
+        // the line is only used when no gentler ground stands far enough in: the core first, as
+        // before, then half its depth, then anywhere a holding's walls clear the border. The first
+        // ring with gentle ground wins, so a province whose pick was already gentle keeps the very
+        // same pixel. On an 8192 scar world 12 holdings moved, 7 of them out of the core; holdings
+        // on ground steeper than 99% of vanilla's went from 14 to 3, and none is past its 99.9th
+        // percentile. The two passes cost about half a second there.
+        double line = Math.Max(0, cfg.LocatorMaxSlope);
+        var footprint = line > 0 ? FootprintSlope(elevation, sea, width, height) : null;
+        double footprintReference = footprint is not null ? MedianSlope(footprint) : 1.0;
+
+        // Per label, the best pick in each ring: the three rings of gentle ground, then the
+        // fallback when there is none, then the pick the core alone would give, which is what the
+        // anchor was before any of this and is kept only to say how many moved.
+        const int Core = 0, Half = 1, Clear = 2, Fallback = 3, Unrestricted = 4;
+        var bestScore = new double[Unrestricted + 1][];
+        var best = new (double X, double Y)[Unrestricted + 1][];
+        for (int r = 0; r <= Unrestricted; r++)
         {
-            for (int x = 0; x < width; x++)
+            bestScore[r] = new double[map.Count];
+            best[r] = new (double X, double Y)[map.Count];
+            Array.Fill(bestScore[r], double.PositiveInfinity);
+        }
+
+        // Two passes: the core, as before, for every province; then the wider rings only for the
+        // provinces whose core had no gentle ground, which are a handful. Walking the whole of every
+        // province for the rings doubled the stage on an 8192 map.
+        Scan(wide: false, null);
+        if (footprint is not null)
+        {
+            var widen = new bool[map.Count];
+            bool any = false;
+            for (int label = 0; label < map.Count; label++)
+                if (map.Seeds[label].IsLand && double.IsPositiveInfinity(bestScore[Core][label]))
+                    any = widen[label] = true;
+            if (any) Scan(wide: true, widen);
+        }
+
+        void Scan(bool wide, bool[]? only)
+        {
+            for (int y = 0; y < height; y++)
             {
-                int cell = y * width + x;
-                int label = map.Label[cell];
+                for (int x = 0; x < width; x++)
+                {
+                    int cell = y * width + x;
+                    int label = map.Label[cell];
+                    if (only is not null && !only[label]) continue;
 
-                // Only the interior core of the province is eligible. A province one pixel deep
-                // everywhere still yields its own pixels, so nothing is ever left without an anchor.
-                if (depth[cell] < deepest[label] * fraction) continue;
+                    int d = depth[cell];
+                    bool core = d >= deepest[label] * fraction;
+                    if (wide ? d < Math.Min(HoldingClearance, deepest[label]) : !core) continue;
 
-                double centroidX = sumX[label] / area[label];
-                double centroidY = sumY[label] / area[label];
-                double dx = x - centroidX, dy = y - centroidY;
+                    // Sea zones keep the rule they always had: the line is about where a holding
+                    // stands.
+                    bool ruled = footprint is not null && map.Seeds[label].IsLand;
 
-                // Distance from the centroid is normalised by the province's own size so the
-                // tiebreak means the same thing in a small province as in a large one.
-                double radius = Math.Sqrt(area[label]) + 1;
-                double score = slope[cell] / reference
-                               + cfg.LocatorCentroidPull * Math.Sqrt(dx * dx + dy * dy) / radius;
+                    double centroidX = sumX[label] / area[label];
+                    double centroidY = sumY[label] / area[label];
+                    double dx = x - centroidX, dy = y - centroidY;
 
-                if (score >= bestScore[label]) continue;
+                    // Distance from the centroid is normalised by the province's own size so the
+                    // tiebreak means the same thing in a small province as in a large one.
+                    double radius = Math.Sqrt(area[label]) + 1;
+                    double pull = cfg.LocatorCentroidPull * Math.Sqrt(dx * dx + dy * dy) / radius;
+                    double score = slope[cell] / reference + pull;
 
-                bestScore[label] = score;
-                anchor[label] = (x, y);
+                    if (!wide)
+                    {
+                        Offer(Unrestricted, score);
+                        if (!ruled) continue;
+                        if (footprint![cell] < line) Offer(Core, score);
+
+                        // When nothing is gentle enough: the least steep ground in the core,
+                        // steepness taken over the footprint so a one-pixel ledge does not win.
+                        Offer(Fallback, footprint[cell] / footprintReference + pull);
+                        continue;
+                    }
+
+                    // Outside the core the rings reach down to the shore, where a land province's
+                    // own pixels can sit below the waterline; the core never does.
+                    if (footprint![cell] >= line || elevation[cell] <= sea) continue;
+                    if (d >= deepest[label] * fraction / 2) Offer(Half, score);
+                    Offer(Clear, score);
+
+                    void Offer(int ring, double s)
+                    {
+                        if (s >= bestScore[ring][label]) return;
+                        bestScore[ring][label] = s;
+                        best[ring][label] = (x, y);
+                    }
+                }
             }
         }
 
-        // A province the loop never saw cannot happen once labels are compacted, but an anchor of
-        // (0,0) would put a castle in the corner of the map rather than fail loudly, so fall back
-        // to the seed the partition already has.
+        var anchor = new (double X, double Y)[map.Count];
+        int moved = 0, outward = 0, steep = 0;
         for (int label = 0; label < map.Count; label++)
-            if (double.IsPositiveInfinity(bestScore[label]))
+        {
+            bool ruled = footprint is not null && map.Seeds[label].IsLand;
+            int ring = ruled ? Core : Unrestricted;
+            while (ring < Fallback && double.IsPositiveInfinity(bestScore[ring][label])) ring++;
+
+            // A province the loop never saw cannot happen once labels are compacted, but an anchor
+            // of (0,0) would put a castle in the corner of the map rather than fail loudly, so fall
+            // back to the seed the partition already has.
+            if (double.IsPositiveInfinity(bestScore[ring][label]))
+            {
                 anchor[label] = (map.Seeds[label].X, map.Seeds[label].Y);
+                continue;
+            }
+
+            anchor[label] = best[ring][label];
+            if (!ruled) continue;
+            if (anchor[label] != best[Unrestricted][label]) moved++;
+            if (ring is Half or Clear) outward++;
+            if (ring == Fallback) steep++;
+        }
 
         Report(map, depth, slope, anchor);
+        if (footprint is not null)
+            Console.WriteLine($"  locator anchors: {moved} holding(s) moved off ground steeper than {line:F1}/px " +
+                              $"({outward} of them out of their province's core); {steep} province(s) have " +
+                              "nothing gentler and keep their least steep ground");
 
         var special = SpecialAnchors(map, depth, slope, elevation, anchor, reference, cfg);
         return new Anchors(anchor, special, new double[map.Count]);
@@ -368,8 +456,12 @@ public static class ProvinceAnchor
         return depth;
     }
 
-    /// <summary>Gradient magnitude by central difference, which is what "steep" means here.</summary>
-    private static float[] SlopeField(float[] elevation, int width, int height)
+    /// <summary>
+    /// Gradient magnitude by central difference, which is what "steep" means here. The ranking
+    /// field leaves the two-pixel difference whole; <paramref name="halve"/> divides it by the
+    /// span, for a slope per pixel that a line in elevation units per world unit can be held to.
+    /// </summary>
+    private static float[] SlopeField(float[] elevation, int width, int height, bool halve = false)
     {
         var slope = new float[width * height];
 
@@ -383,12 +475,42 @@ public static class ProvinceAnchor
 
                 double dx = elevation[y * width + x1] - elevation[y * width + x0];
                 double dy = elevation[y1 * width + x] - elevation[y0 * width + x];
+                if (halve)
+                {
+                    dx /= Math.Max(1, x1 - x0);
+                    dy /= Math.Max(1, y1 - y0);
+                }
 
                 slope[y * width + x] = (float)Math.Sqrt(dx * dx + dy * dy);
             }
         });
 
         return slope;
+    }
+
+    /// <summary>
+    /// How far in from its province's border, in pixels, a holding moved out of the core must
+    /// still stand. A holding's own wall ring runs 3.2–4.1 world units out at scale 1, and a
+    /// province pixel is a world unit, so at five the walls stay inside the province.
+    /// </summary>
+    private const int HoldingClearance = 5;
+
+    /// <summary>
+    /// Slope over a holding's footprint, in elevation units per pixel: the gradient of the terrain
+    /// box-blurred at radius 1 three times (about a Gaussian of σ 1.4), with water raised to sea
+    /// level first so the drop to the seabed does not make every shore steep. This is the scale
+    /// <see cref="MapConfig.LocatorMaxSlope"/> was measured at on vanilla's holdings.
+    /// </summary>
+    private static float[] FootprintSlope(float[] elevation, float sea, int width, int height)
+    {
+        var level = new float[elevation.Length];
+        Parallel.For(0, height, y =>
+        {
+            for (int i = y * width, end = i + width; i < end; i++) level[i] = Math.Max(elevation[i], sea);
+        });
+
+        var smooth = Field.Blur(level, width, height, 1, 3);
+        return SlopeField(smooth, width, height, halve: true);
     }
 
     /// <summary>Median of the non-flat pixels, sampled — the whole field is millions of values and
