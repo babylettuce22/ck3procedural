@@ -170,13 +170,15 @@ Output depends on the settings, available game data, and generated world. The ma
 | Military and artifacts | Generated men-at-arms and associated innovations, regalia, and composed weapon and armour assets. |
 | Regional content | Centers of the World and wonders, regional struggles, routes, Silk Road and steppe content, and formation decisions. |
 | Governments | Government assignment, administrative and nomadic content, hegemony support, and dynastic-cycle integration. |
-| Optional systems | Wilderness and colonisation, county ruins, fantasy racial traits and morphology, and the society prototype. |
+| Optional systems | Wilderness and colonisation, county ruins, fantasy racial traits and morphology, and generated Restorationist and inversion-cult societies. |
 | Integration | Localization, GUI changes, defines, and compatibility declarations and patches for the replacement world. |
 
 Many systems combine generated files with hand-maintained file sets in `BaseFilesToCopy/`.
 Wilderness, ruins, and fantasy content are gated by their settings; ruins also require
-wilderness. Fantasy ethnicities are off by default. Societies are a hand-written prototype,
-off by default and hidden in the normal settings; `--societies` enables it. The presence of
+wilderness. Fantasy ethnicities are off by default. Societies combine generated world state with the static `Societies` file set. They are enabled
+by default but hidden in the normal settings; `--societies` explicitly enables them. The older
+`SocietyPrototype` set is a separate reference implementation and requires `EnableSocieties`
+to be false before `--society-prototype` can select it. The presence of
 a magic setting does not represent a completed procedural magic system.
 
 ### Azgaar imports

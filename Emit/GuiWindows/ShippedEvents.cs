@@ -31,6 +31,9 @@ public static class ShippedEvents
     /// <param name="File">The file it came from, which is how the panel groups them.</param>
     public sealed record Entry(string Id, string Type, string Scope, bool Hidden, string File)
     {
+        /// <summary>A literal title localization key; conditional title blocks have no single title.</summary>
+        public string? TitleKey { get; init; }
+
         /// <summary>The id as an identifier: <c>a.0001</c> cannot be part of a script key.</summary>
         public string Key => Id.Replace('.', '_');
 
@@ -91,6 +94,7 @@ public static class ShippedEvents
         string type = "character_event";
         string scope = "character";
         bool hidden = false;
+        string? titleKey = null;
 
         int depth = 0;
 
@@ -124,11 +128,12 @@ public static class ShippedEvents
                 // Closing the event itself. Emit what was gathered and reset.
                 if (depth == 0 && id is not null)
                 {
-                    yield return new Entry(id, type, scope, hidden, file);
+                    yield return new Entry(id, type, scope, hidden, file) { TitleKey = titleKey };
                     id = null;
                     type = "character_event";
                     scope = "character";
                     hidden = false;
+                    titleKey = null;
                 }
 
                 continue;
@@ -159,6 +164,7 @@ public static class ShippedEvents
             if (word == "type") type = ValueAfter(text, i + 1) ?? type;
             else if (word == "scope") scope = ValueAfter(text, i + 1) ?? scope;
             else if (word == "hidden") hidden = ValueAfter(text, i + 1) == "yes";
+            else if (word == "title") titleKey = TitleAfter(text, i + 1);
         }
     }
 
@@ -200,6 +206,21 @@ public static class ShippedEvents
     {
         while (i < text.Length && char.IsWhiteSpace(text[i])) i++;
         return i;
+    }
+
+    // Titles may be bare or quoted localization keys. Do not pick a nested title from a
+    // conditional block: its conditions and saved scopes only exist when the event runs.
+    private static string? TitleAfter(string text, int from)
+    {
+        int i = SkipSpace(text, from);
+        if (i >= text.Length || text[i] != '=') return null;
+        i = SkipSpace(text, i + 1);
+        if (i >= text.Length) return null;
+        if (text[i] != '"') return ValueAfter(text, from);
+
+        int end = Io.ScriptScan.StringEnd(text, i);
+        string key = text[(i + 1)..end];
+        return key.Length > 0 && key.All(IsWord) ? key : null;
     }
 
     private static bool IsWordStart(char c) => char.IsAsciiLetter(c) || c == '_';

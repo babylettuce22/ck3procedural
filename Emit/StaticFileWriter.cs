@@ -53,11 +53,11 @@ public static class StaticFileWriter
     public const string Fantasy = "Fantasy";
 
     /// <summary>
-    /// The society system: today the Restorationists, a secret order sworn to put a fallen crown
-    /// back on its house's head. The static half — events, interactions, effects, the panel — reads
+    /// The society system: Restorationists sworn to a fallen house, and a cult derived from
+    /// its host religion. The static half — events, interactions, effects, the panel — reads
     /// everything per-world through global variables that
-    /// <see cref="RestorationWriter"/> sets at game start, so no file here names a generated key.
-    /// Off by default (<see cref="Config.MapConfig.EnableSocieties"/>).
+    /// <see cref="RestorationWriter"/> and <see cref="CultWriter"/> set at game start, so no file here names a generated key.
+    /// Enabled by default (<see cref="Config.MapConfig.EnableSocieties"/>).
     /// </summary>
     public const string Societies = "Societies";
 

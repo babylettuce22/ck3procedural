@@ -1,11 +1,12 @@
-Societies -- the Restorationists.
+Societies -- the Restorationists and the inversion cult.
 
-One secret society per world, sworn to put a fallen crown back on the head of the house that lost
-it. The first fully built society, and the pattern later ones (a hidden faith, an inversion cult)
-are meant to follow: a LOYALTY that never changes, and AIMS that change with the state of the world.
+Up to one Restorationist cause and one inversion cult per world, when suitable crowns and faiths
+exist. Each combines generated world state with this static set. The Restorationists seek to put
+a fallen crown back on its house; the cult inverts its host religion. Both have a fixed LOYALTY
+and AIMS that change with the state of the world.
 
-The hand-written prototype this grew out of is in ../SocietyPrototype and ships only with
---society-prototype. It is the reference for the CK3 mechanisms it proved; nothing here depends on it.
+The hand-written prototype this grew out of is in ../SocietyPrototype and can be selected with
+--society-prototype only when EnableSocieties is false; the generated set takes precedence. It is the reference for the CK3 mechanisms it proved; nothing here depends on it.
 
 
 WHAT IS GENERATED AND WHAT IS NOT
@@ -37,7 +38,8 @@ Generated per world (MapGen/Societies/Restoration.cs + Emit/Societies/Restoratio
 
 Everything else is here, and reads the generated half ONLY through global variables set at game
 start. No static file names a generated key. If the world has no fallen crown, global_var:restor_crown
-is never set and every file in this set stays inert -- gate new content on restor_active_trigger.
+is never set and the Restorationist content stays inert -- gate it on restor_active_trigger.
+The cult has its own independent activation trigger, cult_active_trigger.
 
 
 THE LOYALTY, AND THE PHASES
@@ -110,8 +112,10 @@ with a named target on the map and three years to do it (restor.0501 offers, res
   shelter      a landless pretender: done when they are at your court.
   recruit      swear anyone in.
 
-Completion pays favour, rank XP and support, and toasts. Expiry (the timed variable runs out)
-costs a little favour and the Keeper's opinion. The AI completes charges abstractly (35% a year).
+Completion pays favour and rank XP, refreshes support from the map, and toasts. It does not
+award flat support points. Expiry costs a little favour and the Keeper's opinion. The AI has a
+35% yearly chance to attempt its charge; the attempt applies the relevant action when possible,
+and win_over has a further success roll.
 
 State on the member: var:restor_charge (the kind, a flag), var:restor_charge_target (win_over and
 shelter: always a character), var:restor_charge_county (stir: always a county title),
@@ -169,10 +173,10 @@ a variable) gets a custom_tooltip.
 
 HOW TO TEST
 -----------
-  Generate with --societies; the run log prints the crown, the fall, the pretender and the sworn.
+  Societies are enabled by default; --societies explicitly enables them. Generate a world; the run log prints the crown, the fall, the pretender and the sworn.
   In game (console):
     event restor.0001    swear yourself in at Captain, with 100 favour
-    event restor.0002    +50 support (walks the milestones)
+    event restor.0002    stir every crown county for ten years, then recompute support
     event restor.0003    make yourself the pretender
     event restor.0004    print the society's state as a toast chain
     event restor.0005    make yourself the Keeper (Give a Charge appears on members)
@@ -183,9 +187,9 @@ THE INVERSION CULT
 =====================================================================================================
 
 The second society, built the same way as the Restorationists and living in the same set: every key
-cult_*, event namespace cult, the same id blocks per pack, the same voice and rules. The two never
-share a member (one society per character, as in CK2): each side's recruitment excludes the other's
-trait, and the generator seeds them from disjoint sets.
+cult_*, event namespace cult, the same id blocks per pack, the same voice and rules. Membership is intended to be exclusive: each side's recruitment excludes the other's trait, and
+the generator seeds disjoint sets. Known gap: Restorationist pretender succession can swear in
+a cult member directly; recruitment restrictions do not enforce that path.
 
 THE PRINCIPLE: the cult is derived by INVERTING its host, and the generator already made everything it
 inverts. Generated per world (MapGen/Societies/InversionCult.cs + Emit/Societies/CultWriter.cs):

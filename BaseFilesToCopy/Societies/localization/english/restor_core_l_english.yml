@@ -84,3 +84,7 @@
  restor.0012.a:0 "Let them come to me."
  restor.0012.a.tt:0 "The Sworn may approach you. If you join, you gain their support, and the crown may pass to you if the heir dies."
  restor.0012.b:0 "That was a long time ago."
+
+ restor_can_afford_favour_5_tt:0 "You have at least #high 5#! favour"
+ restor_can_afford_favour_10_tt:0 "You have at least #high 10#! favour"
+ restor_can_afford_favour_15_tt:0 "You have at least #high 15#! favour"

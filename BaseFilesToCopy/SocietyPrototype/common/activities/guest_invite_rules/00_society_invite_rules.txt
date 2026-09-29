@@ -17,9 +17,8 @@
 # ---- Why these iterators and not `every_living_character` ----
 #
 # Because you cannot invite someone you have never heard of. There is no world-wide roster in
-# this prototype -- when the generator writes a real society it will keep one, as a global
-# list maintained at game start, and these rules become a single walk over it. Until then the
-# reachable sets below are both the honest answer and the cheap one: a ruler's court, his
+# this prototype. The active ../Societies set uses global rosters maintained by its membership
+# effects. This reference keeps the reachable sets below: a ruler's court, his
 # vassals, his family, his spouses and his liege are the people he could plausibly know the
 # allegiance of.
 #

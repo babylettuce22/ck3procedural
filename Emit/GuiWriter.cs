@@ -44,7 +44,7 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class GuiWriter
 {
-    /// <param name="societies">Whether the society prototype is shipping. Gates the HUD tab, and
+    /// <param name="societies">Whether either society file set is shipping. Gates the HUD tab, and
     /// nothing else here — a tab pointing at a panel whose scripted_guis were not copied would be
     /// a button that silently does nothing. See <see cref="PatchHud"/>.</param>
     /// <param name="chronicle">Whether the chronicle ships. Gates the Chronicle tab and window,
@@ -80,12 +80,12 @@ public static class GuiWriter
 
     /// <summary>
     /// Adds our tabs to the column of buttons down the right of the HUD, under Intrigue: the
-    /// chronicle when it ships (on by default), and the society beneath it when the prototype
-    /// does. With neither, hud.gui and the two files that follow it are not patched at all.
+    /// chronicle when it ships (on by default), and the society beneath it when either society set
+    /// ships. With neither, hud.gui and the two files that follow it are not patched at all.
     ///
     /// <code>
     /// Related base files:
-    ///   Societies/common/scripted_guis/00_society_panel_guis.txt   society_panel_toggle, _window
+    ///   Societies/common/scripted_guis/00_restor_panel_guis.txt   society_panel_toggle, _window
     ///   Societies/gui/gen_society_panel.gui                        the society panel
     ///   Societies/gfx/interface/skinned/hud_maintab/maintab_gen_society.dds  its icon
     ///   Societies/localization/english/society_l_english.yml       SOCIETY_TAB_BUTTON

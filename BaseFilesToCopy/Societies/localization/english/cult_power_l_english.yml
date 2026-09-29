@@ -175,3 +175,5 @@
  cult.0444.a:0 "If the church is theirs, then so am I."
  cult.0444.b:0 "I have heard nothing tonight. Come back another time."
  cult.0444.c:0 "In the name of [cult_faith.HighGodName], get out."
+
+ cult_can_afford_power_10_tt:0 "You have at least #high 10#! dark power"

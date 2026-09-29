@@ -23,19 +23,11 @@
 # rite without being in it.
 #
 # =====================================================================================
-#  What a real rite would add, and why it is not here
+#  Entry requirements
 # =====================================================================================
 #
-# Nothing here costs the society anything. A generated rite pays out of a currency pool and is
-# gated on rank, and both are one line each in the blocks below:
-#
-#   cost = { gold = ... }   plus a has_variable/var: check on the society's currency
-#   can_start_showing_failures_only = { has_trait_xp = { trait = society_member
-#                                                        track = society_rank value >= 50 } }
-#
-# They are left out on purpose. This file should demonstrate the gating and nothing else, so
-# that when a rite misbehaves later it is obvious whether the membership plumbing or the new
-# economy is at fault.
+# The rite requires membership and Standing 50 in can_start_showing_failures_only.
+# There is no entry cost; finishing the rite grants Standing and Dark Power.
 
 activity_society_rite = {
 	# ---- Where it sits in the planner ----

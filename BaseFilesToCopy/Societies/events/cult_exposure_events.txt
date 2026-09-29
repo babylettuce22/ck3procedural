@@ -85,6 +85,8 @@ cult.0300 = {
 	# Clear the house of anything that could be found.
 	option = {
 		name = cult.0300.b
+		trigger = { cult_can_afford_power_trigger = { VALUE = 10 } }
+		show_as_unavailable = { always = yes }
 		cult_exposure_loss_effect = { VALUE = 4 }
 		cult_power_spend_effect = { VALUE = 10 }
 		ai_chance = {
@@ -1261,6 +1263,8 @@ cult.0312 = {
 	# Go quiet.
 	option = {
 		name = cult.0312.a
+		trigger = { cult_can_afford_power_trigger = { VALUE = 10 } }
+		show_as_unavailable = { always = yes }
 		cult_exposure_loss_effect = { VALUE = 4 }
 		cult_power_spend_effect = { VALUE = 10 }
 		ai_chance = { base = 50 }

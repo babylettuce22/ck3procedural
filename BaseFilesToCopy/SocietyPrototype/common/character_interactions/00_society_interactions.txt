@@ -24,10 +24,8 @@
 # rank would mean nobody could ever recruit anybody. A generated society solves this by seeding
 # members of every rank at the bookmark; this prototype has no history writer, so it cannot.
 #
-# No secrecy. Approaching somebody here is a plain interaction with no risk attached, because
-# this set has no secret type yet. When it does, the refusal branch in society.0001 is where a
-# secret gets created on the actor -- and this interaction becomes a genuine gamble rather than
-# a free attempt.
+# Recruitment carries exposure risk: acceptance adds 5 visibility to the recruiter and refusal
+# adds 15 through the follow-up events. Visibility thresholds maintain the membership secret.
 
 society_offer_oath_interaction = {
 	# Moved out of the Friendly block when the society got its own header, because a menu that

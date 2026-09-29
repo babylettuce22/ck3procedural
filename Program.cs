@@ -484,16 +484,14 @@ public static class Program
                         args[++i], System.Globalization.CultureInfo.InvariantCulture);
                     break;
 
-                // Ships the hand-written society prototype. Here as well as on the config object
-                // because the whole point of it is to be looked at in a running game, and the
-                // headless loop is how a world gets built to look at it in. See
-                // BaseFilesToCopy/Societies/README.txt.
+                // Explicitly enables the generated Restorationists and inversion cult (already on by
+                // default). See BaseFilesToCopy/Societies/README.txt.
                 case "--societies":
                     cfg.EnableSocieties = true;
                     break;
 
                 // The hand-written prototype the society system grew out of, kept as a reference
-                // (BaseFilesToCopy/SocietyPrototype). Ignored when --societies is also given.
+                // (BaseFilesToCopy/SocietyPrototype). Ignored whenever EnableSocieties is true, including its default value.
                 case "--society-prototype":
                     cfg.EnableSocietyPrototype = true;
                     break;

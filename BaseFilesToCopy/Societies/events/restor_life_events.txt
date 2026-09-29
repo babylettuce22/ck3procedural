@@ -193,6 +193,8 @@ restor.0202 = {
 	# Whip them out of the gate.
 	option = {
 		name = restor.0202.c
+		trigger = { restor_can_afford_favour_trigger = { VALUE = 5 } }
+		show_as_unavailable = { always = yes }
 		restor_exposure_loss_effect = { VALUE = 2 }
 		restor_favour_spend_effect = { VALUE = 5 }
 		stress_impact = {
@@ -400,6 +402,8 @@ restor.0205 = {
 	# Stop the song.
 	option = {
 		name = restor.0205.b
+		trigger = { restor_can_afford_favour_trigger = { VALUE = 5 } }
+		show_as_unavailable = { always = yes }
 		restor_exposure_loss_effect = { VALUE = 3 }
 		restor_favour_spend_effect = { VALUE = 5 }
 		stress_impact = {
@@ -1465,6 +1469,8 @@ restor.0214 = {
 	# Head down for a while.
 	option = {
 		name = restor.0214.b
+		trigger = { restor_can_afford_favour_trigger = { VALUE = 10 } }
+		show_as_unavailable = { always = yes }
 		restor_exposure_loss_effect = { VALUE = 5 }
 		restor_favour_spend_effect = { VALUE = 10 }
 	}

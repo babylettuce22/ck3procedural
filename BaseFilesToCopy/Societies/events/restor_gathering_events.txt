@@ -755,7 +755,9 @@ restor.0907 = {
 	# Apologise.
 	option = {
 		name = restor.0907.a
+		show_as_unavailable = { always = yes }
 		trigger = {
+			restor_can_afford_favour_trigger = { VALUE = 10 }
 			exists = scope:restor_judged_harshly
 			exists = scope:host
 		}

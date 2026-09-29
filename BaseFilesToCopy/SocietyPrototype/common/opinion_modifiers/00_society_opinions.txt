@@ -19,8 +19,8 @@ society_refused_the_oath_opinion = {
 # ---- What the rite leaves behind ----
 #
 # All three come out of society.0110 and society.0111. They are ordinary opinion modifiers and
-# not hooks or secrets on purpose: this set has no secret type yet, so the only durable record a
-# rite can leave is how the people in the room feel about the person who ran it.
+# not hooks or secrets: these record how attendees feel about the host. Membership secrets
+# are handled separately by the exposure system.
 #
 # Decay times differ because the three memories differ. Being passed over fades; being struck
 # from the roll in front of witnesses does not fade nearly as fast; being raised is a debt, and

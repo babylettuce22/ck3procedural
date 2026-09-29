@@ -890,26 +890,26 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     /// <summary>
     /// Ships the society system — see <see cref="Emit.StaticFileWriter.Societies"/> — and generates
-    /// this world's Restorationist society (<see cref="MapGen.Restoration"/>). Off by default and
-    /// hidden while it is in development. Switching it on writes only files of its own; every other
-    /// file in the mod is byte-identical either way.
+    /// this world's Restorationists and inversion cult. Enabled by default, but hidden in the
+    /// generator settings while in development. Includes static society content, generated setup,
+    /// and shared GUI integration for the society panels.
     /// </summary>
     /// HIDING FOR THIS BUILD
     [HideInGenerator]
     [Category("02 World State")]
     [DisplayName("Societies")]
-    [Description("Generate a secret societies. See BaseFilesToCopy/Societies/README.txt.")]
+    [Description("Generate Restorationist and inversion-cult societies. See BaseFilesToCopy/Societies/README.txt.")]
     public bool EnableSocieties { get; set; } = true;
 
     /// <summary>
     /// Ships the hand-written prototype the society system grew out of — see
     /// <see cref="Emit.StaticFileWriter.SocietyPrototype"/>. Ignored when <see cref="EnableSocieties"/>
-    /// is on: the two define the same panel hooks. CLI only (<c>--society-prototype</c>).
+    /// is on: the two define the same panel hooks. CLI flag: <c>--society-prototype</c>; also requires EnableSocieties to be false.
     /// </summary>
     [HideInGenerator]
     [Category("02 World State")]
     [DisplayName("Society prototype")]
-    [Description("Ship the hand-written society prototype instead of the generated society. For reference only. See BaseFilesToCopy/SocietyPrototype/README.txt.")]
+    [Description("Ship the hand-written society prototype when EnableSocieties is false. For reference only. See BaseFilesToCopy/SocietyPrototype/README.txt.")]
     public bool EnableSocietyPrototype { get; set; } = false;
 
     // =========================================================================

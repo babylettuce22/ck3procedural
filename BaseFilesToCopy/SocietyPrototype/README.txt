@@ -8,10 +8,9 @@ membership of a society gate one end to end -- who sees it, who may perform it, 
 be invited to it?
 
 Everything here is deliberately named `society_*` rather than `gen_society_*`. Nothing in
-this folder is written by an emitter and nothing here should ever be: when the generator
-learns to write societies it will write its own keys (`gen_cult_member`, `gen_cult_rite_*`
-and so on) into the mod directly, and this set becomes the reference implementation those
-files are modelled on rather than a dependency of them.
+this folder is written by an emitter and nothing here should ever be: the active generator
+uses the separate ../Societies set (`restor_*` and `cult_*`) plus per-world emitted setup.
+This prototype remains a reference rather than a dependency of the active system.
 
 WHAT IS IN IT
 -------------
@@ -53,8 +52,10 @@ button four pixels away is a duplicate, not a fallback.
 
 THE TAB IS THE ONE PIECE OF THIS FEATURE THAT IS NOT IN THIS FOLDER. It edits vanilla's
 gui/hud.gui, which only the generator can do -- Emit/GuiWriter.cs PatchHudTabs, gated on
-MapConfig.EnableSocieties. So a `--static-only --societies` run ships everything here and no tab,
-because that mode never reaches GuiWriter; use `--gui-only --societies` to add it, or a full run.
+MapConfig.EnableSocieties or MapConfig.EnableSocietyPrototype. To select this prototype, first
+set EnableSocieties to false in the configuration, then use --society-prototype. A static-only
+run does not reach GuiWriter; use --gui-only or a full run with the same configuration to add
+the tab.
 Shipping the set without ever running GuiWriter now means a panel with no way to open it.
 
 Why the tab is not a game view: vanilla's tabs call `ToggleGameViewData('intrigue_window', ...)`,
@@ -100,8 +101,8 @@ it eventually belongs: options are picked at planning time and show in the plann
 would commit before travelling. That is the better mechanic and deliberately not the first one.
 
 Restraint is not a null choice. A secret society's safest move is to disperse having done
-nothing, and when membership becomes a secret that is the branch nobody outside ever hears
-about -- the other two each leave somebody with a reason to talk.
+nothing, and restraint avoids the additional exposure incurred by the other choices. Existing
+exposure and membership secrets still follow the normal checks.
 
 HOW TO TEST IT
 --------------
@@ -174,19 +175,12 @@ Decay below 15 removes the secret again, matching the modifiers. That is deliber
 from CK2, whose marks were permanent: we SHOW the number, so a panel reading Exposure 4 beside a
 findable secret is a panel the player stops trusting.
 
-WHAT IS DELIBERATELY MISSING
-----------------------------
-No secret type, so nothing about this is actually secret yet -- a non-member cannot be in the
-room, but nor can they discover who was. That is the next piece, and it is where CK3 gives
-the most for free: vanilla's `secret_witch` already has discovery, blackmail hooks and
-exposure, and a society membership secret is the same shape.
+REFERENCE LIMITS
+----------------
+This is the older static reference, not the active societies backlog. It already includes a
+membership secret, exposure consequences and decay, Dark Power spending through abduction,
+and a yearly on_action for visibility decay. The rite has a Standing gate but no entry cost.
+The initial approach still fires through the console or the recruitment interaction.
 
-No cost on the rite, and nothing that SPENDS either meter. Dark Power and Visibility both
-accumulate and neither is ever consumed, so they are honest counters rather than an economy.
-The rank gate exists now -- the rite needs Standing 50, which is the second breakpoint -- and
-society.9002 is the bootstrapping answer to it, since the rite is the only thing that grants
-Standing and you cannot hold one until you have some.
-
-No on_action. The approach fires by hand from the console today; eventually it rolls yearly
-against the traits the society recruits for, which is one small file and no change to
-anything here.
+The active generated system lives in ../Societies and includes both Restorationists and the
+inversion cult, with generated starting members and recurring recruitment content.

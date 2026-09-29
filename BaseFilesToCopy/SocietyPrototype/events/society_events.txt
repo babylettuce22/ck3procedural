@@ -251,12 +251,11 @@ society.0001 = {
 	# Nothing happens, and that is the gap this prototype is leaving open on purpose.
 	#
 	# Refusing should be dangerous for BOTH people. The recruiter has just admitted something
-	# in a room with somebody who said no, which is how a society starts leaking -- in the real
-	# version this branch creates a secret on the recruiter with root as its discoverer, and
-	# from there vanilla's blackmail and exposure machinery does the rest. There is no secret
-	# type in this set yet, so the branch is left inert rather than half-guessed.
+	# in a room with somebody who said no. The follow-up adds exposure to the recruiter;
+	# its thresholds maintain the membership secret. Refusal does not directly assign the
+	# recruit as a discoverer.
 	#
-	# The opinion hit is the one real consequence: you now know something about them, and they
+	# The opinion hit accompanies the exposure increase: you now know something about them, and they
 	# know you know.
 	option = {
 		name = society.0001.b
@@ -347,14 +346,13 @@ society.0002 = {
 		# Straight out of CK2, including the number: recruiting cost +5 visibility there, and
 		# accumulated visibility is what got you found out. It is the mechanic worth copying most
 		# directly out of that system, because it makes exposure a thing the player is spending
-		# rather than a die nobody sees -- every use of the society is a small, permanent risk.
+		# rather than a die nobody sees -- every use of the society adds risk until visibility decays.
 		#
 		# Charged on acceptance as well as refusal, and that is the asymmetry worth keeping: this
 		# is 5 and the refusal is 15, because somebody who joined has the same reasons as you to
 		# say nothing, and somebody who refused has none.
 		#
-		# Nothing consumes visibility yet. When the secret arrives this is what its discovery
-		# chance reads.
+		# Visibility decays yearly. Its thresholds maintain the secret; vanilla handles discovery.
 		society_visibility_gain_effect = { VALUE = 5 }
 	}
 }
@@ -581,9 +579,8 @@ society.0100 = {
 	# rather than treat it as a wasted fortnight -- everyone still gains for having stood in the
 	# room together, just less than a rite that was spent on something.
 	#
-	# This is also the seam the exposure system will attach to: when membership becomes a secret,
-	# a rite that did nothing is the one that nobody outside ever hears about, and the other two
-	# each leave somebody with a reason to talk.
+	# Restraint avoids the added exposure of the other purposes, while existing exposure
+	# and any membership secret remain subject to the normal checks.
 	option = {
 		name = society.0100.c
 
@@ -1261,9 +1258,8 @@ society.0201 = {
 # reveal them is themselves -- and at that level of noise, continuing to deny it is a bigger lie
 # than admitting it.
 #
-# What this does NOT do is apply a consequence, because there is no secret type yet and nothing to
-# expose to. It sets the flag, says so, and stops. When the secret arrives this is where it gets
-# created already-discovered.
+# This event only announces the self-revealed flag set by society_visibility_check_effect.
+# It does not expose the membership secret; secret exposure has its own callback.
 society.0202 = {
 	type = character_event
 	title = society.0202.t

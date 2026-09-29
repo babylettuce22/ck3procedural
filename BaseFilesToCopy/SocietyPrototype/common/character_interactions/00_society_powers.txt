@@ -85,8 +85,8 @@
 # applies all three explicitly; the `death` effect itself applies none of them. That is the right
 # default here: with death_society_sacrifice carrying `public_knowledge = no`, nobody can attach
 # the killing to the killer, and charging tyranny for a crime no one can name would be the
-# mechanics contradicting the fiction. When the secret type arrives, EXPOSURE is what should cost
-# tyranny -- all at once, retroactively, which is also how it should feel.
+# mechanics contradicting the fiction. Membership secrets now have their own exposure
+# consequences; retroactive tyranny for sacrifices is not implemented here.
 #
 # No child sacrifice, though CK2 had it and paid best for it. `is_adult = yes` on the recipient,
 # matching torture_interaction's own gate. It also keeps the reward formula honest: a youth

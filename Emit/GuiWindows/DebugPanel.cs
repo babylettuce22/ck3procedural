@@ -1349,7 +1349,9 @@ public static class DebugPanel
             // to a space. A tooltip wants the two-character \n that CK3 reads as a line break, and
             // that is precisely what Loc would flatten.
             loc.AddBuilt(EventTooltipKey(entry),
-                $"#high {entry.Id}#!\\n"
+                (entry.TitleKey is { } title
+                    ? $"#high ${title}$#! — {entry.Id}\\n"
+                    : $"#high {entry.Id}#!\\n")
                 + $"#weak {entry.Type} · {entry.File}#!\\n\\n"
                 + (entry.Hidden
                     ? "This event is #EMP hidden#! — it runs its effects and shows no window, so "
