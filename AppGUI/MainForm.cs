@@ -357,6 +357,9 @@ public sealed partial class MainForm : ChromeForm
     private string? _lastHeightmapFile;
     private bool _busy;
     private CancellationTokenSource? _cancellation;
+
+    /// <summary>What a cancelled run left behind, for the status bar.</summary>
+    private string _cancelNote = "nothing written";
     private string _modRoot = "";
     private string _modName = GenerationOptions.DefaultModName;
     private string? _lastModDir;
@@ -3364,9 +3367,7 @@ public sealed partial class MainForm : ChromeForm
 
         if (cancelled)
         {
-            _status.Text = modDir is null
-                ? "Cancelled — nothing written"
-                : "Cancelled — the mod folder may be half written";
+            _status.Text = $"Cancelled — {_cancelNote}";
             return;
         }
 
@@ -3478,7 +3479,20 @@ public sealed partial class MainForm : ChromeForm
             _lastRun = RunOutcome.Cancelled;
             Console.WriteLine();
             Console.WriteLine($"Cancelled after {clock.ElapsedMilliseconds / 1000.0:F1} s");
-            if (modDir is not null) RunLog.Write(modDir, _options, "cancelled — the mod folder may be half written");
+
+            // A cancel before the write began leaves the previous mod as it was, record and all.
+            // After it, the folder holds only this run's half, which nobody asked to keep.
+            _cancelNote = "nothing written";
+            if (modDir is not null && RunLog.ClaimedThisRun(modDir))
+            {
+                if (Emit.ModWriter.RemoveHalfWritten(modDir))
+                    _cancelNote = "the partly written mod was removed";
+                else
+                {
+                    _cancelNote = "some of the mod could not be removed (is Crusader Kings III open?)";
+                    RunLog.Write(modDir, _options, "cancelled — the mod folder is half written");
+                }
+            }
             return (null, true);
         }
         catch (Exception ex)
@@ -3489,7 +3503,8 @@ public sealed partial class MainForm : ChromeForm
             Console.WriteLine(ex);
             _status.Text = "Failed — see log";
             failed = true;
-            if (modDir is not null) RunLog.Write(modDir, _options, $"failed: {ex.Message}");
+            // Not over a previous mod the run never reached: its record still describes it.
+            if (modDir is not null && RunLog.ClaimedThisRun(modDir)) RunLog.Write(modDir, _options, $"failed: {ex.Message}");
             return (null, false);
         }
         finally

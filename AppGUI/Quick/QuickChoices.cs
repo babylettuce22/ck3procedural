@@ -76,11 +76,18 @@ public sealed class QuickChoices
 
     public QuickChoices Clone() => (QuickChoices)MemberwiseClone();
 
+    /// <summary>
+    /// Whether the relief choice is applied region by region (<see cref="AppGUI.RegionalRelief"/>)
+    /// rather than map-wide. Goes with Ranges: Classic keeps the old presets and the old map-wide
+    /// relief together, so a Classic world is still the world it always was.
+    /// </summary>
+    public bool RegionalRelief => Mountains == QuickMountains.Ranges;
+
     /// <summary>Every choice on one line, for the run log and the record's header.</summary>
     public string Summary()
     {
         var (w, h) = Pixels;
-        return $"Quick world: {MapType}, seed {Seed}, relief {Relief}, mountains {Mountains}, "
+        return $"Quick world: {MapType}, seed {Seed}, relief {Relief} ({(RegionalRelief ? "regional" : "map-wide")}), mountains {Mountains}, "
                + $"size {Size} ({w}x{h}), era {Era}, climate {Climate}, density {Density}, "
                + $"people {People}, fantasy {FantasyInWorld}, politics {Politics}, rulers {Rulers}, "
                + $"wilderness {(Wilderness ? "on" : "off")}, wars {(Wars ? "on" : "off")}, "

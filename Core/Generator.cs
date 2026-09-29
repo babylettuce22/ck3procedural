@@ -271,11 +271,12 @@ public static class Generator
             Emit.MapDataWriter.RiverIndices(cfg, provinces, drainage), cfg));
 
         var provinceLandMask = ProvinceLandMask(cfg, provinces);
+        var riverWater = majorRivers.Count > 0 ? RiverWaterMask(cfg, provinces) : null;
 
         // 6. Terrain
         var terrain = Stage.Time("terrain classification",
             () => MapGen.TerrainClassifier.Classify(cfg, provinceElevation, provinceLandMask,
-                climate, new Rng(cfg.Seed ^ 0x7E44), azgaar));
+                climate, new Rng(cfg.Seed ^ 0x7E44), azgaar, riverWater));
         onPreview?.Invoke("Terrain", PreviewRenderer.RenderTerrain(terrain.Terrain, cfg));
 
         var order = MapDataWriter.BuildProvinceOrder(provinces, out int baronies, out int landCount, out int riverCount);
@@ -322,6 +323,18 @@ public static class Generator
     {
         var mask = new byte[cfg.ProvinceWidth * cfg.ProvinceHeight];
         Parallel.For(0, mask.Length, i => mask[i] = provinces.Seeds[provinces.Label[i]].IsLand ? (byte)1 : (byte)0);
+        return mask;
+    }
+
+    /// <summary>1 on major-river water provinces, which are not a shore for beaches or sea cliffs.</summary>
+    private static byte[] RiverWaterMask(MapConfig cfg, ProvinceMap provinces)
+    {
+        var mask = new byte[cfg.ProvinceWidth * cfg.ProvinceHeight];
+        Parallel.For(0, mask.Length, i =>
+        {
+            var seed = provinces.Seeds[provinces.Label[i]];
+            mask[i] = !seed.IsLand && seed.IsMajorRiver ? (byte)1 : (byte)0;
+        });
         return mask;
     }
 

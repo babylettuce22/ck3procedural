@@ -76,6 +76,13 @@ public static class TerrainClassifier
         public required TerrainClass[] Terrain { get; init; }
         public required KoppenClass[] Climate { get; init; }
         public required ClimateField Field { get; init; }
+
+        /// <summary>
+        /// 1 on the major rivers' own water, which <see cref="Terrain"/> classes as
+        /// <see cref="TerrainClass.Sea"/> like any other water province. Null when the map has no
+        /// major rivers. Kept so the texture writer can tell a riverbank from a sea shore too.
+        /// </summary>
+        public byte[]? RiverWater { get; init; }
     }
 
     /// <summary>
@@ -83,8 +90,19 @@ public static class TerrainClassifier
     /// generated via <see cref="MapConfig.Scaled"/> — left absolute, a beach at <c>tiny</c> would
     /// be nine times wider relative to the continent it is on than the same beach at
     /// <c>vanilla</c>.
+    ///
+    /// Two, not the five it was. Vanilla paints beach on 0.13% of its land, almost all of it within
+    /// a unit or two of the water; its shores are mostly the local ground running down to the sea.
+    /// At five, with the texture writer's blend band on top, ours put sand on 4% of land in a
+    /// ribbon twenty units deep, which in dry climates reads as a grey dirt strip on every coast.
     /// </summary>
-    private const int BeachReachAtVanilla = 5;
+    private const int BeachReachAtVanilla = 2;
+
+    /// <summary>
+    /// Share of shoreline that gets a beach at all, via a coarse noise patch. Vanilla's sand comes
+    /// and goes along a coast rather than running round it unbroken.
+    /// </summary>
+    private const double BeachShoreShare = 0.45;
 
     /// <summary>
     /// Share of land above the hill and mountain lines, measured off vanilla's own heightmap:
@@ -126,8 +144,13 @@ public static class TerrainClassifier
     /// before. Only the vegetation: beach, hills, mountains and the snow line are relief, and stay
     /// ours either way. See <see cref="AzgaarBiome"/>.
     /// </param>
+    /// <param name="riverWater">
+    /// 1 on the major rivers' water provinces, or null. Those pixels are still classed
+    /// <see cref="TerrainClass.Sea"/>, but they are not a shore: measured from them, every major
+    /// river came out lined with beach as heavy as the sea coast's.
+    /// </param>
     public static Result Classify(MapConfig cfg, float[] elevation, byte[] landMask,
-        ClimateField climate, Rng rng, AzgaarImport? azgaar = null)
+        ClimateField climate, Rng rng, AzgaarImport? azgaar = null, byte[]? riverWater = null)
     {
         int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
         int sea = cfg.Limits.SeaLevelUpper;
@@ -155,7 +178,7 @@ public static class TerrainClassifier
 
         int BeachReach = Math.Max(1, (int)Math.Round(cfg.Scaled(BeachReachAtVanilla)));
 
-        var coastDistance = DistanceToWater(landMask, width, height, BeachReach);
+        var coastDistance = DistanceToWater(ShoreMask(landMask, riverWater), width, height, BeachReach);
 
         // Independent fields so wetlands, forest and the lowland sub-variants do not all switch
         // at the same place. ck2rpg uses five separate simplex instances for exactly this.
@@ -273,8 +296,11 @@ public static class TerrainClassifier
 
                 // Beaches hug the coast, with a noisy inland edge so the shore is not a uniform
                 // ribbon. Only below the hill line — a cliff coast is not a beach.
+                // A coarse patch decides which stretches of shore get sand at all. The edge noise
+                // reused at an offset rather than a new field, so no later rng draw moves.
                 if (coastDistance[i] <= BeachReach && e < hills &&
-                    coastDistance[i] <= 1 + nEdge * BeachReach)
+                    coastDistance[i] <= 1 + nEdge * BeachReach &&
+                    Patch(edgeNoise, x + 517.3, y - 211.9, coarse * 2.3) > 1.0 - BeachShoreShare)
                 {
                     result[i] = TerrainClass.Beach;
                     continue;
@@ -364,7 +390,19 @@ public static class TerrainClassifier
             }
         }
 
-        return new Result { Terrain = result, Climate = zones, Field = climate };
+        return new Result { Terrain = result, Climate = zones, Field = climate, RiverWater = riverWater };
+    }
+
+    /// <summary>
+    /// The land mask with major-river water counted as land, so distance-to-water measures from
+    /// the sea and lakes only. Returns <paramref name="landMask"/> itself when there are no rivers.
+    /// </summary>
+    internal static byte[] ShoreMask(byte[] landMask, byte[]? riverWater)
+    {
+        if (riverWater is null) return landMask;
+        var mask = new byte[landMask.Length];
+        Parallel.For(0, mask.Length, i => mask[i] = (byte)(landMask[i] | riverWater[i]));
+        return mask;
     }
 
     /// <summary>

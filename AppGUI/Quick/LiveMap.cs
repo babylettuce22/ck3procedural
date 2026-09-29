@@ -15,8 +15,8 @@ namespace Ck3MapGen.AppGUI;
 /// <item><b>Pictures</b> take their turn: each waits until the one before has been seen, then fades
 /// in over it.</item>
 /// <item><b>The province partition</b> plays out as it happened (<see cref="PartitionSketch"/>): the
-/// seeds scatter, the provinces grow from them in the order the partition reached each pixel,
-/// relaxation glides every seed towards the middle of what it grew while the borders give way, and
+/// seeds scatter, the provinces grow from them in the order the partition reached each pixel (the
+/// seeds fading as they do), relaxation lets the borders give way, and
 /// the tidy-up settles the rest and turns the impassable mountains to stone.</item>
 /// <item><b>Pins</b> for discoveries that have a place — a people at its heartland, a faith's
 /// medallion, a wonder's glyph — popped on as each card is shown, in the badges the World
@@ -33,6 +33,9 @@ namespace Ck3MapGen.AppGUI;
 internal sealed class LiveMap : IDisposable
 {
     private const double PictureSeconds = 1.2, FadeSeconds = 0.45;
+
+    /// <summary>How far into the growing beat the seeds are gone.</summary>
+    private const double SeedFade = 0.2;
     private const double PinSeconds = 0.35, PinPop = 0.5, PinRipple = 1.3, PinLabel = 3.4, PinLeave = 0.45;
 
     private static readonly Font LabelFont = new("Segoe UI Semibold", 8.5f);
@@ -116,7 +119,7 @@ internal sealed class LiveMap : IDisposable
                 {
                     Seconds = 1.6,
                     Begin = () => BeginSketch(sketch, "Settling the borders" + round),
-                    Frame = t => ShiftFrame(t, settling: false),
+                    Frame = ShiftFrame,
                 });
                 break;
 
@@ -125,7 +128,7 @@ internal sealed class LiveMap : IDisposable
                 {
                     Seconds = 1.2,
                     Begin = () => BeginSketch(sketch, "Marking the mountains"),
-                    Frame = t => ShiftFrame(t, settling: true),
+                    Frame = ShiftFrame,
                     End = EndPartition,
                 });
                 break;
@@ -471,16 +474,15 @@ internal sealed class LiveMap : IDisposable
             });
         }
 
+        // The seeds are large next to a province, so they bow out as the growth gets going.
+        float seeds = 1 - (float)Smooth(Math.Clamp(t / SeedFade, 0, 1));
         var kind = layer.Sketch.SeedKind;
-        for (int i = 0; i < layer.X.Length; i++) Dot(canvas, layer.X[i], layer.Y[i], kind[i], 1);
+        for (int i = 0; i < layer.X.Length; i++) Dot(canvas, layer.X[i], layer.Y[i], kind[i], seeds);
         canvas.Commit();
     }
 
-    /// <summary>
-    /// From one sketch to the next: the borders that moved blend across, and the seeds glide from
-    /// where they were to where they are — or, as the partition settles, fade away.
-    /// </summary>
-    private void ShiftFrame(double t, bool settling)
+    /// <summary>From one sketch to the next: the borders that moved blend across.</summary>
+    private void ShiftFrame(double t)
     {
         var canvas = _canvas!;
         var to = _layer!;
@@ -492,19 +494,6 @@ internal sealed class LiveMap : IDisposable
             foreach (int i in changed) canvas.Pixels[i] = Mix(old[i], to.Colour![i], e);
         else if (from?.Colour is null)
             for (int i = 0; i < canvas.Pixels.Length; i++) canvas.Pixels[i] = Fade(to.Colour![i], e);
-
-        var kind = to.Sketch.SeedKind;
-        float alpha = settling ? 1 - e : 1;
-        for (int i = 0; i < to.X.Length; i++)
-        {
-            float x = to.X[i], y = to.Y[i];
-            if (from is not null && i < from.X.Length && float.IsFinite(from.X[i]))
-            {
-                if (!float.IsFinite(x)) (x, y) = (from.X[i], from.Y[i]);
-                else if (!settling) (x, y) = (from.X[i] + (x - from.X[i]) * e, from.Y[i] + (y - from.Y[i]) * e);
-            }
-            Dot(canvas, x, y, kind[i], alpha);
-        }
         canvas.Commit();
     }
 

@@ -94,7 +94,7 @@
     },
     {
       "type": "RidgeStage",
-      "name": "Ridges \u0026 Mountains",
+      "name": "Ridges & Mountains",
       "enabled": true,
       "params": {
         "seed": -89098401,
@@ -140,7 +140,7 @@
         "profile": 1.1,
         "summitVariation": 0.25,
         "summitSpacing": 22,
-        "grain": 0.2,
+        "grain": 0.0,
         "grainSpacing": 110,
         "grainWander": 0.5,
         "wanderScale": 7,

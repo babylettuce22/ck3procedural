@@ -943,10 +943,19 @@ internal static class LaunchUi
 internal static class ForgePreview
 {
     public static Bitmap? Render(string presetPath, int seed, int width, int height, CancellationToken token,
-        QuickRelief relief = QuickRelief.Standard, QuickFeature feature = QuickFeature.None)
+        QuickRelief relief = QuickRelief.Standard, QuickFeature feature = QuickFeature.None, bool regional = false)
     {
         try
         {
+            if (regional)
+            {
+                // The world is built at its own size; the preview only needs the same regions, and
+                // the ruggedness map is drawn in map-height units, so any size shows them.
+                var field = RegionalRelief.Run(() => RegionalRelief.Preset(presetPath, seed, width, height, feature),
+                    relief, width, height, isPreview: true, token);
+                return HeightRenderer.Render(field, Ck3.SeaLevelNormalised, RenderMode.Hypsometric);
+            }
+
             var pipeline = new HeightPipeline();
             PresetIO.Load(pipeline, presetPath);
             pipeline.SeaLevel = Ck3.SeaLevelNormalised;

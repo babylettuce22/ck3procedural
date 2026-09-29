@@ -303,6 +303,12 @@ public sealed partial class MainForm
         _history.ShowApplied(null);
 
         UseForgeForGeneration(allowUnverifiedSize: false);
+
+        // The workspace holds the choice map-wide, the only form one pipeline can; the world itself
+        // is built with it region by region. See RegionalRelief.
+        if (choices.RegionalRelief)
+            SetSource(new QuickReliefProvider(type.PresetPathFor(choices.Mountains), choices.Seed, width, height,
+                type.Feature, choices.Relief, type.Key));
         return switchedOff;
     }
 

@@ -37,6 +37,7 @@ public static class RunLog
     private static readonly StringBuilder Buffer = new();
     private static TextWriter? _installed;
     private static DateTimeOffset _started;
+    private static string? _claimed;
 
     /// <summary>
     /// Starts a fresh capture. Call beside <see cref="Stage.Begin"/>. Safe to call on every run:
@@ -48,6 +49,7 @@ public static class RunLog
         {
             Buffer.Clear();
             _started = DateTimeOffset.Now;
+            _claimed = null;
 
             // Console.SetOut wraps what it is given in a synchronised writer, so Console.Out is
             // never our instance itself; what it returns afterwards is what to compare against.
@@ -93,7 +95,22 @@ public static class RunLog
     /// run ends; one that still reads "in progress" was interrupted.
     /// </summary>
     public static void Claim(string modDir, GenerationOptions options)
-        => WriteRecord(modDir, options, "in progress — if this is still the outcome, the run was interrupted");
+    {
+        lock (Gate) _claimed = Path.GetFullPath(modDir);
+        WriteRecord(modDir, options, "in progress — if this is still the outcome, the run was interrupted");
+    }
+
+    /// <summary>
+    /// Whether the run since <see cref="Begin"/> got as far as clearing and claiming
+    /// <paramref name="modDir"/>. Until it has, the folder still holds the previous mod untouched,
+    /// and a run that stops short must leave it — record and all — as it was.
+    /// </summary>
+    public static bool ClaimedThisRun(string modDir)
+    {
+        lock (Gate)
+            return _claimed is not null
+                   && string.Equals(_claimed, Path.GetFullPath(modDir), StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Whether <paramref name="modDir"/> holds a record this tool wrote, which is the only thing

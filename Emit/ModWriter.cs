@@ -103,6 +103,56 @@ public static class ModWriter
                 $"'{modDir}' is not empty and was not written by this tool (it holds no "
                 + $"{Core.RunLog.FileName} of ours). Point the output elsewhere, or empty it yourself first.");
 
+        var (files, dirs) = DeleteAllBut(entries);
+        Console.WriteLine($"  cleared {dirs} folders and {files} files from {modDir}");
+    }
+
+    /// <summary>
+    /// Takes away what a run that stopped short had written: the mod folder's contents, the folder
+    /// itself once nothing is left in it, and the launcher's copy of the descriptor beside it. The
+    /// <see cref="Keep"/> files are the user's and stay, as they do through a clear.
+    ///
+    /// Only for a folder this run cleared and claimed (<see cref="Core.RunLog.ClaimedThisRun"/>):
+    /// before that point the folder still holds the previous mod, which the run never touched.
+    /// Returns false, having said why, when something could not be removed.
+    /// </summary>
+    public static bool RemoveHalfWritten(string modDir)
+    {
+        if (!Directory.Exists(modDir) || !Core.RunLog.WroteFolder(modDir)) return false;
+
+        try
+        {
+            // The record last: a removal that stops partway (CK3 holding a file) must leave the folder
+            // still marked as ours, or the next write would refuse to clear what is left.
+            var entries = Directory.EnumerateFileSystemEntries(modDir)
+                .OrderBy(e => Path.GetFileName(e).Equals(Core.RunLog.FileName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var (files, dirs) = DeleteAllBut(entries);
+
+            string trimmed = modDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (!Directory.EnumerateFileSystemEntries(modDir).Any()) Directory.Delete(modDir);
+
+            // Only the outer descriptor that points at this folder: the name alone could be another mod's.
+            if (Path.GetDirectoryName(trimmed) is { } parent)
+            {
+                string outer = Path.Combine(parent, Path.GetFileName(trimmed) + ".mod");
+                if (File.Exists(outer)
+                    && File.ReadAllText(outer).Contains($"path=\"{modDir.Replace('\\', '/')}\"", StringComparison.OrdinalIgnoreCase))
+                    File.Delete(outer);
+            }
+
+            Console.WriteLine($"  removed {dirs} folders and {files} files the cancelled run had written to {modDir}");
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Console.WriteLine($"  could not remove everything the cancelled run wrote: {e.Message}");
+            return false;
+        }
+    }
+
+    private static (int Files, int Dirs) DeleteAllBut(List<string> entries)
+    {
         int files = 0, dirs = 0;
         foreach (string entry in entries)
         {
@@ -122,8 +172,7 @@ public static class ModWriter
                     + "and generate again.", e);
             }
         }
-
-        Console.WriteLine($"  cleared {dirs} folders and {files} files from {modDir}");
+        return (files, dirs);
     }
 
     /// <summary>

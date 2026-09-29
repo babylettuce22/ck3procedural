@@ -439,8 +439,10 @@ public static class TerrainPalette
                     };
                     var (lowA, lowB, confA, confB) = LowlandPair(family, nA, nB);
 
+                    // 110, down from 160: at 160 the sand buried the ground under it, and the
+                    // shore read as a strip of bare dirt rather than as land meeting water.
                     return Mix(
-                        sand, 160,
+                        sand, 110,
                         lowA, (byte)((40 + nA * 30) * confA),
                         lowB, (byte)((30 + nB * 25) * confB),
                         Accent(climate, nC), (byte)((15 + nC * 20) * AccentConfidence(climate, nC))

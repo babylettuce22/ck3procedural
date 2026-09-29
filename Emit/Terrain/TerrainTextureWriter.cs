@@ -112,6 +112,15 @@ public static class TerrainTextureWriter
     /// </summary>
     private const double FieldBlendReach = 4.0;
 
+    /// <summary>
+    /// Width of the transition at a shore — anything against <see cref="TerrainClass.Sea"/> or
+    /// <see cref="TerrainClass.Beach"/> — in pixels of a reference-width map. Vanilla's sand sits
+    /// within a unit or two of the water.
+    /// </summary>
+    private const double ShoreBlendReach = 4.0;
+
+    private static bool IsShore(byte label) => TerrainPalette.TerrainOf(label) is TerrainClass.Sea or TerrainClass.Beach;
+
     /// <summary>Orthogonal step cost in the chamfer distance transform; diagonal is 4.</summary>
     private const int ChamferOrthogonal = 3;
     private const int ChamferDiagonal = 4;
@@ -828,8 +837,12 @@ public static class TerrainTextureWriter
         return GradientPercentiles(elevation, width, height, 1, Sampled, 1.0 - share, 1.0 - share * 0.25);
     }
 
+    /// <param name="riverWater">
+    /// 1 on major-river water at province resolution, or null. Those pixels are
+    /// <see cref="TerrainClass.Sea"/> like the sea, but a riverbank is not a sea cliff.
+    /// </param>
     public static void WriteAll(string modDir, MapConfig cfg, TerrainClass[] terrain,
-        KoppenClass[] climate, float[] elevation, Rng rng)
+        KoppenClass[] climate, float[] elevation, Rng rng, byte[]? riverWater = null)
     {
         string dir = Path.Combine(modDir, "gfx", "map", "terrain");
         Directory.CreateDirectory(dir);
@@ -905,6 +918,7 @@ public static class TerrainTextureWriter
         // hard index change. Two pixels of weight ramp keeps both materials present across the
         // seam, so the edge is crisp without being jagged.
         float fieldReach = (float)Math.Max(1.0, cfg.Scaled(FieldBlendReach));
+        float shoreReach = (float)Math.Max(1.0, cfg.Scaled(ShoreBlendReach));
 
         // The scale the band's own edge wanders at, and the scale it is dithered at. Deliberately
         // far apart: the first decides where one biome fingers into the next, which happens over
@@ -938,7 +952,8 @@ public static class TerrainTextureWriter
         {
             var shoreMask = new byte[terrain.Length];
             Parallel.For(0, terrain.Length,
-                i => shoreMask[i] = terrain[i] == TerrainClass.Sea ? (byte)0 : (byte)1);
+                i => shoreMask[i] = terrain[i] != TerrainClass.Sea || riverWater?[i] == 1
+                    ? (byte)1 : (byte)0);
             coastDistance = TerrainClassifier.DistanceToWater(shoreMask, pWidth, pHeight, cliffReach);
 
             (cliffStart, cliffFull) = CliffLines(elevation, hWidth, hHeight, sea, cliffShare,
@@ -1053,6 +1068,15 @@ public static class TerrainTextureWriter
                     int sy = Math.Clamp((int)Math.Round(wy * scaleY), 0, pHeight - 1);
                     int pSrc = sy * pWidth + sx;
 
+                    // Except at the shore. The warp reaches ~45 px, so it was carrying the Sea label
+                    // (shallow-water mud) that far onto dry land and scattering a two-pixel beach
+                    // into blobs. The old full-width band hid that as a half-strength smear; the
+                    // short shore band would draw it as solid mud. Water and sand are decided where
+                    // the pixel actually is, and the warp only moves boundaries between land kinds.
+                    int pHere = Math.Clamp((int)Math.Round(hy * scaleY), 0, pHeight - 1) * pWidth
+                              + Math.Clamp((int)Math.Round(hx * scaleX), 0, pWidth - 1);
+                    if (IsShore(label[pSrc]) || IsShore(label[pHere])) pSrc = pHere;
+
                     // Sampled at the pixel's own coordinate, not the warped one: the warp decides
                     // which ground this pixel is standing on, but how broken that ground is has to
                     // be read where the pixel actually is or the rock lands beside the slope
@@ -1089,39 +1113,53 @@ public static class TerrainTextureWriter
                         TerrainPalette.TerrainOf(self) == TerrainClass.Farmlands ||
                         TerrainPalette.TerrainOf(boundaryOther[pSrc]) == TerrainClass.Farmlands;
 
-                    float reach = fieldEdge ? fieldReach : blendReach;
+                    // The shore gets a short band too. Sea's palette is shallow-water mud and sand,
+                    // and at the biome band's full width it was being spread up to half strength
+                    // over ~40 px of dry land from every coast and every major river, which read
+                    // as a dirt ribbon. Per neighbour, because a pixel near both a coast and a
+                    // biome edge should still get the biome's full band.
+                    bool shoreSelf = IsShore(self);
+                    float reach = fieldEdge ? fieldReach
+                        : shoreSelf || IsShore(boundaryOther[pSrc]) ? shoreReach : blendReach;
+                    float reach2 = fieldEdge ? fieldReach
+                        : shoreSelf || IsShore(boundaryOther2[pSrc]) ? shoreReach : blendReach;
 
                     float edge = boundaryDistance[pSrc] * (1f / ChamferOrthogonal);
-                    if (edge < reach)
+                    if (edge < Math.Max(reach, reach2))
                     {
                         // Push the band in and out along its length so it is not a uniform ribbon.
                         // Several octaves rather than one: a single frequency displaces the edge in
                         // smooth lobes a few hundred pixels across, which the eye reads as a blotch.
                         // Stacked octaves give it fingers at every scale.
+                        float displace = 0f;
                         if (!fieldEdge)
                         {
                             double ragged = Field.Fbm(bandField, sx * bandFrequency, sy * bandFrequency, 4);
-                            edge += (float)(ragged * blendReach * 0.35);
+                            displace += (float)(ragged * 0.35);
 
                         // And a fine dither on top, at texture scale, so the outer edge of the band
                         // is not itself a clean iso-line along which every material switches on at
                         // once.
                             double interlock = Field.Fbm(interlockField,
                                 sx * interlockFrequency, sy * interlockFrequency, 2);
-                            edge += (float)(interlock * blendReach * 0.14);
+                            displace += (float)(interlock * 0.14);
                         }
 
-                        if (edge < reach)
-                        {
-                            // The runner-up rides the same displacement as the winner. Displacing
-                            // them independently would put a step back in: the two would cross at a
-                            // different place than their true distances say, and the crossing is
-                            // the whole thing being smoothed here.
-                            float edge2 = boundaryDistance2[pSrc] * (1f / ChamferOrthogonal)
-                                        + (edge - boundaryDistance[pSrc] * (1f / ChamferOrthogonal));
+                        // The displacement is a share of each band's own reach, so a short shore
+                        // band wanders in proportion rather than by the biome band's 15 px.
+                        edge += displace * reach;
 
+                        // The runner-up rides the same displacement as the winner. Displacing
+                        // them independently would put a step back in: the two would cross at a
+                        // different place than their true distances say, and the crossing is
+                        // the whole thing being smoothed here.
+                        float edge2 = boundaryDistance2[pSrc] * (1f / ChamferOrthogonal)
+                                    + displace * reach2;
+
+                        if (edge < reach || edge2 < reach2)
+                        {
                             double t1 = Falloff(edge, reach);
-                            double t2 = Falloff(edge2, reach);
+                            double t2 = Falloff(edge2, reach2);
                             double sum = t1 + t2;
 
                             if (sum > 0)

@@ -53,10 +53,12 @@ public static class GuiWriter
     public static void WriteAll(string modDir, string gameDir, bool societies = false,
         bool wilderness = false, bool chronicle = true)
     {
-        PatchCountyView(modDir, gameDir);
-        PatchCharacterWindow(modDir, gameDir);
-        PatchTitleWindow(modDir, gameDir, chronicle);
-        PatchCouncilWindow(modDir, gameDir);
+        // Every patch that asks a Wilderness scripted_gui is gated on the file set shipping — see
+        // PatchCouncilWindow for what one naming an absent scripted_gui looks like in game.
+        if (wilderness) PatchCountyView(modDir, gameDir);
+        if (wilderness) PatchCharacterWindow(modDir, gameDir);
+        PatchTitleWindow(modDir, gameDir, chronicle, wilderness);
+        if (wilderness) PatchCouncilWindow(modDir, gameDir);
         PatchBookmarkTab(modDir, gameDir);
         PatchArtifactDetailsWindow(modDir, gameDir);
         PatchInventoryWindow(modDir, gameDir);
@@ -1268,23 +1270,34 @@ public static class GuiWriter
     ///   Emit/ChronicleRuntimeWriter.cs   gen_chr_line_N, and GEN_CHRONICLE_SINCE
     /// </code>
     /// </summary>
-    private static void PatchTitleWindow(string modDir, string gameDir, bool chronicle)
+    private static void PatchTitleWindow(string modDir, string gameDir, bool chronicle,
+        bool wilderness)
     {
+        if (!chronicle && !wilderness) return;
+
         var doc = GuiDocument.Open(gameDir, "gui", "gui", "window_title.gui");
         if (doc is null) return;
 
-        var wilderness = new ScriptedGui("wilderness_title",
-            GuiScope.Root("TitleViewWindow.GetTitle"));
+        // Only asked when the Wilderness file set ships — see PatchCouncilWindow for what a guard
+        // naming an absent scripted_gui did to the council window.
+        var unclaimed = wilderness
+            ? new ScriptedGui("wilderness_title", GuiScope.Root("TitleViewWindow.GetTitle"))
+            : null;
 
-        doc.NameField("window body", "title_view_main_tab").InsertVisible(wilderness.IsHidden());
+        var inserts = new List<GuiNode>();
+        if (unclaimed is not null)
+        {
+            doc.NameField("window body", "title_view_main_tab").InsertVisible(unclaimed.IsHidden());
 
-        var placeholder = Placeholder("WILDERNESS_TITLE_WINDOW", wilderness,
-            "[TitleViewWindow.Close]",
-            "[TitleViewWindow.CloseHistory]",
-            "[TitleViewWindow.CloseClaimants]");
+            inserts.Add(Placeholder("WILDERNESS_TITLE_WINDOW", unclaimed,
+                "[TitleViewWindow.Close]",
+                "[TitleViewWindow.CloseHistory]",
+                "[TitleViewWindow.CloseClaimants]"));
+        }
+        if (chronicle) inserts.Add(TitleLorePanel(unclaimed));
 
         doc.Leaf("placeholder", "using", "Window_Background_Sidebar")
-           .InsertBefore(chronicle ? [placeholder, TitleLorePanel(wilderness)] : [placeholder]);
+           .InsertBefore([.. inserts]);
 
         // Everything below is the lore panel's. With the chronicle off there is no gen_lore_ loc
         // and no gen_chr_line_N custom loc for it to read, so none of it is written — the window
@@ -1398,12 +1411,14 @@ public static class GuiWriter
     /// variable outlives the window, so opening the panel on a real title and then clicking
     /// unclaimed land would otherwise leave it up over the placeholder.
     /// </summary>
-    private static GuiNode TitleLorePanel(ScriptedGui wilderness)
+    private static GuiNode TitleLorePanel(ScriptedGui? wilderness)
         => GuiBuilder.Widget("gen_title_lore_panel")
             .DataContext("[TitleViewWindow.GetTitle]")
-            .Visible(GuiExpr.And(
-                GuiExpr.VariableExists("gen_title_lore"),
-                GuiExpr.Not(wilderness.IsShown())))
+            .Visible(wilderness is null
+                ? GuiExpr.VariableExists("gen_title_lore")
+                : GuiExpr.And(
+                    GuiExpr.VariableExists("gen_title_lore"),
+                    GuiExpr.Not(wilderness.IsShown())))
             .Gap().Position(660, 80)
             .Size("480", "60%")
             .AllowOutside()
@@ -1490,12 +1505,16 @@ public static class GuiWriter
     /// court office, it is the same person he was already talking to, and it is the one vanilla seat
     /// whose premise survives on a frontier post.
     ///
-    /// ---- What happens with --no-wilderness ----
+    /// ---- Only with the Wilderness file set ----
     ///
-    /// Nothing, and that is checked rather than hoped for. Without the Wilderness file set there is
-    /// no <c>colony_council</c> scripted_gui, a .gui naming a scripted_gui that does not exist
-    /// evaluates false, and false is the right answer in both directions here: the colony seats hide
-    /// themselves and <c>Not(false)</c> leaves every vanilla row exactly as it was.
+    /// This used to ship unconditionally, on the belief that a .gui naming a scripted_gui that does
+    /// not exist evaluates false. It does not: players with Wilderness off got every seat at once —
+    /// the colony rows AND the vanilla rows, and the Warden beside the Chaplain in the top row. The
+    /// colony seats were nameless ("Click to appoint a") because their positions never shipped, the
+    /// top row's third seat pushed the window off the right edge of the screen, and five rows shared
+    /// the height of three. Both the positive and the <c>Not()</c> guard came out visible, which is
+    /// what a <c>visible</c> that fails to evaluate does. So WriteAll only calls this when the
+    /// Wilderness set ships, and the mod then keeps vanilla's window untouched.
     ///
     /// <code>
     /// Related base files:

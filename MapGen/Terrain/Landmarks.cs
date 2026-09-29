@@ -15,7 +15,7 @@ public sealed record Landmark(string Key, string Kind, string Name, int[] Baroni
 
 /// <summary>
 /// Finds the map's landmarks and names them. The rest of their life is in the existing writers:
-/// <see cref="Emit.PassWriter.WriteLandmarks"/> gives each a province modifier and a geographical
+/// <see cref="Emit.PassWriter.WriteLandmarks"/> gives each province modifiers (lowland and heights) and a geographical
 /// region, and Emit.FlatmapInk letters its name on the parchment.
 ///
 /// Where they come from is the one part that is not general. For now that is the set-piece the

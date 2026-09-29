@@ -323,7 +323,7 @@ internal sealed class RunScreen : Panel
         _failed = true;
         _doneTitle.Text = cancelled ? "Stopped" : "The world could not be made";
         _doneSubtitle.Text = cancelled
-            ? "The run was cancelled. The mod folder may be half written; making the world again replaces it."
+            ? "The run was cancelled, and whatever it had written was removed."
             : $"{message ?? "Something went wrong."} The log in Complex has the details.";
         _donePath.Text = "";
         _doneMap.Image = _runMap.Image is { } img ? new Bitmap(img) : null;

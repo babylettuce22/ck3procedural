@@ -710,7 +710,8 @@ internal sealed class QuickPage : Panel
         _preview.Chip = MapChip(type);
 
         var feature = type.Feature;
-        Task.Run(() => ForgePreview.Render(path, seed, 1024, 512, cts.Token, relief, feature)).ContinueWith(task =>
+        bool regional = _choices.RegionalRelief;
+        Task.Run(() => ForgePreview.Render(path, seed, 1024, 512, cts.Token, relief, feature, regional)).ContinueWith(task =>
         {
             var bitmap = task.Result;
             if (IsDisposed || !IsHandleCreated) { bitmap?.Dispose(); return; }
@@ -747,7 +748,7 @@ internal sealed class QuickPage : Panel
             foreach (var (path, feature, tile) in work)
             {
                 var bitmap = ForgePreview.Render(path, ThumbnailSeed, 384, 192, CancellationToken.None,
-                    feature: feature);
+                    feature: feature, regional: true);
                 if (bitmap is null) continue;
                 if (IsDisposed || !IsHandleCreated) { bitmap.Dispose(); return; }
                 BeginInvoke(() => tile.Thumbnail = bitmap);

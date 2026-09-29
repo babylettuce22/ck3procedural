@@ -1717,6 +1717,19 @@ public static partial class CompatibilityWriter
             for (int m = 0; m < 12; m++)
                 if (MonthShortKeys[m] != MonthKeys[m])
                     text.Append($" CW_DATE_{MonthShortKeys[m]}:0 \"{Io.ParadoxText.Loc(shorts[m])}\"\n");
+
+            // The hud date button's tooltip gains a line naming the current month's real-world
+            // counterpart ("Melifrim is January"). Vanilla's text is kept whole and the line slotted
+            // in before the pause hint; one key per month, picked by GetMonthOfYear (1-based, as the
+            // day of month is). The real names are literals -- CW_DATE_January is ours now.
+            var pick = new StringBuilder();
+            for (int m = 0; m < 12; m++)
+            {
+                pick.Append($"[AddLocalizationIf(EqualTo_int32(GetCurrentDate.GetMonthOfYear, '(int32){m + 1}'), 'GEN_MONTH_COUNTERPART_{m + 1}')]");
+                text.Append($" GEN_MONTH_COUNTERPART_{m + 1}:0 \"\\n#weak {Io.ParadoxText.Loc(months[m])} is {MonthKeys[m]}#!\"\n");
+            }
+            text.Append(" CURRENT_DATE_TOOLTIP:2 \"[JoinText( '\\n', GetCurrentDateStringWithSyncInfo, GetPausedByEventReason )]"
+                        + pick + " [AddLocalizationIf(Not(Or(IsPausedByEvent, IsPausedBySuccession)), 'CLICK_TOGGLE_PAUSE')]\"\n");
         }
 
         string dir = Path.Combine(modDir, "localization", "replace", "english");

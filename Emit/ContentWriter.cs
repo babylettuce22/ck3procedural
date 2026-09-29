@@ -222,7 +222,7 @@ public static partial class ContentWriter
 
         Core.Stage.Time("mountain passes",
             () => PassWriter.WriteAll(modDir, MapGen.MountainPasses.ProvinceIds(provinces, order, baronyCount).ToList()));
-        Core.Stage.Time("landmarks", () => PassWriter.WriteLandmarks(modDir, world.Landmarks));
+        Core.Stage.Time("landmarks", () => PassWriter.WriteLandmarks(modDir, world.Landmarks, provinceTerrain));
 
         Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, generatedFaiths.Declared(), cfg.Seed, cfg.ReligionTooltips));
 
@@ -344,7 +344,7 @@ public static partial class ContentWriter
         {
         // Full-resolution heightmap elevation passed to detail texture generator
         Core.Stage.Time("terrain textures", () => TerrainTextureWriter.WriteAll(modDir, cfg, terrain,
-            classified.Climate, terra.Elevation, rng));
+            classified.Climate, terra.Elevation, rng, classified.RiverWater));
 
         Core.Stage.Time("terrain masks", () => TerrainMaskWriter.WriteAll(modDir, gameDir, cfg));
 
