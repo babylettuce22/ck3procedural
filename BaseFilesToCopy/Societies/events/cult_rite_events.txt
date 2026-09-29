@@ -56,6 +56,15 @@ cult.0901 = {
 			trigger = { exists = scope:cult_absentee }
 			desc = cult.0901.desc_absent
 		}
+		# Loc in cult_mass_pool_l_english.yml.
+		triggered_desc = {
+			trigger = {
+				cult_secret_phase_trigger = yes
+				exists = scope:cult_hunter
+				target_is_liege_or_above = scope:cult_hunter
+			}
+			desc = cult.0901.desc_hunter_liege
+		}
 		desc = cult.0901.desc_end
 	}
 	theme = witchcraft
@@ -651,6 +660,14 @@ cult.0905 = {
 			}
 			desc = cult.0905.desc_head_here
 		}
+		# Loc in cult_mass_pool_l_english.yml.
+		triggered_desc = {
+			trigger = {
+				has_trait = cult_member
+				NOT = { cult_rank_at_least_trigger = { RANK = 25 } }
+			}
+			desc = cult.0905.desc_first
+		}
 		first_valid = {
 			triggered_desc = {
 				trigger = { cult_unveiled_trigger = yes }
@@ -717,6 +734,33 @@ cult.0905 = {
 			base = 50
 			modifier = { add = 40 has_trait = paranoid }
 			modifier = { add = 25 has_trait = shy }
+		}
+	}
+
+	# A Magister helps the host at the altar (loc in cult_mass_pool_l_english.yml).
+	option = {
+		name = cult.0905.c
+		trigger = {
+			exists = scope:host
+			cult_rank_at_least_trigger = { RANK = 50 }
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 5
+		}
+		cult_exposure_gain_effect = { VALUE = 2 }
+		scope:host = {
+			add_opinion = {
+				target = root
+				modifier = respect_opinion
+				opinion = 10
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = ambitious }
+			modifier = { add = -20 has_trait = paranoid }
 		}
 	}
 }
@@ -969,6 +1013,10 @@ cult.0908 = {
 #   cult_defilement_careful / cult_defilement_hasty     set at 0912
 #   cult_defilement_clean / cult_defilement_abandoned   set at 0913
 #   var:cult_defilement_witness                         the witness, set at 0913 when there is one
+#   cult_defilement_covered                             set by the pool's cult.1113; 0914 counts it as clean
+#
+# The random pool (cult.1100-1199) is in events/cult_defilement_pool_events.txt; 0914 sets the
+# activity's cult_defilement_home variable, which stops it.
 #
 # All are cleared at the top of 0914 after being copied into saved scope values, so a later
 # Pilgrimage can never be paid by an earlier one's flags.
@@ -996,6 +1044,24 @@ cult.0910 = {
 				desc = cult.0910.desc_sign
 			}
 			desc = cult.0910.desc_defile
+		}
+		# What the pilgrimage looks like from outside (cult_defilement_pool_l_english.yml).
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					has_variable = cult_charge_county
+					exists = scope:cult_defilement_county
+					scope:cult_defilement_county = { this = root.var:cult_charge_county }
+				}
+				desc = cult.0910.desc_charged
+			}
+			triggered_desc = {
+				trigger = {
+					has_variable = cult_exposure
+					var:cult_exposure >= 15
+				}
+				desc = cult.0910.desc_suspected
+			}
 		}
 	}
 	theme = faith
@@ -1079,10 +1145,16 @@ cult.0912 = {
 		character = root
 		animation = prayer
 	}
+	right_portrait = {
+		trigger = { exists = scope:cult_defilement_guest }
+		character = scope:cult_defilement_guest
+		animation = scheme
+	}
 	trigger = { cult_active_trigger = yes }
 	immediate = {
 		cult_save_scopes_effect = yes
 		cult_defilement_save_county_effect = yes
+		cult_defilement_save_guest_effect = yes
 	}
 
 	# Carefully.
@@ -1115,6 +1187,34 @@ cult.0912 = {
 			base = 40
 			modifier = { add = 40 has_trait = impatient }
 			modifier = { add = 20 has_trait = brave }
+		}
+	}
+
+	# Both, with a guest to keep the priests busy (cult_defilement_pool_l_english.yml): the bigger
+	# result and a quiet way out, and the guest carries the risk now.
+	option = {
+		name = cult.0912.c
+		trigger = { exists = scope:cult_defilement_guest }
+		add_character_flag = {
+			flag = cult_defilement_careful
+			months = 6
+		}
+		add_character_flag = {
+			flag = cult_defilement_hasty
+			months = 6
+		}
+		custom_tooltip = cult.0912.c.tt
+		scope:cult_defilement_guest = {
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = 3
+			}
+		}
+		cult_defilement_their_exposure_effect = { WHO = scope:cult_defilement_guest VALUE = 3 }
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = callous }
 		}
 	}
 }
@@ -1161,6 +1261,13 @@ cult.0913 = {
 				desc = cult.0913.desc_careful
 			}
 			desc = cult.0913.desc_hasty
+		}
+		# One of the circle serves here and has promised cover (cult.1113).
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_character_flag = cult_defilement_covered }
+				desc = cult.0913.desc_covered
+			}
 		}
 	}
 	theme = secret
@@ -1312,6 +1419,45 @@ cult.0913 = {
 		}
 	}
 
+	# Leave it to the circle's friend at the shrine (cult.1113).
+	option = {
+		name = cult.0913.e
+		trigger = { has_character_flag = cult_defilement_covered }
+		add_character_flag = {
+			flag = cult_defilement_clean
+			months = 6
+		}
+		custom_tooltip = cult.0913.clean.tt
+		ai_chance = {
+			base = 90
+		}
+	}
+
+	# Put it on another pilgrim: for the clever or the practised liar.
+	option = {
+		name = cult.0913.f
+		trigger = {
+			OR = {
+				intrigue >= 12
+				has_trait = deceitful
+			}
+		}
+		add_character_flag = {
+			flag = cult_defilement_clean
+			months = 6
+		}
+		custom_tooltip = cult.0913.clean.tt
+		stress_impact = {
+			just = medium_stress_impact_gain
+			honest = medium_stress_impact_gain
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = callous }
+		}
+	}
+
 	# Turn back.
 	option = {
 		name = cult.0913.d
@@ -1398,13 +1544,21 @@ cult.0914 = {
 		cult_save_scopes_effect = yes
 		cult_defilement_save_county_effect = yes
 
+		# The pool (cult_defilement_pool_on_actions) stops here.
+		scope:activity ?= { set_variable = cult_defilement_home }
+
 		# Snapshot, then clear. The options read the saved values, never the flags.
 		if = {
 			limit = { has_character_flag = cult_defilement_abandoned }
 			save_scope_value_as = { name = cult_abandoned value = yes }
 		}
 		if = {
-			limit = { has_character_flag = cult_defilement_clean }
+			limit = {
+				OR = {
+					has_character_flag = cult_defilement_clean
+					has_character_flag = cult_defilement_covered	# cult.1113: a sworn friend at the shrine
+				}
+			}
 			save_scope_value_as = { name = cult_clean value = yes }
 		}
 		if = {
@@ -1422,6 +1576,7 @@ cult.0914 = {
 		remove_character_flag = cult_defilement_hasty
 		remove_character_flag = cult_defilement_clean
 		remove_character_flag = cult_defilement_abandoned
+		remove_character_flag = cult_defilement_covered
 		remove_variable = cult_defilement_witness
 	}
 

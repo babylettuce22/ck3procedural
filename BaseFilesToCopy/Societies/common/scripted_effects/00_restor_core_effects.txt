@@ -153,6 +153,7 @@ restor_make_pretender_effect = {
 		name = restor_pretender
 		value = this
 	}
+	restor_charge_set_aside_for_office_effect = { TT = restor_charge_set_aside_heir_tt }
 	restor_swear_in_effect = { RANK = 50 }
 }
 
@@ -162,6 +163,7 @@ restor_make_keeper_effect = {
 		name = restor_keeper
 		value = this
 	}
+	restor_charge_set_aside_for_office_effect = { TT = restor_charge_set_aside_keeper_tt }
 	restor_swear_in_effect = { RANK = 75 }
 }
 

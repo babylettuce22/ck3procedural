@@ -1633,6 +1633,8 @@ public static class PreviewRenderer
         if (map.AutoCut is { } cut)
             return seed.ImpassableCause switch
             {
+                ImpassableCause.Cut when cut.BySlope =>
+                    $"impassable — cut to the steepest ground (slope score {cut.CutHeight:F2} and up), or above the ceiling",
                 ImpassableCause.Cut => $"impassable — cut to the mountains (ground above {cut.GateLine:F0} m" +
                     (float.IsNegativeInfinity(cut.CutHeight) ? ")" : $", highest first down to about {cut.CutHeight:F0} m)"),
                 ImpassableCause.Trapped => "impassable — trapped (landlocked behind impassables)",

@@ -4,6 +4,7 @@
 #   0510-0514   a charge kept: turn a priest, taint a county, defile a holy site, an offering, recruit
 #   0520        a charge's three years ran out
 #   0530-0534   a chance to do the charge in hand, one per kind
+#   0540        a charge from a player Hierophant's own hand (hidden; cult_give_charge_interaction)
 #
 # The state and every transition are in 00_cult_charge_effects.txt; these events only show them.
 # A charge is cleared before its ending event arrives, so the endings read the saved scopes
@@ -810,5 +811,69 @@ cult.0534 = {
 	option = {
 		name = cult.0534.b
 		ai_chance = { base = 40 }
+	}
+}
+
+# =====================================================================================
+#  cult.0540 -- a charge from a player Hierophant's hand (hidden)
+# =====================================================================================
+#
+# Fired on the member by cult_give_charge_interaction, which leaves the kind asked for in
+# var:cult_charge_order and the Hierophant in var:cult_charge_giver. Runs as the member, which the
+# charge effects need (ROOT is the member). The Hierophant is told what was given; a player member
+# gets the usual note (cult.0501).
+
+cult.0540 = {
+	hidden = yes
+	trigger = {
+		has_variable = cult_charge_order
+		has_variable = cult_charge_giver
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		save_scope_as = cult_charge_member
+		var:cult_charge_giver = { save_scope_as = cult_charge_giver }
+		save_scope_value_as = {
+			name = cult_charge_asked
+			value = var:cult_charge_order
+		}
+		cult_charge_order_effect = yes
+		remove_variable = cult_charge_order
+		cult_charge_save_state_effect = yes
+
+		scope:cult_charge_giver = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = cult_charge_given_toast
+				left_icon = scope:cult_charge_member
+				if = {
+					limit = { scope:cult_charge_kind ?= flag:turn_priest }
+					custom_tooltip = cult_charge_given_turn_priest_tt
+				}
+				else_if = {
+					limit = { scope:cult_charge_kind ?= flag:taint }
+					custom_tooltip = cult_charge_given_taint_tt
+				}
+				else_if = {
+					limit = { scope:cult_charge_kind ?= flag:defile_site }
+					custom_tooltip = cult_charge_given_defile_site_tt
+				}
+				else_if = {
+					limit = { scope:cult_charge_kind ?= flag:offering }
+					custom_tooltip = cult_charge_given_offering_tt
+				}
+				else = {
+					custom_tooltip = cult_charge_given_recruit_tt
+				}
+				if = {
+					limit = {
+						NOT = { scope:cult_charge_asked = flag:any }
+						NOT = { scope:cult_charge_asked = scope:cult_charge_kind }
+					}
+					custom_tooltip = cult_charge_given_fallback_tt
+				}
+			}
+		}
+		cult_charge_notify_effect = yes
 	}
 }

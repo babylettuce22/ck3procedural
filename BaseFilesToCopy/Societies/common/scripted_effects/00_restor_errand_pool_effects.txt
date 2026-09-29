@@ -1,0 +1,60 @@
+﻿# The Errand's random pool (restor.1100-1199). See the pool section of
+# common/activities/activity_types/00_restor_errand_activity.txt for how it is drawn.
+
+# One of the Sworn riding with the host, as scope:restor_errand_companion. Root = the host.
+# Unset when the host rides alone, or outside an activity.
+restor_errand_save_companion_effect = {
+	if = {
+		limit = { exists = scope:activity }
+		scope:activity = {
+			random_attending_character = {
+				limit = {
+					NOT = { this = root }
+					has_trait = restor_member
+					is_alive = yes
+				}
+				save_scope_as = restor_errand_companion
+			}
+		}
+	}
+}
+
+# Everything a pool event names. Call right after restor_save_scopes_effect.
+#   scope:restor_errand_county      the county (restor_errand_save_county_effect)
+#   scope:restor_errand_companion   one of the Sworn riding along, if any
+#   scope:restor_errand_lord        the county's holder, if that is not the host
+restor_errand_pool_scopes_effect = {
+	restor_errand_save_county_effect = yes
+	restor_errand_save_companion_effect = yes
+	if = {
+		limit = {
+			exists = scope:restor_errand_county
+			exists = scope:restor_errand_county.holder
+			scope:restor_errand_county.holder = { NOT = { this = root } }
+		}
+		scope:restor_errand_county.holder = { save_scope_as = restor_errand_lord }
+	}
+}
+
+# Stirs $COUNTY$ for ten years, as the Errand's own payment does, and recounts support at once.
+restor_errand_pool_stir_effect = {
+	$COUNTY$ = {
+		add_county_modifier = {
+			modifier = restor_county_stirred
+			years = 10
+		}
+	}
+	custom_tooltip = restor.0914.support_tt
+	hidden_effect = { restor_support_refresh_effect = yes }
+}
+
+# Money raised on the road goes to the heir, and counts in the war chest the panel shows.
+restor_errand_pool_heir_gold_effect = {
+	if = {
+		limit = { exists = global_var:restor_pretender }
+		global_var:restor_pretender = { add_gold = $GOLD$ }
+		hidden_effect = {
+			change_global_variable = { name = restor_war_chest add = $GOLD$ }
+		}
+	}
+}

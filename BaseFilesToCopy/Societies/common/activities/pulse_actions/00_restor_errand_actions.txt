@@ -1,0 +1,329 @@
+﻿# The Errand's pulse actions: small road moments for the activity log. Listed in
+# 00_restor_errand_activity.txt under pulse_actions.
+#
+# Root = the activity; scope:host, scope:province (the Errand's county capital). scope:first and
+# scope:second are the characters the log entry shows. Effects stay small and vanilla-sized, and
+# none moves favour or exposure: those two toast the member every time they change, and a pulse
+# that toasts is noise. Rank XP is silent, so the society's own mark here is a point of standing.
+#
+# Icons: only the three that exist as files in gfx/interface/icons/activity_pulse_actions/ (public,
+# positive, negative). The others vanilla uses (friend, money, prestige...) resolve through that
+# folder's path_overrides.txt, which ck3-tiger does not read, so it reports each as a missing file.
+
+# A milestone with the old arms.
+restor_errand_apa_old_milestone = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+	}
+	weight = { value = 1 }
+	effect = {
+		scope:host = { save_scope_as = first }
+		add_activity_log_entry = {
+			key = restor_errand_apa_old_milestone
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_stress = minor_stress_loss
+			}
+		}
+	}
+}
+
+# The old songs, sung low.
+restor_errand_apa_old_songs = {
+	icon = public
+	is_valid = {
+		is_current_phase_active = yes
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = { location = scope:province }
+			save_scope_as = first
+		}
+		if = {
+			limit = { NOT = { exists = scope:first } }
+			scope:host = { save_scope_as = first }
+		}
+		add_activity_log_entry = {
+			key = restor_errand_apa_old_songs
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_stress = minor_stress_loss
+			}
+		}
+	}
+}
+
+# A false name in an innkeeper's book.
+restor_errand_apa_false_name = {
+	icon = public
+	is_valid = {
+		is_current_phase_active = yes
+	}
+	weight = {
+		value = 1
+		if = {
+			limit = { scope:host = { has_trait = deceitful } }
+			add = 1
+		}
+	}
+	effect = {
+		scope:host = { save_scope_as = first }
+		add_activity_log_entry = {
+			key = restor_errand_apa_false_name
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_intrigue_lifestyle_xp = minor_lifestyle_xp
+			}
+		}
+	}
+}
+
+# Two of the Sworn, late by the fire.
+restor_errand_apa_by_the_fire = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			NOT = { this = scope:host }
+			has_trait = restor_member
+		}
+	}
+	weight = { value = 2 }
+	effect = {
+		scope:host = { save_scope_as = first }
+		random_attending_character = {
+			limit = {
+				NOT = { this = scope:host }
+				has_trait = restor_member
+			}
+			save_scope_as = second
+		}
+		add_activity_log_entry = {
+			key = restor_errand_apa_by_the_fire
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:first = {
+				add_opinion = {
+					target = scope:second
+					modifier = restor_life_good_company_opinion
+				}
+			}
+			scope:second = {
+				add_opinion = {
+					target = scope:first
+					modifier = restor_life_good_company_opinion
+				}
+			}
+		}
+	}
+}
+
+# The usurper's riders on the road.
+restor_errand_apa_riders_passed = {
+	icon = negative
+	is_valid = {
+		is_current_phase_active = yes
+		exists = global_var:restor_usurper
+	}
+	weight = { value = 1 }
+	effect = {
+		scope:host = { save_scope_as = first }
+		global_var:restor_usurper = { save_scope_as = second }
+		add_activity_log_entry = {
+			key = restor_errand_apa_riders_passed
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:first = {
+				add_stress = minor_stress_gain
+			}
+		}
+	}
+}
+
+# A child asks whether the king is coming back.
+restor_errand_apa_child_asked = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+		scope:host = { has_trait = restor_member }
+	}
+	weight = { value = 1 }
+	effect = {
+		scope:host = { save_scope_as = first }
+		add_activity_log_entry = {
+			key = restor_errand_apa_child_asked
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_trait_xp = {
+					trait = restor_member
+					track = restor_rank
+					value = 1
+				}
+			}
+		}
+	}
+}
+
+# A shrine the old kings built.
+restor_errand_apa_roadside_shrine = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+	}
+	weight = {
+		value = 1
+		if = {
+			limit = { scope:host = { has_trait = zealous } }
+			add = 1
+		}
+	}
+	effect = {
+		scope:host = { save_scope_as = first }
+		add_activity_log_entry = {
+			key = restor_errand_apa_roadside_shrine
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_piety = minor_piety_gain
+			}
+		}
+	}
+}
+
+# A thrown shoe.
+restor_errand_apa_thrown_shoe = {
+	icon = negative
+	is_valid = {
+		is_current_phase_active = yes
+		scope:host = { gold > 4 }
+	}
+	weight = { value = 1 }
+	effect = {
+		scope:host = { save_scope_as = first }
+		add_activity_log_entry = {
+			key = restor_errand_apa_thrown_shoe
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				remove_short_term_gold = 3
+			}
+		}
+	}
+}
+
+# The house's colours in a window.
+restor_errand_apa_colours_in_window = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+	}
+	weight = { value = 1 }
+	effect = {
+		scope:host = { save_scope_as = first }
+		add_activity_log_entry = {
+			key = restor_errand_apa_colours_in_window
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_prestige = minor_prestige_gain
+			}
+		}
+	}
+}
+
+# A companion scouts a quieter road.
+restor_errand_apa_scouted_ahead = {
+	icon = public
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			NOT = { this = scope:host }
+			location = scope:province
+			OR = {
+				martial >= 10
+				prowess >= 10
+			}
+		}
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = {
+				NOT = { this = scope:host }
+				location = scope:province
+				OR = {
+					martial >= 10
+					prowess >= 10
+				}
+			}
+			save_scope_as = first
+		}
+		scope:host = { save_scope_as = second }
+		add_activity_log_entry = {
+			key = restor_errand_apa_scouted_ahead
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:first = {
+				add_martial_lifestyle_xp = minor_lifestyle_xp
+			}
+			scope:second = {
+				add_opinion = {
+					target = scope:first
+					modifier = grateful_opinion
+					opinion = 10
+				}
+			}
+		}
+	}
+}
+
+# A round for an old soldier (soldiers).
+restor_errand_apa_round_for_a_veteran = {
+	icon = public
+	is_valid = {
+		is_current_phase_active = yes
+		has_activity_option = { category = restor_errand_purpose option = restor_errand_soldiers }
+	}
+	weight = { value = 2 }
+	effect = {
+		scope:host = { save_scope_as = first }
+		add_activity_log_entry = {
+			key = restor_errand_apa_round_for_a_veteran
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_martial_lifestyle_xp = minor_lifestyle_xp
+			}
+		}
+	}
+}
+
+# A ledger of old debts (coin).
+restor_errand_apa_old_ledger = {
+	icon = public
+	is_valid = {
+		is_current_phase_active = yes
+		has_activity_option = { category = restor_errand_purpose option = restor_errand_coin }
+	}
+	weight = { value = 2 }
+	effect = {
+		scope:host = { save_scope_as = first }
+		add_activity_log_entry = {
+			key = restor_errand_apa_old_ledger
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_stewardship_lifestyle_xp = minor_lifestyle_xp
+			}
+		}
+	}
+}

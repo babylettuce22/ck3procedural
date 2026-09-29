@@ -12,10 +12,11 @@ namespace Ck3MapGen.Emit;
 /// and shared since with the religion glossary (<see cref="ReligionGlossary"/>). Each user owns its
 /// own concept file and loc file; this class collects the concepts and writes them.
 ///
-/// The house rule from the rank titles' in-game test: the header IS the gloss. A description is a
-/// single line where it adds something, and empty where the header says it all — an empty value is
-/// still written, because a missing key shows as the raw key and vanilla's description box has no
-/// visibility condition.
+/// The house rule from the rank titles' in-game test: the header IS the gloss, and the description
+/// is a single line under it. Never leave the description empty: vanilla's <c>Description</c> textbox
+/// (object_tooltip_pop_out in gui/shared/cooltip.gui) has no visibility condition and keeps one
+/// line's height with no text, so an empty value shows as a blank gap under the header (seen in game
+/// 2026-09-28). A missing key is worse still — it shows the raw key.
 /// </summary>
 internal sealed class ConceptTooltips
 {

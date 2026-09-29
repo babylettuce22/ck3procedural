@@ -913,6 +913,17 @@ public sealed class Language
     };
 
     /// <summary>
+    /// Crude English pluralisation of a coined word, which is all a collective noun or a temple's
+    /// plural needs. The words are invented, so there is no correct answer to get wrong — only a
+    /// jarring one: "Aldrichs" and "Bothoss" are worse than "Aldriches" and "Bothoses".
+    /// </summary>
+    public static string Plural(string word)
+        => word.EndsWith('s') || word.EndsWith("ch", StringComparison.Ordinal)
+           || word.EndsWith("sh", StringComparison.Ordinal) || word.EndsWith('x')
+            ? word + "es"
+            : word + "s";
+
+    /// <summary>
     /// Whether a spelled name is one an English reader would trip over: a real word that means
     /// something rude or silly, a slur, plain English, or a real place — a county called "Yemen"
     /// reads as a mistake, not a name (<see cref="Gazetteer"/>). Checked on every emitted name,

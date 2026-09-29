@@ -1,0 +1,150 @@
+﻿# Helpers for the Black Mass's random pool (cult.1000-1099, events/cult_mass_pool_events.txt).
+#
+# The pool is drawn from the Mass's phase every week (common/on_action/00_cult_mass_on_actions.txt).
+# A host pool event marks the activity so it cannot come up twice in one Mass, and marks the host
+# for five years so the next Mass they say leans towards the events they have not seen.
+
+# Root = the host. $EVENT$ is the event's number (1001, not cult.1001).
+cult_mass_pool_mark_effect = {
+	if = {
+		limit = { exists = scope:activity }
+		scope:activity = {
+			set_variable = { name = cult_mass_pool_$EVENT$ }
+		}
+	}
+	add_character_flag = {
+		flag = cult_mass_had_$EVENT$
+		years = 5
+	}
+}
+
+# How many are in the chapel besides root, as scope:cult_mass_count. Zero outside an activity.
+cult_mass_pool_count_effect = {
+	save_scope_value_as = {
+		name = cult_mass_count
+		value = {
+			value = 0
+			if = {
+				limit = { exists = scope:activity }
+				scope:activity = {
+					every_attending_character = {
+						limit = { NOT = { this = root } }
+						add = 1
+					}
+				}
+			}
+		}
+	}
+}
+
+# Everyone in the chapel, root included, gains $VALUE$ exposure (each player among them gets the
+# core effect's own toast). Root alone outside an activity. A no-op once the cult is unveiled.
+cult_mass_pool_everyone_exposure_effect = {
+	if = {
+		limit = { cult_secret_phase_trigger = yes }
+		save_scope_value_as = {
+			name = cult_mass_all_delta
+			value = $VALUE$
+		}
+		custom_tooltip = cult_mass_pool_everyone_exposure_tt
+		hidden_effect = {
+			if = {
+				limit = { exists = scope:activity }
+				scope:activity = {
+					every_attending_character = {
+						limit = { has_trait = cult_member }
+						cult_exposure_gain_effect = { VALUE = $VALUE$ }
+					}
+				}
+			}
+			else = {
+				cult_exposure_gain_effect = { VALUE = $VALUE$ }
+			}
+		}
+	}
+}
+
+# The same, the other way.
+cult_mass_pool_everyone_exposure_loss_effect = {
+	if = {
+		limit = { cult_secret_phase_trigger = yes }
+		save_scope_value_as = {
+			name = cult_mass_all_delta
+			value = $VALUE$
+		}
+		custom_tooltip = cult_mass_pool_everyone_exposure_loss_tt
+		hidden_effect = {
+			if = {
+				limit = { exists = scope:activity }
+				scope:activity = {
+					every_attending_character = {
+						limit = { has_trait = cult_member }
+						cult_exposure_loss_effect = { VALUE = $VALUE$ }
+					}
+				}
+			}
+			else = {
+				cult_exposure_loss_effect = { VALUE = $VALUE$ }
+			}
+		}
+	}
+}
+
+# Every member in the chapel but root gains $XP$ on the cult's rank track.
+cult_mass_pool_circle_rank_effect = {
+	if = {
+		limit = { exists = scope:activity }
+		scope:activity = {
+			every_attending_character = {
+				limit = {
+					NOT = { this = root }
+					has_trait = cult_member
+				}
+				add_trait_xp = {
+					trait = cult_member
+					track = cult_rank
+					value = $XP$
+				}
+			}
+		}
+	}
+}
+
+# Every one in the chapel but root changes their opinion of root by $OPINION$ ($MODIFIER$ is a
+# vanilla stacking opinion that takes `opinion`).
+cult_mass_pool_circle_opinion_effect = {
+	if = {
+		limit = { exists = scope:activity }
+		scope:activity = {
+			every_attending_character = {
+				limit = { NOT = { this = root } }
+				add_opinion = {
+					target = root
+					modifier = $MODIFIER$
+					opinion = $OPINION$
+				}
+			}
+		}
+	}
+}
+
+# Taints $COUNTY$ for ten years if it is of the host faith and not tainted yet, and recounts the
+# rot. The caller's toast says what happened.
+cult_mass_pool_taint_county_effect = {
+	if = {
+		limit = {
+			exists = global_var:cult_host_faith
+			$COUNTY$ = {
+				faith = global_var:cult_host_faith
+				NOT = { has_county_modifier = cult_county_tainted }
+			}
+		}
+		$COUNTY$ = {
+			add_county_modifier = {
+				modifier = cult_county_tainted
+				years = 10
+			}
+		}
+		cult_rot_refresh_effect = yes
+	}
+}

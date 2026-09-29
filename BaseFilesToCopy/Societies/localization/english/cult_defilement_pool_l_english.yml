@@ -1,0 +1,226 @@
+﻿l_english:
+
+ # The Pilgrimage of Defilement's random pool (cult.1100-1199), its pulse actions, and the lines
+ # added to the spine (cult.0910, 0912, 0913).
+
+ cult_defilement_their_exposure_tt:0 "[cult_defilement_exposed.GetTitledFirstName]'s exposure rises by #N [cult_defilement_their_delta|0]#!"
+
+ # ---- Additions to the spine ----------------------------------------------------------------------
+
+ cult.0910.desc_charged:0 "\n\nThis is the shrine the circle named when it gave you your charge."
+ cult.0910.desc_suspected:0 "\n\nPeople at home already whisper about you. They take the pilgrimage for penance, and some of them are relieved."
+ cult.0912.c:0 "[cult_defilement_guest.GetFirstName] keeps the priests talking while I work."
+ cult.0912.c.tt:0 "Careful and quick at once: the bigger result when you come home, and any trouble at the shrine can still be dealt with quietly. It is [cult_defilement_guest.GetFirstNameNoTooltip] the priests will remember"
+ cult.0913.desc_covered:0 "\n\nBut one of the circle serves at this shrine, and has promised that whatever anyone sees here will not be followed up."
+ cult.0913.e:0 "Leave it to our friend at the shrine."
+ cult.0913.f:0 "Let the blame fall on another pilgrim."
+
+ # ---- cult.1101 ---------------------------------------------------------------------------------
+
+ cult.1101.t:0 "A Companion on the Road"
+ cult.1101.desc:0 "A pilgrim fell in beside you at first light and has not left your side since: [cult_defilement_pilgrim.GetFirstName], walking to [cult_defilement_county.GetNameNoTier] to give thanks for a harvest that did not fail. [cult_defilement_pilgrim.GetSheHe|U] has shared [cult_defilement_pilgrim.GetHerHis] bread with you twice, asked you nothing about yourself, and talks of [cult_faith.HighGodName] the way other people talk about the weather.\n\nNobody on this road looks twice at two pilgrims walking together."
+ cult.1101.a:0 "Walk with [cult_defilement_pilgrim.GetHerHim]. I could not ask for a better disguise."
+ cult.1101.b:0 "Tell [cult_defilement_pilgrim.GetHerHim] what the priests at the shrine are really like."
+ cult.1101.b.doubts:0 "[cult_defilement_pilgrim.GetFirstNameNoTooltip] Goes Quiet"
+ cult.1101.b.shocked:0 "[cult_defilement_pilgrim.GetFirstNameNoTooltip] Tells the Others"
+ cult.1101.c:0 "Send [cult_defilement_pilgrim.GetHerHim] on ahead. I walk alone."
+ cult.1101.c.tt:0 "[cult_defilement_pilgrim.GetFirstNameNoTooltip] goes on without you, and nothing more comes of it"
+
+ # ---- cult.1102 ---------------------------------------------------------------------------------
+
+ cult.1102.t:0 "The Sick Pilgrim"
+ cult.1102.desc:0 "An old man has fallen by the road a day short of [cult_defilement_county.GetNameNoTier], burning with fever. The pilgrims he was walking with have gone on without him. They said the shrine would cure him if he could reach it, and that he would have to reach it on his own.\n\nHe cannot stand. He has hold of your robe, and he asks you, in [cult_faith.HighGodNamePossessive] name, to help him."
+ cult.1102.a:0 "Carry him to the shrine."
+ cult.1102.a.fever:0 "You Catch the Fever"
+ cult.1102.a.well:0 "You Stay Well"
+ cult.1102.a.well.tt:0 "The old man reaches the shrine, and you are none the worse for carrying him"
+ cult.1102.b:0 "Kneel over him, and pray to $cult_devil_name$ instead."
+ cult.1102.b.breaks:0 "The Fever Breaks"
+ cult.1102.b.nothing:0 "Nothing Happens"
+ cult.1102.b.nothing.tt:0 "He is no better by morning. Other pilgrims carry him on."
+ cult.1102.c:0 "Leave him to the next pilgrims."
+
+ # ---- cult.1103 ---------------------------------------------------------------------------------
+
+ cult.1103.t:0 "A Face You Know"
+ cult.1103.desc:0 "Among the pilgrims at the hostel tonight is [cult_defilement_known.GetTitledFirstName], who knows your face. [cult_defilement_known.GetSheHe|U] has already looked twice at your robe and your staff, and at the empty yard where your retinue ought to be.\n\nA lord who walks to [cult_defilement_county.GetNameNoTier] among the common pilgrims is either very pious, or has something to hide."
+ cult.1103.a:0 "I have sins to walk off, like everyone here."
+ cult.1103.a.believed:0 "[cult_defilement_known.GetFirstNameNoTooltip] Is Moved"
+ cult.1103.a.doubted:0 "[cult_defilement_known.GetFirstNameNoTooltip] Is Not Convinced"
+ cult.1103.b:0 "Pay [cult_defilement_known.GetHerHim] to keep my pilgrimage to [cult_defilement_known.GetHerselfHimself]."
+ cult.1103.b.tt:0 "[cult_defilement_known.GetFirstNameNoTooltip] says nothing about where you were"
+ cult.1103.c:0 "Invite [cult_defilement_known.GetHerHim] to walk with me, and pray loudly."
+
+ # ---- cult.1104 ---------------------------------------------------------------------------------
+
+ cult.1104.t:0 "Robbers on the Road"
+ cult.1104.desc:0 "Men with cudgels stepped out of the trees an hour short of the ford, and the pilgrims around you have gone down on their knees. The robbers want the offerings the faithful are carrying to [cult_defilement_county.GetNameNoTier], and whatever else anyone has.\n\nNobody here knows you are a lord. Nobody knows what else is in your pack."
+ cult.1104.desc_guest:0 "\n\n[cult_defilement_guest.GetTitledFirstName] has a hand on [cult_defilement_guest.GetHerHis] knife and is watching you."
+ cult.1104.a:0 "Fight them."
+ cult.1104.a.won:0 "The Robbers Run"
+ cult.1104.a.won.tt:0 "The pilgrims thank you, and go on their way with their offerings"
+ cult.1104.a.lost:0 "You Are Beaten"
+ cult.1104.b:0 "Hand over my purse, like everyone else."
+ cult.1104.c:0 "Show them the mark of $cult_devil_name$."
+ cult.1104.c.run:0 "They Run"
+ cult.1104.c.run.tt:0 "The robbers flee into the trees, and none of the pilgrims saw why"
+ cult.1104.c.seen:0 "The Pilgrims Saw It"
+
+ # ---- cult.1105 ---------------------------------------------------------------------------------
+
+ cult.1105.t:0 "Talk at the Hostel"
+ cult.1105.desc:0 "The pilgrim hostel at the last town before [cult_defilement_county.GetNameNoTier] is full, and the talk at the long table tonight is all of [cult_hunter.GetTitledFirstName]. [cult_hunter.GetHerHis|U] people took a family of the Faithless out of a village two valleys over, they say, and [cult_hunter.GetSheHe] means to have every one of them before the year is out.\n\nThey say [cult_hunter.GetHerHis] people walk the pilgrim roads, looking for faces that do not pray."
+ cult.1105.a:0 "Listen, and remember who says what."
+ cult.1105.b:0 "Curse the Faithless louder than anyone at the table."
+ cult.1105.c:0 "Say I have heard that [cult_hunter.GetFirstName] prays to $cult_devil_name$ [cult_hunter.GetHerselfHimself]."
+ cult.1105.c.spreads:0 "The Rumour Spreads"
+ cult.1105.c.back:0 "The Rumour Comes Back to You"
+
+ # ---- cult.1106 ---------------------------------------------------------------------------------
+
+ cult.1106.t:0 "The Friar at the Crossroads"
+ cult.1106.desc:0 "A friar of $cult_host_name$ has been preaching at the crossroads since dawn, standing on a milestone, against the heretics who hide among the faithful. [cult_faith.DevilName] walks these roads in a pilgrim's clothes, he says. He asks every pilgrim who passes to name anyone they know who has strayed.\n\nHe is asking you."
+ cult.1106.a:0 "Give him a name: [cult_defilement_rival.GetTitledFirstName]."
+ cult.1106.b:0 "Give him a coin, and no names."
+ cult.1106.c:0 "Look him in the eye, and walk on."
+ cult.1106.c.passes:0 "He Lets You Pass"
+ cult.1106.c.passes.tt:0 "The friar has already turned to the next pilgrim"
+ cult.1106.c.calls:0 "He Calls After You"
+
+ # ---- cult.1110 ---------------------------------------------------------------------------------
+
+ cult.1110.t:0 "The Keeper's Vigil"
+ cult.1110.desc_named:0 "[cult_defilement_keeper.GetTitledFirstName], who keeps the [cult_faith.HouseOfWorship] at [cult_defilement_county.GetNameNoTier] for [cult_defilement_county.GetHolder.GetTitledFirstName], has begun a vigil at the altar: nine nights on [cult_defilement_keeper.GetHerHis] knees, in thanks for the pilgrim season."
+ cult.1110.desc_unnamed:0 "The old priest who keeps the [cult_faith.HouseOfWorship] at [cult_defilement_county.GetNameNoTier] has begun a vigil at the altar: nine nights on his knees, in thanks for the pilgrim season."
+ cult.1110.desc_end:0 " Nothing happens in the shrine at night that the keeper does not see.\n\nThe circle's work is done at night."
+ cult.1110.a:0 "Keep the vigil beside [cult_defilement_keeper.GetHerHim]."
+ cult.1110.a_unnamed:0 "Keep the vigil beside him."
+ cult.1110.b:0 "Put something in the keeper's wine."
+ cult.1110.b.sleeps:0 "The Keeper Sleeps"
+ cult.1110.b.tastes:0 "The Keeper Notices the Taste"
+ cult.1110.c:0 "Wait. Nobody can kneel for nine nights."
+ cult.1110.c.tt:0 "You lose a few nights, and nothing more"
+
+ # ---- cult.1111 ---------------------------------------------------------------------------------
+
+ cult.1111.t:0 "The Blind Man"
+ cult.1111.desc:0 "A blind man has sat at the gate of the shrine for three days, asking every pilgrim who comes out to lay hands on his eyes. Someone has told him that you pray longer than anyone. He has hold of your sleeve now, and will not let go.\n\n\"Pray for me,\" he says. \"Any prayer at all.\""
+ cult.1111.a:0 "Pray to [cult_faith.HighGodName] for him, as he asks."
+ cult.1111.a.sees:0 "He Sees Light"
+ cult.1111.b:0 "Pray for him, under my breath, to $cult_devil_name$."
+ cult.1111.b.sees:0 "He Sees Light, and Everyone Saw Who Prayed"
+ cult.1111.nothing:0 "Nothing Happens"
+ cult.1111.nothing.tt:0 "The blind man thanks you, and takes hold of the next pilgrim's sleeve"
+ cult.1111.c:0 "Pull my sleeve free and walk on."
+
+ # ---- cult.1112 ---------------------------------------------------------------------------------
+
+ cult.1112.t:0 "The Relic-Seller"
+ cult.1112.desc:0 "Outside the gate of the shrine a man sells relics from a tray: a saint's tooth, a thread from a holy shroud, a splinter of the first altar at [cult_defilement_county.GetNameNoTier]. Every one of them is false, every pilgrim knows it, and he sells them all day.\n\nHe has noticed that you have been round the back of the shrine more than once. He has been looking at you since as though he knows why."
+ cult.1112.a:0 "Buy a relic. Every pilgrim takes one home."
+ cult.1112.b:0 "Denounce him to the priests as a fraud."
+ cult.1112.b.driven:0 "He Is Driven Off"
+ cult.1112.b.driven.tt:0 "The priests chase the relic-seller from the gate, and thank you for it"
+ cult.1112.b.talks:0 "He Tells the Priests About You"
+ cult.1112.c:0 "Buy his silence, and his whole tray."
+
+ # ---- cult.1113 ---------------------------------------------------------------------------------
+
+ cult.1113.t:0 "One of Us"
+ cult.1113.desc_named:0 "[cult_defilement_contact.GetTitledFirstName], who serves [cult_defilement_county.GetHolder.GetTitledFirstName] here, found you at the well this morning and made the circle's sign with two fingers against [cult_defilement_contact.GetHerHis] cup. [cult_defilement_contact.GetSheHe|U] is one of the Faithless.\n\n[cult_defilement_contact.GetSheHe|U] has guessed what you came for, and offers to help. [cult_defilement_contact.GetSheHe|U] knows where the lay brothers sleep and which of them drink, and whatever anyone sees, [cult_defilement_contact.GetSheHe] can make sure nobody follows it up."
+ cult.1113.desc_unnamed:0 "One of the lay brothers found you at the well this morning and made the circle's sign with two fingers against his cup. He is one of the Faithless, sworn years ago, and nobody here knows it.\n\nHe has guessed what you came for, and offers to help. He knows where the other brothers sleep and which of them drink, and whatever anyone sees, he can make sure nobody follows it up."
+ cult.1113.a:0 "Gladly, [cult_defilement_contact.GetFirstName]. Cover my tracks."
+ cult.1113.a_unnamed:0 "Gladly, brother. Cover my tracks."
+ cult.1113.a.tt:0 "#P Whatever is seen at the shrine, nobody follows it up:#! no witness and no extra exposure when you come home"
+ cult.1113.b:0 "Thank [cult_defilement_contact.GetHerHim], and keep [cult_defilement_contact.GetHerHim] out of it."
+ cult.1113.b_unnamed:0 "Thank him, and keep him out of it."
+ cult.1113.b.tt:0 "The lay brother goes back to his work"
+
+ # ---- cult.1114 ---------------------------------------------------------------------------------
+
+ cult.1114.t:0 "The Sermon"
+ cult.1114.desc_named:0 "[cult_defilement_preacher.GetTitledFirstName] preached to the pilgrims today from the steps of the shrine, and preached about you."
+ cult.1114.desc_unnamed:0 "A [cult_faith.PriestNeuter] preached to the pilgrims today from the steps of the shrine, and preached about you."
+ cult.1114.desc_end:0 " Not by name. The sermon named [cult_faith.DevilName], and said the Adversary has servants among the faithful: people who kneel at the same altars and take the same bread and mean none of it, who can be known by their eyes.\n\nThe crowd shouted with the preacher. Some of them looked around at their neighbours as they shouted."
+ cult.1114.a:0 "Shout with them."
+ cult.1114.b:0 "Stand still and say nothing."
+ cult.1114.b.unnoticed:0 "Nobody Notices"
+ cult.1114.b.unnoticed.tt:0 "The crowd is watching the preacher, not you"
+ cult.1114.b.noticed:0 "The Woman Beside You Noticed"
+ cult.1114.c:0 "Find [cult_defilement_preacher.GetHerHim] afterwards, and put a hard question to [cult_defilement_preacher.GetHerHim]."
+ cult.1114.c_unnamed:0 "Find the preacher afterwards, and put a hard question."
+ cult.1114.c.silent:0 "The Preacher Has No Answer"
+ cult.1114.c.remembers:0 "The Preacher Remembers Your Face"
+
+ # ---- cult.1115 ---------------------------------------------------------------------------------
+
+ cult.1115.t:0 "On Your Knees"
+ cult.1115.desc:0 "It is late, and the shrine is full of the faithful praying by candlelight. You have knelt with them so often this week that your knees know the stone. Tonight you found you had been praying for some time before you noticed.\n\nNot the circle's words. The old ones, to [cult_faith.HighGodName], the ones you learned as a child. Nobody is watching you. Nobody would ever know."
+ cult.1115.a:0 "Finish the prayer."
+ cult.1115.b:0 "Say the circle's words instead, on the same breath."
+ cult.1115.c:0 "Get up, and go out into the cold."
+ cult.1115.c.tt:0 "You stand in the courtyard until the feeling passes"
+
+ # ---- cult.1116 ---------------------------------------------------------------------------------
+
+ cult.1116.t:0 "At the Altar Before Dawn"
+ cult.1116.desc:0 "You found [cult_defilement_guest.GetTitledFirstName] at the altar before dawn, alone, on [cult_defilement_guest.GetHerHis] knees, praying to [cult_faith.HighGodName] with [cult_defilement_guest.GetHerHis] eyes shut and [cult_defilement_guest.GetHerHis] face wet. [cult_defilement_guest.GetSheHe|U] did not hear you come in.\n\nWhen [cult_defilement_guest.GetSheHe] saw you, [cult_defilement_guest.GetSheHe] got up at once and said [cult_defilement_guest.GetSheHe] was only keeping up appearances."
+ cult.1116.a:0 "Say nothing. We all have nights like this."
+ cult.1116.b:0 "Remind [cult_defilement_guest.GetHerHim] what becomes of the Faithless who go back."
+ cult.1116.c:0 "Tell [cult_hierophant.GetTitledFirstName] what I saw."
+
+ # ---- cult.1117 ---------------------------------------------------------------------------------
+
+ cult.1117.t:0 "Loose Talk"
+ cult.1117.desc:0 "[cult_defilement_guest.GetTitledFirstName] drank too much at the hostel last night and talked. Not about the circle, [cult_defilement_guest.GetSheHe] swears: only about how little [cult_defilement_guest.GetSheHe] thinks of the priests here and their shrine, loudly, in a room full of pilgrims who had come a long way to pray at it.\n\nOne of the lay brothers was sitting at the next table."
+ cult.1117.a:0 "Tell the brothers [cult_defilement_guest.GetSheHe] is my servant, and I answer for [cult_defilement_guest.GetHerHim]."
+ cult.1117.b:0 "Let [cult_defilement_guest.GetHerHim] answer for [cult_defilement_guest.GetHerHis] own tongue."
+ cult.1117.c:0 "Keep [cult_defilement_guest.GetHerHim] at the hostel until we leave."
+
+ # ---- cult.1118 ---------------------------------------------------------------------------------
+
+ cult.1118.t:0 "The Hunter's Men"
+ cult.1118.desc:0 "Men wearing [cult_hunter.GetTitledFirstName]'s colours came to the shrine this morning. They stand at the gate and look at every pilgrim who goes in, and they ask the priests about anyone who has stayed longer than the rest.\n\nYou have stayed longer than the rest."
+ cult.1118.a:0 "Hide among the sick in the hospice until they go."
+ cult.1118.a.gone:0 "They Go"
+ cult.1118.a.gone.tt:0 "The hunter's men leave for the next shrine without looking in at the hospice"
+ cult.1118.a.found:0 "They Look In at the Hospice"
+ cult.1118.b:0 "Walk past them with my head up."
+ cult.1118.b.pass:0 "They Let You Pass"
+ cult.1118.b.named:0 "They Take Your Name"
+ cult.1118.c:0 "Pay their captain to look at somebody else."
+ cult.1118.c.tt:0 "The captain takes the money, and does not look at you again"
+
+ # ---- cult.1119 ---------------------------------------------------------------------------------
+
+ cult.1119.t:0 "The Offering Box"
+ cult.1119.desc:0 "The offering box by the door of the [cult_faith.HouseOfWorship] is an old iron chest with a slot in the lid, and the pilgrims have been feeding it coins all week. The lay brother who empties it comes at dusk.\n\nFor an hour before that, nobody stands near it but you."
+ cult.1119.a:0 "Empty it."
+ cult.1119.a.unseen:0 "Nobody Sees"
+ cult.1119.a.unseen.tt:0 "The lay brother finds the box empty and blames the last band of pilgrims"
+ cult.1119.a.seen:0 "A Pilgrim Sees You"
+ cult.1119.b:0 "Fill it, generously, where the priests can see."
+ cult.1119.c:0 "Drop the circle's token in among the coins."
+
+ # ---- cult.1120 ---------------------------------------------------------------------------------
+
+ cult.1120.t:0 "The Blessed Well"
+ cult.1120.desc:0 "The well in the courtyard of the shrine is blessed. The pilgrims drink from it, wash their faces in it, and fill flasks to carry home to the ones who could not make the journey. Of everything at [cult_defilement_county.GetNameNoTier], it is the one thing every one of them touches.\n\nYou brought ashes from the circle's last mass, in a twist of cloth."
+ cult.1120.a:0 "Scatter the ashes in the well."
+ cult.1120.b:0 "Drink, like everyone else."
+
+ # ---- Pulse actions -------------------------------------------------------------------------------
+
+ cult_defilement_apa_backwards_prayer_title:0 "[first.GetShortUIName|U] Said the Pilgrims' Prayer Backwards"
+ cult_defilement_apa_kissed_the_step_title:0 "[first.GetShortUIName|U] Kissed the Worn Step with the Faithful"
+ cult_defilement_apa_shared_bread_title:0 "[first.GetShortUIName|U] Shared Bread with the Pilgrims at [province.GetNameNoTooltip]"
+ cult_defilement_apa_watched_the_priests_title:0 "[first.GetShortUIName|U] Learned the Hours the Priests Keep"
+ cult_defilement_apa_lay_brother_title:0 "A Lay Brother Watched [first.GetShortUIName] Too Long"
+ cult_defilement_apa_devout_pilgrim_title:0 "The Priests at [province.GetNameNoTooltip] Remarked on [first.GetShortUIName]'s Devotion"
+ cult_defilement_apa_old_mark_title:0 "[first.GetShortUIName|U] Found an Old Mark of the Circle Cut in the Stone"
+ cult_defilement_apa_hymn_title:0 "[first.GetShortUIName|U] Sang the Pilgrim Hymns with Everyone Else"
+ cult_defilement_apa_blistered_feet_title:0 "[first.GetShortUIName|U] Has Blistered Feet from the Road"
+ cult_defilement_apa_walked_together_title:0 "[first.GetShortUIName|U] and [second.GetShortUIName] Walked the Shrine Together"
+ cult_defilement_apa_power_tt:0 "[first.GetShortUIName|U] gains #P 2#! dark power"
+ cult_defilement_apa_exposure_up_tt:0 "[first.GetShortUIName|U]'s exposure rises by #N 1#!"
+ cult_defilement_apa_exposure_down_tt:0 "[first.GetShortUIName|U]'s exposure falls by #P 1#!"

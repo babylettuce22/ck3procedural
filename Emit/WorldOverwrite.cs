@@ -206,9 +206,9 @@ public static class WorldOverwrite
         // WriteAll covers the faith localisation as well, so a faith edit subsumes the rewrite a
         // title rename would otherwise need. Only when it did not run does that have to happen
         // separately — holy site names are read live off the county title.
-        if (aspects.HasFlag(WorldAspect.Faiths)) ReligionWriter.WriteAll(modDir, written.Faiths.Declared(), result.Config.Seed);
+        if (aspects.HasFlag(WorldAspect.Faiths)) ReligionWriter.WriteAll(modDir, written.Faiths.Declared(), result.Config.Seed, result.Config.ReligionTooltips);
         else if (aspects.HasFlag(WorldAspect.TitleNames))
-            ReligionWriter.WriteLocalisation(modDir, written.Faiths.Declared(), result.Config.Seed);
+            ReligionWriter.WriteLocalisation(modDir, written.Faiths.Declared(), result.Config.Seed, result.Config.ReligionTooltips);
 
         // The character file whole — ancestors, rulers, spouses and children — from the same
         // function that wrote it, with the rulers' current values. Everything the block around a

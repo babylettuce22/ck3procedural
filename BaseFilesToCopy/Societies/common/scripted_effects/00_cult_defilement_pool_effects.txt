@@ -1,0 +1,71 @@
+﻿# The Pilgrimage of Defilement's random pool (cult.1100-1199, events/cult_defilement_pool_events.txt).
+#
+# The pool is drawn by two on_actions (common/on_action/00_cult_defilement_pool_on_actions.txt): the
+# road pool from the activity's on_travel_state_pulse, the shrine pool from the phase's on_weekly_pulse.
+# Both read the state these effects keep:
+#
+#   flag cult_defilement_seen_NNNN   on the host, 6 months: the event has fired this pilgrimage
+#   flag cult_defilement_pool_recent on the host, 6 days: at most one pool event a week
+#   var  cult_defilement_pool_count  on the activity: pool events so far (the on_actions stop at 3)
+#   var  cult_defilement_home        on the activity, set by cult.0914: the pilgrimage is over
+
+# First line of every pool event's immediate, after the scope savers. $ID$ is the event's number.
+cult_defilement_pool_open_effect = {
+	add_character_flag = {
+		flag = cult_defilement_seen_$ID$
+		months = 6
+	}
+	add_character_flag = {
+		flag = cult_defilement_pool_recent
+		days = 6
+	}
+	if = {
+		limit = { exists = scope:activity }
+		scope:activity = {
+			if = {
+				limit = { NOT = { has_variable = cult_defilement_pool_count } }
+				set_variable = {
+					name = cult_defilement_pool_count
+					value = 0
+				}
+			}
+			change_variable = {
+				name = cult_defilement_pool_count
+				add = 1
+			}
+		}
+	}
+}
+
+# Another member's exposure moved by the host's choice, worded from the host's side (the core's
+# cult_their_exposure_gain_effect is worded for the hunter, and colours a rise as good news).
+# $WHO$ must be a member; the member still gets the core effect's own toast.
+cult_defilement_their_exposure_effect = {
+	$WHO$ = { save_scope_as = cult_defilement_exposed }
+	save_scope_value_as = {
+		name = cult_defilement_their_delta
+		value = $VALUE$
+	}
+	custom_tooltip = cult_defilement_their_exposure_tt
+	hidden_effect = {
+		scope:cult_defilement_exposed = { cult_exposure_gain_effect = { VALUE = $VALUE$ } }
+	}
+}
+
+# A guest of this pilgrimage by name, as scope:cult_defilement_guest: an adult member attending who
+# is not the host. Unset when the host walks alone.
+cult_defilement_save_guest_effect = {
+	if = {
+		limit = { exists = scope:activity }
+		scope:activity = {
+			random_attending_character = {
+				limit = {
+					NOT = { this = root }
+					is_adult = yes
+					has_trait = cult_member
+				}
+				save_scope_as = cult_defilement_guest
+			}
+		}
+	}
+}

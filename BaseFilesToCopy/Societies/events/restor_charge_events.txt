@@ -4,6 +4,7 @@
 #   0510-0514   a charge kept: win over, war chest, stir, shelter, recruit
 #   0520        a charge's three years ran out
 #   0530-0534   a chance to do the charge in hand, one per kind
+#   0540        a charge from a player Keeper's own hand (hidden; restor_give_charge_interaction)
 #
 # The state and every transition are in 00_restor_charge_effects.txt; these events only show them.
 # A charge is cleared before its ending event arrives, so the endings read the saved scopes
@@ -678,5 +679,69 @@ restor.0534 = {
 	option = {
 		name = restor.0534.b
 		ai_chance = { base = 40 }
+	}
+}
+
+# =====================================================================================
+#  restor.0540 -- a charge from a player Keeper's hand (hidden)
+# =====================================================================================
+#
+# Fired on the member by restor_give_charge_interaction, which leaves the kind asked for in
+# var:restor_charge_order and the Keeper in var:restor_charge_giver. Runs as the member, which the
+# charge effects need (ROOT is the member). The Keeper is told what was given; a player member gets
+# the usual letter (restor.0501).
+
+restor.0540 = {
+	hidden = yes
+	trigger = {
+		has_variable = restor_charge_order
+		has_variable = restor_charge_giver
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		save_scope_as = restor_charge_member
+		var:restor_charge_giver = { save_scope_as = restor_charge_giver }
+		save_scope_value_as = {
+			name = restor_charge_asked
+			value = var:restor_charge_order
+		}
+		restor_charge_order_effect = yes
+		remove_variable = restor_charge_order
+		restor_charge_save_state_effect = yes
+
+		scope:restor_charge_giver = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = restor_charge_given_toast
+				left_icon = scope:restor_charge_member
+				if = {
+					limit = { scope:restor_charge_kind ?= flag:win_over }
+					custom_tooltip = restor_charge_given_win_over_tt
+				}
+				else_if = {
+					limit = { scope:restor_charge_kind ?= flag:stir }
+					custom_tooltip = restor_charge_given_stir_tt
+				}
+				else_if = {
+					limit = { scope:restor_charge_kind ?= flag:war_chest }
+					custom_tooltip = restor_charge_given_war_chest_tt
+				}
+				else_if = {
+					limit = { scope:restor_charge_kind ?= flag:shelter }
+					custom_tooltip = restor_charge_given_shelter_tt
+				}
+				else = {
+					custom_tooltip = restor_charge_given_recruit_tt
+				}
+				if = {
+					limit = {
+						NOT = { scope:restor_charge_asked = flag:any }
+						NOT = { scope:restor_charge_asked = scope:restor_charge_kind }
+					}
+					custom_tooltip = restor_charge_given_fallback_tt
+				}
+			}
+		}
+		restor_charge_notify_effect = yes
 	}
 }

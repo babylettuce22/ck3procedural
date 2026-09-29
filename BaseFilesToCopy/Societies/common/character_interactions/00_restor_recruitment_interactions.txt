@@ -12,7 +12,7 @@
 # as the yearly approach in 00_restor_recruitment_on_actions.txt, so the two routes do not add up.
 
 restor_sound_out_interaction = {
-	category = interaction_category_friendly
+	category = interaction_category_restor
 	icon = icon_scheme_sway
 	interface_priority = 40
 	common_interaction = no
@@ -134,7 +134,7 @@ restor_sound_out_interaction = {
 }
 
 restor_offer_oath_interaction = {
-	category = interaction_category_friendly
+	category = interaction_category_restor
 	icon = icon_scheme_claim_throne
 	interface_priority = 41
 	common_interaction = no

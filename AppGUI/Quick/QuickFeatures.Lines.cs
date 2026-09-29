@@ -149,6 +149,27 @@ public static partial class QuickFeatures
         return t;
     }
 
+    /// <summary>
+    /// Where a set-piece is a barrier by design, for the generator's impassable cut: whether a
+    /// point, as shares of the map's width and height (y down), lies on the Wall's body — its
+    /// flat top and faces, pinching at the saddles, without the glacis at its feet. Null for every
+    /// other feature, whose walls the terrain decides.
+    ///
+    /// The Wall is flat-topped by design, and a cut that ranks ground by steepness walls its two
+    /// faces and leaves the top between them as a passable road the length of the map: on seed
+    /// 115886, 70% of the top came out passable. Its saddles stay thin, so the pass survey still
+    /// cuts its ways through there.
+    /// </summary>
+    public static Func<double, double, bool>? Barrier(QuickFeature feature, int seed, double aspect)
+    {
+        if (Shapes(feature, seed, aspect) is not [Wall wall]) return null;
+        return (x, y) =>
+        {
+            var (distance, t, _) = wall.Path.Closest(x * aspect, y);
+            return WallSection(wall, distance / wall.Width, t).Range >= 0.5f;
+        };
+    }
+
     // ================================================================ drawing
 
     private static Sample? Evaluate(Line line, double px, double py)

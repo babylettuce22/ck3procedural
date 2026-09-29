@@ -199,6 +199,9 @@ cult_charge_invalid_trigger = {
 	has_variable = cult_charge
 	OR = {
 		NOT = { cult_secret_phase_trigger = yes }
+		# The Hierophant gives charges and holds none. cult_make_hierophant_effect sets any aside at
+		# once; this catches a Hierophant made some other way.
+		cult_is_hierophant_trigger = yes
 		AND = {
 			var:cult_charge = flag:turn_priest
 			OR = {

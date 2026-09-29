@@ -23,6 +23,11 @@
 # The events are fired from the phase's on_phase_active, which runs once per attending character
 # -- the host gets the chain, each guest gets the arrival event. scope:activity and scope:host ride
 # along into the triggered events.
+#
+# The chain is the same every time, so the phase also draws from a random pool each week
+# (on_weekly_pulse -> restor_gathering_host_pool / _guest_pool, events restor.1000-1099 in
+# events/restor_gathering_pool_events.txt) and carries pulse actions. The phase runs three weeks so
+# the pool has room: two or three draws for the host, and restor.0904 moved to the last week.
 
 activity_restor_gathering = {
 	activity_group_type = restor_group
@@ -162,7 +167,7 @@ activity_restor_gathering = {
 			on_phase_active = {
 				if = {
 					limit = { this = scope:host }
-					scope:activity = { progress_activity_phase_after = { weeks = 2 } }
+					scope:activity = { progress_activity_phase_after = { weeks = 3 } }
 					trigger_event = {
 						id = restor.0901
 						days = 1
@@ -183,7 +188,36 @@ activity_restor_gathering = {
 					}
 				}
 			}
+
+			# The random pool (restor.1000-1099), vanilla's funeral-wake way: every attendee draws
+			# from an on_action each week, host and guests from different pools. See
+			# common/on_action/00_restor_gathering_pool_on_actions.txt.
+			on_weekly_pulse = {
+				if = {
+					limit = { this = scope:host }
+					trigger_event = { on_action = restor_gathering_host_pool }
+				}
+				else = {
+					trigger_event = { on_action = restor_gathering_guest_pool }
+				}
+			}
 		}
+	}
+
+	###################
+	# PULSE ACTIONS
+	###################
+
+	# Small moments in the hall, logged in the activity window.
+	# common/activities/pulse_actions/00_restor_gathering_actions.txt
+	pulse_actions = {
+		entries = {
+			restor_gathering_pa_whispered_toast restor_gathering_pa_old_song restor_gathering_pa_sworn_bond
+			restor_gathering_pa_map_study restor_gathering_pa_cipher restor_gathering_pa_jumpy
+			restor_gathering_pa_doors_barred restor_gathering_pa_prayer restor_gathering_pa_heir_story
+			restor_gathering_pa_praised restor_gathering_pa_argument restor_gathering_pa_coin
+		}
+		chance_of_no_event = 5
 	}
 
 	###################

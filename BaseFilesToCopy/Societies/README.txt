@@ -119,6 +119,13 @@ var:restor_charge_given (timed, 3 years), var:restor_charge_goal (war_chest). A 
 a county target never share a variable: ck3-tiger types a variable by its first assignment, so an
 overloaded one gives false scope warnings whenever file order changes.
 
+A PLAYER Keeper also gives charges by hand: Give a Charge (restor_give_charge_interaction) on any
+member, choosing the kind or "whatever the cause needs". It runs restor.0540 on the member, which
+gives that kind (or the usual draw if nothing of it can be done) and toasts the Keeper. The charge
+remembers its giver (var:restor_charge_giver), and keeping it pays the giver 10 favour with a toast.
+The yearly draw goes on regardless. Neither the Keeper nor the heir holds a charge: becoming either
+sets one aside (restor_charge_set_aside_for_office_effect, in the make effects).
+
 
 FILES AND NAMESPACES
 --------------------
@@ -134,8 +141,15 @@ Every key is restor_*. Event namespace restor, blocks by area -- keep to them:
   restor.0700-0799  triumph, the restored realm          events/restor_crown_events.txt
   restor.0800-0899  fall and succession                  events/restor_crown_events.txt
   restor.0900-0999  the gathering (rite) and the errand  events/restor_gathering_events.txt
+  restor.1000-1099  the gathering's random pool          events/restor_gathering_pool_events.txt
+  restor.1100-1199  the errand's random pool             events/restor_errand_pool_events.txt
 
 Each events file has its own loc file of the same stem under localization/english/.
+
+Right-click interactions go in the society's own menu section: `category = interaction_category_restor`
+(the cult's is interaction_category_cult), defined in
+common/character_interaction_categories/01_society_interaction_category.txt. Never friendly/hostile:
+the section is how a member finds the society's powers, and it only draws for members.
 
 
 VOICE
@@ -161,6 +175,7 @@ HOW TO TEST
     event restor.0002    +50 support (walks the milestones)
     event restor.0003    make yourself the pretender
     event restor.0004    print the society's state as a toast chain
+    event restor.0005    make yourself the Keeper (Give a Charge appears on members)
 
 
 =====================================================================================================
@@ -238,6 +253,9 @@ CONTRACTS FOR THE CULT PACKS (mirror the Restorationists')
   Charges:  var:cult_charge (flag), var:cult_charge_target (turn_priest: always a character),
             var:cult_charge_county (taint, defile_site: always a county title), var:cult_charge_given
             (timed, 3 years), var:cult_charge_goal; the panel reads customizable loc CultCurrentCharge.
+            A player Hierophant gives them by hand too (cult_give_charge_interaction -> cult.0540),
+            as the Keeper does; var:cult_charge_giver is paid 10 dark power when it is kept. The
+            Hierophant holds none: becoming Hierophant sets one aside.
   Flags:    cult_sounded_sympathetic (5 y, recruitment), cult_refused_recently (5 y).
   Opinions: cult_brought_me_in_opinion (recruitment's accept path adds it; the recruit charge counts it).
 
@@ -249,6 +267,8 @@ CONTRACTS FOR THE CULT PACKS (mirror the Restorationists')
   cult.0500-0599  charges                          events/cult_charge_events.txt
   cult.0600-0899  core (rot, capture, unveiling, purification, succession)
   cult.0900-0999  the black mass and the defilement events/cult_rite_events.txt
+  cult.1000-1099  the black mass's random pool      events/cult_mass_pool_events.txt
+  cult.1100-1199  the defilement's random pool      events/cult_defilement_pool_events.txt
 
   Test: event cult.0001 (sworn, Magister, 150 power), cult.0002 (taint the holy sites), cult.0003
   (you are Hierophant), cult.0004 (swear the host's head in -> capture).

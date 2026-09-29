@@ -1,0 +1,2892 @@
+﻿namespace = cult
+
+# The inversion cult: the Black Mass's random pool. cult.1000-1099.
+#
+# Drawn during the Mass (common/activities/activity_types/00_cult_mass_activity.txt) by the weekly
+# pulse, through common/on_action/00_cult_mass_on_actions.txt: the host from the host pool, each
+# player guest from the guest pool. Not every Mass gets every one.
+#
+#   HOST (root = host; AI hosts too)
+#   1001   The Candle Gutters       a candle goes out at the wrong word
+#   1002   The Initiate at the Door a new member panics and makes for the door
+#   1003   The Chaplain             secret: a lord and the chaplain who hears their confession, both here
+#   1004   A Knock at the Door      secret: someone knocks in the middle of the Mass
+#   1005     Who Was at the Door    follow-up to 1004: a clerk, the village priest, or the hunter's rider
+#   1006   The Wrong Hymn           the Faithless sing the true hymn from habit
+#   1007   A Sign                   something happens that the circle reads as an answer
+#   1008   Two Books                two senior Faithless, each with their own book of the rite
+#   1009   The Offering             a guest lays something on the altar
+#   1010   The Quiet Guest          secret: a guest who watches faces and says no responses
+#   1011   The Preacher in Town     secret: the hunter's preacher, preaching every morning after
+#   1012   The Founder's Tomb       the Mass said over the grave of the pious forebear who built the chapel
+#   1020   The Doors Stand Open     unveiled: the town comes to watch
+#   1021   The Old Priest           unveiled: a priest of the old way says the true Mass on the step
+#   1022   A Late Convert           unveiled: a vassal who wept in church last year wants to be sworn
+#
+#   GUEST (root = a player guest)
+#   1030   A Face Under a Hood      someone you know is here
+#   1031   The Hierophant's Word    the Hierophant stops you on the stairs
+#   1032   A Letter from Home       secret: your spouse writes, and asks where you are
+#   1033   Cold Feet                the member beside you wants out
+#   1034   The Lesson               the host has you read the lesson backwards
+#
+# Every host event marks the activity (cult_mass_pool_mark_effect) so it cannot repeat in one Mass,
+# and the host for five years, which its weight_multiplier reads so the next Mass leans elsewhere.
+# Every guest event sets a two-month character flag. Every roll ends in a toast.
+
+# =====================================================================================
+#  cult.1001 -- The Candle Gutters
+# =====================================================================================
+
+cult.1001 = {
+	type = character_event
+	title = cult.1001.t
+	desc = {
+		desc = cult.1001.desc
+		triggered_desc = {
+			trigger = { exists = scope:cult_mass_witness }
+			desc = cult.1001.desc_witness
+		}
+		desc = cult.1001.desc_end
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_mass_witness }
+		character = scope:cult_mass_witness
+		animation = fear
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1001
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_active_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1001 } }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1001 }
+		scope:activity = {
+			random_attending_character = {
+				limit = { NOT = { this = root } }
+				save_scope_as = cult_mass_witness
+			}
+		}
+	}
+
+	# Say it again, louder.
+	option = {
+		name = cult.1001.a
+		cult_power_gain_effect = { VALUE = 10 }
+		cult_corrupt_soul_effect = yes
+		cult_mass_pool_circle_rank_effect = { XP = 2 }
+		stress_impact = {
+			craven = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = 20 has_trait = zealous }
+		}
+	}
+
+	# A draught.
+	option = {
+		name = cult.1001.b
+		random_list = {
+			60 = {
+				modifier = { add = 20 learning >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1001.b.goes_on
+					left_icon = root
+					custom_tooltip = cult.1001.b.goes_on.tt
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1001.b.uneasy
+					left_icon = root
+					cult_mass_pool_circle_opinion_effect = { MODIFIER = disappointed_opinion OPINION = -5 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = cynical }
+		}
+	}
+
+	# A sign that he is pleased.
+	option = {
+		name = cult.1001.c
+		random_list = {
+			65 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 10 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1001.c.believed
+					left_icon = root
+					cult_mass_pool_circle_opinion_effect = { MODIFIER = respect_opinion OPINION = 10 }
+				}
+			}
+			35 = {
+				modifier = { add = 15 has_trait = honest }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1001.c.laugh
+					left_icon = root
+					custom_tooltip = cult.1001.c.laugh.tt
+					add_prestige = minor_prestige_loss
+				}
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = deceitful }
+			modifier = { add = -20 has_trait = honest }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1002 -- The Initiate at the Door
+# =====================================================================================
+
+cult.1002 = {
+	type = character_event
+	title = cult.1002.t
+	desc = {
+		desc = cult.1002.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_unveiled_trigger = yes }
+				desc = cult.1002.desc_open
+			}
+			desc = cult.1002.desc_secret
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:cult_mass_initiate
+		animation = fear
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1002
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_active_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1002 } }
+		scope:activity = {
+			any_attending_character = {
+				NOT = { this = root }
+				has_trait = cult_member
+				NOT = { cult_rank_at_least_trigger = { RANK = 25 } }
+			}
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1002 }
+		scope:activity = {
+			random_attending_character = {
+				limit = {
+					NOT = { this = root }
+					has_trait = cult_member
+					NOT = { cult_rank_at_least_trigger = { RANK = 25 } }
+				}
+				save_scope_as = cult_mass_initiate
+			}
+		}
+	}
+
+	# Talk them back to their knees.
+	option = {
+		name = cult.1002.a
+		random_list = {
+			60 = {
+				modifier = { add = 15 diplomacy >= 12 }
+				modifier = { add = 15 diplomacy >= 16 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1002.a.kneels
+					left_icon = root
+					right_icon = scope:cult_mass_initiate
+					scope:cult_mass_initiate = {
+						add_trait_xp = {
+							trait = cult_member
+							track = cult_rank
+							value = 5
+						}
+						add_opinion = {
+							target = root
+							modifier = grateful_opinion
+							opinion = 15
+						}
+					}
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1002.a.leaves
+					left_icon = root
+					right_icon = scope:cult_mass_initiate
+					scope:cult_mass_initiate = {
+						add_trait_xp = {
+							trait = cult_member
+							track = cult_rank
+							value = -10
+						}
+					}
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = compassionate }
+			modifier = { add = 20 diplomacy >= 12 }
+		}
+	}
+
+	# Remind them what the priests do.
+	option = {
+		name = cult.1002.b
+		add_dread = minor_dread_gain
+		scope:cult_mass_initiate = {
+			add_opinion = {
+				target = root
+				modifier = scared_opinion
+				opinion = -15
+			}
+		}
+		custom_tooltip = cult.1002.b.tt
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = callous }
+			modifier = { add = 30 has_trait = sadistic }
+			modifier = { add = -30 has_trait = compassionate }
+		}
+	}
+
+	# Let them go.
+	option = {
+		name = cult.1002.c
+		random_list = {
+			50 = {
+				modifier = { add = 20 scope:cult_mass_initiate = { opinion = { target = root value >= 20 } } }
+				modifier = { add = 100 cult_unveiled_trigger = yes }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1002.c.quiet
+					left_icon = scope:cult_mass_initiate
+					scope:cult_mass_initiate = {
+						add_opinion = {
+							target = root
+							modifier = grateful_opinion
+							opinion = 10
+						}
+					}
+				}
+			}
+			50 = {
+				trigger = { cult_secret_phase_trigger = yes }
+				modifier = { add = 20 scope:cult_mass_initiate = { has_trait = honest } }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1002.c.confession
+					left_icon = scope:cult_mass_initiate
+					cult_exposure_gain_effect = { VALUE = 4 }
+					cult_mass_pool_everyone_exposure_effect = { VALUE = 1 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = forgiving }
+			modifier = { add = -10 has_trait = paranoid }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1003 -- The Chaplain
+# =====================================================================================
+#
+# A lord at the Mass whose own court chaplain is at the Mass too. The lord may be the host.
+
+cult.1003 = {
+	type = character_event
+	title = cult.1003.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:cult_mass_chaplain_lord = root }
+				desc = cult.1003.desc_yours
+			}
+			desc = cult.1003.desc_theirs
+		}
+		desc = cult.1003.desc_end
+	}
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		character = scope:cult_mass_chaplain
+		animation = chaplain
+	}
+	lower_right_portrait = {
+		trigger = { NOT = { scope:cult_mass_chaplain_lord = root } }
+		character = scope:cult_mass_chaplain_lord
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1003
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_secret_phase_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1003 } }
+		scope:activity = {
+			any_attending_character = {
+				exists = cp:councillor_court_chaplain
+				cp:councillor_court_chaplain = {
+					NOT = { this = root }
+					involved_activity ?= scope:activity
+				}
+			}
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1003 }
+		scope:activity = {
+			random_attending_character = {
+				limit = {
+					exists = cp:councillor_court_chaplain
+					cp:councillor_court_chaplain = {
+						NOT = { this = root }
+						involved_activity ?= scope:activity
+					}
+				}
+				save_scope_as = cult_mass_chaplain_lord
+				cp:councillor_court_chaplain = { save_scope_as = cult_mass_chaplain }
+			}
+		}
+	}
+
+	# Say it with me at the altar.
+	option = {
+		name = cult.1003.a
+		cult_power_gain_effect = { VALUE = 10 }
+		cult_corrupt_soul_effect = yes
+		scope:cult_mass_chaplain = {
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = 10
+			}
+		}
+		cult_their_exposure_gain_effect = { WHO = scope:cult_mass_chaplain VALUE = 2 }
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = arrogant }
+		}
+	}
+
+	# Ask the chaplain what their lord confesses.
+	option = {
+		name = cult.1003.b
+		trigger = { NOT = { scope:cult_mass_chaplain_lord = root } }
+		random_list = {
+			75 = {
+				modifier = { add = 15 intrigue >= 12 }
+				if = {
+					limit = {
+						scope:cult_mass_chaplain_lord = {
+							any_secret = { NOT = { is_known_by = root } }
+						}
+					}
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = cult.1003.b.tells
+						left_icon = scope:cult_mass_chaplain
+						right_icon = scope:cult_mass_chaplain_lord
+						custom_tooltip = cult.1003.b.tells.tt
+						hidden_effect = {
+							scope:cult_mass_chaplain_lord = {
+								random_secret = {
+									limit = { NOT = { is_known_by = root } }
+									reveal_to = root
+								}
+							}
+						}
+					}
+				}
+				else = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = cult.1003.b.nothing
+						left_icon = scope:cult_mass_chaplain
+						right_icon = scope:cult_mass_chaplain_lord
+						custom_tooltip = cult.1003.b.nothing.tt
+					}
+				}
+			}
+			25 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1003.b.told
+					left_icon = scope:cult_mass_chaplain_lord
+					scope:cult_mass_chaplain_lord = {
+						add_opinion = {
+							target = root
+							modifier = angry_opinion
+							opinion = -20
+						}
+					}
+				}
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			just = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = deceitful }
+			modifier = { add = 20 has_trait = schemer }
+			modifier = { add = -20 has_trait = honest }
+		}
+	}
+
+	# Everyone here has a double life.
+	option = {
+		name = cult.1003.c
+		scope:cult_mass_chaplain = {
+			add_opinion = {
+				target = root
+				modifier = trust_opinion
+				opinion = 10
+			}
+		}
+		if = {
+			limit = { NOT = { scope:cult_mass_chaplain_lord = root } }
+			scope:cult_mass_chaplain_lord = {
+				add_opinion = {
+					target = root
+					modifier = trust_opinion
+					opinion = 10
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1004 -- A Knock at the Door
+# =====================================================================================
+
+cult.1004 = {
+	type = character_event
+	title = cult.1004.t
+	desc = cult.1004.desc
+	theme = secret
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1004
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_secret_phase_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1004 } }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1004 }
+		cult_mass_pool_count_effect = yes
+	}
+
+	# Nobody breathes.
+	option = {
+		name = cult.1004.a
+		random_list = {
+			55 = {
+				modifier = { add = 15 has_trait = patient }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1004.a.gone
+					left_icon = root
+					custom_tooltip = cult.1004.a.gone.tt
+				}
+			}
+			45 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1004.a.lamp
+					left_icon = root
+					cult_mass_pool_everyone_exposure_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = patient }
+			modifier = { add = 20 has_trait = craven }
+		}
+	}
+
+	# Answer it myself.
+	option = {
+		name = cult.1004.b
+		custom_tooltip = cult.1004.b.tt
+		hidden_effect = {
+			trigger_event = cult.1005
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = -30 has_trait = craven }
+		}
+	}
+
+	# Out through the crypt.
+	option = {
+		name = cult.1004.c
+		cult_mass_pool_everyone_exposure_loss_effect = { VALUE = 1 }
+		cult_mass_pool_circle_opinion_effect = { MODIFIER = disappointed_opinion OPINION = -5 }
+		add_prestige = minor_prestige_loss
+		ai_chance = {
+			base = 20
+			modifier = { add = 40 has_trait = paranoid }
+			modifier = { add = 20 has_trait = craven }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1005 -- Who Was at the Door (follow-up to 1004)
+# =====================================================================================
+#
+# Who it is is rolled in immediate: a clerk with a late letter, the village priest who saw the
+# lights, or -- when there is a hunter -- a rider in the hunter's colours. Each has its own options.
+
+cult.1005 = {
+	type = character_event
+	title = cult.1005.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_mass_door_rider }
+				desc = cult.1005.desc_rider
+			}
+			triggered_desc = {
+				trigger = { exists = scope:cult_mass_door_priest }
+				desc = cult.1005.desc_priest
+			}
+			desc = cult.1005.desc_clerk
+		}
+	}
+	theme = secret
+	override_background = { reference = corridor_night }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_mass_door_rider }
+		character = scope:cult_hunter
+		animation = disapproval
+	}
+	trigger = {
+		cult_active_trigger = yes
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		random_list = {
+			40 = {
+				save_scope_value_as = { name = cult_mass_door_clerk value = yes }
+			}
+			35 = {
+				trigger = { exists = capital_county }
+				save_scope_value_as = { name = cult_mass_door_priest value = yes }
+			}
+			25 = {
+				trigger = { exists = scope:cult_hunter }
+				save_scope_value_as = { name = cult_mass_door_rider value = yes }
+			}
+		}
+	}
+
+	# ---- The clerk ----
+
+	option = {
+		name = cult.1005.clerk_a
+		trigger = {
+			NOT = { exists = scope:cult_mass_door_priest }
+			NOT = { exists = scope:cult_mass_door_rider }
+		}
+		random_list = {
+			70 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1005.clerk_a.nothing
+					left_icon = root
+					custom_tooltip = cult.1005.clerk_a.nothing.tt
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1005.clerk_a.saw
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = { base = 50 }
+	}
+
+	option = {
+		name = cult.1005.clerk_b
+		trigger = {
+			NOT = { exists = scope:cult_mass_door_priest }
+			NOT = { exists = scope:cult_mass_door_rider }
+			gold >= 10
+		}
+		remove_short_term_gold = 10
+		custom_tooltip = cult.1005.clerk_b.tt
+		ai_chance = {
+			base = 50
+			modifier = { add = 30 has_trait = paranoid }
+			modifier = { add = -30 has_trait = greedy }
+		}
+	}
+
+	# ---- The village priest ----
+
+	# Pay him, and his parish is ours.
+	option = {
+		name = cult.1005.priest_a
+		trigger = {
+			exists = scope:cult_mass_door_priest
+			gold >= 25
+		}
+		remove_short_term_gold = 25
+		send_interface_toast = {
+			type = event_toast_effect_good
+			title = cult.1005.priest_a.paid
+			left_icon = root
+			custom_tooltip = cult.1005.priest_a.paid.tt
+			cult_mass_pool_taint_county_effect = { COUNTY = root.capital_county }
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 20 has_trait = generous }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# A vigil for the dead.
+	option = {
+		name = cult.1005.priest_b
+		trigger = { exists = scope:cult_mass_door_priest }
+		random_list = {
+			60 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 10 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1005.priest_b.believed
+					left_icon = root
+					custom_tooltip = cult.1005.priest_b.believed.tt
+				}
+			}
+			40 = {
+				modifier = { add = 15 has_trait = honest }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1005.priest_b.questions
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = deceitful }
+		}
+	}
+
+	# Tell him what happens to priests who talk.
+	option = {
+		name = cult.1005.priest_c
+		trigger = { exists = scope:cult_mass_door_priest }
+		add_dread = minor_dread_gain
+		random_list = {
+			70 = {
+				modifier = { add = 15 dread >= 30 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1005.priest_c.silent
+					left_icon = root
+					custom_tooltip = cult.1005.priest_c.silent.tt
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1005.priest_c.writes
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = callous }
+			modifier = { add = 20 has_trait = sadistic }
+		}
+	}
+
+	# ---- The hunter's rider ----
+
+	# Take the letter; a vigil.
+	option = {
+		name = cult.1005.rider_a
+		trigger = { exists = scope:cult_mass_door_rider }
+		random_list = {
+			50 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 15 intrigue >= 16 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1005.rider_a.satisfied
+					left_icon = root
+					custom_tooltip = cult.1005.rider_a.satisfied.tt
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1005.rider_a.notes
+					left_icon = root
+					right_icon = scope:cult_hunter
+					cult_exposure_gain_effect = { VALUE = 5 }
+					cult_mass_pool_everyone_exposure_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = deceitful }
+		}
+	}
+
+	# A bed, a purse and a good breakfast.
+	option = {
+		name = cult.1005.rider_b
+		trigger = {
+			exists = scope:cult_mass_door_rider
+			gold >= 25
+		}
+		remove_short_term_gold = 25
+		random_list = {
+			75 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1005.rider_b.content
+					left_icon = root
+					custom_tooltip = cult.1005.rider_b.content.tt
+				}
+			}
+			25 = {
+				modifier = { add = 25 scope:cult_hunter = { has_trait = zealous } }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1005.rider_b.reports
+					left_icon = root
+					right_icon = scope:cult_hunter
+					cult_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = generous }
+			modifier = { add = -30 has_trait = greedy }
+		}
+	}
+
+	# Let the dark take the memory of it.
+	option = {
+		name = cult.1005.rider_c
+		trigger = {
+			exists = scope:cult_mass_door_rider
+			cult_power_has_power_trigger = { VALUE = 20 }
+		}
+		cult_power_spend_effect = { VALUE = 20 }
+		cult_corrupt_soul_effect = yes
+		random_list = {
+			80 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1005.rider_c.forgets
+					left_icon = root
+					custom_tooltip = cult.1005.rider_c.forgets.tt
+				}
+			}
+			20 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1005.rider_a.notes
+					left_icon = root
+					right_icon = scope:cult_hunter
+					cult_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = callous }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1006 -- The Wrong Hymn
+# =====================================================================================
+
+cult.1006 = {
+	type = character_event
+	title = cult.1006.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { cult_unveiled_trigger = yes }
+				desc = cult.1006.desc_open
+			}
+			desc = cult.1006.desc
+		}
+		desc = cult.1006.desc_end
+	}
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = disbelief
+	}
+	right_portrait = {
+		character = scope:cult_mass_singer
+		animation = prayer
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1006
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_active_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1006 } }
+		scope:activity = {
+			any_attending_character = { NOT = { this = root } }
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1006 }
+		scope:activity = {
+			random_attending_character = {
+				limit = { NOT = { this = root } }
+				save_scope_as = cult_mass_singer
+			}
+		}
+	}
+
+	# Stop them, and start again.
+	option = {
+		name = cult.1006.a
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 2
+		}
+		cult_mass_pool_circle_rank_effect = { XP = 1 }
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = diligent }
+		}
+	}
+
+	# Let them finish.
+	option = {
+		name = cult.1006.b
+		add_piety = minor_piety_gain
+		add_stress = minor_stress_loss
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = -3
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = content }
+			modifier = { add = 20 has_trait = calm }
+		}
+	}
+
+	# Who started it?
+	option = {
+		name = cult.1006.c
+		random_list = {
+			50 = {
+				modifier = { add = 20 scope:cult_mass_singer = { has_trait = zealous } }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1006.c.believes
+					left_icon = scope:cult_mass_singer
+					scope:cult_mass_singer = {
+						add_trait_xp = {
+							trait = cult_member
+							track = cult_rank
+							value = -10
+						}
+					}
+					add_opinion = {
+						target = scope:cult_mass_singer
+						modifier = suspicion_opinion
+						opinion = -15
+					}
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1006.c.mistake
+					left_icon = scope:cult_mass_singer
+					scope:cult_mass_singer = {
+						add_opinion = {
+							target = root
+							modifier = humiliated_opinion
+							opinion = -10
+						}
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = paranoid }
+			modifier = { add = 20 has_trait = vengeful }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1007 -- A Sign
+# =====================================================================================
+#
+# Something happens on the last word of the invocation. What it was is never said.
+
+cult.1007 = {
+	type = character_event
+	title = cult.1007.t
+	desc = {
+		desc = cult.1007.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_mass_sign_bell }
+				desc = cult.1007.desc_bell
+			}
+			triggered_desc = {
+				trigger = { exists = scope:cult_mass_sign_dogs }
+				desc = cult.1007.desc_dogs
+			}
+			triggered_desc = {
+				trigger = { exists = scope:cult_mass_sign_stone }
+				desc = cult.1007.desc_stone
+			}
+			desc = cult.1007.desc_candles
+		}
+		desc = cult.1007.desc_end
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_mass_witness }
+		character = scope:cult_mass_witness
+		animation = admiration
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1007
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_active_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1007 } }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1007 }
+		scope:activity = {
+			random_attending_character = {
+				limit = { NOT = { this = root } }
+				save_scope_as = cult_mass_witness
+			}
+		}
+		random_list = {
+			25 = { save_scope_value_as = { name = cult_mass_sign_bell value = yes } }
+			25 = { save_scope_value_as = { name = cult_mass_sign_dogs value = yes } }
+			25 = { save_scope_value_as = { name = cult_mass_sign_stone value = yes } }
+			25 = { save_scope_value_as = { name = cult_mass_sign_candles value = yes } }
+		}
+	}
+
+	# He has answered.
+	option = {
+		name = cult.1007.a
+		cult_power_gain_effect = { VALUE = 10 }
+		cult_corrupt_soul_effect = yes
+		cult_mass_pool_circle_rank_effect = { XP = 2 }
+		ai_chance = {
+			base = 50
+			modifier = { add = 20 has_trait = zealous }
+			modifier = { add = 20 has_trait = arrogant }
+		}
+	}
+
+	# Old stone and bad weather.
+	option = {
+		name = cult.1007.b
+		add_learning_lifestyle_xp = minor_lifestyle_xp
+		cult_mass_pool_circle_opinion_effect = { MODIFIER = disappointed_opinion OPINION = -5 }
+		ai_chance = {
+			base = 20
+			modifier = { add = 40 has_trait = cynical }
+		}
+	}
+
+	# Let each of them decide.
+	option = {
+		name = cult.1007.c
+		random_list = {
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1007.c.answer
+					left_icon = root
+					cult_mass_pool_circle_rank_effect = { XP = 2 }
+				}
+			}
+			30 = {
+				trigger = { exists = scope:cult_mass_witness }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1007.c.frightened
+					left_icon = scope:cult_mass_witness
+					scope:cult_mass_witness = {
+						add_stress = medium_stress_gain
+					}
+				}
+			}
+			20 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1007.c.unsure
+					left_icon = root
+					custom_tooltip = cult.1007.c.unsure.tt
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = shy }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1008 -- Two Books
+# =====================================================================================
+
+cult.1008 = {
+	type = character_event
+	title = cult.1008.t
+	desc = cult.1008.desc
+	theme = witchcraft
+	left_portrait = {
+		character = scope:cult_mass_book_a
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:cult_mass_book_b
+		animation = disapproval
+	}
+	lower_left_portrait = root
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1008
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_active_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1008 } }
+		scope:activity = {
+			any_attending_character = {
+				count >= 2
+				NOT = { this = root }
+				has_trait = cult_member
+				cult_rank_at_least_trigger = { RANK = 25 }
+			}
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1008 }
+		scope:activity = {
+			random_attending_character = {
+				limit = {
+					NOT = { this = root }
+					has_trait = cult_member
+					cult_rank_at_least_trigger = { RANK = 25 }
+				}
+				save_scope_as = cult_mass_book_a
+			}
+			random_attending_character = {
+				limit = {
+					NOT = { this = root }
+					NOT = { this = scope:cult_mass_book_a }
+					has_trait = cult_member
+					cult_rank_at_least_trigger = { RANK = 25 }
+				}
+				save_scope_as = cult_mass_book_b
+			}
+		}
+	}
+
+	# The first book.
+	option = {
+		name = cult.1008.a
+		scope:cult_mass_book_a = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_took_my_side_opinion
+			}
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = 3
+			}
+		}
+		scope:cult_mass_book_b = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_took_their_side_opinion
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = {
+				add = 30
+				opinion = { target = scope:cult_mass_book_a value > 20 }
+			}
+		}
+	}
+
+	# The second book.
+	option = {
+		name = cult.1008.b
+		scope:cult_mass_book_b = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_took_my_side_opinion
+			}
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = 3
+			}
+		}
+		scope:cult_mass_book_a = {
+			add_opinion = {
+				target = root
+				modifier = cult_life_took_their_side_opinion
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = {
+				add = 30
+				opinion = { target = scope:cult_mass_book_b value > 20 }
+			}
+		}
+	}
+
+	# From memory.
+	option = {
+		name = cult.1008.c
+		random_list = {
+			50 = {
+				modifier = { add = 15 learning >= 12 }
+				modifier = { add = 15 learning >= 16 }
+				modifier = { add = 10 cult_rank_at_least_trigger = { RANK = 75 } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1008.c.perfect
+					left_icon = root
+					add_trait_xp = {
+						trait = cult_member
+						track = cult_rank
+						value = 3
+					}
+					scope:cult_mass_book_a = {
+						add_opinion = {
+							target = root
+							modifier = respect_opinion
+							opinion = 10
+						}
+					}
+					scope:cult_mass_book_b = {
+						add_opinion = {
+							target = root
+							modifier = respect_opinion
+							opinion = 10
+						}
+					}
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1008.c.stumble
+					left_icon = root
+					add_prestige = minor_prestige_loss
+					scope:cult_mass_book_a = {
+						add_opinion = {
+							target = root
+							modifier = annoyed_opinion
+							opinion = -5
+						}
+					}
+					scope:cult_mass_book_b = {
+						add_opinion = {
+							target = root
+							modifier = annoyed_opinion
+							opinion = -5
+						}
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 learning >= 12 }
+			modifier = { add = 20 has_trait = arrogant }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1009 -- The Offering
+# =====================================================================================
+#
+# What was brought is rolled in immediate: a purse from an alms box, a relic from a shrine on the
+# giver's own land (only if that county is of the host faith and untainted), or an old prayer book.
+
+cult.1009 = {
+	type = character_event
+	title = cult.1009.t
+	desc = {
+		desc = cult.1009.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_mass_offer_relic }
+				desc = cult.1009.desc_relic
+			}
+			triggered_desc = {
+				trigger = { exists = scope:cult_mass_offer_book }
+				desc = cult.1009.desc_book
+			}
+			desc = cult.1009.desc_purse
+		}
+	}
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = interested
+	}
+	right_portrait = {
+		character = scope:cult_mass_giver
+		animation = personality_bold
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1009
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_active_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1009 } }
+		scope:activity = {
+			any_attending_character = {
+				NOT = { this = root }
+				has_trait = cult_member
+			}
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1009 }
+		scope:activity = {
+			random_attending_character = {
+				limit = {
+					NOT = { this = root }
+					has_trait = cult_member
+				}
+				save_scope_as = cult_mass_giver
+			}
+		}
+		random_list = {
+			40 = {
+				save_scope_value_as = { name = cult_mass_offer_purse value = yes }
+			}
+			30 = {
+				trigger = {
+					exists = global_var:cult_host_faith
+					exists = scope:cult_mass_giver.capital_county
+					scope:cult_mass_giver.capital_county = {
+						faith = global_var:cult_host_faith
+						NOT = { has_county_modifier = cult_county_tainted }
+					}
+				}
+				save_scope_value_as = { name = cult_mass_offer_relic value = yes }
+				scope:cult_mass_giver.capital_county = { save_scope_as = cult_mass_offer_county }
+			}
+			30 = {
+				save_scope_value_as = { name = cult_mass_offer_book value = yes }
+			}
+		}
+	}
+
+	# Accept it, before the whole circle.
+	option = {
+		name = cult.1009.a
+		scope:cult_mass_giver = {
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = 5
+			}
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 10
+			}
+		}
+		cult_power_gain_effect = { VALUE = 10 }
+		cult_corrupt_soul_effect = yes
+		if = {
+			limit = { exists = scope:cult_mass_offer_purse }
+			add_gold = 25
+		}
+		if = {
+			limit = { exists = scope:cult_mass_offer_relic }
+			cult_mass_pool_taint_county_effect = { COUNTY = scope:cult_mass_offer_county }
+			cult_their_exposure_gain_effect = { WHO = scope:cult_mass_giver VALUE = 2 }
+		}
+		if = {
+			limit = { exists = scope:cult_mass_offer_book }
+			cult_mass_pool_circle_rank_effect = { XP = 1 }
+		}
+		ai_chance = {
+			base = 60
+			modifier = { add = 20 has_trait = ambitious }
+		}
+	}
+
+	# Take it back before someone misses it.
+	option = {
+		name = cult.1009.b
+		scope:cult_mass_giver = {
+			add_opinion = {
+				target = root
+				modifier = disappointed_opinion
+				opinion = -10
+			}
+		}
+		cult_exposure_loss_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = paranoid }
+			modifier = { add = 20 has_trait = craven }
+		}
+	}
+
+	# The purse: keep it.
+	option = {
+		name = cult.1009.c
+		trigger = { exists = scope:cult_mass_offer_purse }
+		add_gold = 50
+		scope:cult_mass_giver = {
+			add_opinion = {
+				target = root
+				modifier = annoyed_opinion
+				opinion = -5
+			}
+		}
+		stress_impact = {
+			generous = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			modifier = { add = 40 has_trait = greedy }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1010 -- The Quiet Guest
+# =====================================================================================
+#
+# One of the Faithless watches faces all night. Whether anyone has been at them is rolled at the
+# option, and every roll says what was found.
+
+cult.1010 = {
+	type = character_event
+	title = cult.1010.t
+	desc = cult.1010.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	right_portrait = {
+		character = scope:cult_mass_suspect
+		animation = scheme
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1010
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_secret_phase_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1010 } }
+		scope:activity = {
+			any_attending_character = {
+				NOT = { this = root }
+				has_trait = cult_member
+			}
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1010 }
+		scope:activity = {
+			random_attending_character = {
+				limit = {
+					NOT = { this = root }
+					has_trait = cult_member
+				}
+				weight = {
+					base = 1
+					modifier = {
+						add = 2
+						OR = {
+							has_trait = paranoid
+							has_trait = craven
+							has_trait = honest
+						}
+					}
+				}
+				save_scope_as = cult_mass_suspect
+			}
+		}
+	}
+
+	# Ask them straight.
+	option = {
+		name = cult.1010.a
+		random_list = {
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1010.a.frightened
+					left_icon = scope:cult_mass_suspect
+					scope:cult_mass_suspect = {
+						add_opinion = {
+							target = root
+							modifier = humiliated_opinion
+							opinion = -10
+						}
+					}
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1010.a.approached
+					left_icon = scope:cult_mass_suspect
+					custom_tooltip = cult.1010.a.approached.tt
+					cult_their_exposure_gain_effect = { WHO = scope:cult_mass_suspect VALUE = 5 }
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+			20 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1010.a.unsure
+					left_icon = scope:cult_mass_suspect
+					add_stress = minor_stress_gain
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = honest }
+			modifier = { add = 20 has_trait = brave }
+		}
+	}
+
+	# Watch them with the circle's eyes.
+	option = {
+		name = cult.1010.b
+		trigger = { cult_power_has_power_trigger = { VALUE = 15 } }
+		cult_power_spend_effect = { VALUE = 15 }
+		cult_corrupt_soul_effect = yes
+		random_list = {
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1010.b.clean
+					left_icon = scope:cult_mass_suspect
+					scope:cult_mass_suspect = {
+						add_opinion = {
+							target = root
+							modifier = trust_opinion
+							opinion = 5
+						}
+					}
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1010.b.talked
+					left_icon = scope:cult_mass_suspect
+					custom_tooltip = cult.1010.b.talked.tt
+					cult_their_exposure_gain_effect = { WHO = scope:cult_mass_suspect VALUE = 5 }
+					cult_exposure_loss_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = paranoid }
+		}
+	}
+
+	# Have them followed home.
+	option = {
+		name = cult.1010.c
+		trigger = { gold >= 25 }
+		remove_short_term_gold = 25
+		random_list = {
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1010.c.home
+					left_icon = scope:cult_mass_suspect
+					custom_tooltip = cult.1010.c.home.tt
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1010.c.church
+					left_icon = scope:cult_mass_suspect
+					cult_their_exposure_gain_effect = { WHO = scope:cult_mass_suspect VALUE = 3 }
+					add_opinion = {
+						target = scope:cult_mass_suspect
+						modifier = suspicion_opinion
+						opinion = -20
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = schemer }
+		}
+	}
+
+	# Everyone is nervous.
+	option = {
+		name = cult.1010.d
+		random_list = {
+			70 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1010.d.nothing
+					left_icon = root
+					custom_tooltip = cult.1010.d.nothing.tt
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1010.d.talked
+					left_icon = scope:cult_mass_suspect
+					cult_mass_pool_everyone_exposure_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = trusting }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1011 -- The Preacher in Town
+# =====================================================================================
+
+cult.1011 = {
+	type = character_event
+	title = cult.1011.t
+	desc = {
+		desc = cult.1011.desc
+		triggered_desc = {
+			trigger = { exists = scope:cult_mass_shaken }
+			desc = cult.1011.desc_shaken
+		}
+	}
+	theme = faith
+	override_background = { reference = market }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:cult_hunter
+		animation = personality_zealous
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1011
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_secret_phase_trigger = yes
+		exists = global_var:cult_hunter
+		NOT = { global_var:cult_hunter = root }
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1011 } }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1011 }
+		scope:activity = {
+			random_attending_character = {
+				limit = { NOT = { this = root } }
+				save_scope_as = cult_mass_shaken
+			}
+		}
+	}
+
+	# Hear him, from the front row.
+	option = {
+		name = cult.1011.a
+		add_piety = minor_piety_gain
+		cult_exposure_loss_effect = { VALUE = 3 }
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = deceitful }
+			modifier = { add = 20 has_trait = craven }
+		}
+	}
+
+	# The rest of the Mass in silence.
+	option = {
+		name = cult.1011.b
+		cult_mass_pool_everyone_exposure_loss_effect = { VALUE = 1 }
+		cult_mass_pool_circle_opinion_effect = { MODIFIER = disappointed_opinion OPINION = -5 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = paranoid }
+		}
+	}
+
+	# Have it put about that he drinks.
+	option = {
+		name = cult.1011.c
+		random_list = {
+			60 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 15 intrigue >= 16 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1011.c.stops
+					left_icon = root
+					cult_exposure_loss_effect = { VALUE = 2 }
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1011.c.louder
+					left_icon = scope:cult_hunter
+					cult_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = schemer }
+			modifier = { add = 20 has_trait = deceitful }
+		}
+	}
+
+	# Let the circle deal with him.
+	option = {
+		name = cult.1011.d
+		trigger = { cult_power_has_power_trigger = { VALUE = 20 } }
+		cult_power_spend_effect = { VALUE = 20 }
+		cult_corrupt_soul_effect = yes
+		random_list = {
+			75 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1011.d.leaves
+					left_icon = root
+					custom_tooltip = cult.1011.d.leaves.tt
+					cult_mass_pool_everyone_exposure_loss_effect = { VALUE = 2 }
+				}
+			}
+			25 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1011.d.stays
+					left_icon = scope:cult_hunter
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = callous }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1012 -- The Founder's Tomb
+# =====================================================================================
+
+cult.1012 = {
+	type = character_event
+	title = cult.1012.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_mass_founder }
+				desc = cult.1012.desc_father
+			}
+			desc = cult.1012.desc_forebear
+		}
+		desc = cult.1012.desc_end
+	}
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:cult_mass_tomb_asker
+		animation = scheme
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1012
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_active_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1012 } }
+		scope:activity = {
+			any_attending_character = { NOT = { this = root } }
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1012 }
+		father ?= {
+			if = {
+				limit = { is_alive = no }
+				save_scope_as = cult_mass_founder
+			}
+		}
+		scope:activity = {
+			random_attending_character = {
+				limit = { NOT = { this = root } }
+				save_scope_as = cult_mass_tomb_asker
+			}
+		}
+	}
+
+	# Say it over the tomb.
+	option = {
+		name = cult.1012.a
+		cult_power_gain_effect = { VALUE = 10 }
+		cult_corrupt_soul_effect = yes
+		scope:cult_mass_tomb_asker = {
+			add_opinion = {
+				target = root
+				modifier = respect_opinion
+				opinion = 10
+			}
+		}
+		stress_impact = {
+			just = minor_stress_impact_gain
+			content = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = callous }
+			modifier = { add = 20 has_trait = arrogant }
+		}
+	}
+
+	# Not over them.
+	option = {
+		name = cult.1012.b
+		add_stress = minor_stress_loss
+		scope:cult_mass_tomb_asker = {
+			add_opinion = {
+				target = root
+				modifier = disappointed_opinion
+				opinion = -5
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = just }
+			modifier = { add = 20 has_trait = compassionate }
+		}
+	}
+
+	# Lift the stone.
+	option = {
+		name = cult.1012.c
+		random_list = {
+			50 = {
+				modifier = { add = 20 exists = scope:cult_mass_founder }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1012.c.gold
+					left_icon = root
+					add_gold = 30
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1012.c.dust
+					left_icon = root
+					custom_tooltip = cult.1012.c.dust.tt
+				}
+			}
+		}
+		cult_exposure_gain_effect = { VALUE = 1 }
+		stress_impact = {
+			just = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 40 has_trait = greedy }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1020 -- The Doors Stand Open (unveiled)
+# =====================================================================================
+
+cult.1020 = {
+	type = character_event
+	title = cult.1020.t
+	desc = cult.1020.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1020
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_unveiled_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1020 } }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1020 }
+	}
+
+	# Alms for the ones who kneel.
+	option = {
+		name = cult.1020.a
+		trigger = { gold >= 20 }
+		remove_short_term_gold = 20
+		add_prestige = minor_prestige_gain
+		add_piety = minor_piety_gain
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = generous }
+			modifier = { add = -30 has_trait = greedy }
+		}
+	}
+
+	# Names of the ones who don't.
+	option = {
+		name = cult.1020.b
+		add_dread = minor_dread_gain
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = paranoid }
+			modifier = { add = 30 has_trait = vengeful }
+		}
+	}
+
+	# Close the doors.
+	option = {
+		name = cult.1020.c
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 2
+		}
+		cult_mass_pool_circle_opinion_effect = { MODIFIER = pleased_opinion OPINION = 5 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = shy }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1021 -- The Old Priest (unveiled)
+# =====================================================================================
+
+cult.1021 = {
+	type = character_event
+	title = cult.1021.t
+	desc = cult.1021.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = disapproval
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1021
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_unveiled_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1021 } }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1021 }
+	}
+
+	# Leave him.
+	option = {
+		name = cult.1021.a
+		add_stress = minor_stress_loss
+		cult_mass_pool_circle_opinion_effect = { MODIFIER = disappointed_opinion OPINION = -5 }
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = compassionate }
+			modifier = { add = 20 has_trait = forgiving }
+		}
+	}
+
+	# Carry him off the step.
+	option = {
+		name = cult.1021.b
+		add_dread = minor_dread_gain
+		cult_mass_pool_circle_opinion_effect = { MODIFIER = respect_opinion OPINION = 5 }
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = callous }
+			modifier = { add = 20 has_trait = wrathful }
+		}
+	}
+
+	# Invite him in.
+	option = {
+		name = cult.1021.c
+		random_list = {
+			40 = {
+				modifier = { add = 15 learning >= 12 }
+				modifier = { add = 15 diplomacy >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1021.c.comes
+					left_icon = root
+					custom_tooltip = cult.1021.c.comes.tt
+					cult_power_gain_effect = { VALUE = 10 }
+					cult_corrupt_soul_effect = yes
+					add_trait_xp = {
+						trait = cult_member
+						track = cult_rank
+						value = 3
+					}
+				}
+			}
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1021.c.refuses
+					left_icon = root
+					custom_tooltip = cult.1021.c.refuses.tt
+					add_stress = minor_stress_gain
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = arrogant }
+			modifier = { add = 20 learning >= 12 }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1022 -- A Late Convert (unveiled)
+# =====================================================================================
+
+cult.1022 = {
+	type = character_event
+	title = cult.1022.t
+	desc = cult.1022.desc
+	theme = faith
+	left_portrait = {
+		character = root
+		animation = schadenfreude
+	}
+	right_portrait = {
+		character = scope:cult_mass_convert
+		animation = obsequious_bow
+	}
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			has_character_flag = cult_mass_had_1022
+			factor = 0.25
+		}
+	}
+	trigger = {
+		exists = scope:activity
+		cult_unveiled_trigger = yes
+		NOT = { scope:activity = { has_variable = cult_mass_pool_1022 } }
+		any_vassal = {
+			is_ai = yes
+			cult_recruitable_trigger = yes
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_mass_pool_mark_effect = { EVENT = 1022 }
+		random_vassal = {
+			limit = {
+				is_ai = yes
+				cult_recruitable_trigger = yes
+			}
+			save_scope_as = cult_mass_convert
+		}
+	}
+
+	# Swear them in.
+	option = {
+		name = cult.1022.a
+		scope:cult_mass_convert = {
+			cult_swear_in_effect = { RANK = 0 }
+			add_opinion = {
+				target = root
+				modifier = cult_brought_me_in_opinion
+			}
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 3
+		}
+		cult_mass_pool_circle_opinion_effect = { MODIFIER = annoyed_opinion OPINION = -5 }
+		ai_chance = {
+			base = 50
+			modifier = { add = 20 has_trait = ambitious }
+			modifier = { add = 20 has_trait = gregarious }
+		}
+	}
+
+	# Make them wait a year.
+	option = {
+		name = cult.1022.b
+		add_prestige = minor_prestige_gain
+		scope:cult_mass_convert = {
+			add_opinion = {
+				target = root
+				modifier = humiliated_opinion
+				opinion = -10
+			}
+		}
+		cult_mass_pool_circle_opinion_effect = { MODIFIER = respect_opinion OPINION = 5 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = arrogant }
+		}
+	}
+
+	# Turn them away.
+	option = {
+		name = cult.1022.c
+		scope:cult_mass_convert = {
+			add_opinion = {
+				target = root
+				modifier = angry_opinion
+				opinion = -15
+			}
+		}
+		cult_mass_pool_circle_opinion_effect = { MODIFIER = pleased_opinion OPINION = 5 }
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = zealous }
+			modifier = { add = 20 has_trait = vengeful }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1030 -- A Face Under a Hood (guest)
+# =====================================================================================
+
+cult.1030 = {
+	type = character_event
+	title = cult.1030.t
+	desc = {
+		desc = cult.1030.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:cult_mass_known = { is_close_or_extended_family_of = root } }
+				desc = cult.1030.desc_family
+			}
+			triggered_desc = {
+				trigger = { scope:cult_mass_known = { has_relation_rival = root } }
+				desc = cult.1030.desc_rival
+			}
+			triggered_desc = {
+				trigger = { root = { target_is_liege_or_above = scope:cult_mass_known } }
+				desc = cult.1030.desc_liege
+			}
+			triggered_desc = {
+				trigger = { scope:cult_mass_known = { is_vassal_of = root } }
+				desc = cult.1030.desc_vassal
+			}
+			desc = cult.1030.desc_friend
+		}
+		desc = cult.1030.desc_end
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		character = scope:cult_mass_known
+		animation = shock
+	}
+	trigger = {
+		exists = scope:activity
+		exists = scope:host
+		cult_active_trigger = yes
+		NOT = { this = scope:host }
+		NOT = { has_character_flag = cult_mass_seen_1030 }
+		scope:activity = {
+			any_attending_character = {
+				NOT = { this = root }
+				NOT = { this = scope:host }
+				OR = {
+					is_close_or_extended_family_of = root
+					has_relation_rival = root
+					has_relation_friend = root
+					is_vassal_of = root
+					root = { target_is_liege_or_above = prev }
+				}
+			}
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_mass_seen_1030 months = 2 }
+		scope:activity = {
+			random_attending_character = {
+				limit = {
+					NOT = { this = root }
+					NOT = { this = scope:host }
+					OR = {
+						is_close_or_extended_family_of = root
+						has_relation_rival = root
+						has_relation_friend = root
+						is_vassal_of = root
+						root = { target_is_liege_or_above = prev }
+					}
+				}
+				save_scope_as = cult_mass_known
+			}
+		}
+	}
+
+	# In this together.
+	option = {
+		name = cult.1030.a
+		add_opinion = {
+			target = scope:cult_mass_known
+			modifier = friendliness_opinion
+			opinion = 15
+		}
+		scope:cult_mass_known = {
+			add_opinion = {
+				target = root
+				modifier = friendliness_opinion
+				opinion = 15
+			}
+		}
+		ai_chance = { base = 50 }
+	}
+
+	# I have not seen them.
+	option = {
+		name = cult.1030.b
+		scope:cult_mass_known = {
+			add_opinion = {
+				target = root
+				modifier = trust_opinion
+				opinion = 5
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# Remember this.
+	option = {
+		name = cult.1030.c
+		trigger = {
+			scope:cult_mass_known = {
+				any_secret = {
+					secret_type = secret_cult_member
+					NOT = { is_known_by = root }
+				}
+			}
+		}
+		custom_tooltip = cult.1030.c.tt
+		hidden_effect = {
+			cult_reveal_secret_to_root_effect = { WHO = scope:cult_mass_known }
+		}
+		scope:cult_mass_known = {
+			add_opinion = {
+				target = root
+				modifier = suspicion_opinion
+				opinion = -10
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 40 has_trait = schemer }
+		}
+	}
+}
+
+# =====================================================================================
+#  cult.1031 -- The Hierophant's Word (guest)
+# =====================================================================================
+
+cult.1031 = {
+	type = character_event
+	title = cult.1031.t
+	desc = cult.1031.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = interested
+	}
+	right_portrait = {
+		character = scope:cult_hierophant
+		animation = personality_rational
+	}
+	trigger = {
+		exists = scope:activity
+		exists = scope:host
+		cult_active_trigger = yes
+		NOT = { this = scope:host }
+		NOT = { has_character_flag = cult_mass_seen_1031 }
+		exists = global_var:cult_hierophant
+		NOT = { global_var:cult_hierophant = root }
+		global_var:cult_hierophant = { involved_activity ?= scope:activity }
+		NOT = { cult_rank_at_least_trigger = { RANK = 75 } }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_mass_seen_1031 months = 2 }
+	}
+
+	# To rise in it.
+	option = {
+		name = cult.1031.a
+		random_list = {
+			50 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 15 scope:cult_hierophant = { opinion = { target = root value >= 20 } } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1031.a.pleased
+					left_icon = scope:cult_hierophant
+					add_trait_xp = {
+						trait = cult_member
+						track = cult_rank
+						value = 10
+					}
+					scope:cult_hierophant = {
+						add_opinion = {
+							target = root
+							modifier = respect_opinion
+							opinion = 10
+						}
+					}
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1031.a.unimpressed
+					left_icon = scope:cult_hierophant
+					scope:cult_hierophant = {
+						add_opinion = {
+							target = root
+							modifier = annoyed_opinion
+							opinion = -5
+						}
+					}
+				}
+			}
+		}
+		ai_chance = { base = 40 }
+	}
+
+	# Power.
+	option = {
+		name = cult.1031.b
+		cult_power_gain_effect = { VALUE = 10 }
+		cult_corrupt_soul_effect = yes
+		ai_chance = { base = 30 }
+	}
+
+	# Only to serve.
+	option = {
+		name = cult.1031.c
+		scope:cult_hierophant = {
+			add_opinion = {
+				target = root
+				modifier = trust_opinion
+				opinion = 15
+			}
+		}
+		stress_impact = {
+			arrogant = minor_stress_impact_gain
+		}
+		ai_chance = { base = 30 }
+	}
+}
+
+# =====================================================================================
+#  cult.1032 -- A Letter from Home (guest)
+# =====================================================================================
+
+cult.1032 = {
+	type = letter_event
+	sender = scope:cult_mass_spouse
+	opening = cult.1032.opening
+	desc = cult.1032.desc
+	trigger = {
+		exists = scope:activity
+		exists = scope:host
+		cult_secret_phase_trigger = yes
+		NOT = { this = scope:host }
+		NOT = { has_character_flag = cult_mass_seen_1032 }
+		exists = primary_spouse
+		primary_spouse = {
+			is_alive = yes
+			NOT = { has_trait = cult_member }
+			NOT = { involved_activity ?= scope:activity }
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_mass_seen_1032 months = 2 }
+		primary_spouse = { save_scope_as = cult_mass_spouse }
+	}
+
+	# A good lie.
+	option = {
+		name = cult.1032.a
+		random_list = {
+			70 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = -20 scope:cult_mass_spouse = { intrigue >= 12 } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1032.a.believed
+					left_icon = scope:cult_mass_spouse
+					custom_tooltip = cult.1032.a.believed.tt
+				}
+			}
+			30 = {
+				modifier = { add = 15 has_trait = honest }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1032.a.doubted
+					left_icon = scope:cult_mass_spouse
+					scope:cult_mass_spouse = {
+						add_opinion = {
+							target = root
+							modifier = suspicion_opinion
+							opinion = -15
+						}
+					}
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = { base = 50 }
+	}
+
+	# The truth, and an invitation.
+	option = {
+		name = cult.1032.b
+		trigger = { scope:cult_mass_spouse = { cult_recruitable_trigger = yes } }
+		random_list = {
+			35 = {
+				modifier = { add = 20 scope:cult_mass_spouse = { opinion = { target = root value >= 50 } } }
+				modifier = { add = 15 scope:cult_mass_spouse = { cult_sinner_trigger = yes } }
+				modifier = { factor = 0 scope:cult_mass_spouse = { has_trait = zealous } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1032.b.joins
+					left_icon = scope:cult_mass_spouse
+					scope:cult_mass_spouse = {
+						cult_swear_in_effect = { RANK = 0 }
+						add_opinion = {
+							target = root
+							modifier = cult_brought_me_in_opinion
+						}
+					}
+				}
+			}
+			65 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1032.b.horrified
+					left_icon = scope:cult_mass_spouse
+					scope:cult_mass_spouse = {
+						add_opinion = {
+							target = root
+							modifier = suspicion_opinion
+							opinion = -25
+						}
+					}
+					cult_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		stress_impact = {
+			paranoid = minor_stress_impact_gain
+		}
+		ai_chance = { base = 20 }
+	}
+
+	# Burn it.
+	option = {
+		name = cult.1032.c
+		scope:cult_mass_spouse = {
+			add_opinion = {
+				target = root
+				modifier = disappointed_opinion
+				opinion = -10
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+}
+
+# =====================================================================================
+#  cult.1033 -- Cold Feet (guest)
+# =====================================================================================
+
+cult.1033 = {
+	type = character_event
+	title = cult.1033.t
+	desc = cult.1033.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:cult_mass_doubter
+		animation = fear
+	}
+	trigger = {
+		exists = scope:activity
+		exists = scope:host
+		cult_active_trigger = yes
+		NOT = { this = scope:host }
+		NOT = { has_character_flag = cult_mass_seen_1033 }
+		scope:activity = {
+			any_attending_character = {
+				NOT = { this = root }
+				NOT = { this = scope:host }
+				has_trait = cult_member
+			}
+		}
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_mass_seen_1033 months = 2 }
+		scope:activity = {
+			random_attending_character = {
+				limit = {
+					NOT = { this = root }
+					NOT = { this = scope:host }
+					has_trait = cult_member
+				}
+				weight = {
+					base = 1
+					modifier = {
+						add = 2
+						OR = {
+							has_trait = craven
+							has_trait = honest
+							NOT = { cult_rank_at_least_trigger = { RANK = 25 } }
+						}
+					}
+				}
+				save_scope_as = cult_mass_doubter
+			}
+		}
+	}
+
+	# Talk them round.
+	option = {
+		name = cult.1033.a
+		random_list = {
+			60 = {
+				modifier = { add = 15 diplomacy >= 12 }
+				modifier = { add = 15 diplomacy >= 16 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1033.a.stays
+					left_icon = scope:cult_mass_doubter
+					scope:cult_mass_doubter = {
+						add_opinion = {
+							target = root
+							modifier = grateful_opinion
+							opinion = 10
+						}
+						add_trait_xp = {
+							trait = cult_member
+							track = cult_rank
+							value = 3
+						}
+					}
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1033.a.unconvinced
+					left_icon = scope:cult_mass_doubter
+					cult_their_exposure_gain_effect = { WHO = scope:cult_mass_doubter VALUE = 3 }
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = { base = 50 }
+	}
+
+	# Tell the host.
+	option = {
+		name = cult.1033.b
+		scope:host = {
+			add_opinion = {
+				target = root
+				modifier = respect_opinion
+				opinion = 10
+			}
+		}
+		scope:cult_mass_doubter = {
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = -10
+			}
+			add_opinion = {
+				target = root
+				modifier = angry_opinion
+				opinion = -20
+			}
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 3
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = ambitious }
+		}
+	}
+
+	# Keep it to myself.
+	option = {
+		name = cult.1033.c
+		scope:cult_mass_doubter = {
+			add_opinion = {
+				target = root
+				modifier = trust_opinion
+				opinion = 15
+			}
+		}
+		random_list = {
+			70 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1033.c.quiet
+					left_icon = scope:cult_mass_doubter
+					custom_tooltip = cult.1033.c.quiet.tt
+				}
+			}
+			30 = {
+				trigger = { cult_secret_phase_trigger = yes }
+				modifier = { add = 20 scope:cult_mass_doubter = { has_trait = honest } }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1033.c.confesses
+					left_icon = scope:cult_mass_doubter
+					cult_their_exposure_gain_effect = { WHO = scope:cult_mass_doubter VALUE = 8 }
+					cult_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		ai_chance = { base = 20 }
+	}
+}
+
+# =====================================================================================
+#  cult.1034 -- The Lesson (guest)
+# =====================================================================================
+
+cult.1034 = {
+	type = character_event
+	title = cult.1034.t
+	desc = cult.1034.desc
+	theme = witchcraft
+	left_portrait = {
+		character = root
+		animation = reading
+	}
+	right_portrait = {
+		character = scope:host
+		animation = scheme
+	}
+	trigger = {
+		exists = scope:activity
+		exists = scope:host
+		cult_active_trigger = yes
+		NOT = { this = scope:host }
+		NOT = { has_character_flag = cult_mass_seen_1034 }
+	}
+
+	immediate = {
+		cult_save_scopes_effect = yes
+		add_character_flag = { flag = cult_mass_seen_1034 months = 2 }
+	}
+
+	# Every word, backwards.
+	option = {
+		name = cult.1034.a
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 3
+		}
+		cult_power_gain_effect = { VALUE = 5 }
+		cult_corrupt_soul_effect = yes
+		scope:host = {
+			add_opinion = {
+				target = root
+				modifier = respect_opinion
+				opinion = 5
+			}
+		}
+		ai_chance = { base = 50 }
+	}
+
+	# Quietly, and quickly.
+	option = {
+		name = cult.1034.b
+		cult_exposure_loss_effect = { VALUE = 1 }
+		ai_chance = { base = 30 }
+	}
+
+	# The right way round, by mistake.
+	option = {
+		name = cult.1034.c
+		add_piety = minor_piety_gain
+		add_stress = minor_stress_loss
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = -5
+		}
+		scope:host = {
+			add_opinion = {
+				target = root
+				modifier = angry_opinion
+				opinion = -10
+			}
+		}
+		ai_chance = { base = 10 }
+	}
+}

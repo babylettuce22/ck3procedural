@@ -153,6 +153,7 @@ cult_make_hierophant_effect = {
 		name = cult_hierophant
 		value = this
 	}
+	cult_charge_set_aside_for_office_effect = yes
 	cult_swear_in_effect = { RANK = 75 }
 }
 

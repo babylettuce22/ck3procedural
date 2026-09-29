@@ -1,0 +1,80 @@
+﻿# The Pilgrimage of Defilement's random pool. cult.1100-1199, events/cult_defilement_pool_events.txt.
+#
+# Vanilla's pilgrimage draws its road events from an on_action on every travel step
+# (pilgrimage_travel_events) and its shrine events from its phase's on_monthly_pulse
+# (pilgrimage_destination_events). This is the same: the activity's on_travel_state_pulse calls
+# cult_defilement_road_pool, and the phase's on_weekly_pulse calls cult_defilement_shrine_pool --
+# weekly, because the phase is four weeks long, not vanilla's three months.
+#
+# Players only (the AI's pilgrimage is the spine, the pulse actions and the payment). At most one
+# pool event a week, and three in a pilgrimage, road and shrine together; none repeats within a
+# pilgrimage (each event gates on its own cult_defilement_seen_NNNN flag). Nothing once cult.0914
+# has fired, and nothing at the shrine after the host has turned back. Invalid events drop out of the
+# draw; chance_of_no_event is taken first.
+#
+# With four weekly pulses at the shrine at 40% no event, a pilgrimage with no road events sees about
+# two shrine events; a long road can take one or two of the three places.
+
+cult_defilement_road_pool = {
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		is_ai = no
+		is_adult = yes
+		is_imprisoned = no
+		exists = scope:activity
+		NOT = { has_character_flag = cult_defilement_pool_recent }
+		scope:activity = {
+			NOT = { has_variable = cult_defilement_home }
+			trigger_if = {
+				limit = { has_variable = cult_defilement_pool_count }
+				var:cult_defilement_pool_count < 2
+			}
+		}
+	}
+	random_events = {
+		chance_of_no_event = 50
+
+		100 = cult.1101	# a pilgrim walks with you
+		100 = cult.1102	# a sick pilgrim by the road
+		100 = cult.1103	# someone who knows your face
+		60 = cult.1104	# robbers
+		100 = cult.1105	# the hostel's talk of the hunter
+		100 = cult.1106	# a friar preaching against heresy
+	}
+}
+
+cult_defilement_shrine_pool = {
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		is_ai = no
+		is_adult = yes
+		is_imprisoned = no
+		exists = scope:activity
+		NOT = { has_character_flag = cult_defilement_pool_recent }
+		NOT = { has_character_flag = cult_defilement_abandoned }
+		scope:activity = {
+			NOT = { has_variable = cult_defilement_home }
+			trigger_if = {
+				limit = { has_variable = cult_defilement_pool_count }
+				var:cult_defilement_pool_count < 3
+			}
+		}
+	}
+	random_events = {
+		chance_of_no_event = 40
+
+		100 = cult.1110	# the keeper's vigil
+		100 = cult.1111	# the blind man at the gate
+		100 = cult.1112	# the relic-seller
+		80 = cult.1113	# one of the circle serves at the shrine
+		100 = cult.1114	# the sermon names the Adversary
+		80 = cult.1115	# praying for real
+		100 = cult.1116	# a guest on their knees
+		100 = cult.1117	# a guest talked at the hostel
+		80 = cult.1118	# the hunter's men at the gate
+		100 = cult.1119	# the offering box
+		80 = cult.1120	# the blessed well
+	}
+}

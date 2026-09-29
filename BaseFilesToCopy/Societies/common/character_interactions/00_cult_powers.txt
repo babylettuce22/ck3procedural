@@ -32,7 +32,7 @@
 # recruiters will find them willing. Reports it: exposure, and the hunter hears.
 
 cult_turn_priest_interaction = {
-	category = interaction_category_friendly
+	category = interaction_category_cult
 	icon = icon_scheme_sway
 	interface_priority = 40
 	common_interaction = no
@@ -242,7 +242,7 @@ cult_turn_priest_interaction = {
 # exposure is a no-op.
 
 cult_offer_sacrifice_interaction = {
-	category = interaction_category_hostile
+	category = interaction_category_cult
 	icon = icon_dead
 	interface_priority = 60
 	common_interaction = no
@@ -446,7 +446,7 @@ cult_offer_sacrifice_interaction = {
 # with nothing to do with a prisoner produces abductions nobody asked for).
 
 cult_take_them_interaction = {
-	category = interaction_category_hostile
+	category = interaction_category_cult
 	icon = icon_scheme_abduct
 	interface_priority = 55
 	common_interaction = no
@@ -538,7 +538,7 @@ cult_take_them_interaction = {
 # nothing at all; and sometimes the victim works out who wished it on them.
 
 cult_curse_interaction = {
-	category = interaction_category_hostile
+	category = interaction_category_cult
 	icon = plague
 	interface_priority = 40
 	common_interaction = no
@@ -720,7 +720,7 @@ cult_curse_interaction = {
 # exposure, and the lord will not forgive it. A tainted holy site is rot.
 
 cult_defile_relic_interaction = {
-	category = interaction_category_hostile
+	category = interaction_category_cult
 	icon = excommunication
 	interface_priority = 40
 	common_interaction = no
@@ -924,7 +924,7 @@ cult_defile_relic_interaction = {
 # themselves (cult.0444).
 
 cult_whisper_to_the_see_interaction = {
-	category = interaction_category_friendly
+	category = interaction_category_cult
 	icon = religious
 	interface_priority = 60
 	common_interaction = no

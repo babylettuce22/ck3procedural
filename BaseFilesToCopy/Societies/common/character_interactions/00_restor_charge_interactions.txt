@@ -1,0 +1,147 @@
+﻿# The Restorationists: Give a Charge. A player Keeper's own way to direct the Sworn.
+#
+# The yearly draw (restor_charge_pulse_effect) keeps handing out charges on the Keeper's behalf, as
+# it does when the Keeper is AI, so a player Keeper who never opens this still has a working order.
+# This is the lever on top: pick a member, pick what they should do.
+#
+# The options are the charge kinds, exclusive, with "whatever the cause needs" first. An option is
+# greyed out when there is nothing of that kind to aim at; the giving itself re-checks in the
+# member's own scope (restor.0540 -> restor_charge_order_effect), because the charge triggers need
+# ROOT to be the member, and falls back to the usual draw if the kind came up empty after all.
+#
+# auto_accept: a sworn member does not refuse the Keeper to their face. A player member gets the
+# usual letter (restor.0501) and may still let it pass, as with any charge.
+#
+# Only for a player: the AI Keeper's charges already come from the yearly draw.
+
+restor_give_charge_interaction = {
+	category = interaction_category_restor
+	icon = secret
+	interface_priority = 45
+	common_interaction = no
+
+	desc = restor_give_charge_interaction_desc
+
+	# The Keeper's letters find members wherever they are.
+	use_diplomatic_range = no
+	auto_accept = yes
+
+	is_shown = {
+		restor_underground_trigger = yes
+		scope:actor = {
+			is_ai = no
+			restor_is_keeper_trigger = yes
+		}
+		scope:recipient != scope:actor
+		scope:recipient = { has_trait = restor_member }
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = restor_give_charge_has_one_tt
+			scope:recipient = { NOT = { has_variable = restor_charge } }
+		}
+		custom_tooltip = {
+			text = restor_give_charge_heir_tt
+			scope:recipient = { NOT = { restor_is_pretender_trigger = yes } }
+		}
+		exists = global_var:restor_pretender
+		scope:recipient = {
+			is_adult = yes
+			is_imprisoned = no
+		}
+	}
+
+	options_heading = restor_give_charge_options_heading
+
+	send_option = {
+		flag = restor_order_any
+		localization = restor_give_charge_any
+		starts_enabled = { always = yes }
+	}
+	send_option = {
+		is_valid = {
+			custom_tooltip = {
+				text = restor_give_charge_none_tt
+				restor_charge_win_over_possible_trigger = yes
+			}
+		}
+		flag = restor_order_win_over
+		localization = restor_give_charge_win_over
+	}
+	send_option = {
+		is_valid = {
+			custom_tooltip = {
+				text = restor_give_charge_none_tt
+				restor_charge_stir_possible_trigger = yes
+			}
+		}
+		flag = restor_order_stir
+		localization = restor_give_charge_stir
+	}
+	send_option = {
+		is_valid = {
+			custom_tooltip = {
+				text = restor_give_charge_poor_tt
+				scope:recipient = { restor_charge_war_chest_possible_trigger = yes }
+			}
+		}
+		flag = restor_order_war_chest
+		localization = restor_give_charge_war_chest
+	}
+	send_option = {
+		# Only while the heir needs a roof, and only a landed member has one to give.
+		is_shown = {
+			exists = global_var:restor_pretender
+			global_var:restor_pretender = { is_landed = no }
+		}
+		is_valid = {
+			custom_tooltip = {
+				text = restor_give_charge_no_roof_tt
+				scope:recipient = { is_landed = yes }
+			}
+		}
+		flag = restor_order_shelter
+		localization = restor_give_charge_shelter
+	}
+	send_option = {
+		flag = restor_order_recruit
+		localization = restor_give_charge_recruit
+	}
+	send_options_exclusive = yes
+
+	on_accept = {
+		custom_tooltip = restor_give_charge_interaction_tt
+		hidden_effect = {
+			scope:recipient = {
+				if = {
+					limit = { scope:restor_order_win_over ?= yes }
+					set_variable = { name = restor_charge_order value = flag:win_over }
+				}
+				else_if = {
+					limit = { scope:restor_order_stir ?= yes }
+					set_variable = { name = restor_charge_order value = flag:stir }
+				}
+				else_if = {
+					limit = { scope:restor_order_war_chest ?= yes }
+					set_variable = { name = restor_charge_order value = flag:war_chest }
+				}
+				else_if = {
+					limit = { scope:restor_order_shelter ?= yes }
+					set_variable = { name = restor_charge_order value = flag:shelter }
+				}
+				else_if = {
+					limit = { scope:restor_order_recruit ?= yes }
+					set_variable = { name = restor_charge_order value = flag:recruit }
+				}
+				else = {
+					set_variable = { name = restor_charge_order value = flag:any }
+				}
+				set_variable = { name = restor_charge_giver value = scope:actor }
+				trigger_event = restor.0540
+			}
+		}
+	}
+
+	ai_will_do = { base = 0 }
+}

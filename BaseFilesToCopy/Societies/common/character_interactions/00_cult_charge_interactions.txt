@@ -1,0 +1,137 @@
+﻿# The inversion cult: Give a Charge. A player Hierophant's own way to direct the circle.
+#
+# The circle's yearly draw (cult_charge_pulse_effect) keeps handing out charges on the Hierophant's
+# behalf, as it does when the Hierophant is AI, so a player leader who never opens this still has a
+# working cult. This is the lever on top: pick a member, pick what they should do.
+#
+# The options are the charge kinds, exclusive, with "whatever the circle needs" first. An option is
+# greyed out when there is nothing of that kind to aim at anywhere; the giving itself re-checks in the
+# member's own scope (cult.0540 -> cult_charge_order_effect), because the charge triggers need ROOT to
+# be the member, and falls back to the usual draw if the kind came up empty after all.
+#
+# auto_accept: a sworn member does not refuse the Hierophant to their face. A player member gets the
+# usual note (cult.0501) and may still let it pass, as with any charge.
+#
+# Only for a player: the AI Hierophant's charges already come from the yearly draw.
+
+cult_give_charge_interaction = {
+	category = interaction_category_cult
+	icon = secret
+	interface_priority = 45
+	common_interaction = no
+
+	desc = cult_give_charge_interaction_desc
+
+	# The Hierophant's notes find members wherever they are.
+	use_diplomatic_range = no
+	auto_accept = yes
+
+	is_shown = {
+		cult_secret_phase_trigger = yes
+		scope:actor = {
+			is_ai = no
+			cult_is_hierophant_trigger = yes
+		}
+		scope:recipient != scope:actor
+		scope:recipient = { has_trait = cult_member }
+	}
+
+	is_valid_showing_failures_only = {
+		custom_tooltip = {
+			text = cult_give_charge_has_one_tt
+			scope:recipient = { NOT = { has_variable = cult_charge } }
+		}
+		scope:recipient = {
+			is_adult = yes
+			is_imprisoned = no
+		}
+	}
+
+	options_heading = cult_give_charge_options_heading
+
+	send_option = {
+		flag = cult_order_any
+		localization = cult_give_charge_any
+		starts_enabled = { always = yes }
+	}
+	send_option = {
+		is_valid = {
+			custom_tooltip = {
+				text = cult_give_charge_none_tt
+				cult_charge_turn_priest_possible_trigger = yes
+			}
+		}
+		flag = cult_order_turn_priest
+		localization = cult_give_charge_turn_priest
+	}
+	send_option = {
+		is_valid = {
+			custom_tooltip = {
+				text = cult_give_charge_none_tt
+				cult_charge_taint_possible_trigger = yes
+			}
+		}
+		flag = cult_order_taint
+		localization = cult_give_charge_taint
+	}
+	send_option = {
+		is_valid = {
+			custom_tooltip = {
+				text = cult_give_charge_none_tt
+				cult_charge_defile_site_possible_trigger = yes
+			}
+		}
+		flag = cult_order_defile_site
+		localization = cult_give_charge_defile_site
+	}
+	send_option = {
+		is_valid = {
+			custom_tooltip = {
+				text = cult_give_charge_poor_tt
+				scope:recipient = { cult_charge_offering_possible_trigger = yes }
+			}
+		}
+		flag = cult_order_offering
+		localization = cult_give_charge_offering
+	}
+	send_option = {
+		flag = cult_order_recruit
+		localization = cult_give_charge_recruit
+	}
+	send_options_exclusive = yes
+
+	on_accept = {
+		custom_tooltip = cult_give_charge_interaction_tt
+		hidden_effect = {
+			scope:recipient = {
+				if = {
+					limit = { scope:cult_order_turn_priest ?= yes }
+					set_variable = { name = cult_charge_order value = flag:turn_priest }
+				}
+				else_if = {
+					limit = { scope:cult_order_taint ?= yes }
+					set_variable = { name = cult_charge_order value = flag:taint }
+				}
+				else_if = {
+					limit = { scope:cult_order_defile_site ?= yes }
+					set_variable = { name = cult_charge_order value = flag:defile_site }
+				}
+				else_if = {
+					limit = { scope:cult_order_offering ?= yes }
+					set_variable = { name = cult_charge_order value = flag:offering }
+				}
+				else_if = {
+					limit = { scope:cult_order_recruit ?= yes }
+					set_variable = { name = cult_charge_order value = flag:recruit }
+				}
+				else = {
+					set_variable = { name = cult_charge_order value = flag:any }
+				}
+				set_variable = { name = cult_charge_giver value = scope:actor }
+				trigger_event = cult.0540
+			}
+		}
+	}
+
+	ai_will_do = { base = 0 }
+}

@@ -13,7 +13,7 @@
 # the yearly approach in 00_cult_recruitment_on_actions.txt, so the two routes do not add up.
 
 cult_sound_out_interaction = {
-	category = interaction_category_friendly
+	category = interaction_category_cult
 	icon = secret
 	interface_priority = 40
 	common_interaction = no
@@ -154,7 +154,7 @@ cult_sound_out_interaction = {
 }
 
 cult_offer_oath_interaction = {
-	category = interaction_category_friendly
+	category = interaction_category_cult
 	icon = icon_scheme_convert_to_witchcraft
 	interface_priority = 41
 	common_interaction = no

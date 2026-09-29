@@ -1,0 +1,527 @@
+﻿# The Gathering's pulse actions: small moments in the hall, logged in the activity window.
+# Listed under pulse_actions in 00_restor_gathering_activity.txt. Scopes as in
+# game/common/activities/pulse_actions/_pulse_actions.info: root = scope:activity, scope:host,
+# scope:province (the hall). scope:first / scope:second are shown in the log entry.
+#
+# Icons resolve through game/gfx/interface/icons/activity_pulse_actions/path_overrides.txt (friend,
+# martial, intrigue, prestige, money, stress_loss, stress_gain live there, not as files beside it);
+# ck3-tiger does not read that file and reports them missing. "stress" and "piety", which a few
+# vanilla actions use, are in neither place and draw the default icon, so they are not used here.
+#
+# Everything here is small and silent: stress, opinion, lifestyle XP, a little standing. The meters
+# that toast (favour) are left to the events -- a toast per pulse would bury the player.
+
+# ---- A whispered toast ------------------------------------------------------------------------------
+restor_gathering_pa_whispered_toast = {
+	icon = stress_loss
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			has_trait = restor_member
+		}
+	}
+	weight = {
+		value = 1
+	}
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = restor_gathering_pa_whispered_toast
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = { add_stress = minor_stress_loss }
+		}
+	}
+}
+
+# ---- An old song -------------------------------------------------------------------------------------
+restor_gathering_pa_old_song = {
+	icon = public
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			count >= 2
+			location = scope:province
+			has_trait = restor_member
+		}
+	}
+	weight = {
+		value = 1
+	}
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+			}
+			weight = {
+				base = 1
+				modifier = { add = 2 has_trait = gregarious }
+			}
+			save_scope_as = first
+		}
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+				this != scope:first
+			}
+			save_scope_as = second
+		}
+		add_activity_log_entry = {
+			key = restor_gathering_pa_old_song
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:second = {
+				add_opinion = {
+					target = scope:first
+					modifier = friendliness_opinion
+					opinion = 5
+				}
+			}
+		}
+	}
+}
+
+# ---- Two of the Sworn swear to stand together ------------------------------------------------------
+restor_gathering_pa_sworn_bond = {
+	icon = friend
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			count >= 2
+			location = scope:province
+			has_trait = restor_member
+		}
+	}
+	weight = {
+		value = 1
+	}
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+			}
+			save_scope_as = first
+		}
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+				this != scope:first
+			}
+			weight = {
+				base = 1
+				modifier = {
+					add = 3
+					opinion = {
+						target = scope:first
+						value >= 20
+					}
+				}
+			}
+			save_scope_as = second
+		}
+		add_activity_log_entry = {
+			key = restor_gathering_pa_sworn_bond
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:first = {
+				add_opinion = {
+					target = scope:second
+					modifier = friendliness_opinion
+					opinion = 10
+				}
+			}
+			scope:second = {
+				add_opinion = {
+					target = scope:first
+					modifier = friendliness_opinion
+					opinion = 10
+				}
+			}
+		}
+	}
+}
+
+# ---- Poring over the map of the old kingdom ----------------------------------------------------------
+restor_gathering_pa_map_study = {
+	icon = martial
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			has_trait = restor_member
+			martial >= 10
+		}
+	}
+	weight = {
+		value = 1
+	}
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+				martial >= 10
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = restor_gathering_pa_map_study
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = { add_martial_lifestyle_xp = minor_lifestyle_xp }
+		}
+	}
+}
+
+# ---- A cipher taught ------------------------------------------------------------------------------------
+restor_gathering_pa_cipher = {
+	icon = intrigue
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			has_trait = restor_member
+			intrigue >= 10
+		}
+		any_attending_character = {
+			count >= 2
+			location = scope:province
+			has_trait = restor_member
+		}
+	}
+	weight = {
+		value = 1
+	}
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+				intrigue >= 10
+			}
+			save_scope_as = first
+		}
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+				this != scope:first
+			}
+			save_scope_as = second
+		}
+		add_activity_log_entry = {
+			key = restor_gathering_pa_cipher
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:second = { add_intrigue_lifestyle_xp = minor_lifestyle_xp }
+		}
+	}
+}
+
+# ---- Every noise at the door -------------------------------------------------------------------------
+restor_gathering_pa_jumpy = {
+	icon = stress_gain
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			has_trait = restor_member
+			OR = {
+				has_trait = paranoid
+				has_trait = craven
+			}
+		}
+	}
+	weight = {
+		value = 1
+	}
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+				OR = {
+					has_trait = paranoid
+					has_trait = craven
+				}
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = restor_gathering_pa_jumpy
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = { add_stress = minor_stress_gain }
+		}
+	}
+}
+
+# ---- The host checks the bars on the doors ------------------------------------------------------------
+restor_gathering_pa_doors_barred = {
+	icon = public
+	is_valid = {
+		is_current_phase_active = yes
+		scope:host = {
+			location = scope:province
+			has_variable = restor_exposure
+			var:restor_exposure >= 1
+		}
+	}
+	weight = {
+		value = 1
+	}
+	effect = {
+		scope:host = { save_scope_as = first }
+		add_activity_log_entry = {
+			key = restor_gathering_pa_doors_barred
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = { restor_exposure_loss_effect = { VALUE = 1 } }
+		}
+	}
+}
+
+# ---- A prayer for the dead kings --------------------------------------------------------------------
+restor_gathering_pa_prayer = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			has_trait = restor_member
+			NOT = { has_trait = cynical }
+		}
+	}
+	weight = {
+		value = 1
+	}
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+				NOT = { has_trait = cynical }
+			}
+			weight = {
+				base = 1
+				modifier = { add = 2 has_trait = zealous }
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = restor_gathering_pa_prayer
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = { add_piety = minor_piety_gain }
+		}
+	}
+}
+
+# ---- The heir tells of the old court ------------------------------------------------------------------
+restor_gathering_pa_heir_story = {
+	icon = prestige
+	is_valid = {
+		is_current_phase_active = yes
+		exists = global_var:restor_pretender
+		any_attending_character = {
+			this = global_var:restor_pretender
+			location = scope:province
+		}
+		any_attending_character = {
+			location = scope:province
+			has_trait = restor_member
+			NOT = { this = global_var:restor_pretender }
+		}
+	}
+	weight = {
+		value = 2
+	}
+	effect = {
+		global_var:restor_pretender = { save_scope_as = first }
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+				NOT = { this = scope:first }
+			}
+			save_scope_as = second
+		}
+		add_activity_log_entry = {
+			key = restor_gathering_pa_heir_story
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:second = {
+				add_opinion = {
+					target = scope:first
+					modifier = respect_opinion
+					opinion = 10
+				}
+			}
+		}
+	}
+}
+
+# ---- The Keeper has a word of praise ---------------------------------------------------------------------
+restor_gathering_pa_praised = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+		exists = global_var:restor_keeper
+		any_attending_character = {
+			this = global_var:restor_keeper
+			location = scope:province
+		}
+		any_attending_character = {
+			location = scope:province
+			has_trait = restor_member
+			NOT = { this = global_var:restor_keeper }
+		}
+	}
+	weight = {
+		value = 1
+	}
+	effect = {
+		global_var:restor_keeper = { save_scope_as = second }
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+				NOT = { this = scope:second }
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = restor_gathering_pa_praised
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:first = {
+				add_trait_xp = {
+					trait = restor_member
+					track = restor_rank
+					value = 2
+				}
+			}
+		}
+	}
+}
+
+# ---- A quarrel in low voices ---------------------------------------------------------------------------
+restor_gathering_pa_argument = {
+	icon = negative
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			count >= 2
+			location = scope:province
+			has_trait = restor_member
+		}
+	}
+	weight = {
+		value = 1
+	}
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+			}
+			weight = {
+				base = 1
+				modifier = { add = 2 has_trait = wrathful }
+				modifier = { add = 2 has_trait = impatient }
+			}
+			save_scope_as = first
+		}
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+				this != scope:first
+			}
+			save_scope_as = second
+		}
+		add_activity_log_entry = {
+			key = restor_gathering_pa_argument
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:first = {
+				add_opinion = {
+					target = scope:second
+					modifier = annoyed_opinion
+					opinion = -5
+				}
+			}
+			scope:second = {
+				add_opinion = {
+					target = scope:first
+					modifier = annoyed_opinion
+					opinion = -5
+				}
+			}
+		}
+	}
+}
+
+# ---- Coin counted out for the heir ---------------------------------------------------------------------
+restor_gathering_pa_coin = {
+	icon = money
+	is_valid = {
+		is_current_phase_active = yes
+		exists = global_var:restor_pretender
+		any_attending_character = {
+			location = scope:province
+			has_trait = restor_member
+			NOT = { this = global_var:restor_pretender }
+			gold >= 100
+		}
+	}
+	weight = {
+		value = 1
+	}
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = restor_member
+				NOT = { this = global_var:restor_pretender }
+				gold >= 100
+			}
+			weight = {
+				base = 1
+				modifier = { add = 2 has_trait = generous }
+			}
+			save_scope_as = first
+		}
+		global_var:restor_pretender = { save_scope_as = second }
+		add_activity_log_entry = {
+			key = restor_gathering_pa_coin
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:first = {
+				pay_short_term_gold = {
+					target = scope:second
+					gold = 10
+				}
+				add_prestige = minor_prestige_gain
+			}
+		}
+	}
+}

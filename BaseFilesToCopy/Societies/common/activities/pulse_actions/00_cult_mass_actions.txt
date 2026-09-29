@@ -1,0 +1,419 @@
+﻿# The Black Mass's pulse actions: small moments in the chapel, each a line in the activity window's
+# log and a small effect. Listed in 00_cult_mass_activity.txt under pulse_actions.
+#
+# Root here is the ACTIVITY, not a character, so nothing below calls the cult's own meter effects
+# (their toasts name `root`). Only plain vanilla effects: stress, dread, prestige, piety, opinion,
+# lifestyle and rank XP, gold.
+#
+# Icons are the three files the folder really has (public, positive, negative): ck3-tiger does not
+# read the folder's path_overrides.txt and flags every other name as a missing file.
+
+cult_mass_black_candles = {
+	icon = public
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = { location = scope:province }
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = { location = scope:province }
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_mass_black_candles
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_stress = minor_stress_loss
+			}
+		}
+	}
+}
+
+cult_mass_word_perfect = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			has_trait = cult_member
+		}
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = cult_member
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_mass_word_perfect
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_trait_xp = {
+					trait = cult_member
+					track = cult_rank
+					value = 2
+				}
+			}
+		}
+	}
+}
+
+cult_mass_whispered_name = {
+	icon = public
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			NOT = { has_trait = compassionate }
+		}
+	}
+	weight = {
+		value = 1
+		if = {
+			limit = {
+				any_attending_character = {
+					location = scope:province
+					OR = {
+						has_trait = vengeful
+						has_trait = sadistic
+						has_trait = callous
+					}
+				}
+			}
+			add = 0.5
+		}
+	}
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				NOT = { has_trait = compassionate }
+			}
+			weight = {
+				base = 1
+				modifier = {
+					add = 2
+					OR = {
+						has_trait = vengeful
+						has_trait = sadistic
+						has_trait = callous
+					}
+				}
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_mass_whispered_name
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_dread = minor_dread_gain
+			}
+		}
+	}
+}
+
+cult_mass_shared_chalice = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			count >= 2
+		}
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = { location = scope:province }
+			save_scope_as = first
+		}
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				this != scope:first
+			}
+			save_scope_as = second
+		}
+		add_activity_log_entry = {
+			key = cult_mass_shared_chalice
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:first = {
+				add_opinion = {
+					target = scope:second
+					modifier = friendliness_opinion
+					opinion = 10
+				}
+			}
+			scope:second = {
+				add_opinion = {
+					target = scope:first
+					modifier = friendliness_opinion
+					opinion = 10
+				}
+			}
+		}
+	}
+}
+
+cult_mass_nodded_off = {
+	icon = negative
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			this != scope:host
+		}
+	}
+	weight = {
+		value = 1
+		if = {
+			limit = {
+				any_attending_character = {
+					location = scope:province
+					this != scope:host
+					OR = {
+						has_trait = lazy
+						has_trait = drunkard
+					}
+				}
+			}
+			add = 1
+		}
+	}
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				this != scope:host
+			}
+			weight = {
+				base = 1
+				modifier = {
+					add = 3
+					OR = {
+						has_trait = lazy
+						has_trait = drunkard
+					}
+				}
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_mass_nodded_off
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_prestige = minor_prestige_loss
+			}
+			scope:host = {
+				add_opinion = {
+					target = scope:first
+					modifier = annoyed_opinion
+					opinion = -5
+				}
+			}
+		}
+	}
+}
+
+# Twenty years of the church's prayers do not go away because you swore an oath.
+cult_mass_old_words = {
+	icon = public
+	is_valid = {
+		is_current_phase_active = yes
+		cult_secret_phase_trigger = yes
+		any_attending_character = {
+			location = scope:province
+			NOT = { cult_rank_at_least_trigger = { RANK = 50 } }
+		}
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				NOT = { cult_rank_at_least_trigger = { RANK = 50 } }
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_mass_old_words
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_stress = minor_stress_loss
+				add_trait_xp = {
+					trait = cult_member
+					track = cult_rank
+					value = -1
+				}
+			}
+		}
+	}
+}
+
+cult_mass_studied_rite = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			has_lifestyle = learning_lifestyle
+		}
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_lifestyle = learning_lifestyle
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_mass_studied_rite
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_learning_lifestyle_xp = minor_lifestyle_xp
+			}
+		}
+	}
+}
+
+cult_mass_gold_on_altar = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			this != scope:host
+			is_landed = yes
+		}
+	}
+	weight = { value = 0.5 }
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				this != scope:host
+				is_landed = yes
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_mass_gold_on_altar
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:host
+			scope:host = {
+				add_gold = 10
+			}
+		}
+	}
+}
+
+cult_mass_mocked_feast = {
+	icon = public
+	is_valid = {
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			OR = {
+				has_trait = cynical
+				has_trait = callous
+				has_trait = arrogant
+			}
+		}
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				OR = {
+					has_trait = cynical
+					has_trait = callous
+					has_trait = arrogant
+				}
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_mass_mocked_feast
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_stress = minor_stress_loss
+			}
+		}
+	}
+}
+
+# Once the church is unveiled, the town comes to watch.
+cult_mass_watched_openly = {
+	icon = positive
+	is_valid = {
+		is_current_phase_active = yes
+		cult_unveiled_trigger = yes
+	}
+	weight = { value = 2 }
+	effect = {
+		scope:host = { save_scope_as = first }
+		add_activity_log_entry = {
+			key = cult_mass_watched_openly
+			tags = { pulse_action }
+			character = scope:first
+			scope:host = {
+				add_prestige = minor_prestige_gain
+			}
+		}
+	}
+}
+
+cult_mass_shaking_hands = {
+	icon = negative
+	is_valid = {
+		is_current_phase_active = yes
+		cult_secret_phase_trigger = yes
+		any_attending_character = {
+			location = scope:province
+			OR = {
+				has_trait = craven
+				has_trait = paranoid
+				NOT = { cult_rank_at_least_trigger = { RANK = 25 } }
+			}
+		}
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				OR = {
+					has_trait = craven
+					has_trait = paranoid
+					NOT = { cult_rank_at_least_trigger = { RANK = 25 } }
+				}
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_mass_shaking_hands
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_stress = minor_stress_gain
+			}
+		}
+	}
+}

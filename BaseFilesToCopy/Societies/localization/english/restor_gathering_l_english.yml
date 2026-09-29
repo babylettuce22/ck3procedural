@@ -29,7 +29,7 @@
  restor_gathering_intent:0 "Keep the Oath"
  restor_gathering_intent_desc:0 "You are here because you are sworn."
  restor_gathering_phase:0 "The Gathering"
- restor_gathering_phase_desc:0 "Two weeks behind barred doors."
+ restor_gathering_phase_desc:0 "Three weeks behind barred doors."
 
  restor_invite_rule_court:0 "Sworn at Court"
  restor_invite_rule_court_desc:0 "Members of $restor_society_name$ at your own court."

@@ -60,6 +60,19 @@ restor.0003 = {
 	}
 }
 
+# Test: make yourself the Keeper (and sworn, at Elder standing) -- to try Give a Charge.
+restor.0005 = {
+	type = character_event
+	hidden = yes
+	trigger = {
+		restor_active_trigger = yes
+		NOT = { restor_is_pretender_trigger = yes }
+	}
+	immediate = {
+		restor_make_keeper_effect = yes
+	}
+}
+
 # The state, as a message.
 restor.0004 = {
 	type = character_event

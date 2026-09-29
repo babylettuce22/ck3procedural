@@ -224,7 +224,7 @@ public static partial class ContentWriter
             () => PassWriter.WriteAll(modDir, MapGen.MountainPasses.ProvinceIds(provinces, order, baronyCount).ToList()));
         Core.Stage.Time("landmarks", () => PassWriter.WriteLandmarks(modDir, world.Landmarks));
 
-        Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, generatedFaiths.Declared(), cfg.Seed));
+        Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, generatedFaiths.Declared(), cfg.Seed, cfg.ReligionTooltips));
 
         // After the religion files rather than with the faiths: a generated faith's icon is drawn
         // by the writer above, and this is the first moment it exists to be shown. Their map

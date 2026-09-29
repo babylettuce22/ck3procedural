@@ -1,0 +1,55 @@
+﻿# The Black Mass's random pool (cult.1000-1099, events/cult_mass_pool_events.txt).
+#
+# Vanilla's feast mechanism: the activity's phase calls these from on_weekly_pulse, the host into
+# the host pool and each player guest into the guest pool, and random_events picks one event whose
+# trigger holds (or nothing, the `0` entry). The Mass's phase lasts three weeks, so the host draws
+# two or three times and a player guest about as often. With the events a typical Mass can use, a
+# host draw comes up empty about one time in five or six, a guest draw one in four to six. AI guests
+# never draw: the guest pool is for players.
+#
+# Every host event marks the activity (never twice in one Mass) and the host (weight x0.25 for five
+# years via its weight_multiplier), so a second Mass plays different nights from the first.
+#
+# Secret phases only: 1003 chaplain, 1004 knock (1005 follow-up), 1010 guest, 1011 preacher,
+# 1032 letter. Unveiled only: 1020 open doors, 1021 old priest, 1022 late convert. The rest either.
+
+cult_mass_host_pool = {
+	trigger = {
+		exists = scope:activity
+		cult_active_trigger = yes
+	}
+	random_events = {
+		100 = cult.1001	# The Candle Gutters
+		100 = cult.1002	# The Initiate at the Door
+		150 = cult.1003	# The Chaplain (secret; needs a lord and their chaplain both present)
+		100 = cult.1004	# A Knock at the Door (secret)
+		100 = cult.1006	# The Wrong Hymn
+		100 = cult.1007	# A Sign
+		100 = cult.1008	# Two Books (needs two senior Faithless)
+		100 = cult.1009	# The Offering
+		80 = cult.1010	# The Quiet Guest (secret)
+		100 = cult.1011	# The Preacher in Town (secret; needs the hunter)
+		80 = cult.1012	# The Founder's Tomb
+		150 = cult.1020	# The Doors Stand Open (unveiled)
+		150 = cult.1021	# The Old Priest (unveiled)
+		100 = cult.1022	# A Late Convert (unveiled)
+		200 = 0
+	}
+}
+
+cult_mass_guest_pool = {
+	trigger = {
+		exists = scope:activity
+		exists = scope:host
+		cult_active_trigger = yes
+		is_ai = no
+	}
+	random_events = {
+		100 = cult.1030	# A Face Under a Hood
+		100 = cult.1031	# The Hierophant's Word
+		80 = cult.1032	# A Letter from Home (secret)
+		100 = cult.1033	# Cold Feet
+		100 = cult.1034	# The Lesson
+		80 = 0
+	}
+}

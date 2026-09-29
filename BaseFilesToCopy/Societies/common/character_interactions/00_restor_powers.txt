@@ -31,7 +31,7 @@
 # reads. Ignored: a little opinion. Shown to the usurper: exposure for the one who sent it.
 
 restor_carry_letter_interaction = {
-	category = interaction_category_friendly
+	category = interaction_category_restor
 	icon = send_poem_interaction
 	interface_priority = 40
 	common_interaction = no
@@ -209,7 +209,7 @@ restor_carry_letter_interaction = {
 # no claim, and the forger is badly exposed. Forging is never quiet: +8 exposure whatever happens.
 
 restor_forge_charters_interaction = {
-	category = interaction_category_hostile
+	category = interaction_category_restor
 	icon = icon_claim_pressed
 	interface_priority = 40
 	common_interaction = no
@@ -412,7 +412,7 @@ restor_forge_charters_interaction = {
 # and standing, and the heir remembers it. Whether anyone notices is rolled.
 
 restor_shelter_heir_interaction = {
-	category = interaction_category_friendly
+	category = interaction_category_restor
 	icon = guest
 	interface_priority = 50
 	common_interaction = no
@@ -552,7 +552,7 @@ restor_shelter_heir_interaction = {
 # the county counts toward support at once. Vanilla's own grant (court.8040): a granted change.
 
 restor_grant_heir_seat_interaction = {
-	category = interaction_category_friendly
+	category = interaction_category_restor
 	icon = icon_transfer_county
 	interface_priority = 50
 	common_interaction = no
@@ -738,7 +738,7 @@ restor_grant_heir_seat_interaction = {
 # threats, or an accident. A player witness answers the gold and the threat themselves.
 
 restor_silence_witness_interaction = {
-	category = interaction_category_hostile
+	category = interaction_category_restor
 	icon = secret
 	interface_priority = 40
 	common_interaction = no
@@ -852,7 +852,7 @@ restor_silence_witness_interaction = {
 # usurper and name every Sworn they know.
 
 restor_expel_interaction = {
-	category = interaction_category_hostile
+	category = interaction_category_restor
 	icon = icon_hostile
 	interface_priority = 30
 	common_interaction = no

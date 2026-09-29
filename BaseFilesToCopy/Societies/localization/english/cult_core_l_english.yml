@@ -1,5 +1,9 @@
 ﻿l_english:
 
+ # ---- The right-click menu section (header key is the category key; desc is the lowercase phrase) ----
+ interaction_category_cult:0 "$cult_society_name$"
+ CULT_ACTIONS:0 "actions of $cult_society_name$"
+
  # ---- The trait ---------------------------------------------------------------------------------
 
  trait_cult_member:0 "Faithless"

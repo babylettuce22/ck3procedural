@@ -28,6 +28,13 @@
 #   cult.0915            the stolen relic: burn it, or "find" it
 #   cult.0916            the site's holder, if a player, learns what was done to the shrine
 #
+# THE POOL (cult.1100-1199, events/cult_defilement_pool_events.txt), players only, as vanilla's
+# pilgrimage draws its own: on_travel_state_pulse calls the road pool (cult_defilement_road_pool), the
+# phase's on_weekly_pulse the shrine pool (cult_defilement_shrine_pool). The on_actions
+# (common/on_action/00_cult_defilement_pool_on_actions.txt) hold the odds and the caps: one a week,
+# three a pilgrimage, no repeats. And pulse actions (common/activities/pulse_actions/
+# 00_cult_defilement_actions.txt) for the activity log, AI hosts included.
+#
 # Every read of scope:activity is `?=` or guarded, so the DebugPanel can fire any of these outside
 # an activity.
 
@@ -231,7 +238,49 @@ activity_cult_defilement = {
 					trigger_event = { id = cult.0911 days = 2 }
 				}
 			}
+
+			# The shrine pool: the host, a player, once a week while the phase runs.
+			on_weekly_pulse = {
+				if = {
+					limit = {
+						this = scope:host
+						is_ai = no
+					}
+					trigger_event = { on_action = cult_defilement_shrine_pool }
+				}
+			}
 		}
+	}
+
+	# The road pool: the host, a player, on the way to the shrine.
+	on_travel_state_pulse = {
+		if = {
+			limit = {
+				this = scope:host
+				is_ai = no
+			}
+			trigger_event = { on_action = cult_defilement_road_pool }
+		}
+	}
+
+	###################
+	# PULSE ACTIONS
+	###################
+
+	pulse_actions = {
+		entries = {
+			cult_defilement_apa_backwards_prayer
+			cult_defilement_apa_kissed_the_step
+			cult_defilement_apa_shared_bread
+			cult_defilement_apa_watched_the_priests
+			cult_defilement_apa_lay_brother
+			cult_defilement_apa_devout_pilgrim
+			cult_defilement_apa_old_mark
+			cult_defilement_apa_hymn
+			cult_defilement_apa_blistered_feet
+			cult_defilement_apa_walked_together
+		}
+		chance_of_no_event = 20
 	}
 
 	###################

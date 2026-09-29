@@ -202,6 +202,10 @@ restor_charge_invalid_trigger = {
 	OR = {
 		NOT = { restor_underground_trigger = yes }
 		NOT = { exists = global_var:restor_pretender }
+		# The Keeper gives charges and the heir is what they are for; neither holds one. The make
+		# effects set any aside at once; this catches one made some other way.
+		restor_is_keeper_trigger = yes
+		restor_is_pretender_trigger = yes
 		AND = {
 			var:restor_charge = flag:win_over
 			OR = {

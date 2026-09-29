@@ -1,0 +1,308 @@
+﻿# Pulse actions of the Pilgrimage of Defilement (activity_cult_defilement). Small moments at the shrine
+# and on the road there, each a line in the activity's log with one small effect. Listed in the
+# activity's pulse_actions block.
+#
+# Root is the activity, so the society's meter changes go through hidden events on the character
+# (cult.1190 exposure +1, cult.1191 dark power +2, cult.1192 exposure -1), each with a custom_tooltip
+# for the log line. Everyone who can attend is a member (can_be_activity_guest), but each action
+# still checks the trait before touching a meter.
+#
+#   cult_defilement_apa_backwards_prayer    dark power +2
+#   cult_defilement_apa_kissed_the_step     piety
+#   cult_defilement_apa_shared_bread        stress loss
+#   cult_defilement_apa_watched_the_priests intrigue lifestyle
+#   cult_defilement_apa_lay_brother         exposure +1        (secret phases)
+#   cult_defilement_apa_devout_pilgrim      exposure -1        (secret phases, some exposure to lose)
+#   cult_defilement_apa_old_mark            rank XP +2
+#   cult_defilement_apa_hymn                diplomacy lifestyle
+#   cult_defilement_apa_blistered_feet      stress gain
+#   cult_defilement_apa_walked_together     the host and a guest like each other more
+
+cult_defilement_apa_backwards_prayer = {
+	icon = positive
+	is_valid = {
+		has_activity_type = activity_cult_defilement
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			has_trait = cult_member
+		}
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = cult_member
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_defilement_apa_backwards_prayer
+			tags = { pulse_action }
+			character = scope:first
+			custom_tooltip = cult_defilement_apa_power_tt
+			scope:first = { trigger_event = cult.1191 }
+		}
+	}
+}
+
+cult_defilement_apa_kissed_the_step = {
+	icon = positive
+	is_valid = {
+		has_activity_type = activity_cult_defilement
+		is_current_phase_active = yes
+		any_attending_character = { location = scope:province }
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = { location = scope:province }
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_defilement_apa_kissed_the_step
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = { add_piety = miniscule_piety_gain }
+		}
+	}
+}
+
+cult_defilement_apa_shared_bread = {
+	icon = public
+	is_valid = {
+		has_activity_type = activity_cult_defilement
+		is_current_phase_active = yes
+		any_attending_character = { location = scope:province }
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = { location = scope:province }
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_defilement_apa_shared_bread
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = { add_stress = minor_stress_loss }
+		}
+	}
+}
+
+cult_defilement_apa_watched_the_priests = {
+	icon = positive
+	is_valid = {
+		has_activity_type = activity_cult_defilement
+		is_current_phase_active = yes
+		any_attending_character = { location = scope:province }
+	}
+	weight = {
+		value = 1
+		if = {
+			limit = {
+				scope:host = { has_lifestyle = intrigue_lifestyle }
+			}
+			add = 0.5
+		}
+	}
+	effect = {
+		random_attending_character = {
+			limit = { location = scope:province }
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_defilement_apa_watched_the_priests
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = { add_intrigue_lifestyle_xp = minor_lifestyle_xp }
+		}
+	}
+}
+
+cult_defilement_apa_lay_brother = {
+	icon = negative
+	is_valid = {
+		has_activity_type = activity_cult_defilement
+		is_current_phase_active = yes
+		scope:host = { cult_secret_phase_trigger = yes }
+		any_attending_character = {
+			location = scope:province
+			has_trait = cult_member
+		}
+	}
+	weight = { value = 0.5 }
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = cult_member
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_defilement_apa_lay_brother
+			tags = { pulse_action }
+			character = scope:first
+			custom_tooltip = cult_defilement_apa_exposure_up_tt
+			scope:first = { trigger_event = cult.1190 }
+		}
+	}
+}
+
+cult_defilement_apa_devout_pilgrim = {
+	icon = positive
+	is_valid = {
+		has_activity_type = activity_cult_defilement
+		is_current_phase_active = yes
+		scope:host = { cult_secret_phase_trigger = yes }
+		any_attending_character = {
+			location = scope:province
+			has_trait = cult_member
+			has_variable = cult_exposure
+			var:cult_exposure >= 1
+		}
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = cult_member
+				has_variable = cult_exposure
+				var:cult_exposure >= 1
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_defilement_apa_devout_pilgrim
+			tags = { pulse_action }
+			character = scope:first
+			custom_tooltip = cult_defilement_apa_exposure_down_tt
+			scope:first = { trigger_event = cult.1192 }
+		}
+	}
+}
+
+cult_defilement_apa_old_mark = {
+	icon = positive
+	is_valid = {
+		has_activity_type = activity_cult_defilement
+		is_current_phase_active = yes
+		any_attending_character = {
+			location = scope:province
+			has_trait = cult_member
+		}
+	}
+	weight = { value = 0.75 }
+	effect = {
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				has_trait = cult_member
+			}
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_defilement_apa_old_mark
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = {
+				add_trait_xp = {
+					trait = cult_member
+					track = cult_rank
+					value = 2
+				}
+			}
+		}
+	}
+}
+
+cult_defilement_apa_hymn = {
+	icon = public
+	is_valid = {
+		has_activity_type = activity_cult_defilement
+		is_current_phase_active = yes
+		any_attending_character = { location = scope:province }
+	}
+	weight = { value = 1 }
+	effect = {
+		random_attending_character = {
+			limit = { location = scope:province }
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_defilement_apa_hymn
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = { add_diplomacy_lifestyle_xp = minor_lifestyle_xp }
+		}
+	}
+}
+
+cult_defilement_apa_blistered_feet = {
+	icon = negative
+	is_valid = {
+		has_activity_type = activity_cult_defilement
+		is_current_phase_active = yes
+		any_attending_character = { location = scope:province }
+	}
+	weight = { value = 0.5 }
+	effect = {
+		random_attending_character = {
+			limit = { location = scope:province }
+			save_scope_as = first
+		}
+		add_activity_log_entry = {
+			key = cult_defilement_apa_blistered_feet
+			tags = { pulse_action }
+			character = scope:first
+			scope:first = { add_stress = minor_stress_gain }
+		}
+	}
+}
+
+cult_defilement_apa_walked_together = {
+	icon = public
+	is_valid = {
+		has_activity_type = activity_cult_defilement
+		is_current_phase_active = yes
+		scope:host = { location = scope:province }
+		any_attending_character = {
+			location = scope:province
+			NOT = { this = scope:host }
+		}
+	}
+	weight = { value = 1 }
+	effect = {
+		scope:host = { save_scope_as = first }
+		random_attending_character = {
+			limit = {
+				location = scope:province
+				NOT = { this = scope:host }
+			}
+			save_scope_as = second
+		}
+		add_activity_log_entry = {
+			key = cult_defilement_apa_walked_together
+			tags = { pulse_action }
+			character = scope:first
+			target = scope:second
+			scope:first = {
+				add_opinion = {
+					target = scope:second
+					modifier = friendliness_opinion
+					opinion = 10
+				}
+			}
+			scope:second = {
+				add_opinion = {
+					target = scope:first
+					modifier = friendliness_opinion
+					opinion = 10
+				}
+			}
+		}
+	}
+}

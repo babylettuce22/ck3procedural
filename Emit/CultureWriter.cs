@@ -697,7 +697,7 @@ public static class CultureWriter
         foreach (var heritage in cultures.Heritages)
         {
             entries[$"{heritage.Key}_name"] = heritage.Name;
-            entries[$"{heritage.Key}_collective_noun"] = Plural(heritage.Name);
+            entries[$"{heritage.Key}_collective_noun"] = Language.Plural(heritage.Name);
             entries[$"{heritage.Language.Key}_name"] = heritage.Language.Name;
         }
 
@@ -705,7 +705,7 @@ public static class CultureWriter
         {
             entries[culture.Key] = culture.Name;
             entries[$"{culture.Key}_name"] = culture.Name;
-            entries[$"{culture.Key}_collective_noun"] = Plural(culture.Name);
+            entries[$"{culture.Key}_collective_noun"] = Language.Plural(culture.Name);
             entries[$"{culture.Key}_prefix"] = culture.Prefix;
             // The name list's own title, which the culture UI shows beside the list (vanilla:
             // name_list_english "English"). Without it the list reads as its raw key.
@@ -729,15 +729,4 @@ public static class CultureWriter
 
         loc.Write(Path.Combine(dir, "gen_cultures_l_english.yml"));
     }
-
-    /// <summary>
-    /// Crude English pluralisation, which is all a collective noun needs. The names are invented,
-    /// so there is no correct answer to get wrong — only a jarring one, and "Aldrichs" is worse
-    /// than "Aldriches" often enough to be worth the two cases.
-    /// </summary>
-    private static string Plural(string name)
-        => name.EndsWith('s') || name.EndsWith("ch", StringComparison.Ordinal)
-           || name.EndsWith("sh", StringComparison.Ordinal) || name.EndsWith('x')
-            ? name + "es"
-            : name + "s";
 }

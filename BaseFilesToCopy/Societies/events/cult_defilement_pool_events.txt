@@ -1,0 +1,1654 @@
+﻿namespace = cult
+
+# The Pilgrimage of Defilement's random pool. cult.1100-1199.
+# The activity: common/activities/activity_types/00_cult_defilement_activity.txt; its spine is
+# cult.0910-0916 in events/cult_rite_events.txt. The draw: common/on_action/
+# 00_cult_defilement_pool_on_actions.txt (players only, one a week, three a pilgrimage, no repeats).
+#
+#   ON THE ROAD (cult_defilement_road_pool, from on_travel_state_pulse)
+#   1101   A Companion on the Road       a genuine pilgrim walks with you (a new character)
+#   1102   The Sick Pilgrim              an old man with a fever, a day short of the shrine
+#   1103   A Face You Know               one of your vassals, or of your liege's court, on the road
+#   1104   Robbers                       the pilgrims are stopped; a guest, if any, is ready to fight
+#   1105   Talk at the Hostel            the hunter's people walk the pilgrim roads
+#   1106   The Friar at the Crossroads   a friar asks every pilgrim to name a heretic
+#
+#   AT THE SHRINE (cult_defilement_shrine_pool, from the phase's on_weekly_pulse)
+#   1110   The Keeper's Vigil            the shrine's priest keeps a vigil at night
+#   1111   The Blind Man                 a miracle-seeker at the gate
+#   1112   The Relic-Seller              a seller of false relics who has noticed you
+#   1113   One of Us                     a sworn member serves at the shrine: cover (read by 0913/0914)
+#   1114   The Sermon                    a priest preaches against the Adversary's servants
+#   1115   On Your Knees                 you find yourself praying for real
+#   1116   A Guest at the Altar          a guest caught praying in earnest
+#   1117   Loose Talk                    a guest talked at the hostel
+#   1118   The Hunter's Men              the hunter's people at the shrine gate
+#   1119   The Offering Box              the pilgrims' coins
+#   1120   The Blessed Well              ashes in the well: the county is tainted (map change)
+#
+#   HIDDEN, fired by the pulse actions (00_cult_defilement_actions.txt) so a meter moves in a
+#   character's scope (the pulse action's root is the activity)
+#   1190   exposure +1     1191   dark power +2     1192   exposure -1
+#
+# Every pool event: cult_save_scopes_effect, cult_defilement_save_county_effect, then
+# cult_defilement_pool_open_effect { ID }. Every random branch ends in a toast. Reads of the site's
+# holder and of scope:activity are guarded, so any of these can be fired from the console; the county
+# name then reads blank, as the spine's does.
+
+# =====================================================================================
+#  ON THE ROAD
+# =====================================================================================
+
+# ---- cult.1101 -- A Companion on the Road --------------------------------------------------------
+cult.1101 = {
+	type = character_event
+	title = cult.1101.t
+	desc = cult.1101.desc
+	theme = faith
+	override_background = { reference = village }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_defilement_pilgrim }
+		character = scope:cult_defilement_pilgrim
+		animation = happiness
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1101 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1101 }
+		create_character = {
+			template = location_pilgrim_template
+			location = root.location
+			culture = root.location.culture
+			faith = global_var:cult_host_faith
+			dynasty = none
+			random_traits = no
+			gender_female_chance = 50
+			save_scope_as = cult_defilement_pilgrim
+		}
+	}
+
+	# Walk with them.
+	option = {
+		name = cult.1101.a
+		cult_exposure_loss_effect = { VALUE = 1 }
+		scope:cult_defilement_pilgrim = {
+			add_opinion = {
+				target = root
+				modifier = friendliness_opinion
+				opinion = 20
+			}
+		}
+		stress_impact = {
+			shy = minor_stress_impact_gain
+		}
+		ai_chance = { base = 50 }
+	}
+
+	# Plant a doubt.
+	option = {
+		name = cult.1101.b
+		random_list = {
+			50 = {
+				modifier = { add = 15 diplomacy >= 12 }
+				modifier = { add = 15 learning >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1101.b.doubts
+					left_icon = root
+					right_icon = scope:cult_defilement_pilgrim
+					cult_power_gain_effect = { VALUE = 5 }
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1101.b.shocked
+					left_icon = root
+					right_icon = scope:cult_defilement_pilgrim
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = { base = 25 }
+	}
+
+	# Walk alone.
+	option = {
+		name = cult.1101.c
+		custom_tooltip = cult.1101.c.tt
+		stress_impact = {
+			gregarious = minor_stress_impact_gain
+		}
+		ai_chance = { base = 25 }
+	}
+}
+
+# ---- cult.1102 -- The Sick Pilgrim ---------------------------------------------------------------
+cult.1102 = {
+	type = character_event
+	title = cult.1102.t
+	desc = cult.1102.desc
+	theme = faith
+	override_background = { reference = village }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1102 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1102 }
+	}
+
+	# Carry him.
+	option = {
+		name = cult.1102.a
+		add_piety = minor_piety_gain
+		stress_impact = {
+			compassionate = minor_stress_impact_loss
+			lazy = minor_stress_impact_gain
+		}
+		random_list = {
+			20 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1102.a.fever
+					left_icon = root
+					contract_disease_effect = { DISEASE = ill TREATMENT_EVENT = yes }
+				}
+			}
+			80 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1102.a.well
+					left_icon = root
+					custom_tooltip = cult.1102.a.well.tt
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 40 has_trait = compassionate }
+		}
+	}
+
+	# Pray over him to the dark.
+	option = {
+		name = cult.1102.b
+		cult_corrupt_soul_effect = yes
+		random_list = {
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1102.b.breaks
+					left_icon = root
+					cult_power_gain_effect = { VALUE = 10 }
+				}
+			}
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1102.b.nothing
+					left_icon = root
+					custom_tooltip = cult.1102.b.nothing.tt
+				}
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# Leave him.
+	option = {
+		name = cult.1102.c
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = callous }
+		}
+	}
+}
+
+# ---- cult.1103 -- A Face You Know ----------------------------------------------------------------
+#
+# One of the host's own vassals, else a courtier of the host's liege: somebody who knows the host's
+# face and knows the host would not normally walk anywhere.
+cult.1103 = {
+	type = character_event
+	title = cult.1103.t
+	desc = cult.1103.desc
+	theme = intrigue
+	override_background = { reference = tavern }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:cult_defilement_known
+		animation = interested
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1103 }
+		OR = {
+			any_vassal = {
+				is_adult = yes
+				NOT = { has_trait = cult_member }
+			}
+			AND = {
+				is_independent_ruler = no
+				exists = liege
+				liege = {
+					any_courtier = {
+						is_adult = yes
+						NOT = { has_trait = cult_member }
+						NOT = { this = root }
+					}
+				}
+			}
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1103 }
+		random_vassal = {
+			limit = {
+				is_adult = yes
+				NOT = { has_trait = cult_member }
+			}
+			save_scope_as = cult_defilement_known
+		}
+		if = {
+			limit = {
+				NOT = { exists = scope:cult_defilement_known }
+				is_independent_ruler = no
+				exists = liege
+			}
+			liege = {
+				random_courtier = {
+					limit = {
+						is_adult = yes
+						NOT = { has_trait = cult_member }
+						NOT = { this = root }
+					}
+					save_scope_as = cult_defilement_known
+				}
+			}
+		}
+	}
+
+	# I have sins to walk off.
+	option = {
+		name = cult.1103.a
+		random_list = {
+			60 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 10 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1103.a.believed
+					left_icon = root
+					right_icon = scope:cult_defilement_known
+					scope:cult_defilement_known = {
+						add_opinion = {
+							target = root
+							modifier = respect_opinion
+							opinion = 10
+						}
+					}
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1103.a.doubted
+					left_icon = root
+					right_icon = scope:cult_defilement_known
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = { base = 50 }
+	}
+
+	# Pay for silence.
+	option = {
+		name = cult.1103.b
+		trigger = { gold >= 25 }
+		pay_short_term_gold = {
+			target = scope:cult_defilement_known
+			gold = 25
+		}
+		custom_tooltip = cult.1103.b.tt
+		ai_chance = { base = 25 }
+	}
+
+	# Walk with them, and pray loudly.
+	option = {
+		name = cult.1103.c
+		add_piety = minor_piety_gain
+		scope:cult_defilement_known = {
+			add_opinion = {
+				target = root
+				modifier = friendliness_opinion
+				opinion = 10
+			}
+		}
+		cult_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = { base = 25 }
+	}
+}
+
+# ---- cult.1104 -- Robbers ------------------------------------------------------------------------
+cult.1104 = {
+	type = character_event
+	title = cult.1104.t
+	desc = {
+		desc = cult.1104.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_defilement_guest }
+				desc = cult.1104.desc_guest
+			}
+		}
+	}
+	theme = martial
+	override_background = { reference = village }
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_defilement_guest }
+		character = scope:cult_defilement_guest
+		animation = personality_bold
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1104 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1104 }
+		cult_defilement_save_guest_effect = yes
+	}
+
+	# Fight.
+	option = {
+		name = cult.1104.a
+		random_list = {
+			40 = {
+				modifier = { add = 20 prowess >= 12 }
+				modifier = { add = 20 prowess >= 16 }
+				modifier = { add = 15 exists = scope:cult_defilement_guest }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1104.a.won
+					left_icon = root
+					add_prestige = minor_prestige_gain
+					custom_tooltip = cult.1104.a.won.tt
+				}
+			}
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1104.a.lost
+					left_icon = root
+					increase_wounds_no_death_effect = { REASON = fight }
+				}
+			}
+		}
+		stress_impact = {
+			craven = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = brave }
+		}
+	}
+
+	# Hand over the purse.
+	option = {
+		name = cult.1104.b
+		trigger = { gold >= 20 }
+		remove_short_term_gold = 20
+		stress_impact = {
+			arrogant = minor_stress_impact_gain
+			greedy = minor_stress_impact_gain
+		}
+		ai_chance = { base = 40 }
+	}
+
+	# Show them the mark.
+	option = {
+		name = cult.1104.c
+		trigger = {
+			has_variable = cult_power
+			var:cult_power >= 5
+		}
+		cult_power_spend_effect = { VALUE = 5 }
+		cult_corrupt_soul_effect = yes
+		random_list = {
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1104.c.run
+					left_icon = root
+					custom_tooltip = cult.1104.c.run.tt
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1104.c.seen
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = { base = 20 }
+	}
+}
+
+# ---- cult.1105 -- Talk at the Hostel -------------------------------------------------------------
+cult.1105 = {
+	type = character_event
+	title = cult.1105.t
+	desc = cult.1105.desc
+	theme = intrigue
+	override_background = { reference = tavern }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	right_portrait = {
+		character = scope:cult_hunter
+		animation = personality_zealous
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1105 }
+		exists = global_var:cult_hunter
+		NOT = { global_var:cult_hunter = root }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1105 }
+	}
+
+	# Listen.
+	option = {
+		name = cult.1105.a
+		add_intrigue_lifestyle_xp = minor_lifestyle_xp
+		cult_exposure_loss_effect = { VALUE = 1 }
+		ai_chance = { base = 50 }
+	}
+
+	# Curse the Faithless loudest.
+	option = {
+		name = cult.1105.b
+		cult_exposure_loss_effect = { VALUE = 2 }
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# Turn the talk on the hunter.
+	option = {
+		name = cult.1105.c
+		random_list = {
+			40 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 10 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1105.c.spreads
+					left_icon = root
+					right_icon = scope:cult_hunter
+					scope:cult_hunter = { add_piety = medium_piety_loss }
+				}
+			}
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1105.c.back
+					left_icon = root
+					right_icon = scope:cult_hunter
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = { base = 20 }
+	}
+}
+
+# ---- cult.1106 -- The Friar at the Crossroads ----------------------------------------------------
+cult.1106 = {
+	type = character_event
+	title = cult.1106.t
+	desc = cult.1106.desc
+	theme = faith
+	override_background = { reference = village }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_defilement_rival }
+		character = scope:cult_defilement_rival
+		animation = idle
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1106 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1106 }
+		random_relation = {
+			type = rival
+			limit = {
+				NOT = { has_trait = cult_member }
+				faith = global_var:cult_host_faith
+			}
+			save_scope_as = cult_defilement_rival
+		}
+	}
+
+	# Name a rival.
+	option = {
+		name = cult.1106.a
+		trigger = { exists = scope:cult_defilement_rival }
+		scope:cult_defilement_rival = { add_piety = medium_piety_loss }
+		cult_exposure_loss_effect = { VALUE = 1 }
+		stress_impact = {
+			just = medium_stress_impact_gain
+			honest = minor_stress_impact_gain
+			vengeful = minor_stress_impact_loss
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# A coin and no names.
+	option = {
+		name = cult.1106.b
+		trigger = { gold >= 5 }
+		remove_short_term_gold = 5
+		add_piety = miniscule_piety_gain
+		ai_chance = { base = 40 }
+	}
+
+	# Walk on.
+	option = {
+		name = cult.1106.c
+		random_list = {
+			70 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1106.c.passes
+					left_icon = root
+					custom_tooltip = cult.1106.c.passes.tt
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1106.c.calls
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 1 }
+				}
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+}
+
+# =====================================================================================
+#  AT THE SHRINE
+# =====================================================================================
+
+# ---- cult.1110 -- The Keeper's Vigil -------------------------------------------------------------
+#
+# The keeper is the site's lord's court chaplain when there is one who is not sworn, else an old
+# priest nobody names.
+cult.1110 = {
+	type = character_event
+	title = cult.1110.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_defilement_keeper }
+				desc = cult.1110.desc_named
+			}
+			desc = cult.1110.desc_unnamed
+		}
+		desc = cult.1110.desc_end
+	}
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_defilement_keeper }
+		character = scope:cult_defilement_keeper
+		animation = prayer
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1110 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1110 }
+		if = {
+			limit = {
+				exists = scope:cult_defilement_county.holder
+				scope:cult_defilement_county.holder = {
+					NOT = { this = root }
+					exists = cp:councillor_court_chaplain
+					cp:councillor_court_chaplain = {
+						NOT = { has_trait = cult_member }
+						NOT = { this = root }
+					}
+				}
+			}
+			scope:cult_defilement_county.holder.cp:councillor_court_chaplain = { save_scope_as = cult_defilement_keeper }
+		}
+	}
+
+	# Keep the vigil beside them.
+	option = {
+		name = {
+			trigger = { exists = scope:cult_defilement_keeper }
+			text = cult.1110.a
+		}
+		name = {
+			trigger = { NOT = { exists = scope:cult_defilement_keeper } }
+			text = cult.1110.a_unnamed
+		}
+		add_piety = minor_piety_gain
+		cult_exposure_loss_effect = { VALUE = 1 }
+		if = {
+			limit = { exists = scope:cult_defilement_keeper }
+			scope:cult_defilement_keeper = {
+				add_opinion = {
+					target = root
+					modifier = respect_opinion
+					opinion = 15
+				}
+			}
+		}
+		stress_impact = {
+			impatient = minor_stress_impact_gain
+		}
+		ai_chance = { base = 40 }
+	}
+
+	# Something in the wine.
+	option = {
+		name = cult.1110.b
+		random_list = {
+			60 = {
+				modifier = { add = 15 intrigue >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1110.b.sleeps
+					left_icon = root
+					cult_power_gain_effect = { VALUE = 5 }
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1110.b.tastes
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# Wait.
+	option = {
+		name = cult.1110.c
+		custom_tooltip = cult.1110.c.tt
+		stress_impact = {
+			impatient = minor_stress_impact_gain
+		}
+		ai_chance = { base = 30 }
+	}
+}
+
+# ---- cult.1111 -- The Blind Man ------------------------------------------------------------------
+cult.1111 = {
+	type = character_event
+	title = cult.1111.t
+	desc = cult.1111.desc
+	theme = faith
+	override_background = { reference = holy_site_generic }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1111 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1111 }
+	}
+
+	# Pray to the high god, as he asks.
+	option = {
+		name = cult.1111.a
+		add_piety = minor_piety_gain
+		random_list = {
+			10 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1111.a.sees
+					left_icon = root
+					add_piety = medium_piety_gain
+					cult_exposure_loss_effect = { VALUE = 2 }
+				}
+			}
+			90 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1111.nothing
+					left_icon = root
+					custom_tooltip = cult.1111.nothing.tt
+				}
+			}
+		}
+		stress_impact = {
+			zealous = minor_stress_impact_gain
+		}
+		ai_chance = { base = 40 }
+	}
+
+	# Pray to the dark.
+	option = {
+		name = cult.1111.b
+		cult_corrupt_soul_effect = yes
+		random_list = {
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1111.b.sees
+					left_icon = root
+					cult_power_gain_effect = { VALUE = 10 }
+					cult_exposure_gain_effect = { VALUE = 1 }
+				}
+			}
+			70 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1111.nothing
+					left_icon = root
+					custom_tooltip = cult.1111.nothing.tt
+				}
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# Pull free.
+	option = {
+		name = cult.1111.c
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = { base = 30 }
+	}
+}
+
+# ---- cult.1112 -- The Relic-Seller ---------------------------------------------------------------
+cult.1112 = {
+	type = character_event
+	title = cult.1112.t
+	desc = cult.1112.desc
+	theme = intrigue
+	override_background = { reference = market }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1112 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1112 }
+	}
+
+	# Buy a relic, as a pilgrim would.
+	option = {
+		name = cult.1112.a
+		trigger = { gold >= 10 }
+		remove_short_term_gold = 10
+		add_piety = miniscule_piety_gain
+		cult_exposure_loss_effect = { VALUE = 1 }
+		ai_chance = { base = 40 }
+	}
+
+	# Denounce him.
+	option = {
+		name = cult.1112.b
+		add_piety = minor_piety_gain
+		random_list = {
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1112.b.driven
+					left_icon = root
+					custom_tooltip = cult.1112.b.driven.tt
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1112.b.talks
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# Buy his silence.
+	option = {
+		name = cult.1112.c
+		trigger = { gold >= 25 }
+		remove_short_term_gold = 25
+		cult_exposure_loss_effect = { VALUE = 2 }
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+		ai_chance = { base = 30 }
+	}
+}
+
+# ---- cult.1113 -- One of Us ----------------------------------------------------------------------
+#
+# A sworn member at the site's lord's court (named), else a lay brother nobody names. Accepting sets
+# cult_defilement_covered, which cult.0913 reads (a desc line and an option) and cult.0914 counts as
+# a clean pilgrimage: no witness, no extra exposure.
+cult.1113 = {
+	type = character_event
+	title = cult.1113.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_defilement_contact }
+				desc = cult.1113.desc_named
+			}
+			desc = cult.1113.desc_unnamed
+		}
+	}
+	theme = secret
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = interested
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_defilement_contact }
+		character = scope:cult_defilement_contact
+		animation = scheme
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1113 }
+		NOT = { has_character_flag = cult_defilement_covered }
+		NOT = { has_character_flag = cult_defilement_clean }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1113 }
+		if = {
+			limit = {
+				exists = scope:cult_defilement_county.holder
+				NOT = { scope:cult_defilement_county.holder = root }
+			}
+			scope:cult_defilement_county.holder = {
+				random_courtier = {
+					limit = {
+						has_trait = cult_member
+						is_adult = yes
+						NOT = { this = root }
+					}
+					save_scope_as = cult_defilement_contact
+				}
+			}
+		}
+	}
+
+	# Accept the help.
+	option = {
+		name = {
+			trigger = { exists = scope:cult_defilement_contact }
+			text = cult.1113.a
+		}
+		name = {
+			trigger = { NOT = { exists = scope:cult_defilement_contact } }
+			text = cult.1113.a_unnamed
+		}
+		add_character_flag = {
+			flag = cult_defilement_covered
+			months = 6
+		}
+		custom_tooltip = cult.1113.a.tt
+		if = {
+			limit = { exists = scope:cult_defilement_contact }
+			scope:cult_defilement_contact = {
+				add_trait_xp = {
+					trait = cult_member
+					track = cult_rank
+					value = 3
+				}
+			}
+			cult_defilement_their_exposure_effect = { WHO = scope:cult_defilement_contact VALUE = 2 }
+		}
+		ai_chance = { base = 70 }
+	}
+
+	# Keep them out of it.
+	option = {
+		name = {
+			trigger = { exists = scope:cult_defilement_contact }
+			text = cult.1113.b
+		}
+		name = {
+			trigger = { NOT = { exists = scope:cult_defilement_contact } }
+			text = cult.1113.b_unnamed
+		}
+		if = {
+			limit = { exists = scope:cult_defilement_contact }
+			scope:cult_defilement_contact = {
+				add_opinion = {
+					target = root
+					modifier = grateful_opinion
+					opinion = 15
+				}
+			}
+		}
+		else = {
+			custom_tooltip = cult.1113.b.tt
+		}
+		ai_chance = { base = 30 }
+	}
+}
+
+# ---- cult.1114 -- The Sermon ---------------------------------------------------------------------
+#
+# The preacher is the site's lord's chaplain when one is not sworn; else a priest nobody names.
+cult.1114 = {
+	type = character_event
+	title = cult.1114.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:cult_defilement_preacher }
+				desc = cult.1114.desc_named
+			}
+			desc = cult.1114.desc_unnamed
+		}
+		desc = cult.1114.desc_end
+	}
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	right_portrait = {
+		trigger = { exists = scope:cult_defilement_preacher }
+		character = scope:cult_defilement_preacher
+		animation = personality_zealous
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1114 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1114 }
+		if = {
+			limit = {
+				exists = scope:cult_defilement_county.holder
+				scope:cult_defilement_county.holder = {
+					NOT = { this = root }
+					exists = cp:councillor_court_chaplain
+					cp:councillor_court_chaplain = {
+						NOT = { has_trait = cult_member }
+						NOT = { this = root }
+					}
+				}
+			}
+			scope:cult_defilement_county.holder.cp:councillor_court_chaplain = { save_scope_as = cult_defilement_preacher }
+		}
+	}
+
+	# Shout with them.
+	option = {
+		name = cult.1114.a
+		cult_exposure_loss_effect = { VALUE = 2 }
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = { base = 40 }
+	}
+
+	# Say nothing.
+	option = {
+		name = cult.1114.b
+		random_list = {
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = cult.1114.b.unnoticed
+					left_icon = root
+					custom_tooltip = cult.1114.b.unnoticed.tt
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1114.b.noticed
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# A hard question afterwards.
+	option = {
+		name = {
+			trigger = { exists = scope:cult_defilement_preacher }
+			text = cult.1114.c
+		}
+		name = {
+			trigger = { NOT = { exists = scope:cult_defilement_preacher } }
+			text = cult.1114.c_unnamed
+		}
+		random_list = {
+			35 = {
+				modifier = { add = 15 learning >= 12 }
+				modifier = { add = 15 learning >= 16 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1114.c.silent
+					left_icon = root
+					cult_power_gain_effect = { VALUE = 5 }
+				}
+			}
+			65 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1114.c.remembers
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = { base = 20 }
+	}
+}
+
+# ---- cult.1115 -- On Your Knees ------------------------------------------------------------------
+cult.1115 = {
+	type = character_event
+	title = cult.1115.t
+	desc = cult.1115.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = prayer
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1115 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1115 }
+	}
+
+	# Finish the prayer.
+	option = {
+		name = cult.1115.a
+		add_stress = medium_stress_loss
+		add_piety = minor_piety_gain
+		if = {
+			limit = {
+				has_variable = cult_power
+				var:cult_power >= 1
+			}
+			cult_power_spend_effect = { VALUE = 10 }
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = zealous }
+		}
+	}
+
+	# Say the circle's words instead.
+	option = {
+		name = cult.1115.b
+		cult_power_gain_effect = { VALUE = 5 }
+		cult_corrupt_soul_effect = yes
+		add_stress = minor_stress_gain
+		ai_chance = { base = 50 }
+	}
+
+	# Walk out into the cold.
+	option = {
+		name = cult.1115.c
+		add_stress = minor_stress_gain
+		custom_tooltip = cult.1115.c.tt
+		ai_chance = { base = 30 }
+	}
+}
+
+# ---- cult.1116 -- A Guest at the Altar -----------------------------------------------------------
+cult.1116 = {
+	type = character_event
+	title = cult.1116.t
+	desc = cult.1116.desc
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:cult_defilement_guest
+		animation = shame
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1116 }
+		exists = scope:activity
+		scope:activity = {
+			any_attending_character = {
+				NOT = { this = root }
+				is_adult = yes
+				has_trait = cult_member
+			}
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1116 }
+		cult_defilement_save_guest_effect = yes
+	}
+
+	# Say nothing.
+	option = {
+		name = cult.1116.a
+		scope:cult_defilement_guest = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 15
+			}
+			add_stress = minor_stress_loss
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = compassionate }
+		}
+	}
+
+	# Warn them.
+	option = {
+		name = cult.1116.b
+		scope:cult_defilement_guest = {
+			add_opinion = {
+				target = root
+				modifier = scared_opinion
+				opinion = -15
+			}
+			add_stress = minor_stress_gain
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = 3
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = callous }
+		}
+	}
+
+	# Tell the Hierophant.
+	option = {
+		name = cult.1116.c
+		trigger = {
+			exists = scope:cult_hierophant
+			NOT = { scope:cult_hierophant = root }
+			NOT = { scope:cult_hierophant = scope:cult_defilement_guest }
+		}
+		scope:cult_defilement_guest = {
+			add_trait_xp = {
+				trait = cult_member
+				track = cult_rank
+				value = -5
+			}
+			add_opinion = {
+				target = root
+				modifier = angry_opinion
+				opinion = -20
+			}
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 3
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = { base = 20 }
+	}
+}
+
+# ---- cult.1117 -- Loose Talk ---------------------------------------------------------------------
+cult.1117 = {
+	type = character_event
+	title = cult.1117.t
+	desc = cult.1117.desc
+	theme = intrigue
+	override_background = { reference = tavern }
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:cult_defilement_guest
+		animation = shame
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1117 }
+		exists = scope:activity
+		scope:activity = {
+			any_attending_character = {
+				NOT = { this = root }
+				is_adult = yes
+				has_trait = cult_member
+			}
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1117 }
+		cult_defilement_save_guest_effect = yes
+	}
+
+	# Cover for them.
+	option = {
+		name = cult.1117.a
+		cult_exposure_gain_effect = { VALUE = 1 }
+		scope:cult_defilement_guest = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 15
+			}
+		}
+		ai_chance = { base = 40 }
+	}
+
+	# Let them answer for it.
+	option = {
+		name = cult.1117.b
+		cult_defilement_their_exposure_effect = { WHO = scope:cult_defilement_guest VALUE = 3 }
+		scope:cult_defilement_guest = {
+			add_opinion = {
+				target = root
+				modifier = angry_opinion
+				opinion = -10
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# Keep them at the hostel.
+	option = {
+		name = cult.1117.c
+		cult_defilement_their_exposure_effect = { WHO = scope:cult_defilement_guest VALUE = 1 }
+		scope:cult_defilement_guest = { add_stress = minor_stress_gain }
+		ai_chance = { base = 30 }
+	}
+}
+
+# ---- cult.1118 -- The Hunter's Men ---------------------------------------------------------------
+cult.1118 = {
+	type = character_event
+	title = cult.1118.t
+	desc = cult.1118.desc
+	theme = secret
+	override_background = { reference = holy_site_generic }
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+	right_portrait = {
+		character = scope:cult_hunter
+		animation = personality_zealous
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1118 }
+		exists = global_var:cult_hunter
+		NOT = { global_var:cult_hunter = root }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1118 }
+	}
+
+	# Hide among the sick.
+	option = {
+		name = cult.1118.a
+		random_list = {
+			75 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1118.a.gone
+					left_icon = root
+					custom_tooltip = cult.1118.a.gone.tt
+				}
+			}
+			25 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1118.a.found
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		add_stress = minor_stress_gain
+		ai_chance = { base = 40 }
+	}
+
+	# Walk past them.
+	option = {
+		name = cult.1118.b
+		random_list = {
+			50 = {
+				modifier = { add = 15 intrigue >= 12 }
+				modifier = { add = 10 has_trait = brave }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1118.b.pass
+					left_icon = root
+					cult_exposure_loss_effect = { VALUE = 1 }
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1118.b.named
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = { base = 30 }
+	}
+
+	# Bribe their captain.
+	option = {
+		name = cult.1118.c
+		trigger = { gold >= 30 }
+		remove_short_term_gold = 30
+		custom_tooltip = cult.1118.c.tt
+		ai_chance = { base = 30 }
+	}
+}
+
+# ---- cult.1119 -- The Offering Box ---------------------------------------------------------------
+cult.1119 = {
+	type = character_event
+	title = cult.1119.t
+	desc = cult.1119.desc
+	theme = intrigue
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1119 }
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1119 }
+	}
+
+	# Empty it.
+	option = {
+		name = cult.1119.a
+		add_gold = 25
+		random_list = {
+			70 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult.1119.a.unseen
+					left_icon = root
+					custom_tooltip = cult.1119.a.unseen.tt
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = cult.1119.a.seen
+					left_icon = root
+					cult_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		stress_impact = {
+			greedy = minor_stress_impact_loss
+			just = minor_stress_impact_gain
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = greedy }
+		}
+	}
+
+	# Give generously.
+	option = {
+		name = cult.1119.b
+		trigger = { gold >= 15 }
+		remove_short_term_gold = 15
+		add_piety = minor_piety_gain
+		cult_exposure_loss_effect = { VALUE = 1 }
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+		ai_chance = { base = 40 }
+	}
+
+	# The circle's token among the coins.
+	option = {
+		name = cult.1119.c
+		cult_power_gain_effect = { VALUE = 3 }
+		ai_chance = { base = 30 }
+	}
+}
+
+# ---- cult.1120 -- The Blessed Well ---------------------------------------------------------------
+#
+# The one pool event that changes the map: a county not yet tainted is tainted for five years, and the
+# rot is recounted.
+cult.1120 = {
+	type = character_event
+	title = cult.1120.t
+	desc = cult.1120.desc
+	theme = witchcraft
+	override_background = { reference = courtyard }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+		NOT = { has_character_flag = cult_defilement_seen_1120 }
+		exists = scope:activity
+		scope:activity.activity_location.county = {
+			NOT = { has_county_modifier = cult_county_tainted }
+		}
+	}
+	immediate = {
+		cult_save_scopes_effect = yes
+		cult_defilement_save_county_effect = yes
+		cult_defilement_pool_open_effect = { ID = 1120 }
+	}
+
+	# Ashes in the well.
+	option = {
+		name = cult.1120.a
+		if = {
+			limit = { exists = scope:cult_defilement_county }
+			scope:cult_defilement_county = {
+				add_county_modifier = {
+					modifier = cult_county_tainted
+					years = 5
+				}
+			}
+			custom_tooltip = cult.0914.rot_tt
+			hidden_effect = { cult_rot_refresh_effect = yes }
+		}
+		add_trait_xp = {
+			trait = cult_member
+			track = cult_rank
+			value = 2
+		}
+		cult_corrupt_soul_effect = yes
+		cult_exposure_gain_effect = { VALUE = 2 }
+		ai_chance = { base = 60 }
+	}
+
+	# Drink with them.
+	option = {
+		name = cult.1120.b
+		add_stress = minor_stress_loss
+		ai_chance = { base = 40 }
+	}
+}
+
+# =====================================================================================
+#  HIDDEN -- the pulse actions' meter changes
+# =====================================================================================
+#
+# A pulse action runs in the activity's scope; the society's meter effects toast with `root` as the
+# icon and must run on a character. These carry the change to the character, who still gets the core
+# effect's toast.
+
+cult.1190 = {
+	type = character_event
+	hidden = yes
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+	}
+	immediate = {
+		cult_exposure_gain_effect = { VALUE = 1 }
+	}
+}
+
+cult.1191 = {
+	type = character_event
+	hidden = yes
+	trigger = {
+		cult_active_trigger = yes
+		has_trait = cult_member
+	}
+	immediate = {
+		cult_power_gain_effect = { VALUE = 2 }
+	}
+}
+
+cult.1192 = {
+	type = character_event
+	hidden = yes
+	trigger = {
+		cult_secret_phase_trigger = yes
+		has_trait = cult_member
+	}
+	immediate = {
+		cult_exposure_loss_effect = { VALUE = 1 }
+	}
+}

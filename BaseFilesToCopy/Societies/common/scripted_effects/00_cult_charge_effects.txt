@@ -72,6 +72,23 @@ cult_charge_check_effect = {
 # Picks a charge that can be done right now and gives it. The AI takes it silently; a player gets
 # the Hierophant's note (cult.0501) and may turn it down.
 cult_charge_offer_effect = {
+	cult_charge_pick_effect = yes
+	cult_charge_notify_effect = yes
+}
+
+# A player member is told by the Hierophant's note (cult.0501), and may turn it down.
+cult_charge_notify_effect = {
+	if = {
+		limit = {
+			has_variable = cult_charge
+			is_ai = no
+		}
+		trigger_event = { id = cult.0501 days = 1 }
+	}
+}
+
+# The circle's usual draw: whatever can be done right now, weighted by what the member is placed to do.
+cult_charge_pick_effect = {
 	random_list = {
 		30 = {
 			trigger = { cult_charge_turn_priest_possible_trigger = yes }
@@ -106,12 +123,68 @@ cult_charge_offer_effect = {
 			cult_charge_give_recruit_effect = yes
 		}
 	}
+}
+
+# A charge from a player Hierophant's own hand (cult_give_charge_interaction, via cult.0540). ROOT is
+# the member. var:cult_charge_order is the kind asked for, or flag:any for the circle's usual draw; a
+# kind with nothing to aim at right now falls back to that draw rather than giving nothing (the
+# Hierophant's toast says so). var:cult_charge_giver is kept with the charge so its keeping can be
+# reported back (cult_charge_reward_effect).
+cult_charge_order_effect = {
 	if = {
 		limit = {
-			has_variable = cult_charge
-			is_ai = no
+			var:cult_charge_order = flag:turn_priest
+			cult_charge_turn_priest_possible_trigger = yes
 		}
-		trigger_event = { id = cult.0501 days = 1 }
+		cult_charge_give_turn_priest_effect = yes
+	}
+	else_if = {
+		limit = {
+			var:cult_charge_order = flag:taint
+			cult_charge_taint_possible_trigger = yes
+		}
+		cult_charge_give_taint_effect = yes
+	}
+	else_if = {
+		limit = {
+			var:cult_charge_order = flag:defile_site
+			cult_charge_defile_site_possible_trigger = yes
+		}
+		cult_charge_give_defile_site_effect = yes
+	}
+	else_if = {
+		limit = {
+			var:cult_charge_order = flag:offering
+			cult_charge_offering_possible_trigger = yes
+		}
+		cult_charge_give_offering_effect = yes
+	}
+	else_if = {
+		limit = { var:cult_charge_order = flag:recruit }
+		cult_charge_give_recruit_effect = yes
+	}
+	if = {
+		limit = { NOT = { has_variable = cult_charge } }
+		cult_charge_pick_effect = yes
+	}
+}
+
+# THIS has just become the Hierophant. A charge they were carrying came from the office they now
+# hold, so it is set aside -- nobody gives charges to themselves (cult_charge_can_be_offered_trigger).
+cult_charge_set_aside_for_office_effect = {
+	if = {
+		limit = { has_variable = cult_charge }
+		save_scope_as = cult_charge_set_aside
+		if = {
+			limit = { is_ai = no }
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = cult_charge_set_aside_toast
+				left_icon = scope:cult_charge_set_aside
+				custom_tooltip = cult_charge_set_aside_tt
+			}
+		}
+		cult_charge_clear_effect = yes
 	}
 }
 
@@ -287,6 +360,14 @@ cult_charge_save_state_effect = {
 			value = var:cult_charge_goal
 		}
 	}
+	# Who gave it, when a player Hierophant gave it by hand -- the reward reports back to them.
+	if = {
+		limit = {
+			has_variable = cult_charge
+			exists = var:cult_charge_giver
+		}
+		var:cult_charge_giver = { save_scope_as = cult_charge_giver }
+	}
 }
 
 cult_charge_clear_effect = {
@@ -295,6 +376,7 @@ cult_charge_clear_effect = {
 	remove_variable = cult_charge_county
 	remove_variable = cult_charge_given
 	remove_variable = cult_charge_goal
+	remove_variable = cult_charge_giver
 	clear_variable_list = cult_charge_old_recruits
 }
 
@@ -320,6 +402,35 @@ cult_charge_reward_effect = {
 			add_opinion = {
 				target = root
 				modifier = cult_kept_charge_opinion
+			}
+		}
+	}
+	# A charge a player Hierophant gave by hand: the giver hears it was kept, and the circle's
+	# success feeds their own power. scope:cult_charge_giver comes from cult_charge_save_state_effect,
+	# which every caller runs before the state is cleared.
+	hidden_effect = {
+		if = {
+			limit = {
+				exists = scope:cult_charge_giver
+				scope:cult_charge_giver = {
+					is_alive = yes
+					is_ai = no
+				}
+				NOT = { scope:cult_charge_giver = root }
+			}
+			save_scope_as = cult_charge_keeper
+			scope:cult_charge_giver = {
+				if = {
+					limit = { NOT = { has_variable = cult_power } }
+					set_variable = { name = cult_power value = 0 }
+				}
+				change_variable = { name = cult_power add = 10 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = cult_charge_kept_by_toast
+					left_icon = scope:cult_charge_keeper
+					custom_tooltip = cult_charge_kept_by_tt
+				}
 			}
 		}
 	}

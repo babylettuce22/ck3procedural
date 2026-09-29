@@ -44,6 +44,26 @@ types gen_cult_panel {
 			on_start = "[GetScriptedGui('society_panel_window').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
 		}
 
+		# The once-a-second refresh while open; see restor_panel_tick in gen_society_panel.gui.
+		widget = {
+			name = "cult_panel_tick"
+			size = { 0 0 }
+
+			state = {
+				name = cult_panel_tick_a
+				trigger_on_create = yes
+				duration = 1
+				next = cult_panel_tick_b
+				on_finish = "[GetScriptedGui('cult_panel_gather').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+			}
+
+			state = {
+				name = cult_panel_tick_b
+				duration = 0
+				next = cult_panel_tick_a
+			}
+		}
+
 		margin_widget = {
 			size = { 100% 100% }
 			margin_top = 30

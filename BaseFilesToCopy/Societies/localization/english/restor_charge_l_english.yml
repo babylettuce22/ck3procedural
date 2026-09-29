@@ -133,3 +133,36 @@
  restor.0534.a.success:0 "[restor_charge_recruit.GetFirstNameNoTooltip] Swears the Oath"
  restor.0534.a.failure:0 "[restor_charge_recruit.GetFirstNameNoTooltip] Refuses"
  restor.0534.b:0 "Not [restor_charge_recruit.GetHerHim]."
+
+ # ---- Give a Charge (a player Keeper's interaction) and restor.0540 -------------------------------
+
+ restor_give_charge_interaction:0 "Give a Charge"
+ restor_give_charge_interaction_desc:0 "Write to [recipient.GetTitledFirstName] in your own hand, and tell [recipient.GetHerHim] what the cause needs of [recipient.GetHerHim]."
+ restor_give_charge_interaction_tt:0 "[recipient.GetTitledFirstName] is given a charge, with three years to keep it"
+ restor_give_charge_options_heading:0 "What should [recipient.GetSheHe] do?"
+ restor_give_charge_any:0 "Whatever the cause needs most"
+ restor_give_charge_win_over:0 "Win over a lord of $restor_crown_name$"
+ restor_give_charge_stir:0 "Stir a county"
+ restor_give_charge_war_chest:0 "Fill the war chest"
+ restor_give_charge_shelter:0 "Take in the heir"
+ restor_give_charge_recruit:0 "Bring someone new in"
+ restor_give_charge_has_one_tt:0 "[recipient.GetFirstNameNoTooltip] is already keeping a charge"
+ restor_give_charge_heir_tt:0 "The heir is not sent on errands"
+ restor_give_charge_none_tt:0 "There is nothing of this kind left to do"
+ restor_give_charge_poor_tt:0 "[recipient.GetFirstNameNoTooltip] has neither the gold nor the income for it"
+ restor_give_charge_no_roof_tt:0 "[recipient.GetFirstNameNoTooltip] has no court of [recipient.GetHerHis] own to take the heir into"
+
+ restor_charge_given_toast:0 "A Charge Given"
+ restor_charge_given_win_over_tt:0 "[restor_charge_member.GetTitledFirstName] is to win [restor_charge_target.GetTitledFirstName] over to House $restor_house_name$."
+ restor_charge_given_stir_tt:0 "[restor_charge_member.GetTitledFirstName] is to stir [restor_charge_county.GetNameNoTier] for the old crown."
+ restor_charge_given_war_chest_tt:0 "[restor_charge_member.GetTitledFirstName] is to fill the war chest."
+ restor_charge_given_shelter_tt:0 "[restor_charge_member.GetTitledFirstName] is to take in [restor_charge_target.GetTitledFirstName] and keep [restor_charge_target.GetHerHim] safe."
+ restor_charge_given_recruit_tt:0 "[restor_charge_member.GetTitledFirstName] is to bring someone new into $restor_society_name$."
+ restor_charge_given_fallback_tt:0 "What you asked for could not be done now, so [restor_charge_member.GetSheHe] was given this instead."
+
+ restor_charge_kept_by_toast:0 "A Charge Kept"
+ restor_charge_kept_by_tt:0 "[restor_charge_kept_by.GetTitledFirstName] did what you asked. Favour #P +10#!"
+
+ restor_charge_set_aside_toast:0 "Your Charge Is Set Aside"
+ restor_charge_set_aside_keeper_tt:0 "You are the Keeper now. Charges come from you, and you keep none of your own."
+ restor_charge_set_aside_heir_tt:0 "You are the heir now. The Sworn work for you; nobody sends you on their errands."

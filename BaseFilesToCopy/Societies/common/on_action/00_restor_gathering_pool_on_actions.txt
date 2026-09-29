@@ -1,0 +1,50 @@
+﻿# The Gathering's random pool (restor.1000-1099), vanilla's way: the phase's on_weekly_pulse fires
+# one of these for every attending character each week (see restor_gathering_phase in
+# common/activities/activity_types/00_restor_gathering_activity.txt), exactly as the funeral's wake
+# fires funeral_wake_pulse. random_events only draws among events whose trigger passes, so an event
+# that needs the heir in the hall, or a guest with a courtier to bring, simply drops out of the draw
+# when the hall does not have one. The "0" entry is the week where nothing happens.
+#
+# Host events mark the activity (var restor_pool_NNNN) and so happen at most once per Gathering;
+# guest events set a character flag for 90 days, so a guest does not see the same scene twice. The
+# phase lasts three weeks, so the host draws two or three times: most Gatherings see two of the
+# fourteen host scenes, and never the same two for long.
+
+restor_gathering_host_pool = {
+	trigger = {
+		restor_underground_trigger = yes
+	}
+	random_events = {
+		chance_to_happen = 100
+		120 = 0
+		100 = restor.1001	# Riders on the Road: a late arrival may have been followed
+		100 = restor.1002	# Strike Now or Wait: two of the Sworn quarrel over the plan
+		100 = restor.1003	# A Doubt at the Table: one of the Sworn suspects another of informing
+		100 = restor.1004	# The Heir Among Us: the pretender has come in person
+		100 = restor.1005	# A Servant at the Door: someone heard too much
+		100 = restor.1006	# To the Last King: the toast is yours to give
+		100 = restor.1007	# A Letter from the Heir: read aloud, burned, or kept
+		100 = restor.1008	# An Uninvited Guest: a member brings a recruit nobody asked for
+		100 = restor.1009	# News of the Usurper
+		100 = restor.1010	# Counting Swords: pledges for the rising
+		100 = restor.1011	# A Stranger in Town: someone is asking whose horses fill the stable
+		100 = restor.1012	# Released from the Oath: a frightened member wants out
+		100 = restor.1013	# The Headman at the Gate: the village asks if the heir is coming
+		100 = restor.1014	# The Keeper's Account: the Keeper wants to hear what you have done
+	}
+}
+
+restor_gathering_guest_pool = {
+	trigger = {
+		restor_underground_trigger = yes
+	}
+	random_events = {
+		chance_to_happen = 100
+		250 = 0
+		100 = restor.1020	# A Word in Private: the host asks you to carry letters
+		100 = restor.1021	# Asked to Vouch: a suspected member asks you to speak up
+		100 = restor.1022	# By the Fire: the heir or the Keeper, and nobody else awake
+		100 = restor.1023	# A Face You Know: someone you dislike is sworn too
+		100 = restor.1024	# Too Much Wine: the old song, in the yard, at midnight
+	}
+}

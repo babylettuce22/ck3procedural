@@ -30,6 +30,18 @@
 #   restor.0914   day 26   Home                   the ONLY event that pays
 #   restor.0915           the veteran, if one was found: swear them in now or later
 #
+# THE POOL (restor.1100-1199, events/restor_errand_pool_events.txt): the phase also fires two
+# on_actions (common/on_action/00_restor_errand_pool_on_actions.txt), the way vanilla's hunt fires
+# hunt_random_pulse. Each draws one event from a list, or none (20% for a player, 50% for an AI):
+#
+#   day  5   restor_errand_road_pool     the last stretch of road: a bridge, robbers, an inn...
+#   day 14   restor_errand_county_pool   in the county: villagers, tax men, a priest, a widow...
+#   day 22   restor_errand_county_pool   again (never the same event twice in one Errand)
+#
+# Pool events pay for themselves on the spot and never touch the spine's flags, so restor.0914's
+# payment is exactly what it was. Some read the purpose (has_activity_option), some need another
+# of the Sworn riding along, some need the county to belong to an unsworn lord.
+#
 # Exposure scales with the purpose (stirring a county is the loudest thing a member can do), with
 # haste, and with how the witness was handled. See restor.0914.
 #
@@ -220,12 +232,40 @@ activity_restor_errand = {
 					trigger_event = { id = restor.0912 days = 10 }
 					trigger_event = { id = restor.0913 days = 18 }
 					trigger_event = { id = restor.0914 days = 26 }
+					# The random pool: one draw on the road, two in the county.
+					trigger_event = { on_action = restor_errand_road_pool days = 5 }
+					trigger_event = { on_action = restor_errand_county_pool days = 14 }
+					trigger_event = { on_action = restor_errand_county_pool days = 22 }
 				}
 				else = {
 					trigger_event = { id = restor.0911 days = 2 }
 				}
 			}
 		}
+	}
+
+	###################
+	# PULSES
+	###################
+
+	# Small road moments for the activity log (common/activities/pulse_actions/
+	# 00_restor_errand_actions.txt). No favour or exposure: those toast.
+	pulse_actions = {
+		entries = {
+			restor_errand_apa_old_milestone
+			restor_errand_apa_old_songs
+			restor_errand_apa_false_name
+			restor_errand_apa_by_the_fire
+			restor_errand_apa_riders_passed
+			restor_errand_apa_child_asked
+			restor_errand_apa_roadside_shrine
+			restor_errand_apa_thrown_shoe
+			restor_errand_apa_colours_in_window
+			restor_errand_apa_scouted_ahead
+			restor_errand_apa_round_for_a_veteran
+			restor_errand_apa_old_ledger
+		}
+		chance_of_no_event = 20
 	}
 
 	###################

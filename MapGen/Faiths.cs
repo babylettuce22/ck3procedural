@@ -1142,7 +1142,7 @@ public static class Faiths
                 word = baseName + "'s";
             else if (tag.EndsWith("Plural", StringComparison.Ordinal)
                      && words.TryGetValue(tag[..^"Plural".Length], out string? singular))
-                word = singular + "s";
+                word = Language.Plural(singular);
             else
                 word = language.Word(rng, 2, 3);
 

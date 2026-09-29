@@ -22,6 +22,11 @@
 # Every attendee takes +3 exposure when it ends. Once the church is unveiled the Mass is held
 # openly: the exposure effects are no-ops then, and nobody in town has anything to whisper about
 # (cult.0908 only fires in the secret phases).
+#
+# Between the spine's beats, a RANDOM POOL (cult.1000-1099, events/cult_mass_pool_events.txt): each
+# week of the three-week phase the host draws one of fourteen host events and each player guest one
+# of five guest events, or nothing (common/on_action/00_cult_mass_on_actions.txt). PULSE ACTIONS
+# (common/activities/pulse_actions/00_cult_mass_actions.txt) fill the activity window's log.
 
 activity_cult_mass = {
 	activity_group_type = cult_group
@@ -157,7 +162,8 @@ activity_cult_mass = {
 			on_phase_active = {
 				if = {
 					limit = { this = scope:host }
-					scope:activity = { progress_activity_phase_after = { weeks = 2 } }
+					# Three weeks, so the weekly pool below draws two or three nights.
+					scope:activity = { progress_activity_phase_after = { weeks = 3 } }
 					trigger_event = {
 						id = cult.0901
 						days = 1
@@ -181,7 +187,32 @@ activity_cult_mass = {
 					}
 				}
 			}
+
+			# The random pool (cult.1000-1099), vanilla's feast mechanism: each week the host draws
+			# from the host pool and each player guest from the guest pool. See
+			# common/on_action/00_cult_mass_on_actions.txt.
+			on_weekly_pulse = {
+				if = {
+					limit = { this = scope:host }
+					trigger_event = { on_action = cult_mass_host_pool }
+				}
+				else = {
+					trigger_event = { on_action = cult_mass_guest_pool }
+				}
+			}
 		}
+	}
+
+	###################
+	# PULSE ACTIONS
+	###################
+
+	# Small moments in the chapel, for the activity window's log. 00_cult_mass_actions.txt.
+	pulse_actions = {
+		entries = {
+			cult_mass_black_candles cult_mass_word_perfect cult_mass_whispered_name cult_mass_shared_chalice cult_mass_nodded_off cult_mass_old_words cult_mass_studied_rite cult_mass_gold_on_altar cult_mass_mocked_feast cult_mass_watched_openly cult_mass_shaking_hands
+		}
+		chance_of_no_event = 20
 	}
 
 	###################

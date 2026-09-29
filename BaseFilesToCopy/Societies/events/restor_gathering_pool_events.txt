@@ -1,0 +1,2561 @@
+﻿# The Restorationists: the Gathering's random pool. restor.1000-1099.
+#
+# Drawn during the Gathering (common/activities/activity_types/00_restor_gathering_activity.txt) by
+# the phase's on_weekly_pulse, through the on_actions in
+# common/on_action/00_restor_gathering_pool_on_actions.txt -- vanilla's funeral_wake_pulse pattern.
+# The spine (restor.0901-0908) is the same every time; these are what make one Gathering unlike the
+# last.
+#
+#   Host pool -- once per Gathering each (var restor_pool_NNNN on the activity)
+#   1001   Riders on the Road        a late arrival may have been followed
+#   1002   Strike Now or Wait        two of the Sworn quarrel over the plan in front of you
+#   1003   A Doubt at the Table      one guest says another stopped at the usurper's inn
+#   1004   The Heir Among Us         the pretender has come in person, and asks to speak
+#   1005   A Servant at the Door     one of your servants heard too much
+#   1006   To the Last King          the toast to the dead king is yours to give
+#   1007   A Letter from the Heir    the pretender, absent, has written to the hall
+#   1008   An Uninvited Guest        a member brings a courtier nobody asked for
+#   1009   News of the Usurper       at war, ailing, or watching the roads
+#   1010   Counting Swords           the lords pledge men for the rising
+#   1011   A Stranger in Town        someone is asking whose horses fill your stable
+#   1012   Released from the Oath    a frightened member asks to be let go
+#   1013   The Headman at the Gate   a village of the old land asks if the heir is coming
+#   1014   The Keeper's Account      the Keeper wants to hear what you have done
+#
+#   Guest pool -- a 90-day flag each, so a guest does not see the same scene twice
+#   1020   A Word in Private         the host asks you to carry letters
+#   1021   Asked to Vouch            a suspected member wants you to speak up for them
+#   1022   By the Fire               the heir or the Keeper, and nobody else awake
+#   1023   A Face You Know           someone you have no love for is sworn too
+#   1024   Too Much Wine             the old song, in the yard, at midnight
+#
+#   Follow-up
+#   1030   The Watchers Report       from 1003: what the suspect did after the Gathering
+#
+# scope:activity and scope:host ride along from the phase's weekly pulse. Every pool event requires
+# both in its trigger: they are scenes in a hall full of people and mean nothing outside one.
+# Every random outcome ends in a toast (or, for 1003's watchers, a follow-up event that rolls in its
+# immediate and says what it found).
+
+namespace = restor
+
+# =====================================================================================
+#  HOST POOL
+# =====================================================================================
+
+# ---- restor.1001 -- Riders on the Road ---------------------------------------------------------
+restor.1001 = {
+	type = character_event
+	title = restor.1001.t
+	desc = restor.1001.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:restor_late
+		animation = fear
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		scope:activity = {
+			NOT = { has_variable = restor_pool_1001 }
+			any_attending_character = {
+				NOT = { this = scope:host }
+				has_trait = restor_member
+			}
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = {
+			set_variable = { name = restor_pool_1001 }
+			random_attending_character = {
+				limit = {
+					NOT = { this = scope:host }
+					has_trait = restor_member
+				}
+				save_scope_as = restor_late
+			}
+		}
+	}
+
+	# Send men back down the road.
+	option = {
+		name = restor.1001.a
+		random_list = {
+			50 = {
+				modifier = { add = 10 martial >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.1001.a.empty
+					left_icon = root
+					custom_tooltip = restor.1001.a.empty.tt
+				}
+			}
+			30 = {
+				modifier = { add = 10 martial >= 14 }
+				modifier = { add = 10 intrigue >= 14 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1001.a.caught
+					left_icon = root
+					custom_tooltip = restor.1001.a.caught.tt
+					restor_exposure_loss_effect = { VALUE = 2 }
+				}
+			}
+			20 = {
+				modifier = { add = 10 martial < 8 }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1001.a.lost
+					left_icon = root
+					right_icon = scope:restor_late
+					restor_exposure_gain_effect = { VALUE = 3 }
+					restor_their_exposure_gain_effect = { WHO = scope:restor_late VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = brave }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Bar the doors and say nothing.
+	option = {
+		name = restor.1001.b
+		restor_exposure_gain_effect = { VALUE = 2 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = craven }
+			modifier = { add = 10 has_trait = lazy }
+		}
+	}
+
+	# Blame the one who led them here.
+	option = {
+		name = restor.1001.c
+		restor_their_exposure_gain_effect = { WHO = scope:restor_late VALUE = 3 }
+		scope:restor_late = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_scolded_me_opinion
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 25 has_trait = arrogant }
+			modifier = { add = 20 has_trait = wrathful }
+			modifier = { add = -15 has_trait = compassionate }
+		}
+	}
+}
+
+# ---- restor.1002 -- Strike Now or Wait -----------------------------------------------------------
+#
+# Two guests: one who wants the standard raised this year, one who wants to wait. Siding with either
+# makes a friend and a grudge; handing it to the heir is a diplomacy roll that calms both or neither.
+restor.1002 = {
+	type = character_event
+	title = restor.1002.t
+	desc = restor.1002.desc
+	theme = secret
+	left_portrait = {
+		character = scope:restor_hawk
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:restor_dove
+		animation = disapproval
+	}
+	lower_center_portrait = root
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		scope:activity = {
+			NOT = { has_variable = restor_pool_1002 }
+			any_attending_character = {
+				count >= 2
+				NOT = { this = scope:host }
+				has_trait = restor_member
+			}
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = {
+			set_variable = { name = restor_pool_1002 }
+			random_attending_character = {
+				limit = {
+					NOT = { this = scope:host }
+					has_trait = restor_member
+				}
+				weight = {
+					base = 1
+					modifier = { add = 4 has_trait = brave }
+					modifier = { add = 4 has_trait = ambitious }
+					modifier = { add = 3 has_trait = impatient }
+					modifier = { add = 3 has_trait = wrathful }
+				}
+				save_scope_as = restor_hawk
+			}
+			random_attending_character = {
+				limit = {
+					NOT = { this = scope:host }
+					NOT = { this = scope:restor_hawk }
+					has_trait = restor_member
+				}
+				weight = {
+					base = 1
+					modifier = { add = 4 has_trait = craven }
+					modifier = { add = 4 has_trait = patient }
+					modifier = { add = 3 has_trait = paranoid }
+					modifier = { add = 3 has_trait = calm }
+				}
+				save_scope_as = restor_dove
+			}
+		}
+	}
+
+	# The standard this year.
+	option = {
+		name = restor.1002.a
+		scope:restor_hawk = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_took_my_side_opinion
+			}
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = 3
+			}
+		}
+		scope:restor_dove = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_took_their_side_opinion
+			}
+		}
+		restor_exposure_gain_effect = { VALUE = 2 }
+		stress_impact = {
+			patient = minor_stress_impact_gain
+			craven = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 25 has_trait = brave }
+			modifier = { add = 20 has_trait = ambitious }
+			modifier = { add = 15 has_trait = impatient }
+		}
+	}
+
+	# Wait.
+	option = {
+		name = restor.1002.b
+		scope:restor_dove = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_took_my_side_opinion
+			}
+		}
+		scope:restor_hawk = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_took_their_side_opinion
+			}
+		}
+		restor_exposure_loss_effect = { VALUE = 1 }
+		stress_impact = {
+			impatient = minor_stress_impact_gain
+			brave = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 25 has_trait = craven }
+			modifier = { add = 25 has_trait = patient }
+		}
+	}
+
+	# The heir decides, not us.
+	option = {
+		name = restor.1002.c
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+		}
+		random_list = {
+			60 = {
+				modifier = { add = 10 diplomacy >= 12 }
+				modifier = { add = 10 diplomacy >= 16 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1002.c.calm
+					left_icon = scope:restor_hawk
+					right_icon = scope:restor_dove
+					scope:restor_hawk = {
+						add_opinion = {
+							target = root
+							modifier = restor_life_kept_the_peace_opinion
+						}
+					}
+					scope:restor_dove = {
+						add_opinion = {
+							target = root
+							modifier = restor_life_kept_the_peace_opinion
+						}
+					}
+				}
+			}
+			40 = {
+				modifier = { add = 10 diplomacy < 8 }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1002.c.sour
+					left_icon = scope:restor_hawk
+					right_icon = scope:restor_dove
+					scope:restor_hawk = {
+						add_opinion = {
+							target = root
+							modifier = annoyed_opinion
+							opinion = -10
+						}
+					}
+					scope:restor_dove = {
+						add_opinion = {
+							target = root
+							modifier = annoyed_opinion
+							opinion = -10
+						}
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = diplomat }
+			modifier = { add = 15 has_trait = humble }
+		}
+	}
+}
+
+# ---- restor.1003 -- A Doubt at the Table ---------------------------------------------------------
+#
+# The accused is chosen with a lean toward the careless (high exposure), the deceitful and those who
+# think little of the host, so the accusation is sometimes right. The public questioning is an
+# intrigue roll; the quiet watch costs favour and reports later (restor.1030).
+restor.1003 = {
+	type = character_event
+	title = restor.1003.t
+	desc = {
+		desc = restor.1003.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_usurper }
+				desc = restor.1003.desc_usurper
+			}
+			desc = restor.1003.desc_nousurper
+		}
+		desc = restor.1003.desc_end
+	}
+	theme = secret
+	left_portrait = {
+		character = scope:restor_accuser
+		animation = paranoia
+	}
+	right_portrait = {
+		character = scope:restor_suspect
+		animation = idle
+	}
+	lower_center_portrait = root
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		scope:activity = {
+			NOT = { has_variable = restor_pool_1003 }
+			any_attending_character = {
+				count >= 2
+				NOT = { this = scope:host }
+				has_trait = restor_member
+			}
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = {
+			set_variable = { name = restor_pool_1003 }
+			random_attending_character = {
+				limit = {
+					NOT = { this = scope:host }
+					has_trait = restor_member
+				}
+				weight = {
+					base = 1
+					modifier = {
+						add = 4
+						has_variable = restor_exposure
+						var:restor_exposure >= 10
+					}
+					modifier = { add = 3 has_trait = deceitful }
+					modifier = {
+						add = 3
+						opinion = {
+							target = scope:host
+							value < 0
+						}
+					}
+				}
+				save_scope_as = restor_suspect
+			}
+			random_attending_character = {
+				limit = {
+					NOT = { this = scope:host }
+					NOT = { this = scope:restor_suspect }
+					has_trait = restor_member
+				}
+				weight = {
+					base = 1
+					modifier = { add = 4 has_trait = paranoid }
+					modifier = { add = 2 has_trait = honest }
+				}
+				save_scope_as = restor_accuser
+			}
+		}
+	}
+
+	# Put it to them in front of everyone.
+	option = {
+		name = restor.1003.a
+		random_list = {
+			55 = {
+				modifier = { add = 10 has_trait = honest }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.1003.a.answer
+					left_icon = scope:restor_suspect
+					custom_tooltip = restor.1003.a.answer.tt
+					scope:restor_suspect = {
+						add_opinion = {
+							target = root
+							modifier = hurt_opinion
+							opinion = -20
+						}
+						add_opinion = {
+							target = scope:restor_accuser
+							modifier = angry_opinion
+							opinion = -20
+						}
+					}
+				}
+			}
+			30 = {
+				modifier = { add = 10 intrigue >= 12 }
+				modifier = { add = 10 intrigue >= 16 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1003.a.loose
+					left_icon = scope:restor_suspect
+					custom_tooltip = restor.1003.a.loose.tt
+					restor_their_exposure_gain_effect = { WHO = scope:restor_suspect VALUE = 5 }
+					scope:restor_suspect = {
+						add_trait_xp = {
+							trait = restor_member
+							track = restor_rank
+							value = -10
+						}
+					}
+					restor_exposure_loss_effect = { VALUE = 2 }
+				}
+			}
+			15 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1003.a.walks
+					left_icon = scope:restor_suspect
+					scope:restor_suspect = {
+						add_opinion = {
+							target = root
+							modifier = restor_named_before_the_sworn_opinion
+						}
+					}
+					restor_their_exposure_gain_effect = { WHO = scope:restor_suspect VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = paranoid }
+			modifier = { add = 15 has_trait = wrathful }
+			modifier = { add = -15 has_trait = trusting }
+		}
+	}
+
+	# Have them watched afterwards.
+	option = {
+		name = restor.1003.b
+		trigger = {
+			has_variable = restor_favour
+			var:restor_favour >= 10
+		}
+		restor_favour_spend_effect = { VALUE = 10 }
+		custom_tooltip = restor.1003.b.tt
+		hidden_effect = {
+			trigger_event = {
+				id = restor.1030
+				days = { 30 60 }
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = deceitful }
+			modifier = { add = 15 has_trait = patient }
+		}
+	}
+
+	# Drop it.
+	option = {
+		name = restor.1003.c
+		scope:restor_accuser = {
+			add_opinion = {
+				target = root
+				modifier = disappointed_opinion
+				opinion = -10
+			}
+		}
+		stress_impact = {
+			paranoid = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = trusting }
+			modifier = { add = 15 has_trait = forgiving }
+		}
+	}
+}
+
+# ---- restor.1004 -- The Heir Among Us ------------------------------------------------------------
+restor.1004 = {
+	type = character_event
+	title = restor.1004.t
+	desc = restor.1004.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_honorable
+	}
+	right_portrait = {
+		character = scope:restor_pretender
+		animation = personality_bold
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		exists = global_var:restor_pretender
+		NOT = { this = global_var:restor_pretender }
+		scope:activity = {
+			NOT = { has_variable = restor_pool_1004 }
+			any_attending_character = { this = global_var:restor_pretender }
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = { set_variable = { name = restor_pool_1004 } }
+	}
+
+	# Let the heir speak.
+	option = {
+		name = restor.1004.a
+		scope:activity = {
+			every_attending_character = {
+				limit = {
+					has_trait = restor_member
+					NOT = { this = scope:restor_pretender }
+				}
+				add_opinion = {
+					target = scope:restor_pretender
+					modifier = respect_opinion
+					opinion = 10
+				}
+				add_trait_xp = {
+					trait = restor_member
+					track = restor_rank
+					value = 3
+				}
+			}
+		}
+		scope:restor_pretender = { add_prestige = minor_prestige_gain }
+		restor_exposure_gain_effect = { VALUE = 2 }
+		ai_chance = {
+			base = 45
+			modifier = { add = 20 has_trait = zealous }
+			modifier = { add = 20 has_trait = gregarious }
+		}
+	}
+
+	# Better that fewer of them see the heir's face.
+	option = {
+		name = restor.1004.b
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = disappointed_opinion
+				opinion = -10
+			}
+		}
+		restor_exposure_loss_effect = { VALUE = 2 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = paranoid }
+			modifier = { add = 20 has_trait = craven }
+		}
+	}
+
+	# Kneel first, so they all see it.
+	option = {
+		name = restor.1004.c
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_served_the_house_opinion
+			}
+		}
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 5
+		}
+		restor_exposure_gain_effect = { VALUE = 3 }
+		stress_impact = {
+			arrogant = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			modifier = { add = 25 has_trait = humble }
+			modifier = { add = 15 has_trait = honest }
+			modifier = { add = -20 has_trait = arrogant }
+		}
+	}
+}
+
+# ---- restor.1005 -- A Servant at the Door --------------------------------------------------------
+restor.1005 = {
+	type = character_event
+	title = restor.1005.t
+	desc = restor.1005.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		scope:activity = { NOT = { has_variable = restor_pool_1005 } }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = { set_variable = { name = restor_pool_1005 } }
+	}
+
+	# Pay for silence.
+	option = {
+		name = restor.1005.a
+		trigger = { gold >= 25 }
+		remove_short_term_gold = 25
+		random_list = {
+			75 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1005.a.quiet
+					left_icon = root
+					custom_tooltip = restor.1005.a.quiet.tt
+				}
+			}
+			25 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1005.a.talks
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = generous }
+			modifier = { add = -25 has_trait = greedy }
+		}
+	}
+
+	# Frighten them.
+	option = {
+		name = restor.1005.b
+		add_dread = minor_dread_gain
+		random_list = {
+			65 = {
+				modifier = { add = 15 dread >= 40 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1005.b.quiet
+					left_icon = root
+					custom_tooltip = restor.1005.b.quiet.tt
+				}
+			}
+			35 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1005.b.runs
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = callous }
+			modifier = { add = 25 has_trait = sadistic }
+			modifier = { add = -20 has_trait = compassionate }
+		}
+	}
+
+	# Ask where their loyalties lie.
+	option = {
+		name = restor.1005.c
+		random_list = {
+			40 = {
+				modifier = { add = 10 diplomacy >= 12 }
+				modifier = { add = 10 learning >= 12 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1005.c.loyal
+					left_icon = root
+					custom_tooltip = restor.1005.c.loyal.tt
+					restor_favour_gain_effect = { VALUE = 5 }
+				}
+			}
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1005.c.liar
+					left_icon = root
+					custom_tooltip = restor.1005.c.liar.tt
+					restor_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 25
+			modifier = { add = 20 has_trait = trusting }
+			modifier = { add = 15 has_trait = compassionate }
+		}
+	}
+}
+
+# ---- restor.1006 -- To the Last King ---------------------------------------------------------------
+restor.1006 = {
+	type = character_event
+	title = restor.1006.t
+	desc = restor.1006.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = toast
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+			scope:activity = { any_attending_character = { this = scope:restor_pretender } }
+		}
+		character = scope:restor_pretender
+		animation = happiness
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		scope:activity = { NOT = { has_variable = restor_pool_1006 } }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = { set_variable = { name = restor_pool_1006 } }
+	}
+
+	# Say his name aloud.
+	option = {
+		name = restor.1006.a
+		scope:activity = {
+			every_attending_character = {
+				limit = { has_trait = restor_member }
+				add_stress = minor_stress_loss
+			}
+		}
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 2
+		}
+		restor_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = gregarious }
+			modifier = { add = 20 has_trait = zealous }
+		}
+	}
+
+	# To the heir, who is alive.
+	option = {
+		name = restor.1006.b
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+		}
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = respect_opinion
+				opinion = 10
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 5 }
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = ambitious }
+		}
+	}
+
+	# In silence.
+	option = {
+		name = restor.1006.c
+		restor_exposure_loss_effect = { VALUE = 1 }
+		stress_impact = {
+			gregarious = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = paranoid }
+			modifier = { add = 20 has_trait = shy }
+		}
+	}
+}
+
+# ---- restor.1007 -- A Letter from the Heir -------------------------------------------------------
+restor.1007 = {
+	type = character_event
+	title = restor.1007.t
+	desc = restor.1007.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = reading
+	}
+	right_portrait = {
+		character = scope:restor_pretender
+		animation = personality_rational
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		exists = global_var:restor_pretender
+		NOT = { this = global_var:restor_pretender }
+		scope:activity = {
+			NOT = { has_variable = restor_pool_1007 }
+			NOT = { any_attending_character = { this = global_var:restor_pretender } }
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = { set_variable = { name = restor_pool_1007 } }
+	}
+
+	# Read it aloud.
+	option = {
+		name = restor.1007.a
+		restor_gathering_reward_hall_effect = { XP = 3 FAVOUR = 5 }
+		restor_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 45
+			modifier = { add = 20 has_trait = gregarious }
+			modifier = { add = 15 has_trait = honest }
+		}
+	}
+
+	# Read it, then burn it.
+	option = {
+		name = restor.1007.b
+		restor_favour_gain_effect = { VALUE = 5 }
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 2
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 25 has_trait = paranoid }
+			modifier = { add = 15 has_trait = shy }
+		}
+	}
+
+	# Keep it.
+	option = {
+		name = restor.1007.c
+		add_prestige = minor_prestige_gain
+		restor_exposure_gain_effect = { VALUE = 4 }
+		custom_tooltip = restor.1007.c.tt
+		ai_chance = {
+			base = 20
+			modifier = { add = 25 has_trait = ambitious }
+			modifier = { add = 15 has_trait = arrogant }
+		}
+	}
+}
+
+# ---- restor.1008 -- An Uninvited Guest -----------------------------------------------------------
+#
+# A guest has brought an adult of their own court who is not sworn: restor_recruitable_trigger, so
+# never a cult member, the usurper, a prisoner or someone who refused lately.
+restor.1008 = {
+	type = character_event
+	title = restor.1008.t
+	desc = restor.1008.desc
+	theme = secret
+	left_portrait = {
+		character = scope:restor_sponsor
+		animation = personality_bold
+	}
+	right_portrait = {
+		character = scope:restor_newcomer
+		animation = worry
+	}
+	lower_center_portrait = root
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		scope:activity = {
+			NOT = { has_variable = restor_pool_1008 }
+			any_attending_character = {
+				NOT = { this = scope:host }
+				has_trait = restor_member
+				any_courtier = {
+					restor_recruitable_trigger = yes
+					NOT = { this = scope:host }
+				}
+			}
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = {
+			set_variable = { name = restor_pool_1008 }
+			random_attending_character = {
+				limit = {
+					NOT = { this = scope:host }
+					has_trait = restor_member
+					any_courtier = {
+						restor_recruitable_trigger = yes
+						NOT = { this = scope:host }
+					}
+				}
+				save_scope_as = restor_sponsor
+			}
+		}
+		scope:restor_sponsor = {
+			random_courtier = {
+				limit = {
+					restor_recruitable_trigger = yes
+					NOT = { this = scope:host }
+				}
+				weight = {
+					base = 1
+					modifier = { add = 3 opinion = { target = scope:restor_sponsor value >= 20 } }
+				}
+				save_scope_as = restor_newcomer
+			}
+		}
+	}
+
+	# Swear them in now.
+	option = {
+		name = restor.1008.a
+		custom_tooltip = restor.1008.a.tt
+		hidden_effect = {
+			scope:restor_newcomer = {
+				restor_swear_in_effect = { RANK = 0 }
+				add_opinion = {
+					target = scope:restor_sponsor
+					modifier = restor_brought_me_in_opinion
+				}
+			}
+			restor_support_refresh_effect = yes
+		}
+		restor_gathering_their_favour_gain_effect = { WHO = scope:restor_sponsor VALUE = 10 }
+		restor_exposure_gain_effect = { VALUE = 2 }
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = trusting }
+			modifier = { add = 20 has_trait = gregarious }
+			modifier = { add = -20 has_trait = paranoid }
+		}
+	}
+
+	# Send them home with a warning.
+	option = {
+		name = restor.1008.b
+		scope:restor_sponsor = {
+			add_opinion = {
+				target = root
+				modifier = disappointed_opinion
+				opinion = -10
+			}
+		}
+		random_list = {
+			70 = {
+				modifier = { add = 10 dread >= 30 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1008.b.quiet
+					left_icon = scope:restor_newcomer
+					custom_tooltip = restor.1008.b.quiet.tt
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1008.b.talks
+					left_icon = scope:restor_newcomer
+					right_icon = scope:restor_sponsor
+					restor_exposure_gain_effect = { VALUE = 3 }
+					restor_their_exposure_gain_effect = { WHO = scope:restor_sponsor VALUE = 5 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 25 has_trait = paranoid }
+			modifier = { add = 10 has_trait = cynical }
+		}
+	}
+
+	# Both of them wait in the yard until morning.
+	option = {
+		name = restor.1008.c
+		scope:restor_sponsor = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_scolded_me_opinion
+			}
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = -5
+			}
+		}
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 3
+		}
+		restor_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 25
+			modifier = { add = 25 has_trait = arrogant }
+			modifier = { add = 20 has_trait = stubborn }
+		}
+	}
+}
+
+# ---- restor.1009 -- News of the Usurper ----------------------------------------------------------
+#
+# Three kinds of news: at war, ailing, or tightening the roads. The first two open a county of the
+# crown in the usurper's realm to the Sworn (stirred for ten years, support recounted); the third
+# lets the whole hall go home by the back roads.
+restor.1009 = {
+	type = character_event
+	title = restor.1009.t
+	desc = {
+		desc = restor.1009.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:restor_usurper = { is_at_war = yes } }
+				desc = restor.1009.desc_war
+			}
+			triggered_desc = {
+				trigger = { scope:restor_usurper = { is_healthy = no } }
+				desc = restor.1009.desc_ill
+			}
+			desc = restor.1009.desc_roads
+		}
+		desc = restor.1009.desc_end
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:restor_usurper
+		animation = personality_callous
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		exists = global_var:restor_usurper
+		global_var:restor_usurper = { is_alive = yes }
+		NOT = { this = global_var:restor_usurper }
+		scope:activity = { NOT = { has_variable = restor_pool_1009 } }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = { set_variable = { name = restor_pool_1009 } }
+		scope:restor_crown = {
+			random_de_jure_county = {
+				limit = {
+					NOT = { has_county_modifier = restor_county_stirred }
+					exists = holder
+					holder = {
+						OR = {
+							this = scope:restor_usurper
+							any_liege_or_above = { this = scope:restor_usurper }
+						}
+					}
+				}
+				save_scope_as = restor_news_county
+			}
+		}
+	}
+
+	# While the usurper looks elsewhere, stir a county.
+	option = {
+		name = restor.1009.a
+		trigger = {
+			exists = scope:restor_news_county
+			scope:restor_usurper = {
+				OR = {
+					is_at_war = yes
+					is_healthy = no
+				}
+			}
+		}
+		scope:restor_news_county = {
+			add_county_modifier = {
+				modifier = restor_county_stirred
+				years = 10
+			}
+		}
+		restor_exposure_gain_effect = { VALUE = 4 }
+		hidden_effect = { restor_support_refresh_effect = yes }
+		custom_tooltip = restor.1009.a.tt
+		ai_chance = {
+			base = 45
+			modifier = { add = 20 has_trait = ambitious }
+			modifier = { add = 20 has_trait = brave }
+		}
+	}
+
+	# Everyone goes home by the back roads.
+	option = {
+		name = restor.1009.d
+		trigger = {
+			scope:restor_usurper = {
+				is_at_war = no
+				is_healthy = yes
+			}
+		}
+		restor_gathering_hall_exposure_loss_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = paranoid }
+			modifier = { add = 15 has_trait = patient }
+		}
+	}
+
+	# Send word to the heir.
+	option = {
+		name = restor.1009.b
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+		}
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = trust_opinion
+				opinion = 10
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 5 }
+		restor_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = honest }
+		}
+	}
+
+	# It changes nothing.
+	option = {
+		name = restor.1009.c
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 2
+		}
+		stress_impact = {
+			impatient = minor_stress_impact_gain
+			ambitious = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = patient }
+			modifier = { add = 15 has_trait = calm }
+		}
+	}
+}
+
+# ---- restor.1010 -- Counting Swords --------------------------------------------------------------
+restor.1010 = {
+	type = character_event
+	title = restor.1010.t
+	desc = restor.1010.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = marshal
+	}
+	right_portrait = {
+		character = scope:restor_sword_lord
+		animation = personality_bold
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		scope:activity = {
+			NOT = { has_variable = restor_pool_1010 }
+			any_attending_character = {
+				NOT = { this = scope:host }
+				has_trait = restor_member
+				is_landed = yes
+			}
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = {
+			set_variable = { name = restor_pool_1010 }
+			ordered_attending_character = {
+				limit = {
+					NOT = { this = scope:host }
+					has_trait = restor_member
+					is_landed = yes
+				}
+				order_by = max_military_strength
+				save_scope_as = restor_sword_lord
+			}
+		}
+		save_scope_value_as = {
+			name = restor_sword_lords
+			value = {
+				value = 0
+				scope:activity = {
+					every_attending_character = {
+						limit = {
+							NOT = { this = scope:host }
+							has_trait = restor_member
+							is_landed = yes
+						}
+						add = 1
+					}
+				}
+			}
+		}
+	}
+
+	# Write the pledges down.
+	option = {
+		name = restor.1010.a
+		scope:activity = {
+			every_attending_character = {
+				limit = {
+					NOT = { this = scope:host }
+					has_trait = restor_member
+					is_landed = yes
+				}
+				add_trait_xp = {
+					trait = restor_member
+					track = restor_rank
+					value = 3
+				}
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 10 }
+		restor_exposure_gain_effect = { VALUE = 3 }
+		custom_tooltip = restor.1010.a.tt
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = diligent }
+			modifier = { add = 15 has_trait = ambitious }
+		}
+	}
+
+	# Nobody writes anything down.
+	option = {
+		name = restor.1010.b
+		scope:activity = {
+			every_attending_character = {
+				limit = {
+					NOT = { this = scope:host }
+					has_trait = restor_member
+					is_landed = yes
+				}
+				add_trait_xp = {
+					trait = restor_member
+					track = restor_rank
+					value = 1
+				}
+			}
+		}
+		add_diplomacy_lifestyle_xp = minor_lifestyle_xp
+		ai_chance = {
+			base = 35
+			modifier = { add = 25 has_trait = paranoid }
+			modifier = { add = 15 has_trait = deceitful }
+		}
+	}
+
+	# Coin for the heir instead.
+	option = {
+		name = restor.1010.c
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+			scope:activity = {
+				any_attending_character = {
+					NOT = { this = scope:host }
+					NOT = { this = scope:restor_pretender }
+					has_trait = restor_member
+					is_landed = yes
+					gold >= 50
+				}
+			}
+		}
+		scope:activity = {
+			every_attending_character = {
+				limit = {
+					NOT = { this = scope:host }
+					NOT = { this = scope:restor_pretender }
+					has_trait = restor_member
+					is_landed = yes
+					gold >= 50
+				}
+				pay_short_term_gold = {
+					target = scope:restor_pretender
+					gold = 25
+				}
+				add_opinion = {
+					target = root
+					modifier = annoyed_opinion
+					opinion = -5
+				}
+			}
+		}
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 10
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 10 }
+		ai_chance = {
+			base = 20
+			modifier = { add = 25 has_trait = greedy }
+			modifier = { add = 15 has_trait = ambitious }
+		}
+	}
+}
+
+# ---- restor.1011 -- A Stranger in Town -----------------------------------------------------------
+restor.1011 = {
+	type = character_event
+	title = restor.1011.t
+	desc = restor.1011.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		scope:activity = { NOT = { has_variable = restor_pool_1011 } }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = { set_variable = { name = restor_pool_1011 } }
+	}
+
+	# Have the stranger followed.
+	option = {
+		name = restor.1011.a
+		random_list = {
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.1011.a.merchant
+					left_icon = root
+					custom_tooltip = restor.1011.a.merchant.tt
+				}
+			}
+			35 = {
+				modifier = { add = 10 intrigue >= 12 }
+				modifier = { add = 10 intrigue >= 16 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1011.a.followed
+					left_icon = root
+					custom_tooltip = restor.1011.a.followed.tt
+					restor_exposure_loss_effect = { VALUE = 2 }
+					add_intrigue_lifestyle_xp = minor_lifestyle_xp
+				}
+			}
+			25 = {
+				modifier = { add = 10 intrigue < 8 }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1011.a.noticed
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = deceitful }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Down to the cellar; stop the riders coming and going.
+	option = {
+		name = restor.1011.b
+		restor_gathering_hall_exposure_loss_effect = { VALUE = 1 }
+		stress_impact = {
+			impatient = minor_stress_impact_gain
+			gregarious = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 25 has_trait = craven }
+			modifier = { add = 15 has_trait = patient }
+		}
+	}
+
+	# Invite the stranger to dinner.
+	option = {
+		name = restor.1011.c
+		random_list = {
+			50 = {
+				modifier = { add = 10 diplomacy >= 12 }
+				modifier = { add = 10 has_trait = deceitful }
+				modifier = { add = 10 has_trait = gregarious }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1011.c.good
+					left_icon = root
+					custom_tooltip = restor.1011.c.good.tt
+					restor_exposure_loss_effect = { VALUE = 1 }
+					add_prestige = minor_prestige_gain
+				}
+			}
+			50 = {
+				modifier = { add = 10 has_trait = shy }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1011.c.bad
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 25 has_trait = brave }
+			modifier = { add = 15 has_trait = gregarious }
+			modifier = { add = -15 has_trait = craven }
+		}
+	}
+}
+
+# ---- restor.1012 -- Released from the Oath -------------------------------------------------------
+#
+# Never the pretender, the Keeper, or one of the house: those do not get to go home.
+restor.1012 = {
+	type = character_event
+	title = restor.1012.t
+	desc = restor.1012.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:restor_leaver
+		animation = beg
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		scope:activity = {
+			NOT = { has_variable = restor_pool_1012 }
+			any_attending_character = {
+				NOT = { this = scope:host }
+				has_trait = restor_member
+				NOT = { restor_is_pretender_trigger = yes }
+				NOT = { restor_is_keeper_trigger = yes }
+				NOT = { restor_of_the_blood_trigger = yes }
+				OR = {
+					has_trait = craven
+					has_trait = paranoid
+					has_trait = content
+					NOT = { restor_rank_at_least_trigger = { RANK = 25 } }
+				}
+			}
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = {
+			set_variable = { name = restor_pool_1012 }
+			random_attending_character = {
+				limit = {
+					NOT = { this = scope:host }
+					has_trait = restor_member
+					NOT = { restor_is_pretender_trigger = yes }
+					NOT = { restor_is_keeper_trigger = yes }
+					NOT = { restor_of_the_blood_trigger = yes }
+					OR = {
+						has_trait = craven
+						has_trait = paranoid
+						has_trait = content
+						NOT = { restor_rank_at_least_trigger = { RANK = 25 } }
+					}
+				}
+				save_scope_as = restor_leaver
+			}
+		}
+	}
+
+	# Release them.
+	option = {
+		name = restor.1012.a
+		scope:restor_leaver = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 15
+			}
+			restor_gathering_release_member_effect = yes
+		}
+		random_list = {
+			70 = {
+				modifier = { add = 10 scope:restor_leaver = { has_trait = honest } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1012.a.silent
+					left_icon = scope:restor_leaver
+					custom_tooltip = restor.1012.a.silent.tt
+				}
+			}
+			30 = {
+				modifier = { add = 10 scope:restor_leaver = { has_trait = deceitful } }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1012.a.talks
+					left_icon = scope:restor_leaver
+					restor_exposure_gain_effect = { VALUE = 5 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = compassionate }
+			modifier = { add = 15 has_trait = forgiving }
+		}
+	}
+
+	# Talk them round.
+	option = {
+		name = restor.1012.b
+		random_list = {
+			60 = {
+				modifier = { add = 10 diplomacy >= 12 }
+				modifier = { add = 10 diplomacy >= 16 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1012.b.stays
+					left_icon = scope:restor_leaver
+					scope:restor_leaver = {
+						add_trait_xp = {
+							trait = restor_member
+							track = restor_rank
+							value = 5
+						}
+						add_stress = minor_stress_gain
+					}
+				}
+			}
+			40 = {
+				modifier = { add = 10 diplomacy < 8 }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1012.b.goes
+					left_icon = scope:restor_leaver
+					scope:restor_leaver = { restor_gathering_release_member_effect = yes }
+					restor_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = diplomat }
+			modifier = { add = 15 has_trait = gregarious }
+		}
+	}
+
+	# Remind them what happens to those who talk.
+	option = {
+		name = restor.1012.c
+		add_dread = minor_dread_gain
+		scope:restor_leaver = {
+			add_opinion = {
+				target = root
+				modifier = scared_opinion
+				opinion = -15
+			}
+			add_stress = medium_stress_gain
+		}
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			just = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			modifier = { add = 30 has_trait = callous }
+			modifier = { add = 20 has_trait = wrathful }
+			modifier = { add = -20 has_trait = compassionate }
+		}
+	}
+}
+
+# ---- restor.1013 -- The Headman at the Gate ------------------------------------------------------
+#
+# Only when the host's own seat is a county of the crown that nobody has stirred yet: the village
+# asks the question the Sworn would like the whole land to be asking.
+restor.1013 = {
+	type = character_event
+	title = restor.1013.t
+	desc = restor.1013.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		exists = capital_county
+		capital_county = {
+			restor_crown_county_trigger = yes
+			NOT = { has_county_modifier = restor_county_stirred }
+		}
+		scope:activity = { NOT = { has_variable = restor_pool_1013 } }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = { set_variable = { name = restor_pool_1013 } }
+		capital_county = { save_scope_as = restor_home_county }
+	}
+
+	# Tell him yes.
+	option = {
+		name = restor.1013.a
+		scope:restor_home_county = {
+			add_county_modifier = {
+				modifier = restor_county_stirred
+				years = 10
+			}
+		}
+		restor_exposure_gain_effect = { VALUE = 4 }
+		hidden_effect = { restor_support_refresh_effect = yes }
+		ai_chance = {
+			base = 35
+			modifier = { add = 25 has_trait = brave }
+			modifier = { add = 15 has_trait = zealous }
+		}
+	}
+
+	# Tell him he has been listening to fools.
+	option = {
+		name = restor.1013.b
+		custom_tooltip = restor.1013.b.tt
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 25 has_trait = craven }
+			modifier = { add = 20 has_trait = deceitful }
+		}
+	}
+
+	# Bread and a place by the fire, and no answer.
+	option = {
+		name = restor.1013.c
+		add_piety = minor_piety_gain
+		restor_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = compassionate }
+			modifier = { add = 15 has_trait = generous }
+		}
+	}
+}
+
+# ---- restor.1014 -- The Keeper's Account ---------------------------------------------------------
+restor.1014 = {
+	type = character_event
+	title = restor.1014.t
+	desc = restor.1014.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		character = scope:restor_keeper
+		animation = interested
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		exists = scope:activity
+		exists = scope:host
+		this = scope:host
+		exists = global_var:restor_keeper
+		NOT = { this = global_var:restor_keeper }
+		scope:activity = {
+			NOT = { has_variable = restor_pool_1014 }
+			any_attending_character = { this = global_var:restor_keeper }
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		scope:activity = { set_variable = { name = restor_pool_1014 } }
+	}
+
+	# The truth, no more.
+	option = {
+		name = restor.1014.a
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 3
+		}
+		scope:restor_keeper = {
+			add_opinion = {
+				target = root
+				modifier = trust_opinion
+				opinion = 5
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 25 has_trait = honest }
+			modifier = { add = 15 has_trait = humble }
+		}
+	}
+
+	# Make it sound better than it was.
+	option = {
+		name = restor.1014.b
+		random_list = {
+			55 = {
+				modifier = { add = 10 intrigue >= 12 }
+				modifier = { add = 10 has_trait = deceitful }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1014.b.impressed
+					left_icon = scope:restor_keeper
+					restor_favour_gain_effect = { VALUE = 15 }
+					scope:restor_keeper = {
+						add_opinion = {
+							target = root
+							modifier = impressed_opinion
+							opinion = 10
+						}
+					}
+				}
+			}
+			45 = {
+				modifier = { add = 10 scope:restor_keeper = { intrigue >= 14 } }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1014.b.seen
+					left_icon = scope:restor_keeper
+					restor_favour_spend_effect = { VALUE = 10 }
+					scope:restor_keeper = {
+						add_opinion = {
+							target = root
+							modifier = disappointed_opinion
+							opinion = -15
+						}
+					}
+				}
+			}
+		}
+		stress_impact = {
+			honest = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			modifier = { add = 25 has_trait = deceitful }
+			modifier = { add = 15 has_trait = arrogant }
+			modifier = { add = -20 has_trait = honest }
+		}
+	}
+
+	# Ask for more to do.
+	option = {
+		name = restor.1014.c
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 2
+		}
+		scope:restor_keeper = {
+			add_opinion = {
+				target = root
+				modifier = respect_opinion
+				opinion = 10
+			}
+		}
+		restor_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = ambitious }
+			modifier = { add = 20 has_trait = diligent }
+		}
+	}
+}
+
+# =====================================================================================
+#  GUEST POOL
+# =====================================================================================
+
+# ---- restor.1020 -- A Word in Private ------------------------------------------------------------
+restor.1020 = {
+	type = character_event
+	title = restor.1020.t
+	desc = restor.1020.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:host
+		animation = scheme
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:activity
+		exists = scope:host
+		NOT = { this = scope:host }
+		NOT = { has_character_flag = restor_pool_had_1020 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = {
+			flag = restor_pool_had_1020
+			days = 90
+		}
+	}
+
+	# I'll carry them.
+	option = {
+		name = restor.1020.a
+		restor_favour_gain_effect = { VALUE = 10 }
+		restor_exposure_gain_effect = { VALUE = 3 }
+		scope:host = {
+			add_opinion = {
+				target = root
+				modifier = trust_opinion
+				opinion = 10
+			}
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = 20 has_trait = brave }
+			modifier = { add = 15 has_trait = diligent }
+		}
+	}
+
+	# Find someone else.
+	option = {
+		name = restor.1020.b
+		scope:host = {
+			add_opinion = {
+				target = root
+				modifier = disappointed_opinion
+				opinion = -5
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 25 has_trait = craven }
+			modifier = { add = 20 has_trait = paranoid }
+			modifier = {
+				add = 30
+				has_variable = restor_exposure
+				var:restor_exposure >= 12
+			}
+		}
+	}
+}
+
+# ---- restor.1021 -- Asked to Vouch ---------------------------------------------------------------
+restor.1021 = {
+	type = character_event
+	title = restor.1021.t
+	desc = restor.1021.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:restor_vouchee
+		animation = beg
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:activity
+		exists = scope:host
+		NOT = { this = scope:host }
+		NOT = { has_character_flag = restor_pool_had_1021 }
+		scope:activity = {
+			any_attending_character = {
+				NOT = { this = root }
+				NOT = { this = scope:host }
+				has_trait = restor_member
+				has_variable = restor_exposure
+				var:restor_exposure >= 8
+			}
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = {
+			flag = restor_pool_had_1021
+			days = 90
+		}
+		scope:activity = {
+			random_attending_character = {
+				limit = {
+					NOT = { this = root }
+					NOT = { this = scope:host }
+					has_trait = restor_member
+					has_variable = restor_exposure
+					var:restor_exposure >= 8
+				}
+				save_scope_as = restor_vouchee
+			}
+		}
+	}
+
+	# I'll speak for you.
+	option = {
+		name = restor.1021.a
+		restor_their_exposure_loss_effect = { WHO = scope:restor_vouchee VALUE = 3 }
+		restor_exposure_gain_effect = { VALUE = 2 }
+		scope:restor_vouchee = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 15
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 25 has_trait = compassionate }
+			modifier = { add = 15 has_trait = generous }
+		}
+	}
+
+	# I'll speak for you, and you'll owe me.
+	option = {
+		name = restor.1021.b
+		restor_their_exposure_loss_effect = { WHO = scope:restor_vouchee VALUE = 3 }
+		restor_exposure_gain_effect = { VALUE = 2 }
+		if = {
+			limit = {
+				can_add_hook = {
+					target = scope:restor_vouchee
+					type = favor_hook
+				}
+			}
+			add_hook = {
+				type = favor_hook
+				target = scope:restor_vouchee
+			}
+		}
+		else = {
+			custom_tooltip = restor.1021.b.nohook_tt
+		}
+		scope:restor_vouchee = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 5
+			}
+		}
+		ai_chance = {
+			base = 25
+			modifier = { add = 25 has_trait = greedy }
+			modifier = { add = 20 has_trait = ambitious }
+			modifier = { add = 15 has_trait = deceitful }
+		}
+	}
+
+	# You made this trouble yourself.
+	option = {
+		name = restor.1021.c
+		scope:restor_vouchee = {
+			add_opinion = {
+				target = root
+				modifier = refusal_opinion
+				opinion = -10
+			}
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 25 has_trait = paranoid }
+			modifier = { add = 20 has_trait = callous }
+		}
+	}
+}
+
+# ---- restor.1022 -- By the Fire ------------------------------------------------------------------
+#
+# The heir if they are in the hall and are not you; else the Keeper, likewise.
+restor.1022 = {
+	type = character_event
+	title = restor.1022.t
+	desc = {
+		desc = restor.1022.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_pretender
+					scope:restor_elder = scope:restor_pretender
+				}
+				desc = restor.1022.desc_heir
+			}
+			desc = restor.1022.desc_keeper
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = personality_rational
+	}
+	right_portrait = {
+		character = scope:restor_elder
+		animation = interested
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:activity
+		exists = scope:host
+		NOT = { this = scope:host }
+		NOT = { has_character_flag = restor_pool_had_1022 }
+		scope:activity = {
+			any_attending_character = {
+				NOT = { this = root }
+				OR = {
+					restor_is_pretender_trigger = yes
+					restor_is_keeper_trigger = yes
+				}
+			}
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = {
+			flag = restor_pool_had_1022
+			days = 90
+		}
+		if = {
+			limit = {
+				scope:activity = {
+					any_attending_character = {
+						NOT = { this = root }
+						restor_is_pretender_trigger = yes
+					}
+				}
+			}
+			scope:restor_pretender = { save_scope_as = restor_elder }
+		}
+		else = {
+			scope:restor_keeper = { save_scope_as = restor_elder }
+		}
+	}
+
+	# Tell them everything I have done.
+	option = {
+		name = restor.1022.a
+		random_list = {
+			60 = {
+				modifier = { add = 10 diplomacy >= 12 }
+				modifier = { add = 10 restor_rank_at_least_trigger = { RANK = 50 } }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1022.a.good
+					left_icon = scope:restor_elder
+					add_trait_xp = {
+						trait = restor_member
+						track = restor_rank
+						value = 5
+					}
+					scope:restor_elder = {
+						add_opinion = {
+							target = root
+							modifier = respect_opinion
+							opinion = 10
+						}
+					}
+				}
+			}
+			40 = {
+				modifier = { add = 15 has_trait = arrogant }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1022.a.bad
+					left_icon = scope:restor_elder
+					scope:restor_elder = {
+						add_opinion = {
+							target = root
+							modifier = restor_life_boasted_opinion
+						}
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 25 has_trait = ambitious }
+			modifier = { add = 15 has_trait = arrogant }
+		}
+	}
+
+	# Ask about the old kings.
+	option = {
+		name = restor.1022.b
+		add_learning_lifestyle_xp = minor_lifestyle_xp
+		add_stress = minor_stress_loss
+		scope:restor_elder = {
+			add_opinion = {
+				target = root
+				modifier = friendliness_opinion
+				opinion = 5
+			}
+		}
+		ai_chance = {
+			base = 35
+			modifier = { add = 20 has_trait = scholar }
+			modifier = { add = 15 has_trait = humble }
+		}
+	}
+
+	# Say little and listen.
+	option = {
+		name = restor.1022.c
+		restor_exposure_loss_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = shy }
+			modifier = { add = 15 has_trait = paranoid }
+		}
+	}
+}
+
+# ---- restor.1023 -- A Face You Know --------------------------------------------------------------
+restor.1023 = {
+	type = character_event
+	title = restor.1023.t
+	desc = restor.1023.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		character = scope:restor_old_foe
+		animation = shock
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:activity
+		exists = scope:host
+		NOT = { this = scope:host }
+		NOT = { has_character_flag = restor_pool_had_1023 }
+		scope:activity = {
+			any_attending_character = {
+				NOT = { this = root }
+				has_trait = restor_member
+				OR = {
+					has_relation_rival = root
+					opinion = {
+						target = root
+						value <= -20
+					}
+				}
+			}
+		}
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = {
+			flag = restor_pool_had_1023
+			days = 90
+		}
+		scope:activity = {
+			random_attending_character = {
+				limit = {
+					NOT = { this = root }
+					has_trait = restor_member
+					OR = {
+						has_relation_rival = root
+						opinion = {
+							target = root
+							value <= -20
+						}
+					}
+				}
+				save_scope_as = restor_old_foe
+			}
+		}
+	}
+
+	# Offer my hand, for the heir's sake.
+	option = {
+		name = restor.1023.a
+		add_opinion = {
+			target = scope:restor_old_foe
+			modifier = friendliness_opinion
+			opinion = 15
+		}
+		scope:restor_old_foe = {
+			add_opinion = {
+				target = root
+				modifier = friendliness_opinion
+				opinion = 15
+			}
+		}
+		stress_impact = {
+			vengeful = medium_stress_impact_gain
+			arrogant = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 25 has_trait = forgiving }
+			modifier = { add = 15 has_trait = humble }
+			modifier = { add = -25 has_trait = vengeful }
+		}
+	}
+
+	# Keep an eye on them.
+	option = {
+		name = restor.1023.b
+		add_intrigue_lifestyle_xp = minor_lifestyle_xp
+		scope:restor_old_foe = {
+			add_opinion = {
+				target = root
+				modifier = suspicion_opinion
+				opinion = -5
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 25 has_trait = paranoid }
+			modifier = { add = 20 has_trait = vengeful }
+		}
+	}
+}
+
+# ---- restor.1024 -- Too Much Wine ----------------------------------------------------------------
+restor.1024 = {
+	type = character_event
+	title = restor.1024.t
+	desc = restor.1024.desc
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = drink
+	}
+	trigger = {
+		restor_underground_trigger = yes
+		has_trait = restor_member
+		exists = scope:activity
+		exists = scope:host
+		NOT = { this = scope:host }
+		NOT = { has_character_flag = restor_pool_had_1024 }
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		add_character_flag = {
+			flag = restor_pool_had_1024
+			days = 90
+		}
+	}
+
+	# Sing it, quietly.
+	option = {
+		name = restor.1024.a
+		random_list = {
+			55 = {
+				modifier = { add = 10 has_trait = gregarious }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1024.a.good
+					left_icon = root
+					add_stress = minor_stress_loss
+					restor_favour_gain_effect = { VALUE = 5 }
+				}
+			}
+			45 = {
+				modifier = { add = 15 has_trait = drunkard }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1024.a.bad
+					left_icon = root
+					custom_tooltip = restor.1024.a.bad.tt
+					restor_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = drunkard }
+			modifier = { add = 20 has_trait = gregarious }
+		}
+	}
+
+	# Go to bed.
+	option = {
+		name = restor.1024.b
+		custom_tooltip = restor.1024.b.tt
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = temperate }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Tell the host how much I love them.
+	option = {
+		name = restor.1024.c
+		scope:host = {
+			add_opinion = {
+				target = root
+				modifier = friendliness_opinion
+				opinion = 10
+			}
+		}
+		add_prestige = minor_prestige_loss
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = gregarious }
+			modifier = { add = 15 has_trait = drunkard }
+		}
+	}
+}
+
+# =====================================================================================
+#  FOLLOW-UP
+# =====================================================================================
+
+# ---- restor.1030 -- The Watchers Report ----------------------------------------------------------
+#
+# From restor.1003's quiet option. The roll is made here, in immediate, and the desc says which way
+# it fell, so the favour spent always buys an answer -- including "nothing to report" and "dead".
+restor.1030 = {
+	type = character_event
+	title = restor.1030.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:restor_watch_result ?= flag:gone }
+				desc = restor.1030.desc_gone
+			}
+			triggered_desc = {
+				trigger = { scope:restor_watch_result ?= flag:loose }
+				desc = restor.1030.desc_loose
+			}
+			desc = restor.1030.desc_clean
+		}
+	}
+	theme = secret
+	left_portrait = {
+		character = root
+		animation = spymaster
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:restor_suspect
+			scope:restor_suspect = { is_alive = yes }
+		}
+		character = scope:restor_suspect
+		animation = idle
+	}
+	trigger = {
+		restor_active_trigger = yes
+		has_trait = restor_member
+	}
+
+	immediate = {
+		restor_save_scopes_effect = yes
+		if = {
+			limit = {
+				OR = {
+					NOT = { exists = scope:restor_suspect }
+					scope:restor_suspect = {
+						OR = {
+							is_alive = no
+							NOT = { has_trait = restor_member }
+						}
+					}
+				}
+			}
+			save_scope_value_as = { name = restor_watch_result value = flag:gone }
+		}
+		else = {
+			random_list = {
+				60 = {
+					modifier = { add = 15 scope:restor_suspect = { has_trait = honest } }
+					save_scope_value_as = { name = restor_watch_result value = flag:clean }
+				}
+				40 = {
+					modifier = { add = 15 scope:restor_suspect = { has_trait = deceitful } }
+					modifier = {
+						add = 15
+						scope:restor_suspect = {
+							has_variable = restor_exposure
+							var:restor_exposure >= 10
+						}
+					}
+					save_scope_value_as = { name = restor_watch_result value = flag:loose }
+				}
+			}
+		}
+	}
+
+	# Loose talk: stop it.
+	option = {
+		name = restor.1030.a
+		trigger = { scope:restor_watch_result ?= flag:loose }
+		restor_their_exposure_gain_effect = { WHO = scope:restor_suspect VALUE = 5 }
+		scope:restor_suspect = {
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = -10
+			}
+		}
+		restor_exposure_loss_effect = { VALUE = 3 }
+		add_intrigue_lifestyle_xp = minor_lifestyle_xp
+	}
+
+	# Clean: a small apology owed, in private.
+	option = {
+		name = restor.1030.b
+		trigger = { scope:restor_watch_result ?= flag:clean }
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 2
+		}
+		stress_impact = {
+			paranoid = minor_stress_impact_loss
+		}
+	}
+
+	# Gone.
+	option = {
+		name = restor.1030.c
+		trigger = { scope:restor_watch_result ?= flag:gone }
+		restor_favour_gain_effect = { VALUE = 5 }
+	}
+
+	# Nothing matched (should not happen): close the window.
+	option = {
+		name = restor.1030.d
+		fallback = yes
+	}
+}

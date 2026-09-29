@@ -1,0 +1,55 @@
+﻿# Helpers for the Gathering's random pool (restor.1000-1099, events/restor_gathering_pool_events.txt).
+#
+# The core's favour effect speaks to the member ("Gain 10 favour"). When the HOST's choice pays a
+# guest, the host's tooltip needs to name whose favour it is, so this wraps the core effect the way
+# restor_their_exposure_gain_effect wraps exposure: a saved value and a named scope for ONE tooltip
+# key, the change itself hidden. The guest still gets the core's own toast.
+
+# Run by whoever is paying a member. $WHO$ is the member.
+restor_gathering_their_favour_gain_effect = {
+	$WHO$ = { save_scope_as = restor_favour_target }
+	save_scope_value_as = {
+		name = restor_their_favour_delta
+		value = $VALUE$
+	}
+	custom_tooltip = restor_gathering_their_favour_gain_tt
+	hidden_effect = {
+		scope:restor_favour_target = { restor_favour_gain_effect = { VALUE = $VALUE$ } }
+	}
+}
+
+# Everyone sworn in the hall, the host included, is a little harder to find. One tooltip line for the
+# whole hall; each member's own exposure falls through the core effect. Outside an activity (fired
+# from the console), the root alone.
+restor_gathering_hall_exposure_loss_effect = {
+	save_scope_value_as = {
+		name = restor_hall_delta
+		value = $VALUE$
+	}
+	custom_tooltip = restor_gathering_hall_exposure_loss_tt
+	hidden_effect = {
+		if = {
+			limit = { exists = scope:activity }
+			scope:activity = {
+				every_attending_character = {
+					limit = { has_trait = restor_member }
+					restor_exposure_loss_effect = { VALUE = $VALUE$ }
+				}
+			}
+		}
+		else = {
+			restor_exposure_loss_effect = { VALUE = $VALUE$ }
+		}
+	}
+}
+
+# A member takes their leave of the Sworn in the middle of a Gathering: out of the society, and the
+# support meter recounted (it counts members). THIS is the one leaving.
+restor_gathering_release_member_effect = {
+	save_scope_as = restor_released
+	custom_tooltip = restor_gathering_released_tt
+	hidden_effect = {
+		restor_leave_effect = yes
+		restor_support_refresh_effect = yes
+	}
+}

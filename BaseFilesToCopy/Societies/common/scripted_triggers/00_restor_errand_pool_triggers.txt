@@ -1,0 +1,65 @@
+﻿# The Errand's random pool (restor.1100-1199): questions the pool events ask about the Errand they
+# are part of. Every one reads scope:activity through `?=`, so outside an activity each is simply
+# false.
+
+# What the Errand is for: the planner's restor_errand_purpose option. Stir is the default option,
+# but the spine treats it as the fallback when neither of the other two is set; these read the
+# option itself, so a pool event gated on one of them never fires outside an Errand.
+restor_errand_for_stir_trigger = {
+	scope:activity ?= {
+		has_activity_option = { category = restor_errand_purpose option = restor_errand_stir }
+	}
+}
+
+restor_errand_for_coin_trigger = {
+	scope:activity ?= {
+		has_activity_option = { category = restor_errand_purpose option = restor_errand_coin }
+	}
+}
+
+restor_errand_for_soldiers_trigger = {
+	scope:activity ?= {
+		has_activity_option = { category = restor_errand_purpose option = restor_errand_soldiers }
+	}
+}
+
+# Another of the Sworn rides with the host. Root = the host.
+restor_errand_has_companion_trigger = {
+	scope:activity ?= {
+		any_attending_character = {
+			NOT = { this = root }
+			has_trait = restor_member
+			is_alive = yes
+		}
+	}
+}
+
+# The county the Errand went to has an unstirred county of the crown next to it.
+restor_errand_has_second_county_trigger = {
+	scope:activity ?= {
+		activity_location = {
+			county = {
+				any_neighboring_county = {
+					restor_crown_county_trigger = yes
+					NOT = { has_county_modifier = restor_county_stirred }
+				}
+			}
+		}
+	}
+}
+
+# The county belongs to someone who is not the host and not sworn: its lord's men are the
+# society's enemies here (the bridge, the tax men, the garrison, the proclamation).
+restor_errand_foreign_county_trigger = {
+	scope:activity ?= {
+		activity_location = {
+			county = {
+				exists = holder
+				holder = {
+					NOT = { this = root }
+					NOT = { has_trait = restor_member }
+				}
+			}
+		}
+	}
+}

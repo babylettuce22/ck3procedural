@@ -1,0 +1,32 @@
+﻿# Each society's own section in the right-click menu.
+#
+# Vanilla fills index 0-14 and its file warns, in a box, that a gap in `index` crashes the game.
+# So these take 15 and 16, the next two, with nothing between. `index` is the only ordering field
+# (the categories sit last, under "Religious"), and the prototype's file explains why no number
+# can be reserved against a DLC adding its own sixteenth.
+#
+# The same file NAME as SocietyPrototype's category file, deliberately: the static copy never
+# deletes a set's leftovers, so a mod folder reused after switching sets would otherwise carry both
+# files and two categories at index 15. Sharing the path means whichever set ships last replaces
+# the other.
+#
+# The header text is NOT `desc`: InteractionCategoryItem.GetName looks up a loc key named exactly
+# after the category (interaction_category_restor), and without it the menu prints the raw key.
+# Both are in the societies' core loc files.
+#
+# A section with nothing valid in it does not draw, and every interaction filed here is shown only
+# to a sworn member of that society, so a non-member never sees either header.
+
+interaction_category_restor = {
+	index = 15
+	desc = "RESTOR_ACTIONS"
+	# Royal blue-gold would clash with favourites' yellow; a deep blue reads apart from diplomacy's.
+	color = { 0.25 0.35 0.75 1 }
+}
+
+interaction_category_cult = {
+	index = 16
+	desc = "CULT_ACTIONS"
+	# Dark red-violet, apart from hostile's red and succession's lighter purple.
+	color = { 0.45 0.1 0.25 1 }
+}

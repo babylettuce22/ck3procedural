@@ -76,3 +76,14 @@ cult_power_may_whisper_trigger = {
 		cult_is_hierophant_trigger = yes
 	}
 }
+
+# THIS can pay $VALUE$ dark power, for an event option that BUYS something with it. The readable
+# twin of cult_power_has_power_trigger (whose raw comparison makes a poor greyed-out reason). Not for
+# penalties, which are meant to drain whatever is left. Pair with `show_as_unavailable = { always =
+# yes }`. $VALUE$ picks the tooltip: 10 has one.
+cult_can_afford_power_trigger = {
+	custom_tooltip = {
+		text = cult_can_afford_power_$VALUE$_tt
+		cult_power_has_power_trigger = { VALUE = $VALUE$ }
+	}
+}

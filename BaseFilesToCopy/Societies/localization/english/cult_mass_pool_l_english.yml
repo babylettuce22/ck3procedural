@@ -1,0 +1,306 @@
+﻿l_english:
+
+ # The Black Mass's random pool (cult.1000-1099), its pulse actions, and additions to its spine.
+
+ cult_mass_pool_everyone_exposure_tt:0 "Everyone in the chapel: exposure rises by #N [cult_mass_all_delta|0]#!"
+ cult_mass_pool_everyone_exposure_loss_tt:0 "Everyone in the chapel: exposure falls by #P [cult_mass_all_delta|0]#!"
+
+ # ---- Pulse actions -----------------------------------------------------------------------------
+
+ cult_mass_black_candles_title:0 "[first.GetShortUINameNoTooltip|U] Lit the Black Candles"
+ cult_mass_word_perfect_title:0 "[first.GetShortUINameNoTooltip|U] Said the Litany Backwards Without a Slip"
+ cult_mass_whispered_name_title:0 "[first.GetShortUINameNoTooltip|U] Whispered Someone's Name to $cult_devil_name$"
+ cult_mass_shared_chalice_title:0 "[first.GetShortUINameNoTooltip|U] Shared the Chalice With [second.GetShortUINameNoTooltip|U]"
+ cult_mass_nodded_off_title:0 "[first.GetShortUINameNoTooltip|U] Nodded Off During the Litany"
+ cult_mass_old_words_title:0 "[first.GetShortUINameNoTooltip|U] Said the True Responses Out of Habit"
+ cult_mass_studied_rite_title:0 "[first.GetShortUINameNoTooltip|U] Studied the Turned Rite"
+ cult_mass_gold_on_altar_title:0 "[first.GetShortUINameNoTooltip|U] Left Gold on the Altar"
+ cult_mass_mocked_feast_title:0 "[first.GetShortUINameNoTooltip|U] Mocked the Coming Holy Day"
+ cult_mass_watched_openly_title:0 "The Town Watched [first.GetShortUINameNoTooltip|U] Say the Mass"
+ cult_mass_shaking_hands_title:0 "[first.GetShortUINamePossessiveNoTooltip|U] Hands Shook All Night"
+
+ # ---- Spine additions (cult.0901, cult.0905) ------------------------------------------------------
+
+ cult.0901.desc_hunter_liege:0 "\n\nThe one who hunts the Faithless, [cult_hunter.GetTitledFirstName], is your own liege. [cult_hunter.GetSheHe|U] could be at your gate in a day."
+ cult.0905.desc_first:0 "\n\nThis is your first Mass. Nobody told you it would be so like the real one."
+ cult.0905.c:0 "Help [host.GetFirstNameNoTooltip] at the altar."
+
+ # ---- cult.1001 ---------------------------------------------------------------------------------
+
+ cult.1001.t:0 "The Candle Gutters"
+ cult.1001.desc:0 "Halfway through the litany, as you say the name of $cult_devil_name$ over the altar, the tallest candle gutters and goes out. Nobody is near it. There is no draught in the chapel that anyone can feel."
+ cult.1001.desc_witness:0 " [cult_mass_witness.GetFirstNameNoTooltip] has stopped praying altogether."
+ cult.1001.desc_end:0 "\n\nEvery face in the chapel has turned to you. They are waiting to be told what it meant."
+ cult.1001.a:0 "Say the name again, louder, and light it from my own candle."
+ cult.1001.b:0 "It is a draught. Relight it and go on."
+ cult.1001.b.goes_on:0 "The Mass Goes On"
+ cult.1001.b.goes_on.tt:0 "The candle is relit and the Faithless go back to their prayers"
+ cult.1001.b.uneasy:0 "The Circle Is Uneasy"
+ cult.1001.c:0 "Tell them it means he is near, and that he is pleased."
+ cult.1001.c.believed:0 "They Believe You"
+ cult.1001.c.laugh:0 "Someone Laughs"
+ cult.1001.c.laugh.tt:0 "Somebody at the back laughs out loud, and does not stop quickly enough"
+
+ # ---- cult.1002 ---------------------------------------------------------------------------------
+
+ cult.1002.t:0 "The Initiate at the Door"
+ cult.1002.desc:0 "[cult_mass_initiate.GetTitledFirstName] has been sworn for less than a year, and this is [cult_mass_initiate.GetHerHis] first Mass. At the elevation, when the host is held up and the words are turned, [cult_mass_initiate.GetSheHe] went white, got up off [cult_mass_initiate.GetHerHis] knees and walked to the door. [cult_mass_initiate.GetSheHe|U] is standing there now with one hand on the bolt, saying the true prayers under [cult_mass_initiate.GetHerHis] breath."
+ cult.1002.desc_secret:0 "\n\nThe others have seen. If [cult_mass_initiate.GetSheHe] walks out of this chapel tonight, [cult_mass_initiate.GetSheHe] could walk anywhere, and tell anyone."
+ cult.1002.desc_open:0 "\n\nNobody will burn for this now. But everyone in the chapel saw [cult_mass_initiate.GetHerHim] flinch, and they are waiting to see what you do about it."
+ cult.1002.a:0 "Go to [cult_mass_initiate.GetHerHim] myself, and talk [cult_mass_initiate.GetHerHim] back to [cult_mass_initiate.GetHerHis] knees."
+ cult.1002.a.kneels:0 "[cult_mass_initiate.GetFirstNameNoTooltip] Kneels Again"
+ cult.1002.a.leaves:0 "[cult_mass_initiate.GetFirstNameNoTooltip] Leaves"
+ cult.1002.b:0 "Remind [cult_mass_initiate.GetHerHim], quietly, what the priests do to people who were here."
+ cult.1002.b.tt:0 "[cult_mass_initiate.GetFirstNameNoTooltip] goes back to [cult_mass_initiate.GetHerHis] place, and does not look at you again tonight"
+ cult.1002.c:0 "Let [cult_mass_initiate.GetHerHim] go. A frightened member is worse than none."
+ cult.1002.c.quiet:0 "[cult_mass_initiate.GetFirstNameNoTooltip] Keeps Quiet"
+ cult.1002.c.confession:0 "[cult_mass_initiate.GetFirstNameNoTooltip] Goes to Confession"
+
+ # ---- cult.1003 ---------------------------------------------------------------------------------
+
+ cult.1003.t:0 "The Chaplain"
+ cult.1003.desc_yours:0 "The [cult_faith.PriestNeuter] kneeling in the second row, hood up, saying the turned responses without a single mistake, is [cult_mass_chaplain.GetTitledFirstName]: your own chaplain. Last week [cult_mass_chaplain.GetSheHe] heard your confession and gave you your penance."
+ cult.1003.desc_theirs:0 "The [cult_faith.PriestNeuter] kneeling in the second row, hood up, saying the turned responses without a single mistake, is [cult_mass_chaplain.GetTitledFirstName], chaplain to [cult_mass_chaplain_lord.GetTitledFirstName]. [cult_mass_chaplain_lord.GetFirstNameNoTooltip] is here too, three places along, and has not looked at [cult_mass_chaplain.GetHerHim] once. Every month [cult_mass_chaplain_lord.GetFirstNameNoTooltip] kneels in [cult_mass_chaplain_lord.GetHerHis] own chapel and tells [cult_mass_chaplain.GetFirstNameNoTooltip] [cult_mass_chaplain_lord.GetHerHis] sins."
+ cult.1003.desc_end:0 "\n\n[cult_mass_chaplain.GetSheHe|U] knows the words of this service better than anyone in the chapel. [cult_mass_chaplain.GetSheHe|U] has said the right ones every morning for twenty years."
+ cult.1003.a:0 "[cult_mass_chaplain.GetFirstNameNoTooltip], come up. Say it with me at the altar."
+ cult.1003.b:0 "Ask [cult_mass_chaplain.GetFirstNameNoTooltip], afterwards, what [cult_mass_chaplain_lord.GetFirstNameNoTooltip] confesses."
+ cult.1003.b.tells:0 "[cult_mass_chaplain.GetFirstNameNoTooltip] Tells You"
+ cult.1003.b.tells.tt:0 "You learn one of [cult_mass_chaplain_lord.GetFirstNamePossessiveNoTooltip] secrets"
+ cult.1003.b.nothing:0 "Nothing Worth Knowing"
+ cult.1003.b.nothing.tt:0 "[cult_mass_chaplain_lord.GetFirstNameNoTooltip] confesses nothing you did not already know"
+ cult.1003.b.told:0 "[cult_mass_chaplain.GetFirstNameNoTooltip] Tells [cult_mass_chaplain_lord.GetFirstNameNoTooltip] You Asked"
+ cult.1003.c:0 "Say nothing. Everyone in this chapel lives two lives."
+
+ # ---- cult.1004 ---------------------------------------------------------------------------------
+
+ cult.1004.t:0 "A Knock at the Door"
+ cult.1004.desc:0 "Somewhere past midnight, in the silence after the Sanctus, someone knocks at the chapel door. Three knocks, not loud, the way a servant knocks.\n\nNobody moves. [cult_mass_count|0] of the Faithless are in this room with black candles in their hands, and there is only the one door."
+ cult.1004.a:0 "Everyone still. Nobody breathes."
+ cult.1004.a.gone:0 "The Footsteps Go Away"
+ cult.1004.a.gone.tt:0 "Whoever it was gives up and goes back up the stairs"
+ cult.1004.a.lamp:0 "They Come Back With a Lamp"
+ cult.1004.b:0 "Put out the candles. I will answer it myself."
+ cult.1004.b.tt:0 "You will see who is at the door"
+ cult.1004.c:0 "Out through the crypt, all of you, now."
+
+ # ---- cult.1005 ---------------------------------------------------------------------------------
+
+ cult.1005.t:0 "Who Was at the Door"
+ cult.1005.desc_clerk:0 "It is your steward's clerk, with a lamp in one hand and a letter in the other. It came late, he says, and it is marked urgent, and he saw the light under the door.\n\nHe is trying very hard to look only at you."
+ cult.1005.desc_priest:0 "It is the [cult_faith.PriestNeuter] of the village below, an old man in a wet cloak. He saw lights in your chapel from the road and came up to see whether someone had died, and whether you needed him.\n\nBehind you the chapel is dark, and it smells of black wax."
+ cult.1005.desc_rider:0 "It is a man in [cult_hunter.GetTitledFirstName]'s colours, mud to the knees. He has ridden all night with a letter for you, he says, and would like to know why your chapel is lit at this hour."
+ cult.1005.clerk_a:0 "Take the letter, and send him to bed."
+ cult.1005.clerk_a.nothing:0 "He Saw Nothing"
+ cult.1005.clerk_a.nothing.tt:0 "The clerk goes to bed and does not mention it in the morning"
+ cult.1005.clerk_a.saw:0 "He Saw the Candles"
+ cult.1005.clerk_b:0 "Give him a coin, and a reason to forget."
+ cult.1005.clerk_b.tt:0 "The clerk will say nothing about tonight"
+ cult.1005.priest_a:0 "Pay him. From tonight his parish answers to me."
+ cult.1005.priest_a.paid:0 "The Priest Is Paid"
+ cult.1005.priest_a.paid.tt:0 "He takes the money and goes home, and his parish is the cult's now"
+ cult.1005.priest_b:0 "Tell him it is a vigil for the dead."
+ cult.1005.priest_b.believed:0 "The Priest Believes You"
+ cult.1005.priest_b.believed.tt:0 "He offers to pray with you, is refused kindly, and goes home"
+ cult.1005.priest_b.questions:0 "The Priest Asks Questions in the Village"
+ cult.1005.priest_c:0 "Tell him what happens to priests who talk."
+ cult.1005.priest_c.silent:0 "The Priest Says Nothing"
+ cult.1005.priest_c.silent.tt:0 "He goes home, and says nothing to anyone"
+ cult.1005.priest_c.writes:0 "The Priest Writes to His Bishop"
+ cult.1005.rider_a:0 "Take the letter, and tell him it is a vigil."
+ cult.1005.rider_a.satisfied:0 "The Rider Is Satisfied"
+ cult.1005.rider_a.satisfied.tt:0 "He takes your reply and rides home in the morning"
+ cult.1005.rider_a.notes:0 "The Rider Writes Down What He Saw"
+ cult.1005.rider_b:0 "Give him a bed, a purse and a good breakfast."
+ cult.1005.rider_b.content:0 "The Rider Goes Home Content"
+ cult.1005.rider_b.content.tt:0 "He says your hospitality was the best on his road"
+ cult.1005.rider_b.reports:0 "The Rider Reports Anyway"
+ cult.1005.rider_c:0 "Let $cult_devil_name$ have the memory of it."
+ cult.1005.rider_c.forgets:0 "The Rider Remembers Little"
+ cult.1005.rider_c.forgets.tt:0 "He rides away in the morning and never speaks of your chapel. Perhaps he drank too much of your wine"
+
+ # ---- cult.1006 ---------------------------------------------------------------------------------
+
+ cult.1006.t:0 "The Wrong Hymn"
+ cult.1006.desc:0 "The Faithless sing the hymns of the Mass turned, the way they practise them. On the third verse, out of a lifetime's habit, they sing it the right way round: the true hymn to [cult_faith.HighGodName], every word, beautifully."
+ cult.1006.desc_open:0 "The choir sings the new service openly now, with the doors of the chapel standing wide. On the third verse, out of a lifetime's habit, they slip into the old words: the true hymn to [cult_faith.HighGodName], every word, beautifully."
+ cult.1006.desc_end:0 "\n\nNobody has noticed. Half the chapel is singing along. [cult_mass_singer.GetFirstNameNoTooltip] started it, you think, and is singing loudest of all."
+ cult.1006.a:0 "Stop them, and start the verse again."
+ cult.1006.b:0 "Let them finish. I know the words too."
+ cult.1006.c:0 "Find out whether [cult_mass_singer.GetFirstNameNoTooltip] meant it."
+ cult.1006.c.believes:0 "[cult_mass_singer.GetFirstNameNoTooltip] Still Believes"
+ cult.1006.c.mistake:0 "An Honest Mistake"
+
+ # ---- cult.1007 ---------------------------------------------------------------------------------
+
+ cult.1007.t:0 "A Sign"
+ cult.1007.desc:0 "On the last word of the invocation, "
+ cult.1007.desc_bell:0 "the bell in the tower above the chapel rings once. The bell-rope is tied off, and there is nobody in the tower."
+ cult.1007.desc_dogs:0 "a dog begins to howl somewhere in the town, and then another, and then every dog within a mile of your walls."
+ cult.1007.desc_stone:0 "the altar stone cracks from end to end with a sound like a branch breaking."
+ cult.1007.desc_candles:0 "every candle in the chapel leans towards the altar at once, as if something had breathed in."
+ cult.1007.desc_end:0 "\n\nSome of the Faithless are on their faces already. The rest are looking at you, because it was you who said the words."
+ cult.1007.a:0 "He has answered. Tell them so."
+ cult.1007.b:0 "Old stone and bad weather. Tell them so."
+ cult.1007.c:0 "Say nothing. Let each of them decide what it was."
+ cult.1007.c.answer:0 "They Take It as His Answer"
+ cult.1007.c.frightened:0 "[cult_mass_witness.GetFirstNameNoTooltip] Is Badly Frightened"
+ cult.1007.c.unsure:0 "Nobody Is Sure"
+ cult.1007.c.unsure.tt:0 "By morning the Faithless have three different stories about it, and argue over them on the stairs"
+
+ # ---- cult.1008 ---------------------------------------------------------------------------------
+
+ cult.1008.t:0 "Two Books"
+ cult.1008.desc:0 "[cult_mass_book_a.GetTitledFirstName] and [cult_mass_book_b.GetTitledFirstName] have each brought a book of the rite, and each says [cult_mass_book_a.GetHerHis] own is the true one. [cult_mass_book_a.GetFirstNameNoTooltip]'s was copied from the Hierophant's. [cult_mass_book_b.GetFirstNameNoTooltip]'s is older, and [cult_mass_book_b.GetSheHe] says the Hierophant's copyist left out a line.\n\nThey argued it on the stairs, and they are arguing it now, in whispers, across the altar, with the rest of the circle waiting. It is your chapel. Whichever book you say the Mass from, the other will take it personally."
+ cult.1008.a:0 "We say it from [cult_mass_book_a.GetFirstNamePossessiveNoTooltip] book."
+ cult.1008.b:0 "We say it from [cult_mass_book_b.GetFirstNamePossessiveNoTooltip] book."
+ cult.1008.c:0 "Neither. I will say it from memory."
+ cult.1008.c.perfect:0 "Word Perfect"
+ cult.1008.c.stumble:0 "You Stumble"
+
+ # ---- cult.1009 ---------------------------------------------------------------------------------
+
+ cult.1009.t:0 "The Offering"
+ cult.1009.desc:0 "[cult_mass_giver.GetTitledFirstName] came down to the chapel with something wrapped in cloth, and lays it on the altar before the Mass begins.\n\n"
+ cult.1009.desc_purse:0 "It is a purse, heavy with coin, from the alms box of [cult_mass_giver.GetHerHis] own [cult_faith.HouseOfWorship]. The poor of [cult_mass_giver.GetHerHis] parish will go without it this winter, and [cult_mass_giver.GetSheHe] is proud of that."
+ cult.1009.desc_relic:0 "It is a relic from the [cult_faith.HouseOfWorship] in [cult_mass_offer_county.GetNameNoTier], in its silver case: the bone of a saint of [cult_faith.HighGodName], carried in procession every holy day. [cult_mass_giver.GetFirstNameNoTooltip] put a mutton bone in the case in its place. Nobody in [cult_mass_offer_county.GetNameNoTier] has noticed yet."
+ cult.1009.desc_book:0 "It is the great prayer book of [cult_mass_giver.GetHerHis] family's chapel, a hundred years old, the one [cult_mass_giver.GetSheHe] was named over. [cult_mass_giver.GetSheHe|U] wants it read from backwards on this altar tonight and then taken home, so that every prayer said from it afterwards goes to $cult_devil_name$."
+ cult.1009.a:0 "I accept it, before the whole circle."
+ cult.1009.b:0 "Take it back, before somebody misses it."
+ cult.1009.c:0 "The chapel has needs. I will keep the coin."
+
+ # ---- cult.1010 ---------------------------------------------------------------------------------
+
+ cult.1010.t:0 "The Quiet Guest"
+ cult.1010.desc:0 "[cult_mass_suspect.GetTitledFirstName] is at the back again. [cult_mass_suspect.GetSheHe|U] has not said a single response all night. [cult_mass_suspect.GetSheHe|U] watches the door, and whenever someone lowers a hood [cult_mass_suspect.GetSheHe] looks at their face as though [cult_mass_suspect.GetSheHe] were learning it.\n\n[cult_mass_suspect.GetFirstNameNoTooltip] swore the oath like everyone else here. That does not mean nobody else has had a word with [cult_mass_suspect.GetHerHim] since."
+ cult.1010.a:0 "Take [cult_mass_suspect.GetHerHim] aside after, and ask [cult_mass_suspect.GetHerHim] straight."
+ cult.1010.a.frightened:0 "[cult_mass_suspect.GetFirstNameNoTooltip] Was Only Frightened"
+ cult.1010.a.approached:0 "[cult_mass_suspect.GetFirstNameNoTooltip] Was Approached"
+ cult.1010.a.approached.tt:0 "[cult_mass_suspect.GetFirstNameNoTooltip] admits that a man from the church came asking questions a month ago. [cult_mass_suspect.GetSheHe|U] swears [cult_mass_suspect.GetSheHe] told him nothing"
+ cult.1010.a.unsure:0 "You Cannot Tell"
+ cult.1010.b:0 "Watch [cult_mass_suspect.GetHerHim] all night with the eyes the circle has given me."
+ cult.1010.b.clean:0 "You Are Sure of [cult_mass_suspect.GetFirstNameNoTooltip]"
+ cult.1010.b.talked:0 "You Are Sure [cult_mass_suspect.GetFirstNameNoTooltip] Has Talked"
+ cult.1010.b.talked.tt:0 "Knowing what was said, you can cover your own tracks"
+ cult.1010.c:0 "Say nothing, and have [cult_mass_suspect.GetHerHim] followed home."
+ cult.1010.c.home:0 "[cult_mass_suspect.GetFirstNameNoTooltip] Went Straight Home"
+ cult.1010.c.home.tt:0 "Your man followed [cult_mass_suspect.GetHerHim] to [cult_mass_suspect.GetHerHis] own door, and nowhere else"
+ cult.1010.c.church:0 "[cult_mass_suspect.GetFirstNameNoTooltip] Stopped at a [cult_faith.HouseOfWorship|U]"
+ cult.1010.d:0 "Let it be. Everyone is nervous."
+ cult.1010.d.nothing:0 "Nothing Comes of It"
+ cult.1010.d.nothing.tt:0 "Whatever was troubling [cult_mass_suspect.GetFirstNameNoTooltip], it goes no further"
+ cult.1010.d.talked:0 "Someone Has Talked"
+
+ # ---- cult.1011 ---------------------------------------------------------------------------------
+
+ cult.1011.t:0 "The Preacher in Town"
+ cult.1011.desc:0 "A preacher arrived in town this week with a letter from [cult_hunter.GetTitledFirstName], and has been preaching in the square every morning, a few hours after your Mass ends. His subject is the faithless: the ones who kneel in the [cult_faith.HouseOfWorship] by day and go down into cellars after dark. He describes them well. Better than you would like."
+ cult.1011.desc_shaken:0 "\n\n[cult_mass_shaken.GetTitledFirstName] stopped to hear him on the way in this morning, and has not stopped shaking since."
+ cult.1011.a:0 "I will go and hear him myself, in the front row."
+ cult.1011.b:0 "The rest of the Mass in silence. No bells, no singing."
+ cult.1011.c:0 "Have it put about that he drinks."
+ cult.1011.c.stops:0 "The Town Stops Listening"
+ cult.1011.c.louder:0 "He Preaches Louder"
+ cult.1011.d:0 "Let the circle deal with him."
+ cult.1011.d.leaves:0 "The Preacher Leaves Town"
+ cult.1011.d.leaves.tt:0 "He is taken ill in the night, and his servant carries him out of town on a cart"
+ cult.1011.d.stays:0 "The Preacher Stays"
+
+ # ---- cult.1012 ---------------------------------------------------------------------------------
+
+ cult.1012.t:0 "The Founder's Tomb"
+ cult.1012.desc_father:0 "Your chapel was built by [cult_mass_founder.GetTitledFirstName], who is buried under its floor. [cult_mass_founder.GetSheHe|U] left money for a mass to be said for [cult_mass_founder.GetHerHis] soul every year until the end of the world. [cult_mass_founder.GetHerHis|U] tomb is the flat stone in front of the altar, and the Faithless have been kneeling on it all night."
+ cult.1012.desc_forebear:0 "Your chapel was built by one of your forebears, who is buried under its floor, and who left money for a mass to be said for their soul every year until the end of the world. The tomb is the flat stone in front of the altar, and the Faithless have been kneeling on it all night."
+ cult.1012.desc_end:0 "\n\n[cult_mass_tomb_asker.GetTitledFirstName] has asked, quietly, whether the Mass could be said over the tomb itself. It is the oldest consecrated ground in the chapel."
+ cult.1012.a:0 "Do it. A mass was paid for. A mass will be said."
+ cult.1012.b:0 "Not there. Anywhere but there."
+ cult.1012.c:0 "Have the stone lifted, and see what they were buried with."
+ cult.1012.c.gold:0 "A Ring and a Seal"
+ cult.1012.c.dust:0 "Only Dust"
+ cult.1012.c.dust.tt:0 "There is nothing under the stone but a plain shroud and dust. The masons put it back"
+
+ # ---- cult.1020 ---------------------------------------------------------------------------------
+
+ cult.1020.t:0 "The Doors Stand Open"
+ cult.1020.desc:0 "The Mass is said with the doors open now, and the town has come to watch. Some of them kneel on the steps and say the new responses loudly, so that your people can see them do it. Most stand at the back and say nothing at all.\n\nA few of the ones kneeling loudest, you are fairly sure, knelt just as loudly to [cult_faith.HighGodName] a year ago."
+ cult.1020.a:0 "Give alms to the ones who kneel."
+ cult.1020.b:0 "Take down the names of the ones who do not."
+ cult.1020.c:0 "Close the doors. This is not a fair."
+
+ # ---- cult.1021 ---------------------------------------------------------------------------------
+
+ cult.1021.t:0 "The Old Priest"
+ cult.1021.desc:0 "An old [cult_faith.PriestNeuter] of the old way has come to the door of your chapel in the vestments he was ordained in, and is saying the true Mass to [cult_faith.HighGodName] on the step, in a voice that carries, while your Mass goes on inside.\n\nHalf your guests have stopped to listen. He does not look at any of them. He is not asking for anything."
+ cult.1021.a:0 "Leave him. He is an old man."
+ cult.1021.b:0 "Have him carried off the step."
+ cult.1021.c:0 "Invite him in, to say it at our altar."
+ cult.1021.c.comes:0 "He Comes In"
+ cult.1021.c.comes.tt:0 "He looks at the altar for a long time. Then he says it your way"
+ cult.1021.c.refuses:0 "He Will Not Come In"
+ cult.1021.c.refuses.tt:0 "He finishes his Mass on the step, blesses the doorway, and walks home"
+
+ # ---- cult.1022 ---------------------------------------------------------------------------------
+
+ cult.1022.t:0 "A Late Convert"
+ cult.1022.desc:0 "[cult_mass_convert.GetTitledFirstName] arrived at the chapel door tonight without being asked, in [cult_mass_convert.GetHerHis] best clothes, and asks to be sworn to $cult_devil_name$ in front of everyone. Last year [cult_mass_convert.GetSheHe] gave a new window to the [cult_faith.HouseOfWorship] in [cult_mass_convert.GetHerHis] county, and wept at the dedication.\n\nThe church is the cult's now. [cult_mass_convert.GetFirstNameNoTooltip] can count."
+ cult.1022.a:0 "Swear [cult_mass_convert.GetHerHim] in. Everyone is welcome now."
+ cult.1022.b:0 "Make [cult_mass_convert.GetHerHim] wait a year."
+ cult.1022.c:0 "Turn [cult_mass_convert.GetHerHim] away."
+
+ # ---- cult.1030 ---------------------------------------------------------------------------------
+
+ cult.1030.t:0 "A Face Under a Hood"
+ cult.1030.desc:0 "Across the chapel, when [cult_mass_known.GetTitledFirstName] lowers [cult_mass_known.GetHerHis] hood to kneel, you know the face at once. "
+ cult.1030.desc_family:0 "It is your own kin. You sat beside [cult_mass_known.GetHerHim] at the last christening in the family, and [cult_mass_known.GetSheHe] sang every hymn."
+ cult.1030.desc_rival:0 "It is your rival, who has hated you for years and says so at every court, and who once called you godless to your face."
+ cult.1030.desc_liege:0 "It is your liege, who made you swear on the relics of [cult_faith.HighGodName] when [cult_mass_known.GetSheHe] gave you your land."
+ cult.1030.desc_vassal:0 "It is your own vassal, who knelt to you in the [cult_faith.HouseOfWorship] and swore on the relics when you gave [cult_mass_known.GetHerHim] [cult_mass_known.GetHerHis] land."
+ cult.1030.desc_friend:0 "It is your friend, who has never kept a secret from you. Until tonight."
+ cult.1030.desc_end:0 "\n\nYou had no idea. From the way [cult_mass_known.GetSheHe] went still when [cult_mass_known.GetSheHe] saw you, neither did [cult_mass_known.GetSheHe]."
+ cult.1030.a:0 "Nod to [cult_mass_known.GetHerHim]. We are in this together."
+ cult.1030.b:0 "Pretend I have not seen [cult_mass_known.GetHerHim]."
+ cult.1030.c:0 "Remember this. It may be worth something one day."
+ cult.1030.c.tt:0 "You learn #high [cult_mass_known.GetFirstNamePossessiveNoTooltip]#! secret, and can use it"
+
+ # ---- cult.1031 ---------------------------------------------------------------------------------
+
+ cult.1031.t:0 "The Hierophant's Word"
+ cult.1031.desc:0 "After the Mass, as the Faithless go up the stairs one at a time, [cult_hierophant.GetTitledFirstName] stops you with a hand on your arm. The Hierophant has never spoken to you alone before.\n\n\"I have heard your name,\" [cult_hierophant.GetSheHe] says. \"Tell me what you want from the circle.\""
+ cult.1031.a:0 "To rise in it."
+ cult.1031.a.pleased:0 "The Hierophant Is Pleased"
+ cult.1031.a.unimpressed:0 "The Hierophant Is Unimpressed"
+ cult.1031.b:0 "Power."
+ cult.1031.c:0 "Only to serve."
+
+ # ---- cult.1032 ---------------------------------------------------------------------------------
+
+ cult.1032.opening:0 "My dear [ROOT.Char.GetFirstNameNoTooltip],"
+ cult.1032.desc:0 "Our chaplain asked after you at Mass on the holy day, and I did not know what to tell him, so I said you were unwell. I hope the business that keeps you away is going well.\n\nAre you sleeping? I dreamt of you last night, in a cellar full of candles, and could not see your face.\n\nCome home soon."
+ cult.1032.a:0 "Write back a good lie."
+ cult.1032.a.believed:0 "[cult_mass_spouse.GetFirstNameNoTooltip] Is Reassured"
+ cult.1032.a.believed.tt:0 "[cult_mass_spouse.GetSheHe|U] writes back that [cult_mass_spouse.GetSheHe] feels foolish for asking"
+ cult.1032.a.doubted:0 "[cult_mass_spouse.GetFirstNameNoTooltip] Does Not Believe You"
+ cult.1032.b:0 "Write back the truth, and ask [cult_mass_spouse.GetHerHim] to join me."
+ cult.1032.b.joins:0 "[cult_mass_spouse.GetFirstNameNoTooltip] Swears the Oath"
+ cult.1032.b.horrified:0 "[cult_mass_spouse.GetFirstNameNoTooltip] Is Horrified"
+ cult.1032.c:0 "Burn it, and do not reply."
+
+ # ---- cult.1033 ---------------------------------------------------------------------------------
+
+ cult.1033.t:0 "Cold Feet"
+ cult.1033.desc:0 "[cult_mass_doubter.GetTitledFirstName] is kneeling beside you, and has been shaking since the invocation. Under the singing [cult_mass_doubter.GetSheHe] leans over and whispers that [cult_mass_doubter.GetSheHe] cannot do this any more. [cult_mass_doubter.GetSheHe|U] means to go to [cult_mass_doubter.GetHerHis] confessor on the next holy day, tell all of it, and take whatever penance comes.\n\n[cult_mass_doubter.GetSheHe|U] has told nobody else. [cult_mass_doubter.GetSheHe|U] wanted you to know first."
+ cult.1033.a:0 "Talk [cult_mass_doubter.GetHerHim] round."
+ cult.1033.a.stays:0 "[cult_mass_doubter.GetFirstNameNoTooltip] Stays"
+ cult.1033.a.unconvinced:0 "[cult_mass_doubter.GetFirstNameNoTooltip] Is Not Convinced"
+ cult.1033.b:0 "Tell [host.GetFirstNameNoTooltip]."
+ cult.1033.c:0 "Promise to keep it to myself."
+ cult.1033.c.quiet:0 "[cult_mass_doubter.GetFirstNameNoTooltip] Says Nothing More"
+ cult.1033.c.quiet.tt:0 "Whatever [cult_mass_doubter.GetSheHe] decides, [cult_mass_doubter.GetSheHe] does not go to [cult_mass_doubter.GetHerHis] confessor"
+ cult.1033.c.confesses:0 "[cult_mass_doubter.GetFirstNameNoTooltip] Confesses"
+
+ # ---- cult.1034 ---------------------------------------------------------------------------------
+
+ cult.1034.t:0 "The Lesson"
+ cult.1034.desc:0 "[host.GetTitledFirstName] beckons you to the lectern. It is your turn to read the lesson: a page of the scripture of $cult_host_name$, the one about [cult_faith.HighGodName] casting down the proud, to be read from the last word to the first.\n\nEveryone is looking at you. You learned this page by heart as a child."
+ cult.1034.a:0 "Read it clearly, every word backwards."
+ cult.1034.b:0 "Read it quietly, and quickly."
+ cult.1034.c:0 "Read it the right way round, by mistake."

@@ -140,3 +140,38 @@ restor_pretender_can_be_crowned_trigger = {
 		liege = { has_trait = restor_member }
 	}
 }
+
+# The panel's roster: would scope:restor_viewer know THIS member's name? A Captain or above -- and
+# the Keeper -- knows the whole roll; below that you know the people around you and the two names
+# everyone knows, the heir and the Keeper. In the restored realm the order is public. Shared by
+# restor_panel_gather's rebuild and its has-anything-changed check, so the two never disagree.
+restor_panel_knows_trigger = {
+	is_alive = yes
+	has_trait = restor_member
+	is_target_in_global_variable_list = { name = restor_roster target = this }
+	OR = {
+		restor_restored_trigger = yes
+		scope:restor_viewer = { restor_rank_at_least_trigger = { RANK = 50 } }
+		scope:restor_viewer = { restor_is_keeper_trigger = yes }
+		this = scope:restor_viewer
+		restor_is_pretender_trigger = yes
+		restor_is_keeper_trigger = yes
+		is_courtier_of = scope:restor_viewer
+		scope:restor_viewer = { is_courtier_of = prev }
+		is_vassal_of = scope:restor_viewer
+		scope:restor_viewer = { is_vassal_of = prev }
+		is_close_or_extended_family_of = scope:restor_viewer
+	}
+}
+
+# THIS can pay $VALUE$ favour. Gates every option that BUYS something with favour, so nobody at zero
+# gets it free (restor_favour_spend_effect clamps at zero rather than refusing). Not for penalties,
+# which are meant to drain whatever is left. Pair with `show_as_unavailable = { always = yes }` so the
+# option shows greyed with the reason. $VALUE$ picks the tooltip: 5, 10 and 15 have one.
+restor_can_afford_favour_trigger = {
+	custom_tooltip = {
+		text = restor_can_afford_favour_$VALUE$_tt
+		has_variable = restor_favour
+		var:restor_favour >= $VALUE$
+	}
+}

@@ -115,6 +115,27 @@ public enum ImpassableMaskMode : byte
 }
 
 /// <summary>
+/// What <see cref="MapGen.ImpassableAutoCut"/> ranks ground by when it picks the walls.
+/// </summary>
+public enum ImpassableRanking : byte
+{
+    /// <summary>
+    /// Steepness first: the most rugged ground at a barony's scale, weighted up where it stands
+    /// high above the country around it, whatever its absolute height. Escarpments, crater rims and
+    /// steep ridges near the sea become walls; smooth high ground does not, and the valleys between
+    /// a range's ridges stay passable. See <see cref="MapConfig.ImpassableMinSlope"/> and
+    /// <see cref="MapConfig.ImpassableLiftScale"/>.
+    /// </summary>
+    Slope,
+
+    /// <summary>
+    /// Height first, as the cut did before: ground above the gate line ranked by height, grown down
+    /// its flanks, with flat ground below the mountain line exempt.
+    /// </summary>
+    Height,
+}
+
+/// <summary>
 /// Which way the world's peoples lean on the one question CK3 asks about sex: who inherits, who
 /// may be granted a title, who sits on a council, who rides as a knight.
 ///
@@ -877,7 +898,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [HideInGenerator]
     [Category("02 World State")]
     [DisplayName("Societies")]
-    [Description("Generate a secret society for this world: the Restorationists, sworn to put a fallen kingdom back in the hands of the house that lost it. The crown, the house, the pretender and the first members are all read off the world's history. See BaseFilesToCopy/Societies/README.txt.")]
+    [Description("Generate a secret societies. See BaseFilesToCopy/Societies/README.txt.")]
     public bool EnableSocieties { get; set; } = true;
 
     /// <summary>
@@ -1270,6 +1291,65 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("03 Provinces")]
     [Description("Cut the provinces to the mountains before partitioning, so walls end at the foot of each range instead of wherever a province border fell. Off scores whole provinces after partitioning instead.")]
     public bool ImpassableAutoCut { get; set; } = true;
+
+    /// <summary>
+    /// What the auto-cut ranks ground by. Only read with <see cref="ImpassableAutoCut"/> on.
+    ///
+    /// <see cref="Config.ImpassableRanking.Height"/> walls whatever stands highest, and on a map
+    /// whose uplands sit above vanilla's mountain heights that is smooth, gentle ground: on a Rift
+    /// world (seed 630583, 8192), 81% of land between 238 and 316 was walled against 20% of
+    /// vanilla's, including fans and shoulders as gentle as a typical vanilla barony, while only 20%
+    /// of the steep ground below 238 was. <see cref="Config.ImpassableRanking.Slope"/> ranks by
+    /// steepness at a barony's scale instead. On that world and a scar world (seed 288855), smooth
+    /// high ground walled (238–400, gentler than 1.2) fell from 60% and 66% to under 2%, and steep
+    /// ground below 238 walled (3 or steeper) rose from 20% and 39% to 71%; on a wall world
+    /// (115886) it rose from 7% to 35%, with the Wall itself still walled. Walled land fell from
+    /// 10.6% and 10.2% to 9.0% and 8.5%. Valleys between a range's ridges stay passable, as Alpine
+    /// valleys are in vanilla, and some steep coastal bluffs are walled (5% of the walls stood below
+    /// 119, against 0.2%). Ground above <see cref="ImpassableCeilingHeight"/> is walled either way,
+    /// and a Wall set-piece's own body is always wall.
+    /// Recommended: Slope.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("What makes ground impassable. Slope: the steepest, most rugged ground, wherever it stands, so escarpments and ridges become walls and smooth high ground stays passable. Height: the highest ground, grown down its flanks (the older behaviour).")]
+    public ImpassableRanking ImpassableRanking { get; set; } = ImpassableRanking.Slope;
+
+    /// <summary>
+    /// The gentlest ground the slope-ranked cut may wall, in elevation units per world unit (sea
+    /// level 36, heightmap maximum 520): the slope of the terrain smoothed to a quarter of a
+    /// barony's radius, averaged over half a barony. The share is taken from the most rugged ground
+    /// down, and this stops it where a gentle map's ruggedness runs out, rather than walling rolling
+    /// hills to fill it. The default, 1.5, is steeper than four-fifths of the ground vanilla's
+    /// passable provinces stand on (its median is 0.87). Not scaled by <see cref="ReliefScale"/>: it
+    /// is steepness in world units, which is what the game shows. Only read with
+    /// <see cref="ImpassableRanking"/> Slope. 0 turns it off.
+    /// Recommended: 1.5.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("The gentlest ground a slope-ranked wall may stand on, in elevation units per world unit at a barony's scale. Stops a gentle map walling rolling hills to fill its share. 1.5 is steeper than 80% of vanilla's passable ground. 0 turns it off.")]
+    public double ImpassableMinSlope { get; set; } = 1.5;
+
+    /// <summary>
+    /// How much standing high above the country around counts for, in the slope-ranked cut: ground
+    /// this far above its local floor (the lowest ground six barony radii around, smoothed) ranks
+    /// as if twice as rugged. In the generator's elevation units, and scaled with
+    /// <see cref="ReliefScale"/>. Only read with <see cref="ImpassableRanking"/> Slope.
+    ///
+    /// Ruggedness alone leaves the upper parts of a massif passable where its crests are finely
+    /// ridged, since smoothing to a barony's scale averages the ridges away, while it walls low
+    /// coastal bluffs as readily as any range. On the Rift world, lift at 200 kept more of its
+    /// massifs walled than ruggedness alone and more than halved the share of the walls standing
+    /// on ground below 119 (11% → 5%). 100 cut that further (3%), but left 54% of the steep low
+    /// ground passable against 40%.
+    /// Relative to the local floor, not sea level, so it does not bring back walls on smooth
+    /// uplands: a shoulder standing on a high plain is lifted little. 0 turns it off.
+    /// Recommended: 200.
+    /// </summary>
+    [AdvancedSetting]
+    [Category("03 Provinces")]
+    [Description("How strongly standing high above the surrounding country counts toward being impassable in the slope-ranked cut: ground this many elevation units above its local floor ranks as if twice as steep. Lower favours massifs over low steep bluffs. 0 turns it off.")]
+    public double ImpassableLiftScale { get; set; } = 200;
 
     /// <summary>
     /// How far down its own slopes an auto-cut wall runs: to where the ground stands this share of
@@ -2886,6 +2966,16 @@ public sealed class MapConfig : CustomTypeDescriptor
     [DisplayName("Native rank tooltips")]
     [Description("With native titles or realm names on, hovering one of those words in game shows its real-world equivalent (King, Margrave, Duchy...). The words then show in link colour. Turn off to show them as plain text.")]
     public bool NativeRankTooltips { get; set; } = true;
+
+    /// <summary>
+    /// Wraps a generated religion's god and devil names, its head-of-faith title and its words for
+    /// priest, bishop and devotee in hidden game concepts that gloss them in English on hover — the
+    /// same mechanism as <see cref="NativeRankTooltips"/>. See <see cref="Emit.ReligionGlossary"/>.
+    /// </summary>
+    [Category("10 Cultures and faiths")]
+    [DisplayName("Religion tooltips")]
+    [Description("Hovering a generated religion's god, devil or clergy word in game shows what it is (God of War, The Devil, Priest...). The words then show in link colour. Turn off to show them as plain text.")]
+    public bool ReligionTooltips { get; set; } = true;
 
     // Can be way too many nude characters lol
     // Need to extend this to cover "Nudism" cultural pillar

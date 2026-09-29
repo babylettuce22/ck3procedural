@@ -18,7 +18,7 @@ public sealed record CultInversion(string Group, string From, string To);
 /// everything it inverts — the host faith's devil, its sins, its doctrines, its holy tongue.
 ///
 /// <list type="bullet">
-/// <item>host: the largest generated faith of a monotheist religion that names a devil</item>
+/// <item>host: the largest generated faith that names a devil, preferring one with a head of faith, then a monotheist one</item>
 /// <item>what it serves: that faith's own <c>DevilName</c>, by loc key — never invented separately</item>
 /// <item>who it wants: the host religion's sins, as trait keys (a sinner is a likely recruit)</item>
 /// <item>what it will do if it wins: the host's sin doctrines inverted, one group at a time</item>
@@ -92,12 +92,17 @@ public static class InversionCult
             => r.Localization.FirstOrDefault(t => t.Tag == "DevilName").Value is { Length: > 0 } key
                && r.LocalizationText.ContainsKey(key) ? key : null;
 
-        // Monotheist first: a single god with a single adversary is the shape an inversion needs.
-        // A pagan religion that still names a devil will do when there is no monotheist one.
+        // A faith with a head first: the cult's middle phase IS its head of faith sworn to the devil
+        // ("hollow"), so a headless host skips the heart of the story -- the rot can still carry it
+        // to the Unveiling, but only as the fallback when no faith that names a devil has a head.
+        // Heads are drawn at random (Faiths.OrganizeAndMintHeads), so a world may have none.
+        // Then monotheist: a single god with a single adversary is the shape an inversion needs. A
+        // pagan religion that still names a devil will do when there is no monotheist one.
         var host = faiths.Faiths
             .Where(f => !f.Inherited && !f.Religion.Inherited && f.Counties.Count >= MinCounties
                         && DevilKeyOf(f.Religion) is not null)
-            .OrderByDescending(f => f.Religion.Monotheist)
+            .OrderByDescending(f => f.Head is not null && f.IsOrganized)
+            .ThenByDescending(f => f.Religion.Monotheist)
             .ThenByDescending(f => f.Counties.Count)
             .ThenBy(f => f.Key, StringComparer.Ordinal)
             .FirstOrDefault();

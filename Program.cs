@@ -511,6 +511,10 @@ public static class Program
                     cfg.NativeRankTooltips = false;
                     break;
 
+                case "--no-religion-tooltips":
+                    cfg.ReligionTooltips = false;
+                    break;
+
                 // The Chronicle's off switch, so the stubbed build can be run through tiger.
                 case "--no-chronicle":
                     cfg.EnableChronicle = false;

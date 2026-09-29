@@ -15,56 +15,67 @@ cult_panel_gather = {
 	scope = character
 	is_shown = { cult_active_trigger = yes }
 	effect = {
-		# The live values, read without recomputing the globals: opening a window must not be what
-		# crosses a milestone.
-		set_variable = { name = cult_panel_rot value = cult_rot_value }
-		set_variable = { name = cult_panel_sites value = cult_holy_site_share_value }
+		# On opening and then once a second while open (cult_panel_tick); skipped when closed. The
+		# reasoning for each part is in restor_panel_gather.
+		if = {
+			limit = { has_variable = society_panel_open }
 
-		remove_variable = cult_panel_hierophant
-		remove_variable = cult_panel_head
-		remove_variable = cult_panel_hunter
-		if = {
-			limit = { exists = global_var:cult_hierophant }
-			set_variable = { name = cult_panel_hierophant value = global_var:cult_hierophant }
-		}
-		if = {
-			limit = { exists = global_var:cult_host_faith.religious_head }
-			set_variable = { name = cult_panel_head value = global_var:cult_host_faith.religious_head }
-		}
-		if = {
-			limit = {
-				cult_secret_phase_trigger = yes
-				exists = global_var:cult_hunter
+			# The live values, read without recomputing the globals: opening a window must not be
+			# what crosses a milestone.
+			set_variable = { name = cult_panel_rot value = cult_rot_value }
+			set_variable = { name = cult_panel_sites value = cult_holy_site_share_value }
+
+			if = {
+				limit = { exists = global_var:cult_hierophant }
+				set_variable = { name = cult_panel_hierophant value = global_var:cult_hierophant }
 			}
-			set_variable = { name = cult_panel_hunter value = global_var:cult_hunter }
-		}
-
-		# A Magister or above -- and the Hierophant -- knows the whole circle. Below that you know
-		# the people around you and the Hierophant. Once unveiled, everyone knows everyone.
-		clear_variable_list = cult_panel_roster
-		save_scope_as = cult_viewer
-		every_in_global_list = {
-			variable = cult_roster
-			limit = {
-				is_alive = yes
-				OR = {
-					cult_unveiled_trigger = yes
-					scope:cult_viewer = { cult_rank_at_least_trigger = { RANK = 50 } }
-					scope:cult_viewer = { cult_is_hierophant_trigger = yes }
-					this = scope:cult_viewer
-					cult_is_hierophant_trigger = yes
-					is_courtier_of = scope:cult_viewer
-					scope:cult_viewer = { is_courtier_of = prev }
-					is_vassal_of = scope:cult_viewer
-					scope:cult_viewer = { is_vassal_of = prev }
-					is_close_or_extended_family_of = scope:cult_viewer
+			else = { remove_variable = cult_panel_hierophant }
+			if = {
+				limit = { exists = global_var:cult_host_faith.religious_head }
+				set_variable = { name = cult_panel_head value = global_var:cult_host_faith.religious_head }
+			}
+			else = { remove_variable = cult_panel_head }
+			if = {
+				limit = {
+					cult_secret_phase_trigger = yes
+					exists = global_var:cult_hunter
 				}
+				set_variable = { name = cult_panel_hunter value = global_var:cult_hunter }
 			}
-			save_scope_as = cult_rostered
-			scope:cult_viewer = {
-				add_to_variable_list = {
-					name = cult_panel_roster
-					target = scope:cult_rostered
+			else = { remove_variable = cult_panel_hunter }
+
+			# Rebuilt only when the set of members this viewer knows (cult_panel_knows_trigger) has
+			# changed.
+			save_scope_as = cult_viewer
+			if = {
+				limit = {
+					OR = {
+						any_in_global_list = {
+							variable = cult_roster
+							cult_panel_knows_trigger = yes
+							NOT = {
+								scope:cult_viewer = {
+									is_target_in_variable_list = { name = cult_panel_roster target = prev }
+								}
+							}
+						}
+						any_in_list = {
+							variable = cult_panel_roster
+							NOT = { cult_panel_knows_trigger = yes }
+						}
+					}
+				}
+				clear_variable_list = cult_panel_roster
+				every_in_global_list = {
+					variable = cult_roster
+					limit = { cult_panel_knows_trigger = yes }
+					save_scope_as = cult_rostered
+					scope:cult_viewer = {
+						add_to_variable_list = {
+							name = cult_panel_roster
+							target = scope:cult_rostered
+						}
+					}
 				}
 			}
 		}

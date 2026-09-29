@@ -1,0 +1,274 @@
+﻿l_english:
+
+ # ---- Spine additions (restor.0910, restor.0913) -------------------------------------------------
+
+ restor.0910.desc_charge:0 "\n\nIt is also the county your charge names. If this goes well, the Keeper will hear of it."
+ restor.0910.desc_companion:0 "\n\n[restor_errand_companion.GetFirstNameNoTooltip] rides with you. [restor_errand_companion.GetSheHe|U] has been told only what [restor_errand_companion.GetSheHe] needs to know."
+ restor.0910.desc_alone:0 "\n\nYou ride alone. It is safer that way."
+ restor.0913.e:0 "[restor_errand_companion.GetFirstNameNoTooltip], lead them off. Let them follow you."
+
+ # ---- restor.1101 -------------------------------------------------------------------------------
+
+ restor.1101.t:0 "The Bridge"
+ restor.1101.desc:0 "Where the road crosses the river into [restor_errand_county.GetNameNoTier], [restor_errand_lord.GetTitledFirstName]'s men have put a chain across the bridge. Every traveller is asked their name and business, and a clerk writes the answers in a book.\n\nThere are four of them, and they are bored. The ford is half a day upstream."
+ restor.1101.a:0 "I'll tell them the story I told at home."
+ restor.1101.a.success:0 "Waved Through"
+ restor.1101.a.success.tt:0 "The clerk writes down a name that is not yours"
+ restor.1101.a.failure:0 "The Clerk Looks Twice"
+ restor.1101.b:0 "Pay the toll, and something for the clerk's trouble."
+ restor.1101.b.tt:0 "Nobody writes anything down"
+ restor.1101.c:0 "We'll cross at the ford."
+ restor.1101.c.dry:0 "Across the Ford"
+ restor.1101.c.dry.tt:0 "Nobody sees you cross"
+ restor.1101.c.wet:0 "A Cold Crossing"
+
+ # ---- restor.1102 -------------------------------------------------------------------------------
+
+ restor.1102.t:0 "Men in the Road"
+ restor.1102.desc:0 "Three men step out of the trees ahead of you with spears, and two more behind. They want your purses and your horses, in that order.\n\nThey hold their spears like soldiers, not like farmers. Someone taught them."
+ restor.1102.desc_soldiers:0 " You came to [restor_errand_county.GetNameNoTier] to find soldiers. These may be the wrong kind."
+ restor.1102.a:0 "Draw swords!"
+ restor.1102.a.success:0 "The Robbers Run"
+ restor.1102.a.failure:0 "Beaten on the Road"
+ restor.1102.b:0 "Give them the purses."
+ restor.1102.b.tt:0 "They take the money and are gone into the trees"
+ restor.1102.c:0 "Ask them who taught them to hold a spear."
+ restor.1102.c.success:0 "Old Soldiers of $restor_crown_name$"
+ restor.1102.c.failure:0 "The Robbers Laugh"
+
+ # ---- restor.1103 -------------------------------------------------------------------------------
+
+ restor.1103.t:0 "The Song at the Inn"
+ restor.1103.desc:0 "The inn at the edge of [restor_errand_county.GetNameNoTier] is full tonight. Late in the evening an old man by the fire starts to sing, and the room goes quiet to listen. It is a song about the last king of $restor_crown_name$ and the day his banner came down, and it has not been sung openly for years.\n\nNobody stops him. A few people are singing along under their breath."
+ restor.1103.a:0 "I know the words. I'll sing with him."
+ restor.1103.b:0 "Pay him to sing it again, louder."
+ restor.1103.b.success:0 "The Whole Room Sings"
+ restor.1103.b.failure:0 "Someone Slips Out"
+ restor.1103.c:0 "[restor_errand_companion.GetFirstNameNoTooltip] has the better voice."
+ restor.1103.d:0 "Keep my head down and finish my drink."
+ restor.1103.d.tt:0 "Nobody at the inn will remember you"
+
+ # ---- restor.1104 -------------------------------------------------------------------------------
+
+ restor.1104.t:0 "Followed"
+ restor.1104.desc:0 "A man in a brown cloak has been on the road behind you since the last town. When you stop to water the horses, he stops too. When you ride on, so does he. He never comes close enough to speak to."
+ restor.1104.a:0 "We'll lose him in the next market."
+ restor.1104.a.success:0 "You Lose Him"
+ restor.1104.a.success.tt:0 "He does not find you again"
+ restor.1104.a.failure:0 "He Keeps Up"
+ restor.1104.b:0 "Wait for him round the next bend."
+ restor.1104.b.pedlar:0 "Only a Pedlar"
+ restor.1104.b.runs:0 "He Runs"
+ restor.1104.c:0 "Let him follow. I'll give him something dull to report."
+
+ # ---- restor.1105 -------------------------------------------------------------------------------
+
+ restor.1105.t:0 "A Loose Tongue"
+ restor.1105.desc:0 "[restor_errand_companion.GetFirstNameNoTooltip] has had too much to drink, and is telling the table how much better everything was under the old kings of $restor_crown_name$. The table is enjoying it.\n\nSo, you notice, is a man at the next table who has not touched his ale."
+ restor.1105.a:0 "That's enough, [restor_errand_companion.GetFirstNameNoTooltip]. Bed."
+ restor.1105.a.tt:0 "The talk stops before it goes any further"
+ restor.1105.b:0 "Drinks for the whole room!"
+ restor.1105.b.success:0 "The Talk Moves On"
+ restor.1105.b.success.tt:0 "By morning nobody remembers what was said"
+ restor.1105.b.failure:0 "The Quiet Man Leaves"
+ restor.1105.c:0 "Let [restor_errand_companion.GetHerHim] talk. [restor_errand_companion.GetSheHe|U]'s good at it."
+ restor.1105.c.success:0 "The Room Warms to You"
+ restor.1105.c.failure:0 "The Quiet Man Remembers"
+
+ # ---- restor.1106 -------------------------------------------------------------------------------
+
+ restor.1106.t:0 "Fellow Travellers"
+ restor.1106.desc:0 "For two days you have shared the road into [restor_errand_county.GetNameNoTier] with a party of pilgrims. The oldest of them, a woman with a stick and a loud voice, tells anyone who will listen that her father saw the last king of $restor_crown_name$ crowned, and that it rained, and that nobody minded.\n\nNobody looks twice at a party of pilgrims."
+ restor.1106.a:0 "We'll travel with them, at their pace."
+ restor.1106.b:0 "Ask her to tell it again, slowly."
+ restor.1106.c:0 "Give them alms and ride on."
+
+ # ---- restor.1107 -------------------------------------------------------------------------------
+
+ restor.1107.t:0 "Letters in the Saddlebag"
+ restor.1107.desc:0 "There is a patrol on the road ahead, stopping travellers and going through their bags. Nobody is being arrested. Nobody is being hurried, either."
+ restor.1107.desc_keeper:0 "\n\nIn your saddlebag are letters from [restor_keeper.GetTitledFirstName] to the Sworn in [restor_errand_county.GetNameNoTier], with names in them."
+ restor.1107.desc_plain:0 "\n\nIn your saddlebag are letters for the Sworn in [restor_errand_county.GetNameNoTier], with names in them."
+ restor.1107.a:0 "Burn them now, before we reach the patrol."
+ restor.1107.a.tt:0 "The people the letters were for will have to take your word instead"
+ restor.1107.b:0 "Sew them into my boot."
+ restor.1107.b_companion:0 "Put them in [restor_errand_companion.GetFirstNameNoTooltip]'s saddle. [restor_errand_companion.GetSheHe|U] has an honest face."
+ restor.1107.b.success:0 "The Letters Are Not Found"
+ restor.1107.b.success.tt:0 "The patrol waves you on"
+ restor.1107.b.failure:0 "The Letters Are Found"
+ restor.1107.c:0 "Pay the sergeant to search someone else."
+ restor.1107.c.tt:0 "The patrol barely looks at your bags"
+
+ # ---- restor.1110 -------------------------------------------------------------------------------
+
+ restor.1110.t:0 "The Old King's Face"
+ restor.1110.desc:0 "In a village of [restor_errand_county.GetNameNoTier] an old man stops you in the street and holds out his hand. On his palm is a silver coin, worn nearly smooth, with the face of a king of House $restor_house_name$ on it.\n\n"You're not from here," he says. "People say someone's come asking about the old family. Is it true there's still one of them living?""
+ restor.1110.a:0 "It's true. Tell your neighbours."
+ restor.1110.b:0 "I'll buy that coin from you."
+ restor.1110.c:0 "Nobody lives forever, grandfather."
+
+ # ---- restor.1111 -------------------------------------------------------------------------------
+
+ restor.1111.t:0 "The Tax Men"
+ restor.1111.desc:0 "[restor_errand_lord.GetTitledFirstName]'s tax men came into the village this morning, and they are taking more than is owed. A family that cannot pay is watching its cow being led away.\n\nThe whole village is watching you, because you are the only one there with a sword."
+ restor.1111.a:0 "I'll pay what they owe."
+ restor.1111.b:0 "Put the cow back."
+ restor.1111.b.success:0 "The Tax Men Back Down"
+ restor.1111.b.success.tt:0 "They leave the village alone, for now"
+ restor.1111.b.failure:0 "The Tax Men Take Your Name"
+ restor.1111.c:0 "It's not my village."
+
+ # ---- restor.1112 -------------------------------------------------------------------------------
+
+ restor.1112.t:0 "The Garrison Sergeant"
+ restor.1112.desc:0 "The sergeant of [restor_errand_lord.GetTitledFirstName]'s garrison drinks at your inn every night, and every night he complains that he has not been paid since spring. Tonight he has sat down at your table.\n\n"In the old days," he says, to nobody in particular, "a soldier got paid.""
+ restor.1112.a:0 "Ask him who paid soldiers in the old days."
+ restor.1112.a.success:0 "The Sergeant Is One of Us"
+ restor.1112.a.failure:0 "The Sergeant Reports You"
+ restor.1112.b:0 "Buy him drinks and let him talk."
+ restor.1112.b.tt:0 "You learn how many men the garrison has, and how few of them are paid"
+ restor.1112.c:0 "Offer him a place at my court."
+ restor.1112.c.tt:0 "The sergeant joins your court as a knight"
+ restor.1112.d:0 "Find another inn."
+ restor.1112.d.tt:0 "You never see the sergeant again"
+
+ # ---- restor.1113 -------------------------------------------------------------------------------
+
+ restor.1113.t:0 "The Soldier's Widow"
+ restor.1113.desc:0 "An old woman in [restor_errand_county.GetNameNoTier] has heard what you are here for, and asked you to her house. Her husband's family carried spears for House $restor_house_name$ for as long as there were kings in $restor_crown_name$, she says, and he never let anyone forget it. He is dead now. His grandfather's banner is folded in a chest at the foot of her bed.\n\nShe does not ask you for anything. The roof leaks."
+ restor.1113.a:0 "House $restor_house_name$ will pay you a pension. Here is the first of it."
+ restor.1113.b:0 "Let me take the banner to the heir. It belongs with [restor_pretender.GetHerHim]."
+ restor.1113.c:0 "Thank her for her time, and go."
+ restor.1113.c.tt:0 "The banner stays in the chest"
+
+ # ---- restor.1114 -------------------------------------------------------------------------------
+
+ restor.1114.t:0 "The Keeper of the Tombs"
+ restor.1114.desc:0 "Kings of $restor_crown_name$ who died before the fall were buried in the church at [restor_errand_county.GetNameNoTier]. The priest who keeps their tombs is very old. He swept them every week under the old kings, and he has swept them every week since, whoever held the county.\n\nHe knows who you are. He has not said so."
+ restor.1114.desc_cousin:0 " He has a cousin who keeps the church in [restor_errand_pulpit_county.GetNameNoTier], and the two of them write to each other every month."
+ restor.1114.a:0 "Pray at the tombs with him."
+ restor.1114.b:0 "Ask him to say the old king's name from the pulpit."
+ restor.1114.b.success:0 "The Priest Agrees"
+ restor.1114.b.failure:0 "The Priest Will Not"
+ restor.1114.b.failure.tt:0 "He keeps the tombs of the dead. The quarrels of the living are not his business"
+ restor.1114.c:0 "Leave something for the tombs' upkeep."
+
+ # ---- restor.1115 -------------------------------------------------------------------------------
+
+ restor.1115.t:0 "The Empty Mill"
+ restor.1115.desc:0 "You were to meet one of the Sworn at the mill outside [restor_errand_county.GetNameNoTier] at dusk: a miller's son who took the oath years ago and has been the society's eyes here ever since.\n\nDusk came and went. The mill is dark. Nobody has come."
+ restor.1115.a:0 "We'll wait another day."
+ restor.1115.a.comes:0 "He Comes at Last"
+ restor.1115.a.comes.tt:0 "He was only being careful, and he has news"
+ restor.1115.a.wrong:0 "The Wrong Visitors"
+ restor.1115.a.nobody:0 "Nobody Comes"
+ restor.1115.a.nobody.tt:0 "You never learn what happened to him"
+ restor.1115.b:0 "Go to his house."
+ restor.1115.b.afraid:0 "He Is Afraid"
+ restor.1115.b.afraid.tt:0 "He will not meet you again, but he gives you the money he has collected for the heir"
+ restor.1115.b.watched:0 "Shuttered and Watched"
+ restor.1115.c:0 "Leave. Now."
+ restor.1115.c.tt:0 "Whatever happened here, you are not part of it"
+
+ # ---- restor.1116 -------------------------------------------------------------------------------
+
+ restor.1116.t:0 "A Second County"
+ restor.1116.desc:0 "A boy rides in from [restor_errand_second_county.GetNameNoTier] with a message. The people there have heard that someone has come from House $restor_house_name$, and they want to know why nobody has come to them."
+ restor.1116.a:0 "I'll go myself."
+ restor.1116.b:0 "[restor_errand_companion.GetFirstNameNoTooltip], you go. Take the back roads."
+ restor.1116.c:0 "Tell them to wait. Their turn will come."
+ restor.1116.c.tt:0 "[restor_errand_second_county.GetNameNoTier] is left as it is"
+
+ # ---- restor.1117 -------------------------------------------------------------------------------
+
+ restor.1117.t:0 "The Proclamation"
+ restor.1117.desc_usurper:0 "A crier in the market square of [restor_errand_county.GetNameNoTier] is reading out a proclamation from [restor_usurper.GetTitledFirstName]:"
+ restor.1117.desc_lord:0 "A crier in the market square of [restor_errand_county.GetNameNoTier] is reading out a proclamation from [restor_errand_lord.GetTitledFirstName]:"
+ restor.1117.desc:0 " a reward for news of anyone who speaks for House $restor_house_name$, and a rope for anyone who hides them. When he is done, he nails it to the well.\n\nThe crowd listens without a sound. Somebody near the back spits."
+ restor.1117.a:0 "Tear it down tonight."
+ restor.1117.b:0 "Pay the crier to lose it."
+ restor.1117.b.success:0 "The Proclamation Is Lost"
+ restor.1117.b.success.tt:0 "Nobody in [restor_errand_county.GetNameNoTier] hears it read again"
+ restor.1117.b.failure:0 "The Crier Talks"
+ restor.1117.c:0 "Let it hang. Nobody here believes it."
+
+ # ---- restor.1118 -------------------------------------------------------------------------------
+
+ restor.1118.t:0 "A Village Wedding"
+ restor.1118.desc:0 "You have been asked to a wedding in a village of [restor_errand_county.GetNameNoTier], as the stranger with the good horse. Late in the feast the bride's father stands up to give the last toast. He hesitates, looks at you, and sits down again.\n\nYou know which toast he was going to give. It is the one they gave under the old kings."
+ restor.1118.a:0 "Stand up and give it for him."
+ restor.1118.b:0 "Give the couple a wedding gift."
+ restor.1118.c:0 "Thank them, and leave early."
+
+ # ---- restor.1119 -------------------------------------------------------------------------------
+
+ restor.1119.t:0 "The Merchant's Price"
+ restor.1119.desc:0 "The master of a wool house in [restor_errand_county.GetNameNoTier], a man who did well under the old kings and has done better since, has agreed to see you. He will give money to [restor_pretender.GetTitledFirstName], the heir of House $restor_house_name$.\n\nHe would like a promise first: a charter for his house, sealed, on the day the heir is crowned."
+ restor.1119.a:0 "You have my word, and the heir's."
+ restor.1119.b:0 "Give because it's right, or don't give at all."
+ restor.1119.b.success:0 "The Merchant Gives"
+ restor.1119.b.failure:0 "The Merchant Keeps His Purse"
+ restor.1119.b.failure.tt:0 "He wishes the heir well, and nothing more"
+ restor.1119.c:0 "Think what [restor_usurper.GetTitledFirstName] would do if [restor_usurper.GetSheHe] knew we'd talked."
+ restor.1119.c_lord:0 "Think what your lord would do if he knew we'd talked."
+
+ # ---- restor.1120 -------------------------------------------------------------------------------
+
+ restor.1120.t:0 "The Sergeant's Test"
+ restor.1120.desc:0 "The old soldier the village sends you to fought for the people of $restor_crown_name$ when he was young, and his sons want to fight too. Before he lets them follow anyone, he wants to see whether that someone can use a sword.\n\nHe has two blunted blades and a patch of trampled grass behind his house."
+ restor.1120.a:0 "I'll fight you myself."
+ restor.1120.a.success:0 "You Win the Bout"
+ restor.1120.a.failure:0 "He Puts You on Your Back"
+ restor.1120.b:0 "[restor_errand_companion.GetFirstNameNoTooltip] will fight for me."
+ restor.1120.b.success:0 "[restor_errand_companion.GetFirstNameNoTooltip] Wins the Bout"
+ restor.1120.b.failure:0 "[restor_errand_companion.GetFirstNameNoTooltip] Loses the Bout"
+ restor.1120.c:0 "I didn't come here to play at swords."
+ restor.1120.sons_stay_tt:0 "The old soldier's sons stay at home"
+
+ # ---- restor.1121 -------------------------------------------------------------------------------
+
+ restor.1121.t:0 "The Headman's Doubt"
+ restor.1121.desc:0 "The headman of the largest village in [restor_errand_county.GetNameNoTier] has listened to all of it. Then he asks the question you hoped nobody would: what did House $restor_house_name$ ever do for his village, and what will it do if it comes back?"
+ restor.1121.a:0 "It will take no more than the old kings took."
+ restor.1121.b:0 "Here is something for your village now."
+ restor.1121.c:0 "Let me tell you what the old kings did."
+ restor.1121.c.success:0 "The Headman Is Won Over"
+ restor.1121.c.failure:0 "The Headman Is Not Moved"
+
+ # ---- restor.1122 -------------------------------------------------------------------------------
+
+ restor.1122.t:0 "Names for Sale"
+ restor.1122.desc:0 "A thin man sits down across from you in a tavern in [restor_errand_county.GetNameNoTier] and says, very quietly, that he knows who in the county is paid to report on strangers. For twenty gold you can have their names."
+ restor.1122.a:0 "Twenty gold. Here."
+ restor.1122.a.success:0 "Good Names"
+ restor.1122.a.failure:0 "The Names Are Wrong"
+ restor.1122.b:0 "I don't buy from strangers."
+ restor.1122.b.tt:0 "He shrugs, and finds another table"
+
+ # ---- restor.1123 -------------------------------------------------------------------------------
+
+ restor.1123.t:0 "An Old Acquaintance"
+ restor.1123.desc:0 "A woman in the market at [restor_errand_county.GetNameNoTier] stopped [restor_errand_companion.GetFirstNameNoTooltip] this morning and called [restor_errand_companion.GetHerHim] by name. She used to be a servant in [restor_errand_companion.GetHerHis] family's house, and she is very pleased to see [restor_errand_companion.GetHerHim].\n\nShe has asked what brings [restor_errand_companion.GetHerHim] here. She is still asking."
+ restor.1123.a:0 "[restor_errand_companion.GetFirstNameNoTooltip] stays out of sight until we leave."
+ restor.1123.a.tt:0 "Nobody else sees [restor_errand_companion.GetFirstNameNoTooltip] in [restor_errand_county.GetNameNoTier]"
+ restor.1123.b:0 "Give her something for her trouble, and a better story."
+ restor.1123.b.tt:0 "She goes home happy, and none the wiser"
+ restor.1123.c:0 "Let her talk. She's pleased to see an old face, that's all."
+ restor.1123.c.success:0 "She Tells No One"
+ restor.1123.c.success.tt:0 "She has other things to talk about"
+ restor.1123.c.failure:0 "She Tells Everyone"
+
+ # ---- Pulse actions ------------------------------------------------------------------------------
+
+ restor_errand_apa_old_milestone_title:0 "[first.GetShortUIName|U] Passed a Milestone Still Carved with the Arms of $restor_crown_name$"
+ restor_errand_apa_old_songs_title:0 "[first.GetShortUIName|U] Heard the Old Songs of $restor_crown_name$ Sung Low in [province.GetNameNoTooltip]"
+ restor_errand_apa_false_name_title:0 "[first.GetShortUIName|U] Signed an Innkeeper's Book under a False Name"
+ restor_errand_apa_by_the_fire_title:0 "[first.GetShortUIName|U] and [second.GetShortUIName] Talked Late by the Fire"
+ restor_errand_apa_riders_passed_title:0 "[first.GetShortUIName|U] Stepped off the Road to Let [second.GetShortUIName]'s Riders Pass"
+ restor_errand_apa_child_asked_title:0 "A Child in [province.GetNameNoTooltip] Asked [first.GetShortUIName] Whether the King Was Coming Back"
+ restor_errand_apa_roadside_shrine_title:0 "[first.GetShortUIName|U] Prayed at a Roadside Shrine the Old Kings Built"
+ restor_errand_apa_thrown_shoe_title:0 "[first.GetShortUIName|U]'s Horse Threw a Shoe outside [province.GetNameNoTooltip]"
+ restor_errand_apa_colours_in_window_title:0 "[first.GetShortUIName|U] Saw the Colours of House $restor_house_name$ Hung in a Window"
+ restor_errand_apa_scouted_ahead_title:0 "[first.GetShortUIName|U] Rode Ahead and Found [second.GetShortUIName] a Quieter Road"
+ restor_errand_apa_round_for_a_veteran_title:0 "[first.GetShortUIName|U] Bought a Round for an Old Soldier of $restor_crown_name$"
+ restor_errand_apa_old_ledger_title:0 "[first.GetShortUIName|U] Was Shown a Ledger of Debts Owed to the Old Kings"

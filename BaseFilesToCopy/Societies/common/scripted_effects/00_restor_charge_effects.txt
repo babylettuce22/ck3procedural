@@ -71,6 +71,23 @@ restor_charge_check_effect = {
 # Picks a charge that can be done right now and gives it. The AI takes it silently; a player gets
 # the Keeper's letter (restor.0501) and may turn it down.
 restor_charge_offer_effect = {
+	restor_charge_pick_effect = yes
+	restor_charge_notify_effect = yes
+}
+
+# A player member is told by the Keeper's letter (restor.0501), and may turn it down.
+restor_charge_notify_effect = {
+	if = {
+		limit = {
+			has_variable = restor_charge
+			is_ai = no
+		}
+		trigger_event = { id = restor.0501 days = 1 }
+	}
+}
+
+# The usual draw: whatever can be done right now, weighted by what the member is placed to do.
+restor_charge_pick_effect = {
 	random_list = {
 		30 = {
 			trigger = { restor_charge_win_over_possible_trigger = yes }
@@ -101,12 +118,69 @@ restor_charge_offer_effect = {
 			restor_charge_give_recruit_effect = yes
 		}
 	}
+}
+
+# A charge from a player Keeper's own hand (restor_give_charge_interaction, via restor.0540). ROOT is
+# the member. var:restor_charge_order is the kind asked for, or flag:any for the usual draw; a kind
+# with nothing to aim at right now falls back to that draw rather than giving nothing (the Keeper's
+# toast says so). var:restor_charge_giver is kept with the charge so its keeping can be reported back
+# (restor_charge_reward_effect).
+restor_charge_order_effect = {
 	if = {
 		limit = {
-			has_variable = restor_charge
-			is_ai = no
+			var:restor_charge_order = flag:win_over
+			restor_charge_win_over_possible_trigger = yes
 		}
-		trigger_event = { id = restor.0501 days = 1 }
+		restor_charge_give_win_over_effect = yes
+	}
+	else_if = {
+		limit = {
+			var:restor_charge_order = flag:stir
+			restor_charge_stir_possible_trigger = yes
+		}
+		restor_charge_give_stir_effect = yes
+	}
+	else_if = {
+		limit = {
+			var:restor_charge_order = flag:war_chest
+			restor_charge_war_chest_possible_trigger = yes
+		}
+		restor_charge_give_war_chest_effect = yes
+	}
+	else_if = {
+		limit = {
+			var:restor_charge_order = flag:shelter
+			restor_charge_shelter_possible_trigger = yes
+		}
+		restor_charge_give_shelter_effect = yes
+	}
+	else_if = {
+		limit = { var:restor_charge_order = flag:recruit }
+		restor_charge_give_recruit_effect = yes
+	}
+	if = {
+		limit = { NOT = { has_variable = restor_charge } }
+		restor_charge_pick_effect = yes
+	}
+}
+
+# THIS has just become the Keeper or the heir, and neither is given charges
+# (restor_charge_can_be_offered_trigger): the Keeper gives them, and the heir is what they are for. A
+# charge they were carrying is set aside. $TT$ says which.
+restor_charge_set_aside_for_office_effect = {
+	if = {
+		limit = { has_variable = restor_charge }
+		save_scope_as = restor_charge_set_aside
+		if = {
+			limit = { is_ai = no }
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = restor_charge_set_aside_toast
+				left_icon = scope:restor_charge_set_aside
+				custom_tooltip = $TT$
+			}
+		}
+		restor_charge_clear_effect = yes
 	}
 }
 
@@ -234,6 +308,14 @@ restor_charge_save_state_effect = {
 		}
 		var:restor_charge_target = { save_scope_as = restor_charge_target }
 	}
+	# Who gave it, when a player Keeper gave it by hand -- the reward reports back to them.
+	if = {
+		limit = {
+			has_variable = restor_charge
+			exists = var:restor_charge_giver
+		}
+		var:restor_charge_giver = { save_scope_as = restor_charge_giver }
+	}
 }
 
 restor_charge_clear_effect = {
@@ -242,6 +324,7 @@ restor_charge_clear_effect = {
 	remove_variable = restor_charge_county
 	remove_variable = restor_charge_given
 	remove_variable = restor_charge_goal
+	remove_variable = restor_charge_giver
 	clear_variable_list = restor_charge_old_recruits
 }
 
@@ -267,6 +350,35 @@ restor_charge_reward_effect = {
 			add_opinion = {
 				target = root
 				modifier = restor_kept_charge_opinion
+			}
+		}
+	}
+	# A charge a player Keeper gave by hand: the giver hears it was kept, and earns favour by it.
+	# scope:restor_charge_giver comes from restor_charge_save_state_effect, which every caller runs
+	# before the state is cleared.
+	hidden_effect = {
+		if = {
+			limit = {
+				exists = scope:restor_charge_giver
+				scope:restor_charge_giver = {
+					is_alive = yes
+					is_ai = no
+				}
+				NOT = { scope:restor_charge_giver = root }
+			}
+			save_scope_as = restor_charge_kept_by
+			scope:restor_charge_giver = {
+				if = {
+					limit = { NOT = { has_variable = restor_favour } }
+					set_variable = { name = restor_favour value = 0 }
+				}
+				change_variable = { name = restor_favour add = 10 }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor_charge_kept_by_toast
+					left_icon = scope:restor_charge_kept_by
+					custom_tooltip = restor_charge_kept_by_tt
+				}
 			}
 		}
 	}

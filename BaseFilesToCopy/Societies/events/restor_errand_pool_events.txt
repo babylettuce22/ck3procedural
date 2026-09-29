@@ -1,0 +1,2095 @@
+﻿# THE ERRAND'S RANDOM POOL (restor.1100-1199)
+#
+# Drawn by common/on_action/00_restor_errand_pool_on_actions.txt, which the Errand's phase fires on
+# day 5 (the road) and days 14 and 22 (the county). Host only. Every event pays for itself: the
+# spine's own payment in restor.0914 is untouched by anything here.
+#
+#   THE ROAD (restor_errand_road_pool)
+#     1101  The Bridge              the local lord's men check every traveller      (foreign county)
+#     1102  Men in the Road         robbers who hold their spears like soldiers
+#     1103  The Song at the Inn     the forbidden song of the last king
+#     1104  Followed                a man in a brown cloak
+#     1105  A Loose Tongue          a companion talks too much                        (companion)
+#     1106  Fellow Travellers       pilgrims make good cover
+#     1107  Letters in the Saddlebag  a patrol searches bags
+#
+#   THE COUNTY (restor_errand_county_pool)
+#     1110  The Old King's Face     an old man with a coin asks if the line lives
+#     1111  The Tax Men             the lord's collectors take a family's cow         (foreign county)
+#     1112  The Garrison Sergeant   unpaid since spring                               (foreign county)
+#     1113  The Soldier's Widow     a banner in a chest
+#     1114  The Keeper of the Tombs the priest who swept the old kings' tombs
+#     1115  The Empty Mill          a sworn contact who does not come
+#     1116  A Second County         a neighbouring county asks for someone           (unstirred neighbour)
+#     1117  The Proclamation        a reward for news of the house's friends          (foreign county)
+#     1118  A Village Wedding       the old toast
+#     1119  The Merchant's Price    coin only
+#     1120  The Sergeant's Test     soldiers only
+#     1121  The Headman's Doubt     stir only
+#     1122  Names for Sale          the lord's informers, for twenty gold
+#     1123  An Old Acquaintance     a companion is recognised                         (companion)
+#
+# Every event requires scope:activity (the on_action passes it), so none of these fires outside an
+# Errand. Each sets restor_errand_seen_NNNN for 60 days: one Errand never draws the same event
+# twice. Every random outcome ends in a toast, including the ones where nothing happens.
+
+namespace = restor
+
+# =====================================================================================
+#  THE ROAD
+# =====================================================================================
+
+# ---- restor.1101 -- The Bridge -------------------------------------------------------------------
+restor.1101 = {
+	type = character_event
+	title = restor.1101.t
+	desc = restor.1101.desc
+	theme = secret
+	override_background = { reference = terrain_travel }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		restor_errand_foreign_county_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1101 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1101 days = 60 }
+	}
+
+	# The cover story.
+	option = {
+		name = restor.1101.a
+		skill = intrigue
+		duel = {
+			skill = intrigue
+			value = decent_skill_rating
+			50 = {
+				desc = restor.1101.a.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1101.a.success
+					left_icon = root
+					custom_tooltip = restor.1101.a.success.tt
+				}
+			}
+			50 = {
+				desc = restor.1101.a.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1101.a.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = deceitful }
+		}
+	}
+
+	# Pay.
+	option = {
+		name = restor.1101.b
+		trigger = { gold >= 15 }
+		remove_short_term_gold = 15
+		custom_tooltip = restor.1101.b.tt
+		ai_chance = {
+			base = 30
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# The ford.
+	option = {
+		name = restor.1101.c
+		random_list = {
+			75 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.1101.c.dry
+					left_icon = root
+					custom_tooltip = restor.1101.c.dry.tt
+				}
+			}
+			25 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1101.c.wet
+					left_icon = root
+					add_stress = minor_stress_gain
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+}
+
+# ---- restor.1102 -- Men in the Road -------------------------------------------------------------
+restor.1102 = {
+	type = character_event
+	title = restor.1102.t
+	desc = {
+		desc = restor.1102.desc
+		triggered_desc = {
+			trigger = { restor_errand_for_soldiers_trigger = yes }
+			desc = restor.1102.desc_soldiers
+		}
+	}
+	theme = martial
+	override_background = { reference = wilderness }
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1102 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1102 days = 60 }
+	}
+
+	# Fight.
+	option = {
+		name = restor.1102.a
+		skill = prowess
+		duel = {
+			skill = prowess
+			value = decent_skill_rating
+			50 = {
+				desc = restor.1102.a.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1102.a.success
+					left_icon = root
+					add_prestige = minor_prestige_gain
+				}
+			}
+			50 = {
+				desc = restor.1102.a.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1102.a.failure
+					left_icon = root
+					increase_wounds_no_death_effect = { REASON = fight }
+					if = {
+						limit = { gold >= 20 }
+						remove_short_term_gold = 20
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = -25 has_trait = craven }
+		}
+	}
+
+	# Pay.
+	option = {
+		name = restor.1102.b
+		trigger = { gold >= 20 }
+		remove_short_term_gold = 20
+		custom_tooltip = restor.1102.b.tt
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = craven }
+		}
+	}
+
+	# Ask who taught them.
+	option = {
+		name = restor.1102.c
+		random_list = {
+			50 = {
+				modifier = {
+					add = 20
+					restor_errand_for_soldiers_trigger = yes
+				}
+				modifier = {
+					add = 15
+					martial >= 12
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1102.c.success
+					left_icon = root
+					restor_favour_gain_effect = { VALUE = 5 }
+					restor_exposure_gain_effect = { VALUE = 2 }
+					if = {
+						limit = { restor_errand_for_soldiers_trigger = yes }
+						add_trait_xp = {
+							trait = restor_member
+							track = restor_rank
+							value = 3
+						}
+					}
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1102.c.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 2 }
+					if = {
+						limit = { gold >= 20 }
+						remove_short_term_gold = 20
+					}
+					else = {
+						increase_wounds_no_death_effect = { REASON = beaten }
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 restor_errand_for_soldiers_trigger = yes }
+		}
+	}
+}
+
+# ---- restor.1103 -- The Song at the Inn ---------------------------------------------------------
+restor.1103 = {
+	type = character_event
+	title = restor.1103.t
+	desc = restor.1103.desc
+	theme = secret
+	override_background = { reference = tavern }
+	left_portrait = {
+		character = root
+		animation = interested
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_errand_companion }
+		character = scope:restor_errand_companion
+		animation = happiness
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1103 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1103 days = 60 }
+	}
+
+	# Sing.
+	option = {
+		name = restor.1103.a
+		stress_impact = {
+			base = minor_stress_impact_loss
+		}
+		restor_favour_gain_effect = { VALUE = 5 }
+		restor_exposure_gain_effect = { VALUE = 2 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = gregarious }
+		}
+	}
+
+	# Again, louder.
+	option = {
+		name = restor.1103.b
+		trigger = { gold >= 10 }
+		remove_short_term_gold = 10
+		random_list = {
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1103.b.success
+					left_icon = root
+					restor_favour_gain_effect = { VALUE = 10 }
+					restor_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1103.b.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 15
+			modifier = { add = 20 has_trait = brave }
+		}
+	}
+
+	# The companion sings.
+	option = {
+		name = restor.1103.c
+		trigger = { exists = scope:restor_errand_companion }
+		scope:restor_errand_companion = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_good_company_opinion
+			}
+		}
+		restor_their_exposure_gain_effect = { WHO = scope:restor_errand_companion VALUE = 2 }
+		restor_favour_gain_effect = { VALUE = 5 }
+		ai_chance = {
+			base = 20
+		}
+	}
+
+	# Head down.
+	option = {
+		name = restor.1103.d
+		custom_tooltip = restor.1103.d.tt
+		stress_impact = {
+			gregarious = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = paranoid }
+		}
+	}
+}
+
+# ---- restor.1104 -- Followed --------------------------------------------------------------------
+restor.1104 = {
+	type = character_event
+	title = restor.1104.t
+	desc = restor.1104.desc
+	theme = intrigue
+	override_background = { reference = terrain_travel }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1104 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1104 days = 60 }
+	}
+
+	# Lose him.
+	option = {
+		name = restor.1104.a
+		skill = intrigue
+		duel = {
+			skill = intrigue
+			value = decent_skill_rating
+			50 = {
+				desc = restor.1104.a.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1104.a.success
+					left_icon = root
+					custom_tooltip = restor.1104.a.success.tt
+				}
+			}
+			50 = {
+				desc = restor.1104.a.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1104.a.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+		}
+	}
+
+	# Wait for him.
+	option = {
+		name = restor.1104.b
+		random_list = {
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.1104.b.pedlar
+					left_icon = root
+					add_prestige = minor_prestige_loss
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1104.b.runs
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = 20 has_trait = wrathful }
+		}
+	}
+
+	# Feed him a dull story.
+	option = {
+		name = restor.1104.c
+		trigger = {
+			OR = {
+				intrigue >= 10
+				has_trait = deceitful
+			}
+		}
+		restor_exposure_loss_effect = { VALUE = 2 }
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 60
+		}
+	}
+}
+
+# ---- restor.1105 -- A Loose Tongue --------------------------------------------------------------
+restor.1105 = {
+	type = character_event
+	title = restor.1105.t
+	desc = restor.1105.desc
+	theme = secret
+	override_background = { reference = tavern }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:restor_errand_companion
+		animation = laugh
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		restor_errand_has_companion_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1105 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1105 days = 60 }
+	}
+
+	# Enough.
+	option = {
+		name = restor.1105.a
+		scope:restor_errand_companion = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_scolded_me_opinion
+			}
+		}
+		custom_tooltip = restor.1105.a.tt
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Drinks for the room.
+	option = {
+		name = restor.1105.b
+		trigger = { gold >= 10 }
+		remove_short_term_gold = 10
+		random_list = {
+			70 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.1105.b.success
+					left_icon = root
+					custom_tooltip = restor.1105.b.success.tt
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1105.b.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = generous }
+		}
+	}
+
+	# Let them talk.
+	option = {
+		name = restor.1105.c
+		random_list = {
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1105.c.success
+					left_icon = root
+					right_icon = scope:restor_errand_companion
+					restor_favour_gain_effect = { VALUE = 8 }
+					scope:restor_errand_companion = {
+						add_opinion = {
+							target = root
+							modifier = restor_life_good_company_opinion
+						}
+					}
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1105.c.failure
+					left_icon = root
+					right_icon = scope:restor_errand_companion
+					restor_exposure_gain_effect = { VALUE = 2 }
+					restor_their_exposure_gain_effect = { WHO = scope:restor_errand_companion VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = gregarious }
+		}
+	}
+}
+
+# ---- restor.1106 -- Fellow Travellers -----------------------------------------------------------
+restor.1106 = {
+	type = character_event
+	title = restor.1106.t
+	desc = restor.1106.desc
+	theme = faith
+	override_background = { reference = terrain_travel }
+	left_portrait = {
+		character = root
+		animation = happiness
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1106 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1106 days = 60 }
+	}
+
+	# Travel with them.
+	option = {
+		name = restor.1106.a
+		restor_exposure_loss_effect = { VALUE = 2 }
+		add_piety = minor_piety_gain
+		stress_impact = {
+			impatient = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 50
+			modifier = { add = -30 has_trait = impatient }
+		}
+	}
+
+	# Hear the story.
+	option = {
+		name = restor.1106.b
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 3
+		}
+		stress_impact = {
+			base = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 30
+		}
+	}
+
+	# Alms.
+	option = {
+		name = restor.1106.c
+		trigger = { gold >= 5 }
+		remove_short_term_gold = 5
+		add_piety = medium_piety_gain
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = zealous }
+		}
+	}
+}
+
+# ---- restor.1107 -- Letters in the Saddlebag ---------------------------------------------------
+restor.1107 = {
+	type = character_event
+	title = restor.1107.t
+	desc = {
+		desc = restor.1107.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_keeper
+					NOT = { scope:restor_keeper = root }
+				}
+				desc = restor.1107.desc_keeper
+			}
+			desc = restor.1107.desc_plain
+		}
+	}
+	theme = secret
+	override_background = { reference = terrain_travel }
+	left_portrait = {
+		character = root
+		animation = stress
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_errand_companion }
+		character = scope:restor_errand_companion
+		animation = worry
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1107 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1107 days = 60 }
+	}
+
+	# Burn them.
+	option = {
+		name = restor.1107.a
+		restor_favour_spend_effect = { VALUE = 5 }
+		custom_tooltip = restor.1107.a.tt
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = paranoid }
+		}
+	}
+
+	# Hide them.
+	option = {
+		name = {
+			trigger = { exists = scope:restor_errand_companion }
+			text = restor.1107.b_companion
+		}
+		name = {
+			trigger = { NOT = { exists = scope:restor_errand_companion } }
+			text = restor.1107.b
+		}
+		skill = intrigue
+		duel = {
+			skill = intrigue
+			value = decent_skill_rating
+			50 = {
+				desc = restor.1107.b.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1107.b.success
+					left_icon = root
+					custom_tooltip = restor.1107.b.success.tt
+				}
+			}
+			50 = {
+				desc = restor.1107.b.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1107.b.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 5 }
+					if = {
+						limit = { exists = scope:restor_errand_companion }
+						restor_their_exposure_gain_effect = { WHO = scope:restor_errand_companion VALUE = 2 }
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = deceitful }
+		}
+	}
+
+	# Pay the sergeant.
+	option = {
+		name = restor.1107.c
+		trigger = { gold >= 25 }
+		remove_short_term_gold = 25
+		custom_tooltip = restor.1107.c.tt
+		ai_chance = {
+			base = 30
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+}
+
+# =====================================================================================
+#  THE COUNTY
+# =====================================================================================
+
+# ---- restor.1110 -- The Old King's Face ---------------------------------------------------------
+restor.1110 = {
+	type = character_event
+	title = restor.1110.t
+	desc = restor.1110.desc
+	theme = secret
+	override_background = { reference = village }
+	left_portrait = {
+		character = root
+		animation = interested
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1110 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1110 days = 60 }
+	}
+
+	# It lives.
+	option = {
+		name = restor.1110.a
+		restor_favour_gain_effect = { VALUE = 5 }
+		restor_exposure_gain_effect = { VALUE = 2 }
+		if = {
+			limit = { restor_errand_for_stir_trigger = yes }
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = 3
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = honest }
+		}
+	}
+
+	# Buy the coin.
+	option = {
+		name = restor.1110.b
+		trigger = {
+			gold >= 10
+			NOT = { has_character_modifier = restor_life_kings_coin_modifier }
+		}
+		remove_short_term_gold = 10
+		add_character_modifier = {
+			modifier = restor_life_kings_coin_modifier
+			years = 10
+		}
+		restor_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 20
+		}
+	}
+
+	# Nobody lives forever.
+	option = {
+		name = restor.1110.c
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+}
+
+# ---- restor.1111 -- The Tax Men -----------------------------------------------------------------
+restor.1111 = {
+	type = character_event
+	title = restor.1111.t
+	desc = restor.1111.desc
+	theme = stewardship
+	override_background = { reference = farmland }
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		restor_errand_foreign_county_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1111 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1111 days = 60 }
+	}
+
+	# Pay the debt.
+	option = {
+		name = restor.1111.a
+		trigger = { gold >= 30 }
+		remove_short_term_gold = 30
+		restor_favour_gain_effect = { VALUE = 10 }
+		add_prestige = minor_prestige_gain
+		restor_exposure_gain_effect = { VALUE = 1 }
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = generous }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Put the cow back.
+	option = {
+		name = restor.1111.b
+		add_prestige = minor_prestige_gain
+		restor_exposure_gain_effect = { VALUE = 2 }
+		random_list = {
+			60 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1111.b.success
+					left_icon = root
+					custom_tooltip = restor.1111.b.success.tt
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1111.b.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = 20 has_trait = just }
+		}
+	}
+
+	# Not my village.
+	option = {
+		name = restor.1111.c
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+			just = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = callous }
+		}
+	}
+}
+
+# ---- restor.1112 -- The Garrison Sergeant -------------------------------------------------------
+restor.1112 = {
+	type = character_event
+	title = restor.1112.t
+	desc = restor.1112.desc
+	theme = martial
+	override_background = { reference = tavern }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		restor_errand_foreign_county_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1112 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1112 days = 60 }
+	}
+
+	# Sound him out.
+	option = {
+		name = restor.1112.a
+		skill = diplomacy
+		duel = {
+			skill = diplomacy
+			value = decent_skill_rating
+			50 = {
+				desc = restor.1112.a.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1112.a.success
+					left_icon = root
+					restor_favour_gain_effect = { VALUE = 10 }
+					add_trait_xp = {
+						trait = restor_member
+						track = restor_rank
+						value = 3
+					}
+				}
+			}
+			50 = {
+				desc = restor.1112.a.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1112.a.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 diplomacy >= 12 }
+		}
+	}
+
+	# Drinks, and listen.
+	option = {
+		name = restor.1112.b
+		trigger = { gold >= 10 }
+		remove_short_term_gold = 10
+		custom_tooltip = restor.1112.b.tt
+		restor_favour_gain_effect = { VALUE = 5 }
+		ai_chance = {
+			base = 30
+		}
+	}
+
+	# A place at court (soldiers).
+	option = {
+		name = restor.1112.c
+		trigger = {
+			restor_errand_for_soldiers_trigger = yes
+			exists = scope:restor_errand_county
+		}
+		custom_tooltip = restor.1112.c.tt
+		hidden_effect = { restor_errand_find_soldier_effect = yes }
+		restor_exposure_gain_effect = { VALUE = 2 }
+		ai_chance = {
+			base = 40
+		}
+	}
+
+	# Another inn.
+	option = {
+		name = restor.1112.d
+		custom_tooltip = restor.1112.d.tt
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = paranoid }
+		}
+	}
+}
+
+# ---- restor.1113 -- The Soldier's Widow ---------------------------------------------------------
+restor.1113 = {
+	type = character_event
+	title = restor.1113.t
+	desc = restor.1113.desc
+	theme = secret
+	override_background = { reference = sitting_room }
+	left_portrait = {
+		character = root
+		animation = sadness
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1113 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1113 days = 60 }
+	}
+
+	# A pension.
+	option = {
+		name = restor.1113.a
+		trigger = { gold >= 25 }
+		remove_short_term_gold = 25
+		restor_favour_gain_effect = { VALUE = 10 }
+		restor_exposure_gain_effect = { VALUE = 1 }
+		stress_impact = {
+			compassionate = minor_stress_impact_loss
+			greedy = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = compassionate }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# The banner, for the heir.
+	option = {
+		name = restor.1113.b
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+		}
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_served_the_house_opinion
+			}
+		}
+		restor_favour_gain_effect = { VALUE = 5 }
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = ambitious }
+		}
+	}
+
+	# Thank her.
+	option = {
+		name = restor.1113.c
+		custom_tooltip = restor.1113.c.tt
+		ai_chance = {
+			base = 20
+		}
+	}
+}
+
+# ---- restor.1114 -- The Keeper of the Tombs -----------------------------------------------------
+#
+# The priest's pulpit stirs a county: this one, unless the Errand is here to stir it anyway (or it
+# already is), in which case he has a cousin in the next county of the crown who does not.
+restor.1114 = {
+	type = character_event
+	title = restor.1114.t
+	desc = {
+		desc = restor.1114.desc
+		triggered_desc = {
+			trigger = {
+				exists = scope:restor_errand_pulpit_county
+				exists = scope:restor_errand_county
+				NOT = { scope:restor_errand_pulpit_county = scope:restor_errand_county }
+			}
+			desc = restor.1114.desc_cousin
+		}
+	}
+	theme = faith
+	override_background = { reference = temple }
+	left_portrait = {
+		character = root
+		animation = personality_zealous
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1114 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1114 days = 60 }
+		if = {
+			limit = { exists = scope:restor_errand_county }
+			if = {
+				limit = {
+					NOT = { restor_errand_for_stir_trigger = yes }
+					scope:restor_errand_county = { NOT = { has_county_modifier = restor_county_stirred } }
+				}
+				scope:restor_errand_county = { save_scope_as = restor_errand_pulpit_county }
+			}
+			else = {
+				scope:restor_errand_county = {
+					random_neighboring_county = {
+						limit = {
+							restor_crown_county_trigger = yes
+							NOT = { has_county_modifier = restor_county_stirred }
+						}
+						save_scope_as = restor_errand_pulpit_county
+					}
+				}
+			}
+		}
+	}
+
+	# Pray.
+	option = {
+		name = restor.1114.a
+		add_piety = minor_piety_gain
+		stress_impact = {
+			base = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = zealous }
+		}
+	}
+
+	# The pulpit.
+	option = {
+		name = restor.1114.b
+		trigger = { exists = scope:restor_errand_pulpit_county }
+		random_list = {
+			60 = {
+				modifier = {
+					add = 20
+					piety_level >= 3
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1114.b.success
+					left_icon = root
+					right_icon = scope:restor_errand_pulpit_county
+					restor_errand_pool_stir_effect = { COUNTY = scope:restor_errand_pulpit_county }
+					restor_favour_gain_effect = { VALUE = 5 }
+					restor_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.1114.b.failure
+					left_icon = root
+					custom_tooltip = restor.1114.b.failure.tt
+				}
+			}
+		}
+		ai_chance = {
+			base = 50
+		}
+	}
+
+	# The tombs' upkeep.
+	option = {
+		name = restor.1114.c
+		trigger = { gold >= 20 }
+		remove_short_term_gold = 20
+		add_piety = minor_piety_gain
+		restor_favour_gain_effect = { VALUE = 5 }
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = generous }
+		}
+	}
+}
+
+# ---- restor.1115 -- The Empty Mill --------------------------------------------------------------
+restor.1115 = {
+	type = character_event
+	title = restor.1115.t
+	desc = restor.1115.desc
+	theme = intrigue
+	override_background = { reference = farmland }
+	left_portrait = {
+		character = root
+		animation = paranoia
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1115 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1115 days = 60 }
+	}
+
+	# Wait another day.
+	option = {
+		name = restor.1115.a
+		random_list = {
+			40 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1115.a.comes
+					left_icon = root
+					custom_tooltip = restor.1115.a.comes.tt
+					restor_favour_gain_effect = { VALUE = 10 }
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1115.a.wrong
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 4 }
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.1115.a.nobody
+					left_icon = root
+					custom_tooltip = restor.1115.a.nobody.tt
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = patient }
+		}
+	}
+
+	# Go to his house.
+	option = {
+		name = restor.1115.b
+		random_list = {
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1115.b.afraid
+					left_icon = root
+					custom_tooltip = restor.1115.b.afraid.tt
+					restor_errand_pool_heir_gold_effect = { GOLD = 20 }
+					restor_favour_gain_effect = { VALUE = 5 }
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1115.b.watched
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = brave }
+		}
+	}
+
+	# Leave.
+	option = {
+		name = restor.1115.c
+		custom_tooltip = restor.1115.c.tt
+		stress_impact = {
+			paranoid = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = paranoid }
+			modifier = { add = 20 has_trait = craven }
+		}
+	}
+}
+
+# ---- restor.1116 -- A Second County -------------------------------------------------------------
+restor.1116 = {
+	type = character_event
+	title = restor.1116.t
+	desc = restor.1116.desc
+	theme = secret
+	override_background = { reference = village }
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_errand_companion }
+		character = scope:restor_errand_companion
+		animation = interested
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		restor_errand_has_second_county_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1116 }
+	}
+	# The Errand that came to stir is the one a second county most wants to hear from.
+	weight_multiplier = {
+		base = 1
+		modifier = {
+			factor = 2
+			restor_errand_for_stir_trigger = yes
+		}
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1116 days = 60 }
+		scope:activity.activity_location.county = {
+			random_neighboring_county = {
+				limit = {
+					restor_crown_county_trigger = yes
+					NOT = { has_county_modifier = restor_county_stirred }
+				}
+				save_scope_as = restor_errand_second_county
+			}
+		}
+	}
+
+	# Go myself.
+	option = {
+		name = restor.1116.a
+		trigger = { exists = scope:restor_errand_second_county }
+		restor_errand_pool_stir_effect = { COUNTY = scope:restor_errand_second_county }
+		add_trait_xp = {
+			trait = restor_member
+			track = restor_rank
+			value = 5
+		}
+		restor_exposure_gain_effect = { VALUE = 4 }
+		stress_impact = {
+			lazy = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = diligent }
+		}
+	}
+
+	# Send the companion.
+	option = {
+		name = restor.1116.b
+		trigger = {
+			exists = scope:restor_errand_second_county
+			exists = scope:restor_errand_companion
+		}
+		restor_errand_pool_stir_effect = { COUNTY = scope:restor_errand_second_county }
+		scope:restor_errand_companion = {
+			add_trait_xp = {
+				trait = restor_member
+				track = restor_rank
+				value = 5
+			}
+			add_opinion = {
+				target = root
+				modifier = restor_life_trusted_me_opinion
+			}
+		}
+		restor_their_exposure_gain_effect = { WHO = scope:restor_errand_companion VALUE = 3 }
+		ai_chance = {
+			base = 40
+		}
+	}
+
+	# Not this time.
+	option = {
+		name = restor.1116.c
+		custom_tooltip = restor.1116.c.tt
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = craven }
+		}
+	}
+}
+
+# ---- restor.1117 -- The Proclamation ------------------------------------------------------------
+restor.1117 = {
+	type = character_event
+	title = restor.1117.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:restor_usurper }
+				desc = restor.1117.desc_usurper
+			}
+			desc = restor.1117.desc_lord
+		}
+		desc = restor.1117.desc
+	}
+	theme = secret
+	override_background = { reference = market }
+	left_portrait = {
+		character = root
+		animation = rage
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_usurper }
+		character = scope:restor_usurper
+		animation = schadenfreude
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		restor_errand_foreign_county_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1117 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1117 days = 60 }
+	}
+
+	# Tear it down.
+	option = {
+		name = restor.1117.a
+		restor_favour_gain_effect = { VALUE = 10 }
+		restor_exposure_gain_effect = { VALUE = 3 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = 20 has_trait = vengeful }
+		}
+	}
+
+	# Pay the crier.
+	option = {
+		name = restor.1117.b
+		trigger = { gold >= 15 }
+		remove_short_term_gold = 15
+		restor_favour_gain_effect = { VALUE = 5 }
+		random_list = {
+			70 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1117.b.success
+					left_icon = root
+					custom_tooltip = restor.1117.b.success.tt
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1117.b.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = deceitful }
+		}
+	}
+
+	# Let it hang.
+	option = {
+		name = restor.1117.c
+		stress_impact = {
+			brave = minor_stress_impact_gain
+			vengeful = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = craven }
+			modifier = { add = 20 has_trait = patient }
+		}
+	}
+}
+
+# ---- restor.1118 -- A Village Wedding -----------------------------------------------------------
+restor.1118 = {
+	type = character_event
+	title = restor.1118.t
+	desc = restor.1118.desc
+	theme = feast_activity
+	override_background = { reference = village_festival }
+	left_portrait = {
+		character = root
+		animation = toast
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1118 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1118 days = 60 }
+	}
+
+	# Give the toast.
+	option = {
+		name = restor.1118.a
+		restor_favour_gain_effect = { VALUE = 8 }
+		restor_exposure_gain_effect = { VALUE = 2 }
+		stress_impact = {
+			shy = minor_stress_impact_gain
+			gregarious = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = gregarious }
+			modifier = { add = -20 has_trait = shy }
+		}
+	}
+
+	# A gift.
+	option = {
+		name = restor.1118.b
+		trigger = { gold >= 10 }
+		remove_short_term_gold = 10
+		add_prestige = minor_prestige_gain
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = generous }
+		}
+	}
+
+	# Leave early.
+	option = {
+		name = restor.1118.c
+		stress_impact = {
+			gregarious = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = shy }
+		}
+	}
+}
+
+# ---- restor.1119 -- The Merchant's Price (coin) -------------------------------------------------
+restor.1119 = {
+	type = character_event
+	title = restor.1119.t
+	desc = restor.1119.desc
+	theme = stewardship
+	override_background = { reference = market }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_pretender }
+		character = scope:restor_pretender
+		animation = personality_greedy
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		restor_errand_for_coin_trigger = yes
+		exists = global_var:restor_pretender
+		NOT = { has_character_flag = restor_errand_seen_1119 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1119 days = 60 }
+	}
+
+	# Promise.
+	option = {
+		name = restor.1119.a
+		restor_errand_pool_heir_gold_effect = { GOLD = 40 }
+		restor_favour_gain_effect = { VALUE = 5 }
+		ai_chance = {
+			base = 40
+		}
+	}
+
+	# Loyalty, or nothing.
+	option = {
+		name = restor.1119.b
+		skill = diplomacy
+		duel = {
+			skill = diplomacy
+			value = decent_skill_rating
+			50 = {
+				desc = restor.1119.b.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1119.b.success
+					left_icon = root
+					restor_errand_pool_heir_gold_effect = { GOLD = 25 }
+					restor_favour_gain_effect = { VALUE = 10 }
+				}
+			}
+			50 = {
+				desc = restor.1119.b.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = restor.1119.b.failure
+					left_icon = root
+					custom_tooltip = restor.1119.b.failure.tt
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = honest }
+		}
+	}
+
+	# A threat.
+	option = {
+		name = {
+			trigger = { exists = scope:restor_usurper }
+			text = restor.1119.c
+		}
+		name = {
+			trigger = { NOT = { exists = scope:restor_usurper } }
+			text = restor.1119.c_lord
+		}
+		restor_errand_pool_heir_gold_effect = { GOLD = 50 }
+		restor_exposure_gain_effect = { VALUE = 3 }
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 30 has_trait = callous }
+			modifier = { add = 20 has_trait = greedy }
+		}
+	}
+}
+
+# ---- restor.1120 -- The Sergeant's Test (soldiers) ----------------------------------------------
+restor.1120 = {
+	type = character_event
+	title = restor.1120.t
+	desc = restor.1120.desc
+	theme = martial
+	override_background = { reference = courtyard }
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:restor_errand_companion }
+		character = scope:restor_errand_companion
+		animation = inspect_weapon
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		restor_errand_for_soldiers_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1120 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1120 days = 60 }
+	}
+
+	# Fight him.
+	option = {
+		name = restor.1120.a
+		skill = prowess
+		duel = {
+			skill = prowess
+			value = decent_skill_rating
+			50 = {
+				desc = restor.1120.a.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1120.a.success
+					left_icon = root
+					restor_favour_gain_effect = { VALUE = 10 }
+					add_prestige = minor_prestige_gain
+				}
+			}
+			50 = {
+				desc = restor.1120.a.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1120.a.failure
+					left_icon = root
+					add_prestige = minor_prestige_loss
+					custom_tooltip = restor.1120.sons_stay_tt
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 prowess >= 12 }
+		}
+	}
+
+	# The companion fights.
+	option = {
+		name = restor.1120.b
+		trigger = { exists = scope:restor_errand_companion }
+		scope:restor_errand_companion = {
+			duel = {
+				skill = prowess
+				value = decent_skill_rating
+				50 = {
+					desc = restor.1120.b.success
+					compare_modifier = {
+						value = scope:duel_value
+						multiplier = 3.5
+						min = -49
+					}
+					root = {
+						send_interface_toast = {
+							type = event_toast_effect_good
+							title = restor.1120.b.success
+							left_icon = scope:restor_errand_companion
+							restor_favour_gain_effect = { VALUE = 8 }
+							scope:restor_errand_companion = {
+								add_prestige = minor_prestige_gain
+							}
+						}
+					}
+				}
+				50 = {
+					desc = restor.1120.b.failure
+					compare_modifier = {
+						value = scope:duel_value
+						multiplier = -3.5
+						min = -49
+					}
+					root = {
+						send_interface_toast = {
+							type = event_toast_effect_bad
+							title = restor.1120.b.failure
+							left_icon = scope:restor_errand_companion
+							custom_tooltip = restor.1120.sons_stay_tt
+							scope:restor_errand_companion = {
+								add_prestige = minor_prestige_loss
+							}
+						}
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = {
+				add = 30
+				scope:restor_errand_companion = { prowess >= 12 }
+			}
+		}
+	}
+
+	# No games.
+	option = {
+		name = restor.1120.c
+		add_prestige = minor_prestige_loss
+		custom_tooltip = restor.1120.sons_stay_tt
+		ai_chance = {
+			base = 10
+			modifier = { add = 30 has_trait = craven }
+		}
+	}
+}
+
+# ---- restor.1121 -- The Headman's Doubt (stir) --------------------------------------------------
+restor.1121 = {
+	type = character_event
+	title = restor.1121.t
+	desc = restor.1121.desc
+	theme = diplomacy
+	override_background = { reference = village }
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		restor_errand_for_stir_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1121 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1121 days = 60 }
+	}
+
+	# A promise about taxes.
+	option = {
+		name = restor.1121.a
+		restor_favour_gain_effect = { VALUE = 5 }
+		restor_exposure_gain_effect = { VALUE = 1 }
+		ai_chance = {
+			base = 30
+		}
+	}
+
+	# Money now.
+	option = {
+		name = restor.1121.b
+		trigger = { gold >= 20 }
+		remove_short_term_gold = 20
+		restor_favour_gain_effect = { VALUE = 8 }
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = generous }
+			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# Argue it.
+	option = {
+		name = restor.1121.c
+		skill = diplomacy
+		duel = {
+			skill = diplomacy
+			value = decent_skill_rating
+			50 = {
+				desc = restor.1121.c.success
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1121.c.success
+					left_icon = root
+					restor_favour_gain_effect = { VALUE = 10 }
+					add_trait_xp = {
+						trait = restor_member
+						track = restor_rank
+						value = 3
+					}
+				}
+			}
+			50 = {
+				desc = restor.1121.c.failure
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1121.c.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 2 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 diplomacy >= 12 }
+		}
+	}
+}
+
+# ---- restor.1122 -- Names for Sale --------------------------------------------------------------
+restor.1122 = {
+	type = character_event
+	title = restor.1122.t
+	desc = restor.1122.desc
+	theme = intrigue
+	override_background = { reference = alley_night }
+	left_portrait = {
+		character = root
+		animation = scheme
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1122 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1122 days = 60 }
+	}
+
+	# Buy.
+	option = {
+		name = restor.1122.a
+		trigger = { gold >= 20 }
+		remove_short_term_gold = 20
+		random_list = {
+			70 = {
+				modifier = {
+					add = 15
+					intrigue >= 12
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1122.a.success
+					left_icon = root
+					restor_exposure_loss_effect = { VALUE = 3 }
+				}
+			}
+			30 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1122.a.failure
+					left_icon = root
+					restor_exposure_gain_effect = { VALUE = 3 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 40
+		}
+	}
+
+	# No.
+	option = {
+		name = restor.1122.b
+		custom_tooltip = restor.1122.b.tt
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = paranoid }
+		}
+	}
+}
+
+# ---- restor.1123 -- An Old Acquaintance ---------------------------------------------------------
+restor.1123 = {
+	type = character_event
+	title = restor.1123.t
+	desc = restor.1123.desc
+	theme = secret
+	override_background = { reference = market }
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:restor_errand_companion
+		animation = shock
+	}
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		restor_errand_has_companion_trigger = yes
+		NOT = { has_character_flag = restor_errand_seen_1123 }
+	}
+	immediate = {
+		restor_save_scopes_effect = yes
+		restor_errand_pool_scopes_effect = yes
+		add_character_flag = { flag = restor_errand_seen_1123 days = 60 }
+	}
+
+	# Out of sight.
+	option = {
+		name = restor.1123.a
+		scope:restor_errand_companion = {
+			add_opinion = {
+				target = root
+				modifier = annoyed_opinion
+				opinion = -10
+			}
+		}
+		custom_tooltip = restor.1123.a.tt
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Something for her trouble.
+	option = {
+		name = restor.1123.b
+		trigger = { gold >= 15 }
+		remove_short_term_gold = 15
+		custom_tooltip = restor.1123.b.tt
+		ai_chance = {
+			base = 30
+		}
+	}
+
+	# Let her talk.
+	option = {
+		name = restor.1123.c
+		random_list = {
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = restor.1123.c.success
+					left_icon = scope:restor_errand_companion
+					custom_tooltip = restor.1123.c.success.tt
+				}
+			}
+			50 = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = restor.1123.c.failure
+					left_icon = scope:restor_errand_companion
+					restor_their_exposure_gain_effect = { WHO = scope:restor_errand_companion VALUE = 4 }
+					restor_exposure_gain_effect = { VALUE = 1 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 20 has_trait = trusting }
+		}
+	}
+}

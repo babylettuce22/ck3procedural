@@ -59,6 +59,31 @@ types gen_society_panel {
 			on_start = "[GetScriptedGui('society_panel_window').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
 		}
 
+		# The refresh. The gather in _show runs once, on opening, so anything that changed while the
+		# window stayed open -- a daily tick, an event option, a decision taken beside it -- showed
+		# stale until it was closed and reopened. This invisible widget re-runs the gather once a
+		# second, looping two states the way vanilla's event-window shimmer loops (next = each other).
+		# The gather is cheap, rebuilds the roster only when its membership changed (so the list does
+		# not flicker or lose its hover), and does nothing unless the panel is open.
+		widget = {
+			name = "restor_panel_tick"
+			size = { 0 0 }
+
+			state = {
+				name = restor_panel_tick_a
+				trigger_on_create = yes
+				duration = 1
+				next = restor_panel_tick_b
+				on_finish = "[GetScriptedGui('restor_panel_gather').Execute( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]"
+			}
+
+			state = {
+				name = restor_panel_tick_b
+				duration = 0
+				next = restor_panel_tick_a
+			}
+		}
+
 		margin_widget = {
 			size = { 100% 100% }
 			margin_top = 30

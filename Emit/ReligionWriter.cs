@@ -7,11 +7,12 @@ namespace Ck3MapGen.Emit;
 public static class ReligionWriter
 {
     /// <param name="seed">The world's seed, which the descriptions are drawn with. See <see cref="FaithDescriptions"/>.</param>
-    public static void WriteAll(string modDir, FaithMap faiths, int seed)
+    /// <param name="tooltips">Gloss the religions' gods and clergy words on hover. See <see cref="ReligionGlossary"/>.</param>
+    public static void WriteAll(string modDir, FaithMap faiths, int seed, bool tooltips = true)
     {
         WriteHolySites(modDir, faiths);
         WriteReligions(modDir, faiths);
-        WriteLocalisation(modDir, faiths, seed);
+        WriteLocalisation(modDir, faiths, seed, tooltips);
 
         // Here rather than beside the call site, so an editor save that rewrites the faiths
         // redraws the icons from the same edited colours and tenets.
@@ -224,19 +225,27 @@ public static class ReligionWriter
     /// Not private: holy site names read <c>county.Name</c> off the live title, so renaming a
     /// county after the write means re-running exactly this. See <see cref="WorldOverwrite"/>.
     /// </summary>
-    internal static void WriteLocalisation(string modDir, FaithMap faiths, int seed)
+    internal static void WriteLocalisation(string modDir, FaithMap faiths, int seed, bool tooltips = true)
     {
         string dir = Path.Combine(modDir, "localization", "english");
         Directory.CreateDirectory(dir);
 
         var entries = new SortedDictionary<string, string>(StringComparer.Ordinal);
 
+        // The gods, the devil and the clergy words, as links to their glosses. Written through
+        // AddBuilt below: the values are concept markup, not text for ParadoxText.Loc to escape.
+        var concepts = tooltips ? new ConceptTooltips() : null;
+        var glossed = concepts is null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : ReligionGlossary.Gloss(faiths, concepts);
+        ReligionGlossary.Write(modDir, concepts);
+
         foreach (var religion in faiths.Religions)
         {
             entries[religion.Key] = religion.Name;
             entries[$"{religion.Key}_adj"] = religion.Name;
             entries[$"{religion.Key}_adherent"] = religion.Name;
-            entries[$"{religion.Key}_adherent_plural"] = religion.Name + "s";
+            entries[$"{religion.Key}_adherent_plural"] = Language.Plural(religion.Name);
             entries[$"{religion.Key}_desc"] = FaithDescriptions.For(religion, seed);
 
             foreach (var (key, value) in religion.LocalizationText) entries[key] = value;
@@ -247,7 +256,7 @@ public static class ReligionWriter
             entries[faith.Key] = faith.Name;
             entries[$"{faith.Key}_adj"] = faith.Name;
             entries[$"{faith.Key}_adherent"] = faith.Name;
-            entries[$"{faith.Key}_adherent_plural"] = faith.Name + "s";
+            entries[$"{faith.Key}_adherent_plural"] = Language.Plural(faith.Name);
             entries[$"{faith.Key}_desc"] = FaithDescriptions.For(faith, seed);
 
             // Localization required for unreformed faiths when reforming
@@ -270,7 +279,11 @@ public static class ReligionWriter
         }
 
         var loc = new LocFile();
-        foreach (var (key, value) in entries) loc.Add(key, value);
+        foreach (var (key, value) in entries)
+        {
+            if (glossed.TryGetValue(key, out var link)) loc.AddBuilt(key, link);
+            else loc.Add(key, value);
+        }
 
         loc.Write(Path.Combine(dir, "gen_faiths_l_english.yml"));
     }

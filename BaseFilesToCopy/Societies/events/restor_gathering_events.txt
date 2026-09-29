@@ -4,7 +4,8 @@
 #   0901   host, day 1       The Sworn Gather: what the Gathering is for
 #   0902   host              Plan the Rising: which counties to stir
 #   0903   host              An Empty Seat: judge a member who was asked and stayed away
-#   0904   host, day 7       Raise One of the Sworn: someone's standing, or your own
+#   0904   host, day 17      Raise One of the Sworn: someone's standing, or your own
+#   (the random pool drawn during the Gathering is restor.1000-1099, restor_gathering_pool_events.txt)
 #   0905   each guest        Arrival: who is in the hall, and who is not
 #   0906   each guest        what the host decided
 #   0907   the absentee      named before the Sworn, or forgiven
@@ -48,6 +49,21 @@ restor.0901 = {
 		triggered_desc = {
 			trigger = { exists = scope:restor_absentee }
 			desc = restor.0901.desc_absent
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_pretender
+					NOT = { scope:restor_pretender = root }
+					exists = scope:activity
+					scope:activity = { any_attending_character = { this = scope:restor_pretender } }
+				}
+				desc = restor.0901.desc_heir
+			}
+			triggered_desc = {
+				trigger = { scope:restor_usurper ?= { is_at_war = yes } }
+				desc = restor.0901.desc_war
+			}
 		}
 		desc = restor.0901.desc_end
 	}
@@ -144,7 +160,7 @@ restor.0901 = {
 		restor_gathering_reward_hall_effect = { XP = 5 FAVOUR = 15 }
 		hidden_effect = {
 			restor_gathering_tell_guests_effect = { PURPOSE = oath }
-			trigger_event = { id = restor.0904 days = 6 }
+			trigger_event = { id = restor.0904 days = 16 }
 		}
 		ai_chance = {
 			base = 40
@@ -165,7 +181,7 @@ restor.0901 = {
 		custom_tooltip = restor.0901.b.tt
 		hidden_effect = {
 			trigger_event = { id = restor.0902 days = 2 }
-			trigger_event = { id = restor.0904 days = 6 }
+			trigger_event = { id = restor.0904 days = 16 }
 		}
 		ai_chance = {
 			base = 30
@@ -182,7 +198,7 @@ restor.0901 = {
 		custom_tooltip = restor.0901.c.tt
 		hidden_effect = {
 			trigger_event = { id = restor.0903 days = 2 }
-			trigger_event = { id = restor.0904 days = 6 }
+			trigger_event = { id = restor.0904 days = 16 }
 		}
 		ai_chance = {
 			base = 15
@@ -858,6 +874,33 @@ restor.0908 = {
 			modifier = { add = 20 has_trait = brave }
 		}
 	}
+
+	# The heir is under this roof: get them out before the town looks closer. Only when they came.
+	# Loc in restor_gathering_pool_l_english.yml.
+	option = {
+		name = restor.0908.d
+		trigger = {
+			exists = scope:restor_pretender
+			NOT = { scope:restor_pretender = root }
+			exists = scope:activity
+			scope:activity = { any_attending_character = { this = scope:restor_pretender } }
+		}
+		restor_exposure_loss_effect = { VALUE = 1 }
+		scope:restor_pretender = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 10
+			}
+		}
+		stress_impact = {
+			gregarious = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
 }
 
 # =====================================================================================
@@ -899,16 +942,41 @@ restor.0910 = {
 			}
 			desc = restor.0910.desc_stir
 		}
+		# Who rides out, and whether this is the county the member's charge names (keys in
+		# restor_errand_pool_l_english.yml).
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:restor_errand_county
+					has_variable = restor_charge
+					var:restor_charge = flag:stir
+					has_variable = restor_charge_county
+					var:restor_charge_county = scope:restor_errand_county
+				}
+				desc = restor.0910.desc_charge
+			}
+			triggered_desc = {
+				trigger = { exists = scope:restor_errand_companion }
+				desc = restor.0910.desc_companion
+			}
+			desc = restor.0910.desc_alone
+		}
 	}
 	theme = secret
 	left_portrait = {
 		character = root
 		animation = personality_bold
 	}
+	right_portrait = {
+		trigger = { exists = scope:restor_errand_companion }
+		character = scope:restor_errand_companion
+		animation = personality_bold
+	}
 	trigger = { restor_active_trigger = yes }
 	immediate = {
 		restor_save_scopes_effect = yes
 		restor_errand_save_county_effect = yes
+		restor_errand_save_companion_effect = yes
 		# Nothing from an earlier Errand survives into this one.
 		remove_character_flag = restor_errand_careful
 		remove_character_flag = restor_errand_hasty
@@ -1065,6 +1133,7 @@ restor.0913 = {
 	immediate = {
 		restor_save_scopes_effect = yes
 		restor_errand_save_county_effect = yes
+		restor_errand_save_companion_effect = yes
 		if = {
 			limit = {
 				exists = scope:restor_errand_county
@@ -1139,6 +1208,34 @@ restor.0913 = {
 			base = 30
 			modifier = { add = 20 has_trait = generous }
 			modifier = { add = -20 has_trait = greedy }
+		}
+	}
+
+	# A companion leads the witness off (hasty only, and only with one of the Sworn riding along):
+	# the host comes home clean, the companion carries the exposure. Loc in
+	# restor_errand_pool_l_english.yml.
+	option = {
+		name = restor.0913.e
+		trigger = {
+			NOT = { has_character_flag = restor_errand_careful }
+			exists = scope:restor_errand_companion
+		}
+		add_character_flag = {
+			flag = restor_errand_clean
+			months = 6
+		}
+		custom_tooltip = restor.0913.clean.tt
+		restor_their_exposure_gain_effect = { WHO = scope:restor_errand_companion VALUE = 3 }
+		scope:restor_errand_companion = {
+			add_opinion = {
+				target = root
+				modifier = restor_life_trusted_me_opinion
+			}
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 20 has_trait = callous }
+			modifier = { add = -10 has_trait = compassionate }
 		}
 	}
 

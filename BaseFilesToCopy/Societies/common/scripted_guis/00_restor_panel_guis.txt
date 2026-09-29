@@ -53,66 +53,77 @@ restor_panel_gather = {
 	scope = character
 	is_shown = { restor_active_trigger = yes }
 	effect = {
-		# The live value, read without recomputing the global: opening a window must not be what
-		# crosses a milestone and sends every member an event.
-		set_variable = { name = restor_panel_support value = restor_support_value }
-		set_variable = { name = restor_panel_share value = restor_pretender_share_value }
-		set_variable = { name = restor_panel_war_chest value = global_var:restor_war_chest }
+		# Run on opening (the window's _show) and then once a second by restor_panel_tick while it
+		# stays open. The tick's widget may keep time while the window is hidden, so the whole body
+		# is skipped unless the panel is actually open.
+		if = {
+			limit = { has_variable = society_panel_open }
 
-		# People. Removed first, so a slot that has emptied since the last look shows as empty.
-		remove_variable = restor_panel_pretender
-		remove_variable = restor_panel_keeper
-		remove_variable = restor_panel_usurper
-		remove_variable = restor_panel_king
-		if = {
-			limit = { exists = global_var:restor_pretender }
-			set_variable = { name = restor_panel_pretender value = global_var:restor_pretender }
-		}
-		if = {
-			limit = { exists = global_var:restor_keeper }
-			set_variable = { name = restor_panel_keeper value = global_var:restor_keeper }
-		}
-		if = {
-			limit = { exists = global_var:restor_usurper }
-			set_variable = { name = restor_panel_usurper value = global_var:restor_usurper }
-		}
-		if = {
-			limit = {
-				restor_restored_trigger = yes
-				exists = global_var:restor_crown.holder
+			# The live value, read without recomputing the global: opening a window must not be what
+			# crosses a milestone and sends every member an event.
+			set_variable = { name = restor_panel_support value = restor_support_value }
+			set_variable = { name = restor_panel_share value = restor_pretender_share_value }
+			set_variable = { name = restor_panel_war_chest value = global_var:restor_war_chest }
+
+			# People. Set when filled, removed when emptied -- never removed and re-set, which would
+			# blink the portrait's datacontext every second.
+			if = {
+				limit = { exists = global_var:restor_pretender }
+				set_variable = { name = restor_panel_pretender value = global_var:restor_pretender }
 			}
-			set_variable = { name = restor_panel_king value = global_var:restor_crown.holder }
-		}
-
-		# The roster. What a member knows depends on how far in they are: a Captain or above -- and
-		# the Keeper -- knows the whole roll; below that you know the people around you and the two
-		# names everyone knows, the heir and the Keeper. In the restored realm the order is public
-		# and everyone sees everyone.
-		clear_variable_list = restor_panel_roster
-		save_scope_as = restor_viewer
-		every_in_global_list = {
-			variable = restor_roster
-			limit = {
-				is_alive = yes
-				OR = {
+			else = { remove_variable = restor_panel_pretender }
+			if = {
+				limit = { exists = global_var:restor_keeper }
+				set_variable = { name = restor_panel_keeper value = global_var:restor_keeper }
+			}
+			else = { remove_variable = restor_panel_keeper }
+			if = {
+				limit = { exists = global_var:restor_usurper }
+				set_variable = { name = restor_panel_usurper value = global_var:restor_usurper }
+			}
+			else = { remove_variable = restor_panel_usurper }
+			if = {
+				limit = {
 					restor_restored_trigger = yes
-					scope:restor_viewer = { restor_rank_at_least_trigger = { RANK = 50 } }
-					scope:restor_viewer = { restor_is_keeper_trigger = yes }
-					this = scope:restor_viewer
-					restor_is_pretender_trigger = yes
-					restor_is_keeper_trigger = yes
-					is_courtier_of = scope:restor_viewer
-					scope:restor_viewer = { is_courtier_of = prev }
-					is_vassal_of = scope:restor_viewer
-					scope:restor_viewer = { is_vassal_of = prev }
-					is_close_or_extended_family_of = scope:restor_viewer
+					exists = global_var:restor_crown.holder
 				}
+				set_variable = { name = restor_panel_king value = global_var:restor_crown.holder }
 			}
-			save_scope_as = restor_rostered
-			scope:restor_viewer = {
-				add_to_variable_list = {
-					name = restor_panel_roster
-					target = scope:restor_rostered
+			else = { remove_variable = restor_panel_king }
+
+			# The roster: the members this viewer would know (restor_panel_knows_trigger). Rebuilt
+			# only when that set has changed -- someone to add, or someone listed who no longer
+			# belongs -- because rebuilding the list every tick redraws every row under the mouse.
+			save_scope_as = restor_viewer
+			if = {
+				limit = {
+					OR = {
+						any_in_global_list = {
+							variable = restor_roster
+							restor_panel_knows_trigger = yes
+							NOT = {
+								scope:restor_viewer = {
+									is_target_in_variable_list = { name = restor_panel_roster target = prev }
+								}
+							}
+						}
+						any_in_list = {
+							variable = restor_panel_roster
+							NOT = { restor_panel_knows_trigger = yes }
+						}
+					}
+				}
+				clear_variable_list = restor_panel_roster
+				every_in_global_list = {
+					variable = restor_roster
+					limit = { restor_panel_knows_trigger = yes }
+					save_scope_as = restor_rostered
+					scope:restor_viewer = {
+						add_to_variable_list = {
+							name = restor_panel_roster
+							target = scope:restor_rostered
+						}
+					}
 				}
 			}
 		}

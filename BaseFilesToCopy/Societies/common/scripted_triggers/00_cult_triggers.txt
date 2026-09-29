@@ -129,3 +129,25 @@ cult_valid_hunter_trigger = {
 	NOT = { has_trait = cult_member }
 	is_landed = yes
 }
+
+# The panel's roster: would scope:cult_viewer know THIS member's name? A Magister or above -- and
+# the Hierophant -- knows the whole circle; below that you know the people around you and the
+# Hierophant. Once unveiled, everyone knows everyone. Shared by cult_panel_gather's rebuild and its
+# has-anything-changed check, so the two never disagree.
+cult_panel_knows_trigger = {
+	is_alive = yes
+	has_trait = cult_member
+	is_target_in_global_variable_list = { name = cult_roster target = this }
+	OR = {
+		cult_unveiled_trigger = yes
+		scope:cult_viewer = { cult_rank_at_least_trigger = { RANK = 50 } }
+		scope:cult_viewer = { cult_is_hierophant_trigger = yes }
+		this = scope:cult_viewer
+		cult_is_hierophant_trigger = yes
+		is_courtier_of = scope:cult_viewer
+		scope:cult_viewer = { is_courtier_of = prev }
+		is_vassal_of = scope:cult_viewer
+		scope:cult_viewer = { is_vassal_of = prev }
+		is_close_or_extended_family_of = scope:cult_viewer
+	}
+}

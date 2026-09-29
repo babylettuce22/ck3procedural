@@ -141,3 +141,33 @@
  cult.0534.a.success:0 "[cult_charge_recruit.GetFirstNameNoTooltip] Takes the Oath"
  cult.0534.a.failure:0 "[cult_charge_recruit.GetFirstNameNoTooltip] Refuses"
  cult.0534.b:0 "Not [cult_charge_recruit.GetHerHim]."
+
+ # ---- Give a Charge (a player Hierophant's interaction) and cult.0540 ----------------------------
+
+ cult_give_charge_interaction:0 "Give a Charge"
+ cult_give_charge_interaction_desc:0 "Send [recipient.GetTitledFirstName] a note in your own hand, and tell [recipient.GetHerHim] what the circle needs of [recipient.GetHerHim]."
+ cult_give_charge_interaction_tt:0 "[recipient.GetTitledFirstName] is given a charge, with three years to keep it"
+ cult_give_charge_options_heading:0 "What should [recipient.GetSheHe] do?"
+ cult_give_charge_any:0 "Whatever the circle needs most"
+ cult_give_charge_turn_priest:0 "Turn a priest"
+ cult_give_charge_taint:0 "Taint a county"
+ cult_give_charge_defile_site:0 "Defile a holy site"
+ cult_give_charge_offering:0 "Gather dark power"
+ cult_give_charge_recruit:0 "Bring someone new in"
+ cult_give_charge_has_one_tt:0 "[recipient.GetFirstNameNoTooltip] is already keeping a charge"
+ cult_give_charge_none_tt:0 "There is nothing of this kind left to do"
+ cult_give_charge_poor_tt:0 "[recipient.GetFirstNameNoTooltip] has neither the gold nor the income for it"
+
+ cult_charge_given_toast:0 "A Charge Given"
+ cult_charge_given_turn_priest_tt:0 "[cult_charge_member.GetTitledFirstName] is to turn [cult_charge_target.GetTitledFirstName] to $cult_devil_name$."
+ cult_charge_given_taint_tt:0 "[cult_charge_member.GetTitledFirstName] is to taint [cult_charge_county.GetNameNoTier]."
+ cult_charge_given_defile_site_tt:0 "[cult_charge_member.GetTitledFirstName] is to defile the holy site at [cult_charge_county.GetNameNoTier]."
+ cult_charge_given_offering_tt:0 "[cult_charge_member.GetTitledFirstName] is to gather dark power for the circle."
+ cult_charge_given_recruit_tt:0 "[cult_charge_member.GetTitledFirstName] is to bring someone new into $cult_society_name$."
+ cult_charge_given_fallback_tt:0 "What you asked for could not be done now, so [cult_charge_member.GetSheHe] was given this instead."
+
+ cult_charge_kept_by_toast:0 "A Charge Kept"
+ cult_charge_kept_by_tt:0 "[cult_charge_keeper.GetTitledFirstName] did what you asked. Dark power #P +10#!"
+
+ cult_charge_set_aside_toast:0 "Your Charge Is Set Aside"
+ cult_charge_set_aside_tt:0 "You are the Hierophant now. Charges come from you, and you keep none of your own."

@@ -355,10 +355,10 @@ public static class NativeRankWriter
     }
 
     /// <summary>
-    /// The line under the English header, or nothing. The header is the gloss — a native word is
-    /// obviously native, so saying so again, and naming the English a second time, only made the
-    /// tooltip three paragraphs tall. An empty value is written rather than no key, which would
-    /// show the raw key; vanilla's description box has no visibility condition and just collapses.
+    /// The line under the English header. The header is the gloss — a native word is obviously
+    /// native, so saying so again, and naming the English a second time, only made the tooltip three
+    /// paragraphs tall. Every rank carries a one-liner: an empty description does not collapse, it
+    /// leaves a blank line under the header (see <see cref="ConceptTooltips"/>).
     /// </summary>
     private static string Describe(string explanation, bool sacred)
         => !sacred ? explanation

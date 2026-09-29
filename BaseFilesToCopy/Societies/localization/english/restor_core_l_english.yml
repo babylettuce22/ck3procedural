@@ -1,5 +1,9 @@
 ﻿l_english:
 
+ # ---- The right-click menu section (header key is the category key; desc is the lowercase phrase) ----
+ interaction_category_restor:0 "$restor_society_name$"
+ RESTOR_ACTIONS:0 "actions of $restor_society_name$"
+
  # ---- The trait ---------------------------------------------------------------------------------
 
  trait_restor_member:0 "Sworn"

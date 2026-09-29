@@ -8,11 +8,14 @@ namespace Ck3MapGen.MapGen;
 /// <c>CutHeight</c> is the smoothed elevation the quota stopped at; mountain ground below it is
 /// passable unless the plateau rule took it. Shares are of land area. <c>Passes</c> are the
 /// corridors cut through the walls, empty with <see cref="MapConfig.MountainPasses"/> off.
+/// With <c>BySlope</c> (<see cref="ImpassableRanking.Slope"/>), <c>CutHeight</c> is instead the
+/// slope score the share stopped at, and <c>PlateauShare</c> the ground walled outside the share
+/// for standing above the ceiling.
 /// </summary>
 public sealed record AutoCutDiagnostics(
     float MountainLine, float SteepLine, float GateLine, float CutHeight,
     double TargetShare, double PlateauShare, double MaskShare, int Pieces,
-    IReadOnlyList<MountainPass>? Passes = null);
+    IReadOnlyList<MountainPass>? Passes = null, bool BySlope = false);
 
 /// <summary>
 /// The impassable mask drawn from the terrain before any province exists, so the partition can be
@@ -25,7 +28,12 @@ public sealed record AutoCutDiagnostics(
 /// 3192 px at every map size, so on a 4096 map it spans twice the terrain it does at 8192. Cutting
 /// first puts the wall's edge on the terrain instead.
 ///
-/// Seven steps, all per pixel on the province raster:
+/// By default (<see cref="ImpassableRanking.Slope"/>) the first four steps below are one: land is
+/// ranked by its steepness at a barony's scale, lifted by its height above the local floor, and
+/// the share taken from the top; see <see cref="SlopeWalls"/>. Steepness is what makes ground
+/// impassable, and ranking by height walled smooth uplands while leaving escarpments and steep
+/// ridges near the sea passable. The cliffs, clean, size rule and passes follow as below, without
+/// the crest extension. <see cref="ImpassableRanking.Height"/> runs all seven:
 /// <list type="number">
 /// <item>Mountain ground: land above the gate line (the mountain line capped at
 /// <see cref="MapConfig.ImpassableGateHeight"/>), plus steep ground within a short reach of it.</item>
@@ -117,123 +125,142 @@ public static class ImpassableAutoCut
         });
         if (landTotal == 0) return null;
 
-        // 1. Mountain ground. Steep ground counts only near ground above the gate line; on its own,
-        // the eroded sides of low hills are as steep as any range.
-        // Whole-raster arrays are the cost here, not arithmetic: an 8192 map's int raster is 128 MB,
-        // allocated while the generator already holds several GB. The box counts share one scratch
-        // row buffer, and the steep counts reuse this one once the ground is known.
-        var scratch = new int[n];
-        var nearGate = BoxCount(gate, width, height, reach, scratch);
-        var ground = new bool[n];
-        Parallel.For(0, height, y =>
-        {
-            for (int i = y * width, end = i + width; i < end; i++)
-                ground[i] = land[i] == 1 && (gate[i] == 1 || (steep[i] == 1 && nearGate[i] > 0));
-        });
-
-        // 2 and 3. Plateaus outside the quota; the rest ranked by height.
-        var landNear = BoxCount(land, width, height, radius, scratch);
-        var highNear = BoxCount(high, width, height, radius, scratch);
-        var gateNear = BoxCount(gate, width, height, radius, scratch);
-        bool plateaus = cfg.ImpassableMountainPlateaus;
-
-        var raw = new bool[n];
-        var candidate = new bool[n];
-        long plateauPixels = SumRows(height, y =>
-        {
-            long count = 0;
-            for (int i = y * width, end = i + width; i < end; i++)
-            {
-                if (!ground[i]) continue;
-                if (plateaus && highNear[i] * 2 > landNear[i]) { raw[i] = true; count++; continue; }
-                if (landNear[i] > 0 && gateNear[i] >= gateMin * landNear[i]) candidate[i] = true;
-            }
-            return count;
-        });
-
-        // The foot needs the smoothed terrain everywhere, to find each place's local floor and peak;
-        // without it only the candidates are ranked, so only their rows are finished.
-        double foot = Math.Clamp(cfg.ImpassableFootRelief, 0, 1);
-        double rugged = Math.Max(0, cfg.ImpassableMinRuggedness);
-        var smooth = Gaussian(elevation, land, foot > 0 || rugged > 0 ? null : candidate, width, height, radius / 4.0);
-
-        // Flat ground below the mountain line is not wall, however high it stands: a tableland or
-        // a bench partway up a range is somewhere people live and armies march. Height alone let
-        // it in — on an inland-sea map 14.6% of the walls were flat ground under the mountain line,
-        // long smooth shelves lower than the peaks beside them. The plateau rule still takes flat
-        // ground mostly above the mountain line; nothing here touches it. Nor is anything above the
-        // ceiling flat for this purpose, however smooth: on a map whose mountain line stood at 475,
-        // tablelands at 400–478 were exempt, and higher than anything vanilla stands on.
-        var flat = rugged > 0
-            ? FlatGround(smooth, elevation, MathF.Min(mountainLine, ceiling), land, width, height,
-                Math.Max(1, radius / 2), rugged)
-            : null;
-        if (flat is not null)
-            Parallel.For(0, height, y =>
-            {
-                for (int i = y * width, end = i + width; i < end; i++)
-                    if (flat[i]) candidate[i] = false;
-            });
-        int candidates = 0;
-        for (int i = 0; i < n; i++) if (candidate[i]) candidates++;
-
-        // The scored pass stops where its floor says the mountains have run out, however much of the
-        // share is left; the cut keeps that. Its floor is the same median + deviations over the
-        // same score, 0.35 high + 0.65 steep, taken over a barony-wide window instead of a
-        // province, and the land that clears it caps the share. Where the mountains are ample the
-        // share still binds (the three worlds the cut was measured on cleared it on 16.7%, 17.7%
-        // and 7.2% of land against shares of 8%, 5% and 5%); on the Ondrerol import, whose relief
-        // is gentler, 4.8% cleared it against 8%, and without the cap the cut walled 10.9% of land
-        // where the scored pass had walled 4.3%.
-        var steepNear = BoxCount(steep, width, height, radius, scratch, into: nearGate);
-        double qualifying = QualifyingShare(landNear, highNear, steepNear, land, landTotal, cfg, out double floor);
-        double target = Math.Min(share, qualifying);
-        long room = (long)(target * landTotal);
-
-        // The share decides how far down the walls reach; it may not leave mountain ground above the
-        // ceiling passable. Ranked by height, the share is spent on the tallest ranges first, and
-        // each grows down its own flanks: on a continents world whose top 3.5% of land began at 475,
-        // the cores began at 510, those ranges' walls ran down to 230–300, and eleven highlands
-        // peaking at 480–520 were left passable. Capping the cut there walls every one of them,
-        // past the share, and leaves a map whose mountains stay under the ceiling untouched.
+        // Steps 1–4 pick the raw walls, by steepness or by height; everything from the cliffs on is
+        // the same for both.
+        bool bySlope = cfg.ImpassableRanking == ImpassableRanking.Slope;
+        bool[] raw;
+        float[] smooth;
+        bool[]? flat = null, footAnywhere = null;
         float cutHeight;
         bool capped = false;
-        bool[]? footAnywhere = null;
-        if (foot > 0)
+        double target, qualifying, floor = 0, foot = 0;
+        long plateauPixels;
+        if (bySlope)
         {
-            // Walls run from their height-ranked cores down to their own foot; the cores shrink to
-            // leave the quota's room for the flanks. See FootGround.
-            var footGround = FootGround(smooth, landNear, gateNear, land, gateMin, width, height,
-                (int)Math.Round(3.0 * radius), (float)foot, out footAnywhere);
-            if (flat is not null)
-                Parallel.For(0, height, y =>
-                {
-                    for (int i = y * width, end = i + width; i < end; i++)
-                        if (flat[i]) footGround[i] = footAnywhere[i] = false;
-                });
-            cutHeight = FootCut(raw, candidate, smooth, footGround, candidates,
-                target * landTotal + plateauPixels, width, height);
-            capped = cutHeight > ceiling;
-            if (capped) cutHeight = ceiling;
-            raw = Grow(raw, candidate, smooth, cutHeight, footGround, width, height, out _);
+            raw = SlopeWalls(elevation, land, landTotal, width, height, radius, close, cfg, share,
+                ceiling, out smooth, out cutHeight, out plateauPixels);
+            target = qualifying = share;
         }
         else
         {
-            if (room >= candidates) cutHeight = float.NegativeInfinity;
-            else if (room <= 0) cutHeight = float.PositiveInfinity;
-            else
-            {
-                var values = new float[candidates];
-                for (int i = 0, k = 0; i < n; i++) if (candidate[i]) values[k++] = smooth[i];
-                cutHeight = Provinces.Select(values, candidates - (int)room);
-            }
-            capped = cutHeight > ceiling;
-            if (capped) cutHeight = ceiling;
+            // 1. Mountain ground. Steep ground counts only near ground above the gate line; on its own,
+            // the eroded sides of low hills are as steep as any range.
+            // Whole-raster arrays are the cost here, not arithmetic: an 8192 map's int raster is 128 MB,
+            // allocated while the generator already holds several GB. The box counts share one scratch
+            // row buffer, and the steep counts reuse this one once the ground is known.
+            var scratch = new int[n];
+            var nearGate = BoxCount(gate, width, height, reach, scratch);
+            var ground = new bool[n];
             Parallel.For(0, height, y =>
             {
                 for (int i = y * width, end = i + width; i < end; i++)
-                    if (candidate[i] && smooth[i] >= cutHeight) raw[i] = true;
+                    ground[i] = land[i] == 1 && (gate[i] == 1 || (steep[i] == 1 && nearGate[i] > 0));
             });
+
+            // 2 and 3. Plateaus outside the quota; the rest ranked by height.
+            var landNear = BoxCount(land, width, height, radius, scratch);
+            var highNear = BoxCount(high, width, height, radius, scratch);
+            var gateNear = BoxCount(gate, width, height, radius, scratch);
+            bool plateaus = cfg.ImpassableMountainPlateaus;
+
+            var walls = raw = new bool[n];
+            var candidate = new bool[n];
+            plateauPixels = SumRows(height, y =>
+            {
+                long count = 0;
+                for (int i = y * width, end = i + width; i < end; i++)
+                {
+                    if (!ground[i]) continue;
+                    if (plateaus && highNear[i] * 2 > landNear[i]) { walls[i] = true; count++; continue; }
+                    if (landNear[i] > 0 && gateNear[i] >= gateMin * landNear[i]) candidate[i] = true;
+                }
+                return count;
+            });
+
+            // The foot needs the smoothed terrain everywhere, to find each place's local floor and peak;
+            // without it only the candidates are ranked, so only their rows are finished.
+            foot = Math.Clamp(cfg.ImpassableFootRelief, 0, 1);
+            double rugged = Math.Max(0, cfg.ImpassableMinRuggedness);
+            smooth = Gaussian(elevation, land, foot > 0 || rugged > 0 ? null : candidate, width, height, radius / 4.0);
+
+            // Flat ground below the mountain line is not wall, however high it stands: a tableland or
+            // a bench partway up a range is somewhere people live and armies march. Height alone let
+            // it in — on an inland-sea map 14.6% of the walls were flat ground under the mountain line,
+            // long smooth shelves lower than the peaks beside them. The plateau rule still takes flat
+            // ground mostly above the mountain line; nothing here touches it. Nor is anything above the
+            // ceiling flat for this purpose, however smooth: on a map whose mountain line stood at 475,
+            // tablelands at 400–478 were exempt, and higher than anything vanilla stands on.
+            var flatGround = flat = rugged > 0
+                ? FlatGround(smooth, elevation, MathF.Min(mountainLine, ceiling), land, width, height,
+                    Math.Max(1, radius / 2), rugged)
+                : null;
+            if (flatGround is not null)
+                Parallel.For(0, height, y =>
+                {
+                    for (int i = y * width, end = i + width; i < end; i++)
+                        if (flatGround[i]) candidate[i] = false;
+                });
+            int candidates = 0;
+            for (int i = 0; i < n; i++) if (candidate[i]) candidates++;
+
+            // The scored pass stops where its floor says the mountains have run out, however much of the
+            // share is left; the cut keeps that. Its floor is the same median + deviations over the
+            // same score, 0.35 high + 0.65 steep, taken over a barony-wide window instead of a
+            // province, and the land that clears it caps the share. Where the mountains are ample the
+            // share still binds (the three worlds the cut was measured on cleared it on 16.7%, 17.7%
+            // and 7.2% of land against shares of 8%, 5% and 5%); on the Ondrerol import, whose relief
+            // is gentler, 4.8% cleared it against 8%, and without the cap the cut walled 10.9% of land
+            // where the scored pass had walled 4.3%.
+            var steepNear = BoxCount(steep, width, height, radius, scratch, into: nearGate);
+            qualifying = QualifyingShare(landNear, highNear, steepNear, land, landTotal, cfg, out floor);
+            target = Math.Min(share, qualifying);
+            long room = (long)(target * landTotal);
+
+            // The share decides how far down the walls reach; it may not leave mountain ground above the
+            // ceiling passable. Ranked by height, the share is spent on the tallest ranges first, and
+            // each grows down its own flanks: on a continents world whose top 3.5% of land began at 475,
+            // the cores began at 510, those ranges' walls ran down to 230–300, and eleven highlands
+            // peaking at 480–520 were left passable. Capping the cut there walls every one of them,
+            // past the share, and leaves a map whose mountains stay under the ceiling untouched.
+            if (foot > 0)
+            {
+                // Walls run from their height-ranked cores down to their own foot; the cores shrink to
+                // leave the quota's room for the flanks. See FootGround.
+                var footGround = FootGround(smooth, landNear, gateNear, land, gateMin, width, height,
+                    (int)Math.Round(3.0 * radius), (float)foot, out var anywhere);
+                footAnywhere = anywhere;
+                if (flatGround is not null)
+                    Parallel.For(0, height, y =>
+                    {
+                        for (int i = y * width, end = i + width; i < end; i++)
+                            if (flatGround[i]) footGround[i] = anywhere[i] = false;
+                    });
+                cutHeight = FootCut(raw, candidate, smooth, footGround, candidates,
+                    target * landTotal + plateauPixels, width, height);
+                capped = cutHeight > ceiling;
+                if (capped) cutHeight = ceiling;
+                raw = Grow(raw, candidate, smooth, cutHeight, footGround, width, height, out _);
+            }
+            else
+            {
+                if (room >= candidates) cutHeight = float.NegativeInfinity;
+                else if (room <= 0) cutHeight = float.PositiveInfinity;
+                else
+                {
+                    var values = new float[candidates];
+                    for (int i = 0, k = 0; i < n; i++) if (candidate[i]) values[k++] = smooth[i];
+                    cutHeight = Provinces.Select(values, candidates - (int)room);
+                }
+                capped = cutHeight > ceiling;
+                if (capped) cutHeight = ceiling;
+                float cut = cutHeight;
+                var smoothed = smooth;
+                Parallel.For(0, height, y =>
+                {
+                    for (int i = y * width, end = i + width; i < end; i++)
+                        if (candidate[i] && smoothed[i] >= cut) walls[i] = true;
+                });
+            }
         }
 
         // Cliffs, outside the share. The foot is measured against the local floor, and beside the
@@ -290,8 +317,10 @@ public static class ImpassableAutoCut
         string crests = "";
         if (masked > 0 && (cfg.ImpassableCrestFollow > 0 || minWall > 0.5))
         {
+            // Ranked by steepness, a wall is its ridge already; running it on along a height line
+            // would bring back the height ranking by another door, so only the size rule applies.
             var (followed, added, dropped) = FollowCrests(mask, smooth, footAnywhere, flat, land, width, height,
-                radius, barony, cfg.Limits.SeaLevelUpper, gateLine, cfg.ImpassableCrestFollow,
+                radius, barony, cfg.Limits.SeaLevelUpper, gateLine, bySlope ? 0 : cfg.ImpassableCrestFollow,
                 cfg.ImpassableCrestReachBaronies, minWall);
             mask = Erode(Dilate(followed, width, height, close), width, height, close);
             Parallel.For(0, height, y =>
@@ -327,19 +356,29 @@ public static class ImpassableAutoCut
         masked -= opened;
 
         var diagnostics = new AutoCutDiagnostics(mountainLine, steepLine, gateLine, cutHeight,
-            target, (double)plateauPixels / landTotal, (double)masked / landTotal, pieces, passes);
-        string cut = float.IsNegativeInfinity(cutHeight)
-            ? "all mountain ground fit the share"
-            : capped
-                ? $"quota stopped above the ceiling, so cores start at the ceiling ({cutHeight:F0}), past the share"
-                : $"quota stopped at smoothed height {cutHeight:F0}";
-        if (foot > 0) cut += $", walls taken down to {foot:P0} of their local relief";
-        string quota = qualifying < share
-            ? $"share {target:P1}, capped by the floor {floor:F2} (setting {share:P0})"
-            : $"share {share:P0}";
-        Console.WriteLine($"  impassable auto-cut: {diagnostics.MaskShare:P1} of land in {pieces} wall piece(s) " +
-                          $"({quota} + plateaus {diagnostics.PlateauShare:P1}; mountain ground above " +
-                          $"{gateLine:F0}, mountain line {mountainLine:F0}, steep line {steepLine:F2}/px; {cut}{cliffs}{crests})");
+            target, (double)plateauPixels / landTotal, (double)masked / landTotal, pieces, passes, bySlope);
+        if (bySlope)
+        {
+            Console.WriteLine($"  impassable auto-cut: {diagnostics.MaskShare:P1} of land in {pieces} wall piece(s) " +
+                              $"(ranked by slope: share {share:P0} down to a score of {cutHeight:F2} + " +
+                              $"{diagnostics.PlateauShare:P1} above the ceiling ({ceiling:F0}); " +
+                              $"mountain line {mountainLine:F0}{cliffs}{crests})");
+        }
+        else
+        {
+            string cut = float.IsNegativeInfinity(cutHeight)
+                ? "all mountain ground fit the share"
+                : capped
+                    ? $"quota stopped above the ceiling, so cores start at the ceiling ({cutHeight:F0}), past the share"
+                    : $"quota stopped at smoothed height {cutHeight:F0}";
+            if (foot > 0) cut += $", walls taken down to {foot:P0} of their local relief";
+            string quota = qualifying < share
+                ? $"share {target:P1}, capped by the floor {floor:F2} (setting {share:P0})"
+                : $"share {share:P0}";
+            Console.WriteLine($"  impassable auto-cut: {diagnostics.MaskShare:P1} of land in {pieces} wall piece(s) " +
+                              $"({quota} + plateaus {diagnostics.PlateauShare:P1}; mountain ground above " +
+                              $"{gateLine:F0}, mountain line {mountainLine:F0}, steep line {steepLine:F2}/px; {cut}{cliffs}{crests})");
+        }
         if (cfg.MountainPasses) MountainPasses.Report(passes);
         return (mask, diagnostics);
     }
@@ -377,6 +416,146 @@ public static class ImpassableAutoCut
             return count;
         });
         return (double)over / landTotal;
+    }
+
+    /// <summary>
+    /// The raw walls ranked by steepness (<see cref="ImpassableRanking.Slope"/>), ready for the
+    /// cliffs and the clean. Returns the walls; <paramref name="smooth"/> is the terrain they were
+    /// measured on, <paramref name="cut"/> the score the share stopped at, and
+    /// <paramref name="outside"/> the pixels walled outside the share.
+    ///
+    /// Each land pixel scores its ruggedness — the slope of the terrain smoothed to a quarter of a
+    /// barony's radius, averaged over half a barony, so erosion grooves read as the hillside they
+    /// are cut into — times one plus its height above the local floor over
+    /// <see cref="MapConfig.ImpassableLiftScale"/>. The floor is the lowest ground six barony radii
+    /// around, so a massif counts for more than a bluff of the same steepness while a shoulder on a
+    /// high plain counts for little. Ground gentler than <see cref="MapConfig.ImpassableMinSlope"/>
+    /// never scores. The share is taken from the top score down.
+    ///
+    /// Water is taken at sea level before the smoothing, or every coast would read as a cliff down
+    /// to the seabed. Ground above the ceiling is walled whatever it scores, outside the share, and
+    /// so is a set-piece's barrier (see <see cref="AppGUI.QuickFeatures.Barrier"/>), inside it.
+    ///
+    /// Measured against the height ranking on two 8192 worlds (Rift 630583, scar 288855): smooth
+    /// high ground walled (238–400, ruggedness under 1.2) fell from 60% and 66% to under 2%, and
+    /// steep ground below 238 walled (ruggedness 3 or more) rose from 20% and 39% to 71%.
+    /// </summary>
+    private static bool[] SlopeWalls(float[] elevation, byte[] land, long landTotal, int width, int height,
+        int radius, int close, MapConfig cfg, double share, float ceiling,
+        out float[] smooth, out float cut, out long outside)
+    {
+        int n = width * height;
+        float sea = cfg.Limits.SeaLevelUpper;
+        var terrain = smooth = Gaussian(elevation, null, null, width, height, radius / 4.0, floorAt: sea);
+        var rugged = BoxMean(FeatureSlope(terrain, width, height), width, height, Math.Max(1, radius / 2));
+        double liftScale = Math.Max(0, cfg.ImpassableLiftScale) * cfg.ReliefScale;
+        var floor = liftScale > 0 ? LocalFloor(terrain, width, height, 6 * radius) : null;
+        float inverseLift = liftScale > 0 ? (float)(1 / liftScale) : 0f;
+        float minSlope = (float)Math.Max(0, cfg.ImpassableMinSlope);
+
+        // A set-piece's barrier is that map's mountains, so it spends the share like any wall; the
+        // ceiling is outside it, as it is when ranking by height. On the wall world, the Wall's body
+        // outside the share walled 15% of land.
+        var barrier = Barrier(cfg, width, height);
+        var forced = new bool[n];
+        var score = new float[n];
+        outside = SumRows(height, y =>
+        {
+            long count = 0;
+            for (int i = y * width, end = i + width; i < end; i++)
+            {
+                if (land[i] == 0) continue;
+                if (terrain[i] >= ceiling) { forced[i] = true; count++; continue; }
+                if (barrier is not null && barrier[i]) { forced[i] = true; continue; }
+                if (rugged[i] < minSlope || rugged[i] <= 0) continue;
+                score[i] = floor is null ? rugged[i] : rugged[i] * (1 + MathF.Max(0, terrain[i] - floor[i]) * inverseLift);
+            }
+            return count;
+        });
+
+        int scored = 0;
+        for (int i = 0; i < n; i++) if (score[i] > 0) scored++;
+        var values = new float[scored];
+        for (int i = 0, k = 0; i < n; i++) if (score[i] > 0) values[k++] = score[i];
+
+        // The share is of walls as they stand after the clean, which drops the specks and hairlines
+        // a threshold leaves and every wall under ImpassableMinWallBaronies. The count taken is
+        // corrected twice by what the clean kept of it; on the three worlds above, the first guess
+        // kept about four-fifths.
+        var raw = new bool[n];
+        double goal = share * landTotal;
+        double minWall = Math.Max(0.5, cfg.ImpassableMinWallBaronies) * cfg.BaronyPixels;
+        int open = Math.Max(Math.Max(1, close / 2), radius / 4);
+        long want = (long)goal;
+        cut = float.PositiveInfinity;
+        for (int pass = 0; pass < 3 && scored > 0 && goal >= 1; pass++)
+        {
+            long take = Math.Clamp(want, 1, scored);
+            float line = cut = Provinces.Select(values, scored - (int)take);
+            Parallel.For(0, height, y =>
+            {
+                for (int i = y * width, end = i + width; i < end; i++) raw[i] = forced[i] || score[i] >= line;
+            });
+            if (pass == 2) break;
+
+            var trial = Erode(Dilate(raw, width, height, close), width, height, close);
+            Parallel.For(0, height, y =>
+            {
+                for (int i = y * width, end = i + width; i < end; i++) trial[i] &= land[i] == 1;
+            });
+            trial = Dilate(Erode(trial, width, height, open), width, height, open);
+            var (_, sizes) = Label(trial, width, height);
+            long kept = -outside;
+            foreach (int size in sizes) if (size >= minWall) kept += size;
+            if (kept <= 0) break;
+            want = (long)(take * goal / kept);
+        }
+        if (float.IsPositiveInfinity(cut)) Array.Copy(forced, raw, n);
+        return raw;
+    }
+
+    /// <summary>
+    /// The set-piece's barrier (<see cref="AppGUI.QuickFeatures.Barrier"/>) as a raster, or null
+    /// when the map has none. The shape is smooth and several baronies across, so it is sampled
+    /// every four pixels.
+    /// </summary>
+    private static bool[]? Barrier(MapConfig cfg, int width, int height)
+    {
+        string[] parts = (cfg.SetPiece ?? "").Split('@');
+        if (parts.Length != 2 || !int.TryParse(parts[1], out int seed)) return null;
+        var contains = AppGUI.QuickFeatures.Barrier(AppGUI.QuickCatalogue.FeatureOf(parts[0]), seed,
+            (double)width / height);
+        if (contains is null) return null;
+
+        const int q = 4;
+        int cw = (width + q - 1) / q, ch = (height + q - 1) / q;
+        var coarse = new bool[cw * ch];
+        Parallel.For(0, ch, cy =>
+        {
+            for (int cx = 0; cx < cw; cx++)
+                coarse[cy * cw + cx] = contains((cx * q + q / 2.0) / width, (cy * q + q / 2.0) / height);
+        });
+        var result = new bool[width * height];
+        Parallel.For(0, height, y =>
+        {
+            for (int x = 0; x < width; x++) result[y * width + x] = coarse[y / q * cw + x / q];
+        });
+        return result;
+    }
+
+    /// <summary>
+    /// The lowest ground within <paramref name="reach"/> of every pixel, as a grey opening of the
+    /// smoothed terrain, blurred by half the reach so the square window leaves no mark. Found on a
+    /// pooled grid, as <see cref="FootGround"/> finds its floor.
+    /// </summary>
+    private static float[] LocalFloor(float[] smooth, int width, int height, int reach)
+    {
+        int q = Math.Max(1, reach / 24);
+        int cw = (width + q - 1) / q, ch = (height + q - 1) / q;
+        int coarse = Math.Max(1, Math.Min((int)Math.Round((double)reach / q), Math.Min(cw, ch) - 1));
+        var (lowest, _) = Pool(smooth, width, height, q, cw, ch);
+        return Upsample(Gaussian(Extreme(Extreme(lowest, cw, ch, coarse, max: false), cw, ch, coarse, max: true),
+            null, null, cw, ch, coarse / 2.0), cw, ch, q, width, height);
     }
 
     /// <summary>Runs <paramref name="row"/> over every row in parallel and sums what it returns.</summary>
@@ -638,21 +817,7 @@ public static class ImpassableAutoCut
     private static bool[] FlatGround(float[] smooth, float[] elevation, float mountainLine, byte[] land,
         int width, int height, int r, double rugged)
     {
-        // Central differences, one-sided at the edges.
-        var slope = new float[smooth.Length];
-        Parallel.For(0, height, y =>
-        {
-            int up = y > 0 ? y - 1 : y, down = y < height - 1 ? y + 1 : y;
-            float dyScale = down - up == 2 ? 0.5f : 1f;
-            for (int x = 0; x < width; x++)
-            {
-                int left = x > 0 ? x - 1 : x, right = x < width - 1 ? x + 1 : x;
-                float dxScale = right - left == 2 ? 0.5f : 1f;
-                float dx = (smooth[y * width + right] - smooth[y * width + left]) * dxScale;
-                float dy = (smooth[down * width + x] - smooth[up * width + x]) * dyScale;
-                slope[y * width + x] = MathF.Sqrt(dx * dx + dy * dy);
-            }
-        });
+        var slope = FeatureSlope(smooth, width, height);
 
         var sample = new List<float>();
         for (int i = 0; i < land.Length; i++) if (land[i] != 0) sample.Add(slope[i]);
@@ -668,6 +833,27 @@ public static class ImpassableAutoCut
                 flat[i] = land[i] != 0 && elevation[i] < mountainLine && mean[i] < line;
         });
         return flat;
+    }
+
+    /// <summary>The gradient of <paramref name="smooth"/> at every pixel, by central differences,
+    /// one-sided at the edges.</summary>
+    private static float[] FeatureSlope(float[] smooth, int width, int height)
+    {
+        var slope = new float[smooth.Length];
+        Parallel.For(0, height, y =>
+        {
+            int up = y > 0 ? y - 1 : y, down = y < height - 1 ? y + 1 : y;
+            float dyScale = down - up == 2 ? 0.5f : 1f;
+            for (int x = 0; x < width; x++)
+            {
+                int left = x > 0 ? x - 1 : x, right = x < width - 1 ? x + 1 : x;
+                float dxScale = right - left == 2 ? 0.5f : 1f;
+                float dx = (smooth[y * width + right] - smooth[y * width + left]) * dxScale;
+                float dy = (smooth[down * width + x] - smooth[up * width + x]) * dyScale;
+                slope[y * width + x] = MathF.Sqrt(dx * dx + dy * dy);
+            }
+        });
+        return slope;
     }
 
     /// <summary>The mean over the (2r+1)² square around every pixel, edges mirrored.</summary>

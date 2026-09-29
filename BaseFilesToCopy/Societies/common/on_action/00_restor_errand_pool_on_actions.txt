@@ -1,0 +1,72 @@
+﻿# The Errand's random pool: restor.1100-1199, events/restor_errand_pool_events.txt.
+#
+# Drawn the way vanilla's hunt draws hunt_random_pulse: the activity's phase fires these on_actions
+# at fixed days (00_restor_errand_activity.txt), and each draws ONE event from its list. The host
+# only; scope:activity and scope:host ride along from the phase block.
+#
+#   restor_errand_road_pool     day 5    the last stretch of road into the county
+#   restor_errand_county_pool   day 14   in the county, between On the Road and The Witness
+#   restor_errand_county_pool   day 22   in the county, between The Witness and Home
+#
+# Each draw comes up empty 20% of the time for a player (50% for an AI host), so a player's Errand
+# carries two or three of these, and never the same set twice. Each event sets
+# restor_errand_seen_NNNN for 60 days, so the two county draws of one Errand never repeat each
+# other. Events gated on a purpose, a companion or a neighbouring county drop out of the draw when
+# they cannot fire; chance_of_no_event is taken before that.
+
+restor_errand_road_pool = {
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		is_imprisoned = no
+	}
+	random_events = {
+		chance_of_no_event = {
+			value = 20
+			if = {
+				limit = { is_ai = yes }
+				add = 30
+			}
+		}
+		100 = restor.1101	# the bridge: a chain across the road
+		100 = restor.1102	# men in the road
+		100 = restor.1103	# the song at the inn
+		100 = restor.1104	# followed
+		100 = restor.1105	# a loose tongue (companion)
+		100 = restor.1106	# fellow travellers
+		100 = restor.1107	# letters in the saddlebag
+	}
+}
+
+restor_errand_county_pool = {
+	trigger = {
+		exists = scope:activity
+		restor_underground_trigger = yes
+		is_imprisoned = no
+	}
+	random_events = {
+		chance_of_no_event = {
+			value = 20
+			if = {
+				limit = { is_ai = yes }
+				add = 30
+			}
+		}
+		# Any purpose
+		100 = restor.1110	# the old king's face
+		100 = restor.1111	# the tax men
+		100 = restor.1112	# the garrison sergeant
+		100 = restor.1113	# the soldier's widow
+		100 = restor.1114	# the keeper of the tombs
+		100 = restor.1115	# the empty mill: a contact who does not come
+		100 = restor.1116	# a second county (needs an unstirred neighbour)
+		100 = restor.1117	# the proclamation
+		100 = restor.1118	# a village wedding
+		100 = restor.1122	# names for sale
+		100 = restor.1123	# a companion recognised (companion)
+		# One purpose each
+		150 = restor.1119	# coin: the merchant's price
+		150 = restor.1120	# soldiers: the sergeant's test
+		150 = restor.1121	# stir: the headman's doubt
+	}
+}
