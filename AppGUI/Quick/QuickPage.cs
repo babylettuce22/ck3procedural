@@ -27,6 +27,7 @@ internal sealed class QuickPage : Panel
     public event Action? LaunchRequested;
     public event Action? OpenFolderRequested;
     public event Action? CustomizeRequested;
+    public event Action? See3DRequested;
     public event Action? GameFolderRequested;
 
     // the history run on after the world is written; see RunScreen's history view
@@ -116,6 +117,14 @@ internal sealed class QuickPage : Panel
     private readonly ChoiceGroup<QuickFantasy> _fantasy;
     private readonly ChoiceGroup<QuickPolitics> _politics;
     private readonly ChoiceGroup<GenderPreference> _rulers;
+    // Beside the Fantasy heading while the world has races: opens the race mix (RaceMixDialog).
+    private readonly TextLink _mixLink = new() { Name = "quickRaceMix", LinkFont = Small, Glyph = "", AccessibleName = "Race mix" };
+    private static readonly Dictionary<QuickFantasy, string> FantasySubtitles = new()
+    {
+        [QuickFantasy.None] = "Humans only, as in vanilla",
+        [QuickFantasy.Low] = "Mostly human, a few other races",
+        [QuickFantasy.High] = "Elves, dwarves, orcs and more",
+    };
     private readonly ToggleCard _wilderness = new() { Name = "quickWilderness", Text = "Wilderness", Description = "Unsettled lands to clear, claim and colonise." };
     private readonly ToggleCard _wars = new() { Name = "quickWars", Text = "Wars at the start", Description = "Rivals already at war on the first day." };
     private readonly ToggleCard _nativeTitles = new() { Name = "quickNativeTitles", Text = "Native titles", Description = "Kings and dukes titled in their people's own language." };
@@ -165,9 +174,9 @@ internal sealed class QuickPage : Panel
             .Add(QuickPeople.Invented, "Invented", "New cultures, faiths, languages and names", "quickPeopleInvented")
             .Add(QuickPeople.RealCk3, "Real CK3", "Vanilla's cultures and faiths laid onto this map", "quickPeopleReal");
         _fantasy = new ChoiceGroup<QuickFantasy>("Fantasy", "Whether other races share the world with humans.", QuickFantasy.None)
-            .Add(QuickFantasy.None, "None", "Humans only, as in vanilla", "quickFantasyNone")
-            .Add(QuickFantasy.Low, "Low fantasy", "Mostly human, a few other races", "quickFantasyLow")
-            .Add(QuickFantasy.High, "High fantasy", "Elves, dwarves, orcs and more", "quickFantasyHigh");
+            .Add(QuickFantasy.None, "None", FantasySubtitles[QuickFantasy.None], "quickFantasyNone")
+            .Add(QuickFantasy.Low, "Low fantasy", FantasySubtitles[QuickFantasy.Low], "quickFantasyLow")
+            .Add(QuickFantasy.High, "High fantasy", FantasySubtitles[QuickFantasy.High], "quickFantasyHigh");
         _politics = new ChoiceGroup<QuickPolitics>("Politics", "How the realms stand on the first day.", QuickPolitics.Kingdoms)
             .Add(QuickPolitics.Fragmented, "Fragmented", "Every count rules alone", "quickPoliticsFragmented")
             .Add(QuickPolitics.Kingdoms, "Kingdoms", "Realms great and small", "quickPoliticsKingdoms")
@@ -187,7 +196,19 @@ internal sealed class QuickPage : Panel
             ShowNativeToggles();
             ShowFantasy();
         };
-        _fantasy.Changed += v => _choices.Fantasy = v;
+        _fantasy.Changed += v =>
+        {
+            // A new level brings its own human share; the races' weights are taste and stay.
+            // One left at its defaults by that is no mix at all.
+            if (v != _choices.Fantasy && _choices.Mix is { } mix)
+            {
+                mix.HumanShare = 0;
+                if (mix.IsDefault) _choices.Mix = null;
+            }
+            _choices.Fantasy = v;
+            ShowFantasy();
+        };
+        _mixLink.Click += (_, _) => EditRaceMix();
         _politics.Changed += v => _choices.Politics = v;
         _rulers.Changed += v => _choices.Rulers = v;
         _wilderness.Toggled += on => _choices.Wilderness = on;
@@ -200,7 +221,8 @@ internal sealed class QuickPage : Panel
         BuildGroupsStep(_worldPanel, "Shape the world", "Size, era and climate. The defaults make a good first world.",
             [_size, _era, _climate, _density], toggles: null);
         BuildGroupsStep(_peoplePanel, "People and politics", "Who lives here, who rules, and what else the world holds.",
-            [_peopleGroup, _fantasy, _politics, _rulers], toggles: [_wilderness, _wars, _nativeTitles, _nativeRealms]);
+            [_peopleGroup, _fantasy, _politics, _rulers], toggles: [_wilderness, _wars, _nativeTitles, _nativeRealms],
+            headingLinks: new() { [_fantasy] = (_mixLink, () => MixLinkShown) });
         BuildReviewStep();
         WireRunScreen();
 
@@ -329,6 +351,7 @@ internal sealed class QuickPage : Panel
         _run.LaunchRequested += () => LaunchRequested?.Invoke();
         _run.OpenFolderRequested += () => OpenFolderRequested?.Invoke();
         _run.CustomizeRequested += () => CustomizeRequested?.Invoke();
+        _run.See3DRequested += () => See3DRequested?.Invoke();
         _run.RetryRequested += () => Go(ReviewStep);
         _run.PlayPauseRequested += () => PlayPauseRequested?.Invoke();
         _run.PaceRequested += () => PaceRequested?.Invoke();
@@ -454,8 +477,10 @@ internal sealed class QuickPage : Panel
         _choices.NativeTitles = kept.NativeTitles;
         _choices.NativeRealms = kept.NativeRealms;
         _choices.Mountains = kept.Mountains;
-        // So is fantasy: a surprise should not put elves into a player's historical game.
+        // So is fantasy: a surprise should not put elves into a player's historical game. Nor
+        // should it throw away a race mix set by hand.
         _choices.Fantasy = kept.Fantasy;
+        _choices.Mix = kept.Mix;
         _previousSeeds.Push(kept.Seed);
         SyncControls();
         RenderPreview();
@@ -480,7 +505,39 @@ internal sealed class QuickPage : Panel
     /// generator refuses races on them. Hidden rather than greyed, like the native switches, and
     /// the step closes up around it.
     /// </summary>
-    private void ShowFantasy() => _fantasy.Shown = _choices.People == QuickPeople.Invented;
+    private void ShowFantasy()
+    {
+        _fantasy.Shown = _choices.People == QuickPeople.Invented;
+
+        // The race mix goes with races: offered beside the heading once Low or High is picked, and
+        // named "custom" once set, with the chosen card saying so too.
+        _mixLink.Text = _choices.MixInWorld is null ? "Race mix…" : "Custom race mix…";
+        _mixLink.Visible = MixLinkShown;
+        foreach (var (level, subtitle) in FantasySubtitles)
+            _fantasy.SetSubtitle(level, level == _choices.Fantasy && _choices.MixInWorld is { } mix
+                ? $"Custom mix  ·  {mix.HumanPercent(level)}% human"
+                : subtitle);
+        _peoplePanel.PerformLayout();
+    }
+
+    /// <summary>Whether the race mix link is on the step: only for a world with races.</summary>
+    private bool MixLinkShown => _fantasy.Shown && _choices.FantasyInWorld != QuickFantasy.None;
+
+    /// <summary>
+    /// Opens the race mix over the page. A mix brought back to its defaults is dropped rather than
+    /// kept, so the world is exactly the one the fantasy choice alone makes.
+    /// </summary>
+    private void EditRaceMix()
+    {
+        var level = _choices.FantasyInWorld;
+        if (level == QuickFantasy.None) return;
+
+        using var dialog = new RaceMixDialog(_choices.Mix ?? new QuickRaceMix(), level);
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+        _choices.Mix = dialog.Mix.IsDefault ? null : dialog.Mix;
+        ShowFantasy();
+    }
 
     /// <summary>Puts every control in step with <see cref="_choices"/>.</summary>
     private void SyncControls()
@@ -758,7 +815,10 @@ internal sealed class QuickPage : Panel
 
     // ================================================================ choice steps
 
-    private void BuildGroupsStep(StepPanel panel, string title, string subtitle, IChoiceGroup[] views, ToggleCard[]? toggles)
+    /// <param name="headingLinks">A link to place at the right end of a group's heading, and
+    /// whether it is showing: the Fantasy row's race mix.</param>
+    private void BuildGroupsStep(StepPanel panel, string title, string subtitle, IChoiceGroup[] views, ToggleCard[]? toggles,
+        Dictionary<IChoiceGroup, (TextLink Link, Func<bool> Shown)>? headingLinks = null)
     {
         var titleLabel = MakeLabel(title, Title, Theme.Text);
         var subtitleLabel = MakeLabel(subtitle, Subtitle, Theme.TextDim);
@@ -773,6 +833,7 @@ internal sealed class QuickPage : Panel
             panel.Controls.Add(t);
             panel.Controls.Add(h);
             foreach (var card in cards) panel.Controls.Add(card);
+            if (headingLinks?.TryGetValue(view, out var link) == true) panel.Controls.Add(link.Link);
             headers.Add((view, t, h, cards));
         }
 
@@ -795,9 +856,13 @@ internal sealed class QuickPage : Panel
             y += StepPanel.Place(subtitleLabel, x, y, w) + S(18);
 
             // Every card in a row is as tall as the one with the most to say, so none is cut short.
-            void Row(Label t, Label h, IReadOnlyList<Control> cards)
+            // A heading link takes the right end of the title's line, and the hint the room left.
+            void Row(Label t, Label h, IReadOnlyList<Control> cards, TextLink? link = null)
             {
-                y = StepPanel.TitleAndHint(t, h, x, y, w) + S(6);
+                int linkRoom = link is null ? 0 : link.Width + S(16);
+                if (link is not null)
+                    link.Location = new Point(x + w - link.Width, y + (t.PreferredHeight - link.Height) / 2);
+                y = StepPanel.TitleAndHint(t, h, x, y, w - linkRoom) + S(6);
                 int gap = S(12);
                 int n = Math.Max(1, cards.Count);
                 int cw = (w - gap * (n - 1)) / n;
@@ -811,7 +876,16 @@ internal sealed class QuickPage : Panel
             foreach (var (view, t, h, cards) in headers)
             {
                 t.Visible = h.Visible = view.Shown;
-                if (view.Shown) Row(t, h, cards);
+                TextLink? link = null;
+                if (headingLinks?.TryGetValue(view, out var entry) == true)
+                {
+                    // Read from the flag, not back off Visible: on a step not yet showing, Visible
+                    // reports false whatever it was set to.
+                    bool shown = entry.Shown();
+                    entry.Link.Visible = shown;
+                    if (shown) link = entry.Link;
+                }
+                if (view.Shown) Row(t, h, cards, link);
             }
             if (toggles is not null && extrasTitle is not null && extrasHint is not null)
                 Row(extrasTitle, extrasHint, [.. toggles.Where(c => c.Visible)]);
@@ -873,7 +947,9 @@ internal sealed class QuickPage : Panel
             ClimateNames[_choices.Climate],
             DensityNames[_choices.Density],
             PeopleNames[_choices.People],
-            FantasyNames[_choices.FantasyInWorld],
+            _choices.MixInWorld is { } mix
+                ? $"{(_choices.FantasyInWorld == QuickFantasy.Low ? "Low" : "High")} fantasy, custom mix  ·  {mix.Describe(_choices.FantasyInWorld)}"
+                : FantasyNames[_choices.FantasyInWorld],
             PoliticsNames[_choices.Politics],
             RulerNames[_choices.Rulers],
             extras.Count == 0 ? "None" : string.Join("  ·  ", extras),

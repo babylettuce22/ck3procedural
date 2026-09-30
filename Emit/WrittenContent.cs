@@ -62,6 +62,16 @@ public sealed record WrittenContent
     public required Dictionary<int, string> Holdings { get; init; }
 
     /// <summary>
+    /// The folder this was written to and the game folder it was written against. The CK3 ground
+    /// view reads the written detail maps and colormap back from the first and the terrain
+    /// textures from the second; nothing else here needs either.
+    /// </summary>
+    public string? ModDir { get; init; }
+
+    /// <inheritdoc cref="ModDir"/>
+    public string? GameDir { get; init; }
+
+    /// <summary>
     /// The seat holdings the additional bookmarks write around today's, or null without them. Kept so
     /// a province-history re-emit writes them again rather than dropping them.
     /// </summary>

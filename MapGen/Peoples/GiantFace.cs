@@ -38,12 +38,23 @@ internal static class GiantFace
 
     // ---- brow shelf ----
     private const double BrowY = 49.4;        // crest height at the centre, male space
-    private const double BrowArch = 0.25;     // the crest rises this much over each eye
-    private const double BrowOut = 1.85;      // peak forward push of the crest
-    private const double BrowDown = 0.35;     // the crest also sags down over the lids
-    private const double BrowAbove = 2.6;     // fade up into the forehead (gradual)
     private const double BrowBelow = 1.0;     // fade down onto the lids (sharp: the overhang)
-    private const double BrowHalf = 6.2;      // half-width before the temple taper
+
+    /// <summary>
+    /// One brow: <paramref name="Out"/> the peak forward push of the crest, <paramref name="Down"/>
+    /// how far it sags over the lids, <paramref name="Above"/> its fade up into the forehead,
+    /// <paramref name="Arch"/> how much it rises over each eye, <paramref name="Half"/> its
+    /// half-width before the temple taper. The orc brow (<see cref="OrcBrow"/>) is the same field.
+    /// </summary>
+    internal sealed record BrowShape(double Out, double Down, double Above, double Arch, double Half)
+    {
+        /// <summary>The shelf. ~8% over the rendered 1.7 on the user's call before the first in-game look.</summary>
+        public static readonly BrowShape Giant = new(Out: 1.85, Down: 0.35, Above: 2.6, Arch: 0.25, Half: 6.2);
+
+        /// <summary>Heavy, low and sloping: more sag onto the lids and a longer fade up the forehead,
+        /// at about three quarters of the giant's push. Approved from renders 2026-09-29.</summary>
+        public static readonly BrowShape Orc = new(Out: 1.35, Down: 0.45, Above: 3.2, Arch: 0.15, Half: 6.0);
+    }
 
     // ---- jaw ----
     private const double JawOut = 1.2, JawDown = 0.75;         // gonial angles
@@ -61,6 +72,14 @@ internal static class GiantFace
     /// <param name="female">Selects the width and strength of the female head.</param>
     /// <param name="dominant">Each vertex's dominant bone name.</param>
     public static PointedEars.Result Shape(float[] p, float[] n, float[] ta, int[] tri, string[] dominant, bool female)
+        => Build(p, n, ta, tri, dominant, female, BrowShape.Giant, withJaw: true);
+
+    /// <summary>A brow alone, no jaw — the orc brow.</summary>
+    public static PointedEars.Result BrowOnly(float[] p, float[] n, float[] ta, int[] tri, string[] dominant, bool female, BrowShape shape)
+        => Build(p, n, ta, tri, dominant, female, shape, withJaw: false);
+
+    private static PointedEars.Result Build(float[] p, float[] n, float[] ta, int[] tri, string[] dominant, bool female,
+        BrowShape browShape, bool withJaw)
     {
         int count = p.Length / 3;
         double sx = female ? 0.92 : 1.0, amount = female ? 0.85 : 1.0;
@@ -83,15 +102,15 @@ internal static class GiantFace
             return d;
         }
 
-        var brow = Field(q => Brow(q, n, dominant), BrowLandmark);
-        var jaw = Field(q => Jaw(q, dominant), LipLandmark);
+        var brow = Field(q => Brow(q, n, dominant, browShape), BrowLandmark);
+        var jaw = withJaw ? Field(q => Jaw(q, dominant), LipLandmark) : new double[p.Length];
 
         var moved = new double[p.Length];
         for (int i = 0; i < p.Length; i++) moved[i] = p[i] + brow[i] + jaw[i];
         return PointedEars.Finish(p, moved, n, ta, tri);
     }
 
-    private static double[] Brow(double[] p, float[] n, string[] dom)
+    private static double[] Brow(double[] p, float[] n, string[] dom, BrowShape b)
     {
         int count = p.Length / 3;
         var d = new double[p.Length];
@@ -103,18 +122,18 @@ internal static class GiantFace
             if (z > -4.0 || lid || (dom[v].Contains("eye", StringComparison.Ordinal) && y < 48.3)) continue;
 
             double ax = Math.Abs(x);
-            double crest = BrowY + BrowArch * Math.Sin(Math.Min(ax / 3.6, 1.0) * Math.PI) - 0.15 * Math.Exp(-Math.Pow(x / 0.9, 2));
+            double crest = BrowY + b.Arch * Math.Sin(Math.Min(ax / 3.6, 1.0) * Math.PI) - 0.15 * Math.Exp(-Math.Pow(x / 0.9, 2));
             double dy = y - crest;
-            double vert = dy > 0 ? Math.Exp(-Math.Pow(dy / BrowAbove, 2)) : Math.Exp(-Math.Pow(dy / BrowBelow, 2));
-            double s = vert * (1.0 - SmoothStep(BrowHalf, BrowHalf + 2.2, ax));
+            double vert = dy > 0 ? Math.Exp(-Math.Pow(dy / b.Above, 2)) : Math.Exp(-Math.Pow(dy / BrowBelow, 2));
+            double s = vert * (1.0 - SmoothStep(b.Half, b.Half + 2.2, ax));
             if (s < 1e-4) continue;
 
             // Forward along a blend of the skin normal and −z; the crest sags onto the lids.
             double fx = 0.35 * n[v * 3], fy = 0.35 * n[v * 3 + 1], fz = -0.65 + 0.35 * n[v * 3 + 2];
             double l = Math.Sqrt(fx * fx + fy * fy + fz * fz);
-            d[v * 3] += BrowOut * s * fx / l;
-            d[v * 3 + 1] += BrowOut * s * fy / l - BrowDown * s * (dy < 0.6 ? 1 : 0.4);
-            d[v * 3 + 2] += BrowOut * s * fz / l;
+            d[v * 3] += b.Out * s * fx / l;
+            d[v * 3 + 1] += b.Out * s * fy / l - b.Down * s * (dy < 0.6 ? 1 : 0.4);
+            d[v * 3 + 2] += b.Out * s * fz / l;
         }
 
         return d;

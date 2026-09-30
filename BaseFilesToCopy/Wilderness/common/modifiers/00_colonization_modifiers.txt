@@ -124,18 +124,60 @@ overseeing_the_settlement = {
 	# contain — ck3-tiger catches the missing file, the game shows a blank square and says nothing.
 	icon = county_modifier_control_positive
 
-	# The colony renders something, because there is somebody there to render it to. Deliberately a
-	# real sum rather than a token: this is the whole reward for a lord being absent from his court
-	# for years, and if it does not beat sitting at home the choice is not a choice.
-	#
-	# 1.5 until the levy line came out of settlement_overseen. It is carrying both halves of presence
-	# now — the colony's coin and the men it cannot raise — because income is the only channel the
-	# engine leaves open. That makes it the tuning knob for the whole mechanic: if overseeing feels
-	# too weak or too strong, this is the number, and there is no second one to balance it against.
-	monthly_income = 2.0
+	# No income here any more. This modifier is the presence MARKER — a dozen triggers ask for it by
+	# name — and the yield moved to the overseeing_yield_* ladder below, which
+	# colony_refresh_presence_effect applies beside it.
 
 	# He is a lord in a palisade, not a lord in a hall. Nobody is impressed.
 	monthly_prestige = -0.5
+}
+
+# ---- What the colony renders its lord: a ladder, not a flat sum ----
+#
+# Character scope, exactly one at a time, applied with overseeing_the_settlement and removed with it
+# (colony_refresh_presence_effect / colony_remove_oversight_yield_effect).
+#
+# This was a flat +2.0 gold a month for everyone, and a flat sum was wrong at both ends. A palisade
+# that went up last spring paid the same as a colony a generation from promotion. And +2.0 is not
+# the same amount of money to everyone: to a tribal chief whose whole realm yields a gold or two it
+# was a second treasury, conjured from a hamlet by standing in it.
+#
+# So the sum follows the rung the colony has reached — what the place can actually hand over — and a
+# tribal lord is paid in the currency his realm runs on. Tribal colonies already build in prestige
+# (colony_tribal_labour); a chief living among his settlers is paid in the standing it brings, not in
+# coin a hamlet does not have.
+#
+# The gold ladder tops out below the old flat 2.0 on purpose: the county half, settlement_overseen,
+# still carries growth, control and build speed, and those are the real point of going.
+#
+# Still the only income channel presence has — see the note at the top of this section on why levy
+# cannot be substituted — so these six numbers are the tuning knob for what presence is worth.
+overseeing_yield_gold_1 = {
+	icon = county_modifier_control_positive
+	monthly_income = 0.5
+}
+overseeing_yield_gold_2 = {
+	icon = county_modifier_control_positive
+	monthly_income = 1.0
+}
+overseeing_yield_gold_3 = {
+	icon = county_modifier_control_positive
+	monthly_income = 1.5
+}
+
+# Net of the marker's -0.5 these are +0, +0.5 and +1.0: the chief is not humbled by the palisade the
+# way a feudal lord is, and he is not enriched by it either until it is worth something.
+overseeing_yield_prestige_1 = {
+	icon = county_modifier_control_positive
+	monthly_prestige = 0.5
+}
+overseeing_yield_prestige_2 = {
+	icon = county_modifier_control_positive
+	monthly_prestige = 1.0
+}
+overseeing_yield_prestige_3 = {
+	icon = county_modifier_control_positive
+	monthly_prestige = 1.5
 }
 
 # County scope, on the colony being overseen.
@@ -177,8 +219,8 @@ settlement_overseen = {
 	# producing no men at all.
 	#
 	# Nothing replaces it, because nothing can: there is no additive levy modifier for a holding you
-	# hold yourself. Presence is worth coin and it is not worth soldiers, and
-	# `overseeing_the_settlement.monthly_income` now carries what this was pretending to be worth.
+	# hold yourself. Presence is worth coin and it is not worth soldiers, and the overseeing_yield_*
+	# ladder now carries what this was pretending to be worth.
 }
 
 # County scope: applied when the ruler pays for supplies

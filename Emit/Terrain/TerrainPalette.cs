@@ -77,6 +77,9 @@ public static class TerrainPalette
     private const byte Drylands01 = 18;
     private const byte DrylandsCracked = 19;
     private const byte DrylandsGrassy = 20;
+    private const byte DrylandsLowlands = 85;     // gen_drylands_lowlands (tan)
+    private const byte DrylandsLowlands02 = 86;   // olive
+    private const byte DrylandsLowlands03 = 87;   // dark olive
     private const byte FarmPaddy = 21;
     private const byte Farmland = 22;
     private const byte Floodplains = 23;
@@ -209,6 +212,36 @@ public static class TerrainPalette
         return (set[a], set[b], BucketConfidence(nA, count), BucketConfidence(nB, count - 1));
     }
 
+    /// <summary>
+    /// Where along <paramref name="set"/> a selector sits, as the two neighbouring entries and how
+    /// far toward the second it is (0..1, smoothstepped). Weighting them 1 - t and t makes a
+    /// partition of unity: crossing from one entry to the next is a cross-fade with both present,
+    /// never a pick that fades to nothing at the seam and lets a third material show through.
+    ///
+    /// The selector is spread through its own distribution first — the palette selectors are
+    /// fBm and cluster around 0.5 with sigma ~0.15 (mosaic-noise measure), so laid on the raw
+    /// value the middle entry would take most of the ground and the ends almost none.
+    /// </summary>
+    private static (byte A, byte B, double T) CrossFade(ReadOnlySpan<byte> set, double n)
+    {
+        double p = Math.Clamp(Spread(n) * set.Length - 0.5, 0, set.Length - 1);
+        int i = Math.Min((int)p, set.Length - 2);
+        double t = p - i;
+        return (set[i], set[i + 1], t * t * (3.0 - 2.0 * t));
+    }
+
+    /// <summary>
+    /// A palette selector spread through its own distribution to roughly uniform 0..1 (a logistic
+    /// stand-in for the normal CDF). Weights laid on the raw value barely move: the selectors are
+    /// fBm and cluster around 0.5.
+    /// </summary>
+    private static double Spread(double n) => 1.0 / (1.0 + Math.Exp(-1.702 * (n - 0.5) / SelectorSpread));
+
+    /// <summary>Spread of the jittered nA/nB selectors about 0.5 (mosaic-noise measure, plus jitter).</summary>
+    private const double SelectorSpread = 0.15;
+
+    private static readonly byte[] DrylandGround = [DrylandsGrassy, Drylands01, DrylandsCracked];
+
     private static byte Accent(Climate climate, double n)
     {
         var set = Accents[(int)climate];
@@ -330,10 +363,16 @@ public static class TerrainPalette
     /// middling ground — so a caller that has no heightmap to measure gets the old behaviour
     /// roughly split rather than either extreme.
     /// </param>
+    /// <param name="slope">
+    /// The same measure over a wider stencil, for <see cref="SlopeStone"/> only. Measured across one
+    /// texel, slope follows every rill, and stone painted from it drew a web of lines; the hill
+    /// classes still want that fine detail, so they keep <paramref name="rugged"/>. Negative means
+    /// the caller has none, and <paramref name="rugged"/> stands in.
+    /// </param>
     public static Blend For(TerrainClass terrain, Climate climate, double relief,
         double nA, double nB, double nC,
         double canopyDensity = 0.5, double zoneA = 0.5, double zoneB = 0.5,
-        double rugged = 0.5)
+        double rugged = 0.5, double slope = -1)
     {
         var blend = Biome(terrain, climate, relief, nA, nB, nC, canopyDensity, zoneA, zoneB, rugged);
 
@@ -343,11 +382,53 @@ public static class TerrainPalette
         // anywhere from 4% of a steppe pixel to 30% of a desert one — the share would have meant
         // something different in every biome. Contrast is untouched here (the default is 1.0, a
         // pure rescale), so the writer still applies it exactly once afterwards.
-        double slope = SlopeSoilShare(terrain, rugged);
-        if (slope > 0)
-            blend = Merge(Normalized(blend), Single(SlopeSoils[(int)climate]), slope);
+        if (slope < 0) slope = rugged;
+        double stone = SlopeStoneShare(terrain, slope);
+        if (stone > 0)
+            blend = Merge(Normalized(blend),
+                Normalized(SlopeStone(PaintedFamily(terrain, climate), slope, nA, nC)), stone);
 
         return blend;
+    }
+
+    /// <summary>
+    /// The family a terrain case actually paints from. Most cases use the climate's, but several
+    /// are their own family whatever the Koppen call says — steppe is steppe ground under a desert
+    /// climate too. Slope stone has to come from the same family as the ground it sits in: taken
+    /// from the climate, a Steppe slope under a Desert climate drew dark desert hill rock across
+    /// green steppe, in a lattice along every rill (rendered 2026-09-29).
+    /// </summary>
+    private static Climate PaintedFamily(TerrainClass terrain, Climate climate) => terrain switch
+    {
+        TerrainClass.Steppe => Climate.Steppe,
+        TerrainClass.Taiga or TerrainClass.Arctic => Climate.Northern,
+        TerrainClass.Jungle => Climate.Tropical,
+        TerrainClass.Drylands => Climate.Drylands,
+        TerrainClass.Desert => Climate.Desert,
+        _ => climate,
+    };
+
+    /// <summary>
+    /// What a steep lowland slope is made of: the climate family's hill ground and its shoulder into
+    /// mountain rock, bare rock on the steepest faces, and — in the dry and open families only — the
+    /// soil the slope sheds.
+    ///
+    /// This is the slope response the terrain classes cannot give. Hills and Mountains are picked on
+    /// elevation, so every flank below the hill line keeps its lowland class however steep it is.
+    /// Measured on a Forge world against vanilla (2026-09-29), the steepest 15% of land carried 21%
+    /// stony texture where vanilla's carries 61%, and 58% of it had almost none — a rim of forest
+    /// floor and canopy round every hill mass. Done here in the paint rather than in the classifier
+    /// because the class is also the province's gameplay terrain.
+    /// </summary>
+    private static Blend SlopeStone(Climate climate, double rugged, double nA, double nC)
+    {
+        ref readonly var family = ref Families[(int)climate];
+        return Mix(
+            family.Hills, (byte)(90 + 40 * nA),
+            family.Transition, (byte)(35 + 60 * rugged),
+            HillRock(climate, nC), (byte)(40 * rugged * HillRockConfidence(climate, nC)),
+            SlopeSoils[(int)climate], (byte)(10 + 40 * (1.0 - rugged))
+        );
     }
 
     /// <summary>
@@ -369,42 +450,43 @@ public static class TerrainPalette
     ///
     /// Arid slopes are the one place stone is the honest answer — <c>desert_rocky</c> is what a
     /// wadi wall is made of — so those two families keep it.
+    ///
+    /// The three forest families have none. Their soil was forestfloor, which is 0.7% of vanilla's
+    /// land at every slope; rendered against vanilla, ours carpeted steep forest with it, so the
+    /// slope showed litter where vanilla shows its hill ground and rock.
     /// </summary>
     private static readonly byte[] SlopeSoils =
     [
-        ForestFloor,      // Tropical
-        ForestFloor,      // Central
+        Unused,           // Tropical
+        Unused,           // Central
         PlainsDryMud,     // Steppe
         DesertRocky,      // Desert
         DrylandsCracked,  // Drylands
-        ForestFloor,      // Northern
+        Unused,           // Northern
         MediDryMud,       // Mediterranean
     ];
 
     /// <summary>
-    /// How much of the pixel a lowland biome gives up to bare ground on a slope.
+    /// How much of the pixel a lowland biome gives up to <see cref="SlopeStone"/> on a slope.
     ///
-    /// Much gentler than the hill treatment on purpose: this is an acknowledgement that the ground
-    /// falls away, not a landform in its own right. At its ceiling it is a sixth of the pixel,
-    /// where <see cref="HillBlend"/> hands its stony layers better than a third. It also starts
-    /// later — nothing at all below the middle of the ruggedness range — so ordinary rolling
-    /// country is untouched and only genuinely broken ground shows earth.
-    ///
-    /// One material, not a rotated pair. It arrives through <see cref="Merge"/>, which folds it
-    /// onto the same material where the case already carries one — every forest case already has
-    /// forestfloor — so on those it deepens a layer the pixel had rather than spending a slot, and
-    /// the three layers varying underneath it are what keep a long slope from reading as tiled.
+    /// Aimed at vanilla's own curve, measured by slope percentile of land: stony texture is 17% of
+    /// its moderate ground (p50-85), 61% of its steep (p85-97) and 73% of its steepest. rugged runs
+    /// 0 at this map's p60 gradient to 1 at its p92, so the ramp starts just above ordinary
+    /// rolling country and is near full on the steepest faces. What the pixel was keeps the rest —
+    /// on steep forest that thins the canopy toward rock, as vanilla's does.
     ///
     /// Excluded: the classes that already answer to slope (hills, both mountains), the ones where
     /// slope is meaningless or already handled (sea, beach — the shore is the cliff path's), and
     /// oasis, which is a small hand-placed pocket rather than a landform.
     /// </summary>
-    private static double SlopeSoilShare(TerrainClass terrain, double rugged) => terrain switch
+    private static double SlopeStoneShare(TerrainClass terrain, double rugged) => terrain switch
     {
         TerrainClass.Sea or TerrainClass.Beach or TerrainClass.Oasis
             or TerrainClass.Hills or TerrainClass.Mountains or TerrainClass.DesertMountains => 0.0,
-        _ => 0.16 * Ramp(rugged, 0.55, 0.35),
+        _ => SlopeStoneMax * Ramp(rugged, 0.42, 0.42),
     };
+
+    private const double SlopeStoneMax = 0.66;
 
     private static Blend Biome(TerrainClass terrain, Climate climate, double relief,
         double nA, double nB, double nC,
@@ -482,8 +564,20 @@ public static class TerrainPalette
                     };
                     var (lowA, lowB, confA, confB) = LowlandPair(family, nA, nB);
 
+                    // Parcels, not a carpet. Cultivation stamps a whole barony Farmlands, and led
+                    // by fields at full weight every pixel of it was field — one solid block the
+                    // size of a province, where vanilla scatters small parcels through grass
+                    // (1,063 field patches, median 3 u², 16% of farmed country field-dominated;
+                    // ours was 146 patches, the largest a whole barony at 23,927 u²). The medium
+                    // selector lays out the parcels and the fine one breaks their edges. No floor:
+                    // vanilla's fields are strong where they are (69% of the pixel) and absent
+                    // between, so a faint field layer everywhere reads as carpet, not parcels.
+                    // Leading with the fine selector instead was tried and merged the parcels into
+                    // fewer, larger sheets (p90 1,458 u² against 115).
+                    double parcel = Ramp(0.7 * Spread(nB) + 0.3 * Spread(nC), 0.58, 0.12);
+
                     return Mix(
-                        fields, (byte)(100 + nA * 50),
+                        fields, (byte)(190 * parcel),
                         lowA, (byte)((60 + (1.0 - nA) * 40) * confA),
                         lowB, (byte)((50 + nB * 30) * confB),
                         Accent(climate, nC), (byte)((20 + nC * 20) * AccentConfidence(climate, nC))
@@ -662,22 +756,37 @@ public static class TerrainPalette
             case TerrainClass.Drylands:
                 {
                     ref readonly var dry = ref Families[(int)Climate.Drylands];
-                    var (lowA, lowB, confA, confB) = LowlandPair(dry, nA, nB);
+
+                    // Fixed materials, moving weights — like Steppe above, and unlike LowlandPair.
+                    // A bucket pick fades to nothing on both sides of every edge, so each edge
+                    // showed whatever sat underneath as a rim, and the patches followed the
+                    // selector's contours as winding bands: the "splotchy" drylands the user saw.
+                    // Rendered against vanilla (ck3devtools/TerrainRender), vanilla's hand-painted
+                    // masks have neither — its variants overlap and fade through each other.
+                    //
+                    // Each lowland rides a selector at its own scale: tan on nA (~100 px), olive
+                    // on nB (~40 px), dark olive on nC (~18 px). Tying two of them to one selector
+                    // in opposition doubled the broad light/dark swing. Patch-scale brightness
+                    // (band-passed, drylands interior, seed 4242) went from 2.09/2.88/3.79 at
+                    // 2-4/4-8/8-16 u to 1.34/1.99/2.98 against vanilla's 1.40/1.70/1.96.
+                    //
+                    // gen_drylands_base is left out: the darkest of the family and 1% of vanilla's
+                    // drylands lowland weight (85/86/87 are 38/34/27%).
+                    double uA = Spread(nA), uB = Spread(nB);
+                    var (dirtA, dirtB, dirtT) = CrossFade(DrylandGround, nB);
+                    double dirt = 50 + nB * 30;
 
                     // medi_dry_mud and plains_01_dry_mud are the sun-baked flats between the scrub,
                     // and together are 0.70% of vanilla's painted weight — more than the entire
                     // farmland family. Both were previously unreachable: medi_dry_mud sat in the
                     // drylands accent list, which this case never consults, and plains_01_dry_mud
                     // only appeared under Floodplains, which nothing assigns.
-                    //
-                    // The third slot fades across its own cuts like the fourth: grassy, drylands_01
-                    // and cracked are far apart in colour, and swapped at full weight they were the
-                    // largest source of hard material swaps left in drylands (measured 2026-09-27).
                     return Mix(
-                        lowA, (byte)((90 + nA * 40) * confA),
-                        lowB, (byte)((75 + (1.0 - nA) * 40) * confB),
-                        nB < 0.4 ? DrylandsGrassy : nB < 0.75 ? Drylands01 : DrylandsCracked,
-                            (byte)((50 + nB * 30) * CutConfidence(nB, 0.4, 0.75)),
+                        DrylandsLowlands, (byte)(50 + 90 * uA),
+                        DrylandsLowlands02, (byte)(30 + 100 * uB),
+                        DrylandsLowlands03, (byte)(20 + 90 * Spread(nC)),
+                        dirtA, (byte)(dirt * (1.0 - dirtT)),
+                        dirtB, (byte)(dirt * dirtT),
                         nC < 0.3 ? DesertCracked : nC < 0.5 ? MediDryMud
                             : nC < 0.68 ? PlainsDryMud : dry.Hills,
                         (byte)((25 + nC * 25) * Math.Min(CutConfidence(nC, 0.3),

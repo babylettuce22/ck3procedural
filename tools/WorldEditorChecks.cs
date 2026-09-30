@@ -83,10 +83,26 @@ internal static class WorldEditorChecks
             using (var bitmap = view.RenderRealmsFocused(county)) Check(bitmap.Width == 2, "Focused realm render");
 
             var title = world.Titles["k_test"];
+            string openedColour = title.Value("color");
             Set(title, "Name", "New Kingdom");
             Set(title, "color", "110 120 130");
             view.RefreshShells();
             Check(kingdom.Name == "New Kingdom" && kingdom.Color == (110, 120, 130), "Shells follow edits");
+
+            // A recoloured primary title repaints its realm; put back, the realm takes the palette's hue again.
+            static bool Paints(AppGUI.LoadedWorldView v, byte r, byte g, byte b)
+            {
+                var image = v.RenderImage("Realms");
+                for (int i = 0; i + 2 < image.Rgb.Length; i += 3)
+                    if (image.Rgb[i] == r && image.Rgb[i + 1] == g && image.Rgb[i + 2] == b) return true;
+                return false;
+            }
+            Check(Paints(view, 110, 120, 130), "Realms view follows a recoloured primary title");
+            Set(title, "color", openedColour);
+            view.RefreshShells();
+            Check(!Paints(view, 110, 120, 130), "Realms view drops a colour put back");
+            Set(title, "color", "110 120 130");
+            view.RefreshShells();
             var ruler = world.Entries.Single(e => e.Kind == "Character");
             Set(ruler, "Name", "Élodie");
             Set(ruler, "martial", "12");
@@ -221,6 +237,19 @@ internal static class WorldEditorChecks
                 using (var bitmap = actualView.RenderRealmsFocused(largest))
                     bitmap.Save(Path.Combine(root, "realms-focused.png"), System.Drawing.Imaging.ImageFormat.Png);
                 Console.WriteLine($"  Renders written beside the fixture; focused realm: {actualView.Realm.Primary(largest).Name}, {actualView.Realm.RealmSize(largest)} counties.");
+
+                // The 3D view of an opened mod: its own heightmap.png, wearing its CK3 ground.
+                if (File.Exists(Path.Combine(existing, "map_data", "heightmap.png")))
+                {
+                    var (field, packed) = actualView.ReadHeightfields();
+                    Check(field.Cols > 0 && packed.Cols == field.Cols, "Existing world heightmap reads for 3D");
+                    var ground = actualView.RenderImage("CK3 ground");
+                    Check(ground.Width > 0, "Existing world renders CK3 ground");
+                    AppGUI.PreviewRenderer.ToBitmap(ground).Save(Path.Combine(root, "ck3-ground.png"), System.Drawing.Imaging.ImageFormat.Png);
+                    var frame = AppGUI.HeightfieldRenderer.Render(packed, AppGUI.HeightfieldView.Default, 1600, 900, drape: ground);
+                    AppGUI.PreviewRenderer.ToBitmap(frame).Save(Path.Combine(root, "ground-3d.png"), System.Drawing.Imaging.ImageFormat.Png);
+                    Console.WriteLine($"  3D: {field.Cols}×{field.Rows} field, {100 * field.LandShare:F1}% land; ground {ground.Width}×{ground.Height}.");
+                }
 
                 // The main window redirects Console.Out into its log box; keep ours.
                 var stdout = Console.Out;

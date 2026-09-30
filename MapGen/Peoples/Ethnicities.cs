@@ -13,7 +13,7 @@ public enum RaceArchetype
     Orc,
     Gnome,
     Giantkin,
-    Deepkin,
+    DuskElf,
     // Appended, not inserted, so every existing race keeps its ordinal.
     Hornkin
 }
@@ -57,7 +57,7 @@ internal static class RaceSkin
         RaceArchetype.Orc => "gen_skin_orc",
         RaceArchetype.Gnome => "gen_skin_gnome",
         RaceArchetype.Giantkin => "gen_skin_giantkin",
-        RaceArchetype.Deepkin => "gen_skin_deepkin",
+        RaceArchetype.DuskElf => "gen_skin_deepkin",
         RaceArchetype.Hornkin => "gen_skin_hornkin",
         _ => null
     };
@@ -67,7 +67,7 @@ internal static class RaceSkin
     ///
     /// <c>x</c> is the undertone axis stock uses — cool European around 0.0-0.5, warm Asian from
     /// 0.6 up — and <c>y</c> is lightness, running from the palest skin at 0.12 to the deepest at
-    /// 0.96. Choosing this well matters most for <see cref="RaceArchetype.Deepkin"/>, whose shift
+    /// 0.96. Choosing this well matters most for <see cref="RaceArchetype.DuskElf"/>, whose shift
     /// is strongly negative in value: darkening a base that is already deep only crushes it to
     /// black, so the drow draw from the pale half and let the gene do the darkening.
     /// </summary>
@@ -79,7 +79,7 @@ internal static class RaceSkin
         RaceArchetype.Orc => (0.30f, 0.42f, 0.80f, 0.68f),
         RaceArchetype.Gnome => (0.30f, 0.35f, 0.80f, 0.58f),
         RaceArchetype.Giantkin => (0.00f, 0.30f, 0.45f, 0.52f),
-        RaceArchetype.Deepkin => (0.00f, 0.30f, 0.50f, 0.52f),
+        RaceArchetype.DuskElf => (0.00f, 0.30f, 0.50f, 0.52f),
         // Weathered herders: mid tones, sun-darkened rather than pale.
         RaceArchetype.Hornkin => (0.20f, 0.38f, 0.70f, 0.62f),
         _ => (0.10f, 0.25f, 0.70f, 0.55f)
@@ -141,9 +141,9 @@ internal static class RaceMorphs
             new("gene_height", "normal_height", 0.46f, 0.56f),
             new("gene_bs_body_type", "body_fat_head_fat_low", 0.47f, 0.57f),
             new("gene_bs_body_shape", "body_shape_triangle_half", 0.35f, 0.55f, Tiered: false),
-            // All three elves share the pointed ear; see the high elf above for why angle and
-            // bend gave way to it.
-            new(PointedEars.Gene, PointedEars.HighTemplate, 0.80f, 1.00f),
+            // Their own leaf-shaped ear (EarShape.Sylvan); see the high elf above for why angle and
+            // bend gave way to the pointed ear.
+            new(PointedEars.Gene, PointedEars.SylvanTemplate, 0.80f, 1.00f),
             new("gene_bs_ear_bend", "ear_both_bend_pos", 0.00f, 0.00f, Tiered: false),
             new("gene_bs_ear_outward", "ear_outward_pos", 0.20f, 0.40f),
             new("gene_bs_ear_size", "ear_size_pos", 0.25f, 0.45f),
@@ -154,7 +154,9 @@ internal static class RaceMorphs
             new("gene_height", "normal_height", 0.34f, 0.44f),
             new("gene_bs_body_type", "body_fat_head_fat_medium", 0.60f, 0.75f),
             new("gene_bs_body_shape", "body_shape_rectangle_full", 0.75f, 1.00f, Tiered: false),
-            new("gene_jaw_width", "jaw_width_pos", 0.80f, 1.00f),
+            // Was 0.80-1.00, which with the jaw shape and chin width below read as oversized
+            // (user, in game, 2026-09-29) — worst on women; see FemaleOf for their correction.
+            new("gene_jaw_width", "jaw_width_pos", 0.70f, 0.90f),
             new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.65f, 0.90f),
             new("gene_bs_ear_size", "ear_size_neg", 0.35f, 0.55f),
         ],
@@ -167,7 +169,10 @@ internal static class RaceMorphs
             // every face. Tiered: a low-fantasy orc shows half-grown ones.
             new(OrcTusks.Gene, OrcTusks.LowerTemplate, 0.80f, 1.00f),
             new("gene_jaw_width", "jaw_width_pos", 0.88f, 1.00f),
-            new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.80f, 1.00f),
+            // The heavy brow bone (MapGen/OrcBrow.cs). It replaced gene_bs_forehead_brow_forward at
+            // 0.8-1.0, which pinched the inner brows into a frown; that gene is now forced to zero.
+            new(OrcBrow.Gene, OrcBrow.OnTemplate, 0.80f, 1.00f),
+            new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.00f, 0.00f, Tiered: false),
         ],
         RaceArchetype.Gnome =>
         [
@@ -191,19 +196,19 @@ internal static class RaceMorphs
             new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.00f, 0.00f, Tiered: false),
             new("gene_bs_ear_size", "ear_size_neg", 0.50f, 0.80f),
         ],
-        RaceArchetype.Deepkin =>
+        RaceArchetype.DuskElf =>
         [
             new("gene_height", "normal_height", 0.46f, 0.58f),
             new("gene_bs_body_type", "body_fat_head_fat_low", 0.45f, 0.55f),
             new("gene_bs_body_shape", "body_shape_hourglass_half", 0.08f, 0.26f, Tiered: false),
-            // Elves too: the shared pointed ear, as for the high elf.
-            new(PointedEars.Gene, PointedEars.HighTemplate, 0.80f, 1.00f),
+            // Elves too, as drow: a long ear swept back along the skull (EarShape.Drow).
+            new(PointedEars.Gene, PointedEars.DrowTemplate, 0.80f, 1.00f),
             new("gene_bs_ear_bend", "ear_both_bend_pos", 0.00f, 0.00f, Tiered: false),
             new("gene_bs_ear_outward", "ear_outward_pos", 0.25f, 0.45f),
             new("gene_jaw_width", "jaw_width_neg", 0.32f, 0.42f),
         ],
-        // Highland and steppe herders: rangy rather than bulky, a strong brow for the horns to rise
-        // from. The horns themselves are not in this table — they are an accessory gene (a mix of
+        // Highland and steppe herders: rangy rather than bulky, with a plain brow under the horns.
+        // The horns themselves are not in this table — they are an accessory gene (a mix of
         // styles per culture, written in ApplyMorphGenes) and are enforced by their own portrait
         // group in Emit/Characters/RaceMorphWriter.cs, together with the skin mound they grow from.
         RaceArchetype.Hornkin =>
@@ -212,7 +217,10 @@ internal static class RaceMorphs
             new("gene_bs_body_type", "body_fat_head_fat_low", 0.44f, 0.54f),
             new("gene_bs_body_shape", "body_shape_triangle_half", 0.45f, 0.70f, Tiered: false),
             new("gene_jaw_width", "jaw_width_pos", 0.60f, 0.80f),
-            new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.55f, 0.80f),
+            // Forced to zero: at 0.55-0.8 vanilla's slider pinched the brows into a frown rather than
+            // building bone (rendered 2026-09-29). A light brow-bone shape barely showed, so the
+            // horns alone carry the look.
+            new("gene_bs_forehead_brow_forward", "forehead_brow_forward_pos", 0.00f, 0.00f, Tiered: false),
         ],
         _ => []
     };
@@ -249,11 +257,33 @@ internal static class RaceMorphs
             new("gene_jaw_width", "jaw_width_neg", 0.38f, 0.48f),
             .. MaleElfFace,
         ],
-        RaceArchetype.Deepkin =>
+        RaceArchetype.DuskElf =>
         [
             new("gene_jaw_width", "jaw_width_neg", 0.40f, 0.47f),
             .. MaleElfFace,
             new("gene_eyebrows_fullness", "layer_2_avg_thickness", 0.00f, 1.00f, Tiered: false),
+        ],
+        _ => []
+    };
+
+    /// <summary>
+    /// What a race's women get on top of <see cref="Of"/>, forced at render time only, as
+    /// <see cref="MaleOf"/> is for elf men.
+    ///
+    /// Dwarf women: the dwarf face widens jaw and chin and pushes the jaw forward for everyone, and
+    /// vanilla's gene_jaw_width gives women the full male range on a narrower head ("Female uses full
+    /// range", 01_genes_morph.txt), so their jaws came out the most oversized thing on the map (user,
+    /// in game, 2026-09-29). Here: a moderately broad jaw rather than a maximal one, a light jaw shape,
+    /// and chin and jaw brought back toward vanilla. Untiered, like the men's corrections.
+    /// </summary>
+    public static IReadOnlyList<RaceMorph> FemaleOf(RaceArchetype archetype) => archetype switch
+    {
+        RaceArchetype.Dwarf =>
+        [
+            new("gene_jaw_width", "jaw_width_pos", 0.58f, 0.68f, Tiered: false),
+            new("gene_bs_jaw_def", "jaw_def_pos", 0.10f, 0.28f, Tiered: false),
+            new("gene_chin_width", "chin_width_pos", 0.55f, 0.66f, Tiered: false),
+            new("gene_jaw_forward", "jaw_forward_pos", 0.50f, 0.60f, Tiered: false),
         ],
         _ => []
     };
@@ -482,15 +512,23 @@ public static class Ethnicities
         // and the heritage phase runs budgetless because its output is only the suggestion the
         // 70%-follow drift reads.
         int totalCounties = Math.Max(1, cultures.Sum(c => c.Counties.Count));
-        double fantasyBudget = (1.0 - HumanShareFor(cfg.RaceMode)) * totalCounties;
+        double fantasyBudget = (1.0 - HumanShareOf(cfg)) * totalCounties;
         double fantasySpent = 0;
         var minorityQueue = new List<RaceArchetype>();
+
+        // A custom race mix splits that budget per race (see MixBudget). Null without one, which
+        // leaves the single budget in charge and every roll below exactly as it was. Its shares are
+        // of SETTLED land: the mode's budget counts wilderness counties too while spending only
+        // settled ones, which on a wild map leaves fantasy races well over the mode's figure.
+        int totalLand = Math.Max(1, cultures.Sum(LandCount));
+        var mix = MixBudget.For(cfg, (1.0 - HumanShareOf(cfg)) * totalLand);
 
         // 1. Determine Archetypes with Guaranteed Variety Guarantee
         var heritageArchetypes = AssignDiverseArchetypes(heritages, cultures, provinceTerrain, cfg, rng,
             wilderness,
             cfg.TieRaceToHeritage ? fantasyBudget : null,
             cfg.TieRaceToHeritage && cfg.AllowMinorityRaces,
+            cfg.TieRaceToHeritage ? mix : null,
             out var heritageOverflow);
         minorityQueue.AddRange(heritageOverflow);
 
@@ -522,7 +560,7 @@ public static class Ethnicities
         // The quota can never exceed the pool it draws from, and asking for more used to be actively
         // harmful rather than merely unmet — see above. Clamped once here so both the branch below
         // and the shortfall report agree on what was actually achievable.
-        var quotaPool = FantasyPoolFor();
+        var quotaPool = FantasyPoolFor(cfg);
         int targetQuota = Math.Clamp(cfg.GuaranteedRaceCount, 1, Math.Max(1, quotaPool.Count));
 
         // 4. Assign Culture Ethnicities.
@@ -554,7 +592,7 @@ public static class Ethnicities
             // is not scatter, it is the map, and the tie yields to it.
             var importedRace = culture.ImportedArchetype is { } tagged
                 && cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly
-                && FantasyPoolFor().Contains(tagged)
+                && FantasyPoolFor(cfg).Contains(tagged)
                     ? culture.ImportedArchetype
                     : null;
 
@@ -563,7 +601,11 @@ public static class Ethnicities
                 cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", race, culture.Name, cfg.RaceMode, cfg.DominantLook, rng);
                 ethnicities[cultureEth.Key] = cultureEth;
                 usedArchetypes.Add(race);
-                if (race != RaceArchetype.Human) fantasySpent += LandCount(culture);
+                if (race != RaceArchetype.Human)
+                {
+                    fantasySpent += LandCount(culture);
+                    mix?.Spend(race, LandCount(culture));
+                }
             }
             else if (cfg.TieRaceToHeritage && heritageEth != null)
             {
@@ -606,26 +648,77 @@ public static class Ethnicities
                         available = available.Where(a => FitsTerrain(a, shares)).ToList();
                     }
 
-                    // The ratio gate, quota edition. A race still owed when the land budget is
-                    // gone arrives as a minority inside a human culture rather than as a realm —
-                    // the guarantee and the ratio both hold, which neither could alone. With
-                    // minorities disallowed the guarantee simply wins the land, as its name says
-                    // it should, and the ratio shortfall is reported at the end. The first
-                    // fantasy culture is always seated for the same reason the heritage phase
-                    // seats its first seed: a fantasy mode should never produce zero fantasy.
-                    bool overBudget = fantasySpent > 0
-                        && fantasySpent + LandCount(culture) > fantasyBudget;
-
-                    if (available.Count > 0 && overBudget && cfg.AllowMinorityRaces)
+                    if (mix is not null)
                     {
-                        var demoted = rng.Pick(available);
-                        minorityQueue.Add(demoted);
-                        usedArchetypes.Add(demoted); // spoken for, just not with land
-                        subArchetype = RaceArchetype.Human;
+                        // The mix's quota edition. The culture goes to an unplaced race whose share
+                        // still has room for it, the more it is owed the likelier. With none, the
+                        // first fantasy culture is seated anyway (as below), then humans take it
+                        // if they are still unplaced themselves, and failing that an unplaced race
+                        // is demoted to a minority, or wins the land when minorities are off.
+                        int land = LandCount(culture);
+                        var shares = GetTerrainShares([culture], provinceTerrain);
+                        var fantasy = available.Where(a => a != RaceArchetype.Human).ToList();
+
+                        if (mix.Pick(fantasy, land, r => TerrainPull(cfg, r, shares), rng) is { } owed)
+                            subArchetype = owed;
+                        else if (fantasySpent == 0 && fantasy.Count > 0)
+                            subArchetype = rng.Pick(fantasy);
+                        else if (available.Contains(RaceArchetype.Human))
+                            subArchetype = RaceArchetype.Human;
+                        else if (fantasy.Count > 0 && cfg.AllowMinorityRaces)
+                        {
+                            var demoted = rng.Pick(fantasy);
+                            minorityQueue.Add(demoted);
+                            usedArchetypes.Add(demoted); // spoken for, just not with land
+                            subArchetype = RaceArchetype.Human;
+                        }
+                        else
+                            subArchetype = fantasy.Count > 0 ? rng.Pick(fantasy) : PickArchetypeForCulture(culture, provinceTerrain, cfg, rng);
                     }
                     else
                     {
-                        subArchetype = available.Count > 0 ? rng.Pick(available) : PickArchetypeForCulture(culture, provinceTerrain, cfg, rng);
+                        // The ratio gate, quota edition. A race still owed when the land budget is
+                        // gone arrives as a minority inside a human culture rather than as a realm —
+                        // the guarantee and the ratio both hold, which neither could alone. With
+                        // minorities disallowed the guarantee simply wins the land, as its name says
+                        // it should, and the ratio shortfall is reported at the end. The first
+                        // fantasy culture is always seated for the same reason the heritage phase
+                        // seats its first seed: a fantasy mode should never produce zero fantasy.
+                        bool overBudget = fantasySpent > 0
+                            && fantasySpent + LandCount(culture) > fantasyBudget;
+
+                        if (available.Count > 0 && overBudget && cfg.AllowMinorityRaces)
+                        {
+                            var demoted = rng.Pick(available);
+                            minorityQueue.Add(demoted);
+                            usedArchetypes.Add(demoted); // spoken for, just not with land
+                            subArchetype = RaceArchetype.Human;
+                        }
+                        else
+                        {
+                            subArchetype = available.Count > 0 ? rng.Pick(available) : PickArchetypeForCulture(culture, provinceTerrain, cfg, rng);
+                        }
+                    }
+                }
+                else if (mix is not null)
+                {
+                    // The mix's drift edition. Most cultures still follow their heritage's race,
+                    // while that race's share has room; the rest, and the ones it has no room for,
+                    // go to whichever race is most owed land that suits this culture's own ground,
+                    // and to humans once no race is owed any.
+                    int land = LandCount(culture);
+                    var baseArchetype = heritageEth?.Archetype ?? RaceArchetype.Human;
+                    if (rng.Chance(0.70) && mix.Fits(baseArchetype, land))
+                    {
+                        subArchetype = baseArchetype;
+                    }
+                    else
+                    {
+                        var shares = GetTerrainShares([culture], provinceTerrain);
+                        var suited = quotaPool
+                            .Where(r => cfg.RaceTerrain != RaceTerrainRule.Require || FitsTerrain(r, shares))
+                            .ToList();
+                        subArchetype = mix.Pick(suited, land, r => TerrainPull(cfg, r, shares), rng) ?? RaceArchetype.Human;
                     }
                 }
                 else
@@ -640,7 +733,11 @@ public static class Ethnicities
                         subArchetype = RaceArchetype.Human;
                 }
 
-                if (subArchetype != RaceArchetype.Human) fantasySpent += LandCount(culture);
+                if (subArchetype != RaceArchetype.Human)
+                {
+                    fantasySpent += LandCount(culture);
+                    mix?.Spend(subArchetype, LandCount(culture));
+                }
 
                 cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", subArchetype, culture.Name, cfg.RaceMode, cfg.DominantLook, rng);
                 ethnicities[cultureEth.Key] = cultureEth;
@@ -815,18 +912,37 @@ public static class Ethnicities
 
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly)
         {
-            int humanCounties = byCulture
-                .Where(kv => kv.Value.Archetype == RaceArchetype.Human)
-                .Sum(kv => kv.Key.Counties.Count);
-            Say($"  ethnicities: humans hold {(double)humanCounties / totalCounties:P0} " +
-                              $"of counties (mode target ~{HumanShareFor(cfg.RaceMode):P0})");
+            if (mix is null)
+            {
+                int humanCounties = byCulture
+                    .Where(kv => kv.Value.Archetype == RaceArchetype.Human)
+                    .Sum(kv => kv.Key.Counties.Count);
+                Say($"  ethnicities: humans hold {(double)humanCounties / totalCounties:P0} " +
+                                  $"of counties (mode target ~{HumanShareFor(cfg.RaceMode):P0})");
+            }
+            else
+            {
+                // Each race's settled land against its share, so a mix that came out lumpy says so
+                // rather than looking ignored. A race with no land but a minority seat says that too.
+                var held = byCulture
+                    .GroupBy(kv => kv.Value.Archetype)
+                    .ToDictionary(g => g.Key, g => g.Sum(kv => LandCount(kv.Key)));
+                var minorities = minorityPlaced.Select(m => m.Race).ToHashSet();
+                Say($"  ethnicities: humans hold {(double)held.GetValueOrDefault(RaceArchetype.Human) / totalLand:P0} " +
+                    $"of settled counties (custom target ~{HumanShareOf(cfg):P0})");
+                Say("  ethnicities: custom mix — " + string.Join(", ", mix.Races.Select(r =>
+                    $"{RaceName(r)} {(double)held.GetValueOrDefault(r) / totalLand:P0} of {mix.Budget(r) / totalLand:P0}"
+                    + (minorities.Contains(r) ? " + minority" : ""))));
+            }
         }
 
         Say($"  ethnicities: {byCulture.Count} cultures across {deliveredRaces} distinct races -> {string.Join(", ", tallies)}");
 
         // Delivering fewer races than asked for used to be silent, which made a clipped quota
-        // look like bad luck in the seed. Say which constraint actually bound.
+        // look like bad luck in the seed. Say which constraint actually bound. A mix asks only for
+        // the races it kept: the ones it switched off were never wanted.
         int wanted = Math.Max(1, cfg.GuaranteedRaceCount);
+        if (mix is not null) wanted = Math.Min(wanted, quotaPool.Count);
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly
             && deliveredRaces < wanted)
         {
@@ -867,6 +983,9 @@ public static class Ethnicities
     /// <param name="allowOverflow">Whether a guaranteed race the budget cannot seat becomes a
     /// minority (returned in <paramref name="overflow"/>) instead of taking land anyway. False
     /// means the guarantee wins the land and the ratio is knowingly sacrificed.</param>
+    /// <param name="mix">The custom race mix's per-race split of <paramref name="fantasyBudget"/>,
+    /// which then gates each race on its own share instead of all of them on the total. Null
+    /// without a mix, and whenever <paramref name="fantasyBudget"/> is.</param>
     private static Dictionary<Heritage, RaceArchetype> AssignDiverseArchetypes(
         List<Heritage> heritages,
         List<Culture> cultures,
@@ -876,6 +995,7 @@ public static class Ethnicities
         WildernessMap? wilderness,
         double? fantasyBudget,
         bool allowOverflow,
+        MixBudget? mix,
         out List<RaceArchetype> overflow)
     {
         overflow = [];
@@ -937,7 +1057,7 @@ public static class Ethnicities
 
         // Pool of available candidate races
         // FantasyPoolFor already includes Exotic in ExoticSurreal; adding it again here would put
-        var candidatePool = FantasyPoolFor().ToList();
+        var candidatePool = FantasyPoolFor(cfg).ToList();
 
         // Calculate how many distinct races we must guarantee
         int targetUnique = Math.Clamp(cfg.GuaranteedRaceCount, 1, Math.Min(heritages.Count, candidatePool.Count));
@@ -970,13 +1090,26 @@ public static class Ethnicities
             assignments[h] = race;
             assignedRaces.Add(race);
             remainingHeritages.Remove(h);
-            if (race != RaceArchetype.Human) fantasySpent += heritageCounties[h];
+            if (race != RaceArchetype.Human)
+            {
+                fantasySpent += heritageCounties[h];
+                mix?.Spend(race, heritageCounties[h]);
+            }
             importedCount++;
         }
 
         if (importedCount > 0)
             Console.WriteLine($"  ethnicities: {importedCount} of {heritages.Count} heritages took " +
                               $"their race from the export's tags");
+
+        // A custom mix seats races by how much land each is owed rather than by the phases below;
+        // see SeatByMix. The export's tags above stand either way.
+        if (mix is not null)
+        {
+            SeatByMix(mix, remainingHeritages, heritageCounties, heritageTerrain, heritageFits, assignments,
+                cfg, rng, allowOverflow, overflow);
+            return assignments;
+        }
 
         // 1. Guaranteed Diversity Phase: Pair each unique race to its highest-affinity available heritage
         for (int i = 0; i < targetUnique && remainingHeritages.Count > 0; i++)
@@ -1117,6 +1250,118 @@ public static class Ethnicities
         return assignments;
     }
 
+    /// <summary>
+    /// A custom mix's heritage seating, in place of the diversity greedy and the terrain remainder.
+    ///
+    /// Round after round, the race owed the most land takes the heritage that suits it best among
+    /// those its share has room for (<see cref="MixBudget.Fits"/>). So a heavy weight gets its
+    /// second heritage before a light one gets its first, and the ground still decides where each
+    /// one goes. Equal claims, as every race has at the start of an even mix, go to whichever has
+    /// the best-suited heritage on offer, which is how the greedy this replaces chose. Heritages no
+    /// race is owed are human.
+    ///
+    /// A race that never fits anywhere gets a minority seat, or with minorities off takes its best
+    /// heritage anyway, as the guarantee does elsewhere. If no race fits at all, the most owed is
+    /// seated regardless: a world with races on never comes out with none, the modes' own promise.
+    /// </summary>
+    private static void SeatByMix(
+        MixBudget mix,
+        List<Heritage> remaining,
+        Dictionary<Heritage, int> counties,
+        Dictionary<Heritage, Dictionary<TerrainClass, double>> terrain,
+        Dictionary<Heritage, HashSet<RaceArchetype>>? requireFits,
+        Dictionary<Heritage, RaceArchetype> assignments,
+        MapConfig cfg,
+        Rng rng,
+        bool allowOverflow,
+        List<RaceArchetype> overflow)
+    {
+        // The heritage that suits a race best of those `admit` lets through, with the greedy's
+        // jitter to break ties inside an affinity step. Require's verdict is never overridden.
+        (Heritage? Heritage, double Score) BestFor(RaceArchetype race, Func<Heritage, bool> admit)
+        {
+            Heritage? best = null;
+            double bestScore = double.MinValue;
+            foreach (var h in remaining)
+            {
+                if (requireFits is not null && !requireFits[h].Contains(race)) continue;
+                if (!admit(h)) continue;
+                double score = TerrainPull(cfg, race, terrain[h]) + rng.Double(0.0, 0.3);
+                if (score > bestScore) { bestScore = score; best = h; }
+            }
+            return (best, bestScore);
+        }
+
+        void Seat(RaceArchetype race, Heritage h)
+        {
+            assignments[h] = race;
+            mix.Spend(race, counties[h]);
+            remaining.Remove(h);
+        }
+
+        while (remaining.Count > 0)
+        {
+            RaceArchetype? pick = null;
+            Heritage? pickHeritage = null;
+            double pickOwed = -1.0, pickScore = double.MinValue;
+
+            foreach (var race in mix.Races)
+            {
+                double owed = mix.Owed(race);
+                if (owed <= 0) continue;
+
+                var (h, score) = BestFor(race, x => mix.Fits(race, counties[x]));
+                if (h is null) continue;
+
+                bool claims = owed > pickOwed + 1e-9 || (Math.Abs(owed - pickOwed) <= 1e-9 && score > pickScore);
+                if (claims) (pick, pickHeritage, pickOwed, pickScore) = (race, h, owed, score);
+            }
+
+            if (pick is not { } chosen || pickHeritage is null) break;
+            Seat(chosen, pickHeritage);
+        }
+
+        var landed = assignments.Values.ToHashSet();
+
+        if (!landed.Any(r => r != RaceArchetype.Human))
+        {
+            foreach (var race in mix.Races.OrderByDescending(mix.Owed))
+            {
+                if (BestFor(race, _ => true).Heritage is not { } h) continue;
+                Seat(race, h);
+                landed.Add(race);
+                break;
+            }
+        }
+
+        foreach (var h in remaining) assignments[h] = RaceArchetype.Human;
+        if (remaining.Count > 0) landed.Add(RaceArchetype.Human);
+
+        // The races with weight but no land, up to the guarantee (which by default is all of them).
+        int wanted = Math.Clamp(cfg.GuaranteedRaceCount, 1, mix.Races.Count + 1);
+        var delivered = new HashSet<RaceArchetype>(landed);
+        foreach (var race in mix.Races)
+        {
+            if (delivered.Count >= wanted) break;
+            if (delivered.Contains(race)) continue;
+
+            if (allowOverflow)
+            {
+                overflow.Add(race);
+                delivered.Add(race);
+                continue;
+            }
+
+            // Minorities off: the guarantee wins land from the humans, and the caller reports the ratio.
+            var humanHeld = assignments.Where(kv => kv.Value == RaceArchetype.Human).Select(kv => kv.Key).ToList();
+            remaining.Clear();
+            remaining.AddRange(humanHeld);
+            if (BestFor(race, _ => true).Heritage is not { } taken) continue;
+            Seat(race, taken);
+            delivered.Add(race);
+        }
+    }
+
     /// <summary>Terrain the heritage has most of — the old modal reading, kept for the remainder roll.</summary>
     private static TerrainClass DominantOf(Dictionary<TerrainClass, double> shares) =>
         shares.OrderByDescending(kv => kv.Value).First().Key;
@@ -1134,13 +1379,130 @@ public static class Ethnicities
     /// were equal on all but huge maps). Measured result: LowFantasy delivered ~10% human. The
     /// mode was decorative.
     /// </summary>
-    private static double HumanShareFor(FantasyRaceMode mode) => mode switch
+    internal static double HumanShareFor(FantasyRaceMode mode) => mode switch
     {
         FantasyRaceMode.LowFantasy => 0.85,
         FantasyRaceMode.HighFantasy => 0.35,
         FantasyRaceMode.ExoticSurreal => 0.12,
         _ => 1.0
     };
+
+    /// <summary>
+    /// The human share this world is actually built to: the custom mix's when it sets one, the
+    /// mode's otherwise. See <see cref="MapConfig.RaceMixHumanShare"/> for the bounds.
+    /// </summary>
+    private static double HumanShareOf(MapConfig cfg)
+        => HasCustomMix(cfg) && cfg.RaceMixHumanShare > 0
+            ? Math.Clamp(cfg.RaceMixHumanShare, MapConfig.MinRaceMixHumanShare, MapConfig.MaxRaceMixHumanShare) / 100.0
+            : HumanShareFor(cfg.RaceMode);
+
+    /// <summary>Whether a custom race mix is in force: switched on, on a world that has races at all.</summary>
+    private static bool HasCustomMix(MapConfig cfg)
+        => cfg.CustomRaceMix && cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly;
+
+    /// <summary>A fantasy race's weight in the custom mix, 0 for humans (their share is a percentage, not a weight).</summary>
+    internal static int MixWeight(MapConfig cfg, RaceArchetype race) => Math.Max(0, race switch
+    {
+        RaceArchetype.Dwarf => cfg.RaceMixDwarves,
+        RaceArchetype.HighElf => cfg.RaceMixHighElves,
+        RaceArchetype.WoodElf => cfg.RaceMixWoodElves,
+        RaceArchetype.Orc => cfg.RaceMixOrcs,
+        RaceArchetype.Gnome => cfg.RaceMixGnomes,
+        RaceArchetype.Giantkin => cfg.RaceMixGiantkin,
+        RaceArchetype.DuskElf => cfg.RaceMixDuskElves,
+        RaceArchetype.Hornkin => cfg.RaceMixHornkin,
+        _ => 0
+    });
+
+    /// <summary>
+    /// How strongly a mix pick leans toward ground that suits the race: its affinity for the
+    /// region, or nothing at all under <see cref="RaceTerrainRule.Ignore"/>.
+    /// </summary>
+    private static double TerrainPull(MapConfig cfg, RaceArchetype race, Dictionary<TerrainClass, double> shares)
+        => cfg.RaceTerrain == RaceTerrainRule.Ignore ? 1.0 : HeritageAffinity(race, shares);
+
+    /// <summary>
+    /// A custom race mix (<see cref="MapConfig.CustomRaceMix"/>) as land: the fantasy budget split
+    /// between the races by their weights, and how much each has been given so far.
+    ///
+    /// Races settle whole heritages (or cultures under TieRaceToHeritage = false), so no share can
+    /// be hit exactly. Every gate asks the same question instead, <see cref="Fits"/>: does giving
+    /// the race this land leave it nearer its share than not giving it? A share smaller than half
+    /// the smallest region a race could take therefore never wins land, and the race is seated as a
+    /// minority instead, which is what the mix's description promises for small shares.
+    ///
+    /// The same question is asked of all the races together, against the whole fantasy budget.
+    /// Without it each race could run over by up to half a region, and on a map of nine heritages
+    /// six of those overruns took the land meant for humans: 5% human against a 35% target.
+    /// </summary>
+    private sealed class MixBudget
+    {
+        private readonly Dictionary<RaceArchetype, double> _budget = [];
+        private readonly Dictionary<RaceArchetype, double> _spent = [];
+        private readonly double _total;
+        private double _totalSpent;
+
+        /// <summary>The fantasy races the mix keeps, in pool order.</summary>
+        public IReadOnlyList<RaceArchetype> Races { get; }
+
+        private MixBudget(IReadOnlyList<RaceArchetype> races, MapConfig cfg, double fantasyBudget)
+        {
+            Races = races;
+            _total = fantasyBudget;
+            double total = races.Sum(r => (double)MixWeight(cfg, r));
+            foreach (var r in races)
+                _budget[r] = total > 0 ? fantasyBudget * MixWeight(cfg, r) / total : 0.0;
+        }
+
+        /// <summary>The mix for this config, or null when there is none.</summary>
+        public static MixBudget? For(MapConfig cfg, double fantasyBudget)
+            => HasCustomMix(cfg)
+                ? new MixBudget([.. FantasyPoolFor(cfg).Where(r => r != RaceArchetype.Human)], cfg, fantasyBudget)
+                : null;
+
+        /// <summary>The counties the race's share comes to.</summary>
+        public double Budget(RaceArchetype race) => _budget.GetValueOrDefault(race);
+
+        /// <summary>Land the race's share still has room for; never negative.</summary>
+        public double Owed(RaceArchetype race) => Math.Max(0.0, Budget(race) - _spent.GetValueOrDefault(race));
+
+        /// <summary>
+        /// Whether <paramref name="land"/> more counties leave the race nearer its share than it is
+        /// now (short by less, or over by less than it was short), and the races together nearer
+        /// theirs. Humans always fit; theirs is the land no race is owed.
+        /// </summary>
+        public bool Fits(RaceArchetype race, int land)
+            => race == RaceArchetype.Human
+               || (land < 2.0 * Owed(race) && land < 2.0 * Math.Max(0.0, _total - _totalSpent));
+
+        public void Spend(RaceArchetype race, int land)
+        {
+            if (race == RaceArchetype.Human) return;
+            _spent[race] = _spent.GetValueOrDefault(race) + land;
+            _totalSpent += land;
+        }
+
+        /// <summary>
+        /// A fantasy race from <paramref name="candidates"/> that <see cref="Fits"/> the land,
+        /// drawn by how much land it is still owed times <paramref name="pull"/>, how well the
+        /// ground suits it. Null when none fits, which every caller reads as "this land is humans'".
+        /// </summary>
+        public RaceArchetype? Pick(IReadOnlyList<RaceArchetype> candidates, int land,
+            Func<RaceArchetype, double> pull, Rng rng)
+        {
+            var fitting = candidates.Where(r => r != RaceArchetype.Human && Fits(r, land)).ToList();
+            if (fitting.Count == 0) return null;
+
+            var weights = fitting.Select(r => Owed(r) * pull(r)).ToList();
+            double roll = rng.Double(0.0, weights.Sum());
+            for (int i = 0; i < fitting.Count; i++)
+            {
+                roll -= weights[i];
+                if (roll <= 0.0) return fitting[i];
+            }
+            return fitting[^1];
+        }
+    }
 
     /// <summary>
     /// How hard the guarantee phase is pushed toward SMALL heritages, per mode. A guaranteed race
@@ -1160,17 +1522,23 @@ public static class Ethnicities
     /// heritage diversity phase and the shortfall report cannot disagree about what was achievable
     /// — they previously each built their own list and could disagree about what was reachable.
     /// </summary>
-    private static IReadOnlyList<RaceArchetype> FantasyPoolFor()
+    private static IReadOnlyList<RaceArchetype> FantasyPoolFor(MapConfig cfg)
     {
         // ExoticSurreal is an INTENSITY setting, not an extra race. It pushes every race's colour
         // and morphology further from human; it does not add a people of its own. The roster is the
         // same nine in every mode.
-        return
+        IReadOnlyList<RaceArchetype> all =
         [
             RaceArchetype.Human, RaceArchetype.Dwarf, RaceArchetype.WoodElf, RaceArchetype.HighElf,
-            RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.Deepkin,
+            RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.DuskElf,
             RaceArchetype.Hornkin
         ];
+
+        // A custom mix leaves out every race it gave no weight, and with it that race's quota
+        // seat, minority seat and every terrain roll. Humans always stay; see MixBudget.Fits.
+        return HasCustomMix(cfg)
+            ? [.. all.Where(r => r == RaceArchetype.Human || MixWeight(cfg, r) > 0)]
+            : all;
     }
 
     /// <summary>A race needs at least this share of a heritage before its terrain counts at all.</summary>
@@ -1183,7 +1551,7 @@ public static class Ethnicities
     /// How well a race suits a heritage, given the heritage's whole terrain make-up.
     ///
     /// Taking the *modal* terrain instead — which is what this used to do — is why dwarves,
-    /// giantkin and deepkin went missing. A heritage spans dozens of counties, so its mode is
+    /// giantkin and dusk elves went missing. A heritage spans dozens of counties, so its mode is
     /// almost always whichever terrain is commonest map-wide (plains, farmlands, forest), and
     /// every race whose affinities are for minority terrain scored the <c>_ => 1</c> floor no
     /// matter how much mountain or wetland it actually contained. Those races then sorted to
@@ -1248,14 +1616,14 @@ public static class Ethnicities
     private static readonly RaceArchetype[] TerrainRaces =
     [
         RaceArchetype.Dwarf, RaceArchetype.HighElf, RaceArchetype.WoodElf, RaceArchetype.Orc,
-        RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.Deepkin, RaceArchetype.Hornkin
+        RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.DuskElf, RaceArchetype.Hornkin
     ];
 
     /// <summary>Every race a culture-level roll may produce.</summary>
     private static readonly RaceArchetype[] CultureRaces =
     [
         RaceArchetype.Human, RaceArchetype.Dwarf, RaceArchetype.HighElf, RaceArchetype.WoodElf,
-        RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.Deepkin,
+        RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Giantkin, RaceArchetype.DuskElf,
         RaceArchetype.Hornkin
     ];
 
@@ -1336,7 +1704,7 @@ public static class Ethnicities
             (RaceArchetype.Giantkin, TerrainClass.Arctic or TerrainClass.Mountains) => 12,
             // Caves under broken country and the dark of the fens — the "subterranean depths" of
             // their trait, kept off the high mountains dwarves, orcs and giants already contest.
-            (RaceArchetype.Deepkin, TerrainClass.Hills or TerrainClass.Wetlands) => 10,
+            (RaceArchetype.DuskElf, TerrainClass.Hills or TerrainClass.Wetlands) => 10,
             // Herders of the open ground nobody else claims — steppe and dry scrub, where only orcs
             // otherwise score — then the highland pastures and tribal forests they share.
             (RaceArchetype.Hornkin, TerrainClass.Steppe or TerrainClass.Drylands) => 12,
@@ -1392,7 +1760,7 @@ public static class Ethnicities
                     => [RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Giantkin],
 
                 TerrainClass.Hills
-                    => [RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.Deepkin, RaceArchetype.Hornkin, RaceArchetype.Human],
+                    => [RaceArchetype.Dwarf, RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.DuskElf, RaceArchetype.Hornkin, RaceArchetype.Human],
 
                 TerrainClass.Forest or TerrainClass.Taiga or TerrainClass.Jungle
                     => [RaceArchetype.WoodElf, RaceArchetype.Gnome, RaceArchetype.Orc, RaceArchetype.Hornkin],
@@ -1407,10 +1775,18 @@ public static class Ethnicities
                     => [RaceArchetype.Orc, RaceArchetype.Gnome, RaceArchetype.HighElf],
 
                 TerrainClass.Wetlands
-                    => [RaceArchetype.Gnome, RaceArchetype.Deepkin, RaceArchetype.WoodElf],
+                    => [RaceArchetype.Gnome, RaceArchetype.DuskElf, RaceArchetype.WoodElf],
 
                 _ => [RaceArchetype.HighElf, RaceArchetype.Giantkin, RaceArchetype.Orc, RaceArchetype.Human, RaceArchetype.Dwarf]
             };
+        }
+
+        // A custom mix's switched-off races are never candidates, whatever the ground says.
+        if (HasCustomMix(cfg))
+        {
+            var pool = FantasyPoolFor(cfg);
+            candidates = [.. candidates.Where(pool.Contains)];
+            if (candidates.Count == 0) return RaceArchetype.Human;
         }
 
         // One of each before seconds of any: a candidate the map does not have yet always beats
@@ -1435,18 +1811,23 @@ public static class Ethnicities
         if (!cfg.EnableFantasyEthnicities || cfg.RaceMode == FantasyRaceMode.HumanOnly)
             return RaceArchetype.Human;
 
+        // Less a custom mix's switched-off races; the same array otherwise, so the rolls are too.
+        IReadOnlyList<RaceArchetype> races = HasCustomMix(cfg)
+            ? [.. CultureRaces.Where(FantasyPoolFor(cfg).Contains)]
+            : CultureRaces;
+
         if (cfg.RaceTerrain == RaceTerrainRule.Ignore)
-            return rng.Pick(CultureRaces);
+            return rng.Pick(races);
 
         var shares = GetTerrainShares([culture], provinceTerrain);
 
         if (cfg.RaceTerrain == RaceTerrainRule.Require)
         {
-            var fitting = CultureRaces.Where(r => FitsTerrain(r, shares)).ToList();
+            var fitting = races.Where(r => FitsTerrain(r, shares)).ToList();
             return fitting.Count > 0 ? rng.Pick(fitting) : RaceArchetype.Human;
         }
 
-        return PickByAffinity(CultureRaces, shares, rng);
+        return PickByAffinity(races, shares, rng);
     }
 
     private static EthnicityDef CreateEthnicity(
@@ -1464,7 +1845,7 @@ public static class Ethnicities
         // a dwarf in a Mediterranean world is a Mediterranean-looking dwarf.
         //
         // Races used to be pinned to a family instead — orcs and gnomes on the Asian templates,
-        // deepkin on the African ones, the rest European — which tied fantasy races to real-world
+        // dusk elves on the African ones, the rest European — which tied fantasy races to real-world
         // ethnicities for no reason the race itself gave. Nothing a race IS depends on the family:
         // its skin is its own skin_color band plus the gen_race_skin shift, its hair and eyes are
         // its own palettes (see ApplyColorGenes), and its shape is RaceMorphs forced at render.
@@ -1726,13 +2107,13 @@ public static class Ethnicities
     /// <summary>
     /// The phonology a race speaks, or null for humans, who draw from the world's real-world
     /// flavours like any people. Five fantasy tongues for eight races, grouped by kinship: the
-    /// deepkin are estranged elves, gnomes are dwarf-kin, and giants are as rough-tongued as orcs.
+    /// dusk elves are estranged elves, gnomes are dwarf-kin, and giants are as rough-tongued as orcs.
     /// The hornkin have a tongue of their own, from the back of the throat.
     /// Applied by <see cref="Cultures.SpeakAsRace"/>.
     /// </summary>
     public static LanguageFlavour? TongueOf(RaceArchetype archetype) => archetype switch
     {
-        RaceArchetype.HighElf or RaceArchetype.WoodElf or RaceArchetype.Deepkin => LanguageFlavour.Sylvan,
+        RaceArchetype.HighElf or RaceArchetype.WoodElf or RaceArchetype.DuskElf => LanguageFlavour.Sylvan,
         RaceArchetype.Dwarf or RaceArchetype.Gnome => LanguageFlavour.Dwarven,
         RaceArchetype.Orc or RaceArchetype.Giantkin => LanguageFlavour.Harsh,
         RaceArchetype.Hornkin => LanguageFlavour.Guttural,
@@ -1844,7 +2225,7 @@ public static class Ethnicities
                 Shape(def, rng, f, "gene_neck_length", "neck_length_neg", 0.05f, 0.25f);
                 Shape(def, rng, f, "gene_head_width", "head_width_pos", 0.70f, 0.95f);
                 Shape(def, rng, f, "gene_jaw_forward", "jaw_forward_pos", 0.55f, 0.85f);
-                Shape(def, rng, f, "gene_bs_jaw_def", "jaw_def_pos", 0.60f, 0.90f);
+                Shape(def, rng, f, "gene_bs_jaw_def", "jaw_def_pos", 0.40f, 0.70f);   // was 0.60-0.90
                 Shape(def, rng, f, "gene_chin_width", "chin_width_pos", 0.75f, 0.95f);
                 Shape(def, rng, f, "gene_bs_nose_length", "nose_length_pos", 0.50f, 0.80f);
                 Shape(def, rng, f, "gene_bs_nose_size", "nose_size_pos", 0.55f, 0.80f);
@@ -1965,7 +2346,7 @@ public static class Ethnicities
                 AddGene(def, "gene_hair_type", "hair_wavy", 0.0f, 1.0f, weight: 50);
                 break;
 
-            case RaceArchetype.Deepkin:
+            case RaceArchetype.DuskElf:
                 // The third elf, and it has to hold its own shape against the other two. Large
                 // light-adapted eyes are the distinguishing feature; the old values sank the eye
                 // with eye_depth_pos 0.60-0.85 instead, which is the opposite read.
@@ -2254,7 +2635,7 @@ public static class Ethnicities
                 AddColor(def, "eye_color", Eye.PaleGreen, weight: 15);
                 break;
 
-            case RaceArchetype.Deepkin:
+            case RaceArchetype.DuskElf:
                 // Reaches the bottom of the ramp on purpose. Stopping at t=0.70 left the
                 // darkest third of the band unreachable, which is the third that makes a
                 // drow look like a drow.

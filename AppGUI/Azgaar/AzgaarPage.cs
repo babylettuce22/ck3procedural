@@ -31,6 +31,7 @@ internal sealed class AzgaarPage : Panel
     public event Action? LaunchRequested;
     public event Action? OpenFolderRequested;
     public event Action? CustomizeRequested;
+    public event Action? See3DRequested;
     public event Action? GameFolderRequested;
     public event Action? GuideRequested;
 
@@ -282,6 +283,7 @@ internal sealed class AzgaarPage : Panel
         _run.LaunchRequested += () => LaunchRequested?.Invoke();
         _run.OpenFolderRequested += () => OpenFolderRequested?.Invoke();
         _run.CustomizeRequested += () => CustomizeRequested?.Invoke();
+        _run.See3DRequested += () => See3DRequested?.Invoke();
         _run.RetryRequested += () => Go(ReviewStep);
         _run.AnotherRequested += () =>
         {

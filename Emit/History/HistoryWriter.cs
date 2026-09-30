@@ -1476,7 +1476,7 @@ public static class HistoryWriter
             RaceArchetype.Orc => "phenotype_rough_hewn",
             RaceArchetype.Giantkin => "phenotype_towering",
             RaceArchetype.Gnome => "phenotype_diminutive",
-            RaceArchetype.Deepkin => "phenotype_dusk_adapted",
+            RaceArchetype.DuskElf => "phenotype_dusk_adapted",
             RaceArchetype.Hornkin => "phenotype_horned",
             RaceArchetype.Human when cfg.EnableFantasyEthnicities
                 && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly => "phenotype_human",

@@ -90,7 +90,7 @@ gen_aging.0002 = {
 # always both saved; root is whichever of them decides.
 #
 # The choice comes BEFORE conception, so nothing here ends a pregnancy. That fits the races:
-# elves and deepkin are written as having children when they choose to, and a late dwarven child
+# elves (dusk elves included) are written as having children when they choose to, and a late dwarven child
 # is a thing a house decides on, not an accident. The three options are yes, leave it to chance,
 # and no.
 #
@@ -115,7 +115,7 @@ gen_aging.0010 = {
 			}
 			triggered_desc = {
 				trigger = { scope:mother = { has_trait = phenotype_dusk_adapted } }
-				desc = gen_aging.0010.desc.deepkin
+				desc = gen_aging.0010.desc.dusk_elf
 			}
 			desc = gen_aging.0010.desc.dwarf
 		}
@@ -300,7 +300,7 @@ gen_aging.0090 = {
 			}
 			triggered_desc = {
 				trigger = { has_trait = phenotype_dusk_adapted }
-				desc = gen_aging.0090.race_deepkin
+				desc = gen_aging.0090.race_dusk_elf
 			}
 			triggered_desc = {
 				trigger = { has_trait = phenotype_stocky }

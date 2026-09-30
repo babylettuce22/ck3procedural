@@ -149,6 +149,14 @@ public static class DebugPanel
         public string Source { get; init; } = "procedural";
 
         public string Races { get; init; } = "human only";
+
+        /// <summary>
+        /// Whether the Fantasy file set shipped. The race census lives in it
+        /// (00_race_debug_effects.txt), so the Live tab's Races rows and the gather's call to it are
+        /// written only when this is true.
+        /// </summary>
+        public bool FantasyRaces { get; init; }
+
         public bool Wilderness { get; init; }
         public bool Magic { get; init; }
         public bool Retinues { get; init; }
@@ -601,8 +609,46 @@ public static class DebugPanel
                     .MaxWidth(RowWidth)
                     .Format("#weak")
                     .Text("GEN_DEBUG_PANEL_WILDERNESS_NOTE")
-                : GuiBuilder.Of("widget").Size(0, 0));
+                : GuiBuilder.Of("widget").Size(0, 0))
+
+            .Gap().Add(facts.FantasyRaces ? RaceCensus(labels) : GuiBuilder.Of("widget").Size(0, 0));
     }
+
+    /// <summary>
+    /// Living characters by race, and the phenotype system's three invariants.
+    ///
+    /// Filled by <c>gen_debug_race_census_effect</c>, which ships in the Fantasy file set
+    /// (00_race_debug_effects.txt) because it names the phenotype traits, and those exist only on a
+    /// map that has races. Only written when that set shipped, like the gather's call to it.
+    ///
+    /// A doubled character counts once, under the race the sanitizer would keep, so the nine race
+    /// rows plus the undecided row add up to everyone alive.
+    /// </summary>
+    private static GuiBuilder RaceCensus(LabelSet labels)
+        => GuiBuilder.VBox()
+            .ExpandingH()
+            .Spacing(2)
+
+            .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_RACES"))
+            .Add(Row(labels, "human", Counter("race_human")),
+                 Row(labels, "high elf (gracile)", Counter("race_gracile")),
+                 Row(labels, "wood elf (sylvan)", Counter("race_sylvan")),
+                 Row(labels, "dwarf (stocky)", Counter("race_stocky")),
+                 Row(labels, "orc (rough-hewn)", Counter("race_rough_hewn")),
+                 Row(labels, "giantkin (towering)", Counter("race_towering")),
+                 Row(labels, "gnome (diminutive)", Counter("race_diminutive")),
+                 Row(labels, "dusk elf (umbral)", Counter("race_dusk_adapted")),
+                 Row(labels, "hornkin (horned)", Counter("race_horned")),
+                 Row(labels, "hornborn, any race", Counter("race_hornborn")),
+                 Row(labels, "race from own ethnicity", Counter("race_from_gene")),
+                 Row(labels, "mixed-line humans", Counter("race_mixed_human")))
+
+            .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_RACE_CHECKS"))
+            .Add(Row(labels, "no race yet", Counter("race_untagged")),
+                 Row(labels, "two races at once", Counter("race_conflict")),
+                 Row(labels, "human trait, fantasy ethnicity", Counter("race_contradicts")))
+
+            .Gap().Add(Note("GEN_DEBUG_PANEL_RACE_CHECKS_NOTE"));
 
     // ===========================================================================================
     // Tab three: the levers
@@ -1127,6 +1173,7 @@ public static class DebugPanel
             		save_scope_value_as = { name = gen_rulers value = var:gen_dbg_rulers }
             		save_scope_value_as = { name = gen_independent value = var:gen_dbg_independent }
             		save_scope_value_as = { name = gen_artifacts value = var:gen_dbg_artifacts }
+            RACELOG
 
             		debug_log = "=== generated world: counts follow as saved scopes ==="
             		debug_log_scopes = yes
@@ -1212,9 +1259,28 @@ public static class DebugPanel
             }
             WONDERS
 
-            """.Replace("WONDERS", wonders) + FireEntries(events));
+            """.Replace("WONDERS", wonders).Replace("RACELOG\n", RaceLog(facts)) + FireEntries(events));
 
-        WriteGatherEffect(modDir);
+        WriteGatherEffect(modDir, facts);
+    }
+
+    /// <summary>
+    /// The race census's figures for the log button, as more named scopes in the same dump. Empty
+    /// on a map without races, where the census does not exist.
+    /// </summary>
+    private static string RaceLog(Facts facts)
+    {
+        if (!facts.FantasyRaces) return "";
+
+        string[] names =
+        [
+            "human", "gracile", "sylvan", "stocky", "rough_hewn", "towering", "diminutive",
+            "dusk_adapted", "horned", "hornborn", "from_gene", "mixed_human",
+            "untagged", "conflict", "contradicts",
+        ];
+
+        return string.Concat(names.Select(n =>
+            $"\t\tsave_scope_value_as = {{ name = gen_race_{n} value = var:gen_dbg_race_{n} }}\n"));
     }
 
     /// <summary>
@@ -1282,7 +1348,7 @@ public static class DebugPanel
     /// The gather above calls it too, so there is exactly one copy of the arithmetic and the panel
     /// and the log cannot report different numbers for the same world.
     /// </summary>
-    private static void WriteGatherEffect(string modDir)
+    private static void WriteGatherEffect(string modDir, Facts facts)
     {
         string dir = Path.Combine(modDir, "common", "scripted_effects");
         Directory.CreateDirectory(dir);
@@ -1398,10 +1464,22 @@ public static class DebugPanel
             	every_vassal = {
             		scope:gen_dbg_root = { change_variable = { name = gen_dbg_vassals add = 1 } }
             	}
-            }
+            RACES}
 
-            """);
+            """.Replace("RACES", facts.FantasyRaces ? RaceCensusCall : ""));
     }
+
+    /// <summary>
+    /// The gather's call into the race census, on a map with races. The census itself is static
+    /// script in the Fantasy file set, because it names the phenotype traits.
+    /// </summary>
+    private const string RaceCensusCall = """
+
+        	# Living characters by race, and the phenotype invariants. Shipped by the Fantasy file
+        	# set: common/scripted_effects/00_race_debug_effects.txt.
+        	gen_debug_race_census_effect = yes
+
+        """;
 
     /// <summary>
     /// The way in.
@@ -1535,6 +1613,14 @@ public static class DebugPanel
         loc.Add("GEN_DEBUG_PANEL_WILDERNESS_NOTE",
             "This map ships the wilderness system, so counties with no holder are the frontier "
             + "still waiting to be settled rather than a fault.");
+
+        loc.Add("GEN_DEBUG_PANEL_HEAD_RACES", "Races, living characters");
+        loc.Add("GEN_DEBUG_PANEL_HEAD_RACE_CHECKS", "Race invariants");
+        loc.Add("GEN_DEBUG_PANEL_RACE_CHECKS_NOTE",
+            "The last two should read #high 0#!. #high No race yet#! is normal in small numbers, "
+            + "since the engine invents courtiers and guests all year and the pulse reaches them "
+            + "yearly. Right-click anyone and pick #high Race inspector#! to see why they are what "
+            + "they are.");
 
         loc.Add("GEN_DEBUG_PANEL_HEAD_INSPECT", "Inspect");
         loc.Add("GEN_DEBUG_PANEL_HEAD_RESOURCES", "Testing resources");

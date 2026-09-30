@@ -121,6 +121,7 @@ Frequently used options:
 | `--no-calendar` | Keep CK3's month names and AD instead of generating the world's own calendar. |
 | `--gender historical\|mixed\|femaledominated` | Choose the world's gender-law profile. |
 | `--races off\|low\|high\|exotic` | Choose a fantasy-race preset. |
+| `--race-mix <list>` | With `--races`, set each race's share by hand, as `human=40,dwarf=80,gnome=0`: `human` is the percentage of land humans hold (10–95, 0 follows the preset), the others are weights (0–100, default 50, 0 leaves the race out) dividing the rest. The preset still decides how pronounced the races look. |
 | `--content procedural\|vanilla` | Generate the world's cultures and faiths, or settle the generated map with CK3's own. |
 | `--vanilla-region <keys>` | With `--content vanilla`, confine the real-world window to vanilla geographical regions (`world_europe`, `"world_africa, world_middle_east"`). |
 | `--impassable-mask <png>` | Supply a painted impassable mask; `--impassable-mask-mode snap\|touch` controls how it applies. |

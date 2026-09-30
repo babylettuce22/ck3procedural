@@ -115,6 +115,10 @@ public static class MapModes
             Legend = TerrainLegend(),
             Probe = (r, _, cell, _) => Spaced(r.Terrain.Terrain[cell].ToString()),
         },
+        // The written ground as CK3's terrain shader blends it, from the game's own textures. After
+        // the write because it reads the written detail maps back; see GroundPreview for what it
+        // does and does not reproduce.
+        new("CK3 ground", "Physical", GroundPreview.Render) { AfterWrite = true },
         new("Rivers", "Physical", (r, _) => PreviewRenderer.RenderRivers(r)),
         new("Drainage", "Physical", (r, _) => PreviewRenderer.RenderDrainage(r)),
         new("Impassable", "Physical", (r, _) => PreviewRenderer.RenderImpassable(r))

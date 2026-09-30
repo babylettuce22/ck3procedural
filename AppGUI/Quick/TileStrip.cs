@@ -123,8 +123,17 @@ internal sealed class TileStrip : Control
     private void Place()
     {
         SuspendLayout();
-        for (int i = 0; i < _tiles.Count; i++)
+        // Each tile is its own window, and Windows moves a window by copying its old pixels to the
+        // new spot. Moved one at a time, a tile can land on a neighbour that has not moved yet and
+        // the copy carries pieces of both, which smeared the row while it glided. So the tiles move
+        // in the direction of travel, the leading one first, and every one repaints whole after.
+        bool rightward = _tiles.Count > 0 && _tiles[0].Left < -_offset;
+        for (int n = 0; n < _tiles.Count; n++)
+        {
+            int i = rightward ? _tiles.Count - 1 - n : n;
             _tiles[i].Bounds = new Rectangle(i * (_tileW + _gap) - _offset, 0, _tileW, _tileH);
+        }
+        foreach (var tile in _tiles) tile.Invalidate();
 
         // The arrows sit on the edges of the pictures, halfway down them, only where there is
         // somewhere to go.

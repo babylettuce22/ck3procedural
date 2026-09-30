@@ -74,7 +74,21 @@ public sealed class QuickChoices
     /// <summary>Realms named in it too; see <see cref="MapConfig.NativeRealmNames"/>.</summary>
     public bool NativeRealms { get; set; }
 
-    public QuickChoices Clone() => (QuickChoices)MemberwiseClone();
+    /// <summary>
+    /// A hand-set race mix, or null for the fantasy choice's own. Kept while Fantasy is None, like
+    /// the pick itself, but only applied with races on; see <see cref="MixInWorld"/>.
+    /// </summary>
+    public QuickRaceMix? Mix { get; set; }
+
+    public QuickChoices Clone()
+    {
+        var copy = (QuickChoices)MemberwiseClone();
+        copy.Mix = Mix?.Clone();
+        return copy;
+    }
+
+    /// <summary>The mix the world is actually made with: none unless it has races.</summary>
+    public QuickRaceMix? MixInWorld => FantasyInWorld == QuickFantasy.None ? null : Mix;
 
     /// <summary>
     /// Whether the relief choice is applied region by region (<see cref="AppGUI.RegionalRelief"/>)
@@ -89,7 +103,9 @@ public sealed class QuickChoices
         var (w, h) = Pixels;
         return $"Quick world: {MapType}, seed {Seed}, relief {Relief} ({(RegionalRelief ? "regional" : "map-wide")}), mountains {Mountains}, "
                + $"size {Size} ({w}x{h}), era {Era}, climate {Climate}, density {Density}, "
-               + $"people {People}, fantasy {FantasyInWorld}, politics {Politics}, rulers {Rulers}, "
+               + $"people {People}, fantasy {FantasyInWorld}"
+               + (MixInWorld is { } mix ? $" (custom mix: {mix.Describe(FantasyInWorld)})" : "")
+               + $", politics {Politics}, rulers {Rulers}, "
                + $"wilderness {(Wilderness ? "on" : "off")}, wars {(Wars ? "on" : "off")}, "
                + $"native titles {(NativeTitles ? "on" : "off")}, native realms {(NativeRealms ? "on" : "off")}";
     }
@@ -210,6 +226,10 @@ public sealed class QuickChoices
         if (fantasy == QuickFantasy.Low) cfg.RaceMode = MapConfig.FantasyRaceMode.LowFantasy;
         else if (fantasy == QuickFantasy.High) cfg.RaceMode = MapConfig.FantasyRaceMode.HighFantasy;
 
+        // A hand-set mix takes over how much land each race holds; Low or High still decides how
+        // strongly they look it. Without one the reset left Custom Race Mix off.
+        MixInWorld?.ApplyTo(cfg);
+
         // Three start dates, as vanilla has. They follow the world's history when the player
         // accepts it later than it began — see MapGen.HistoryEras — and a world of real CK3 people
         // has vanilla's own dates instead (UsesAdditionalBookmarks says no to it).
@@ -241,6 +261,117 @@ public sealed class QuickChoices
             Wilderness = random.Next(4) != 0,
             Wars = random.Next(3) != 0,
         };
+    }
+}
+
+/// <summary>
+/// A hand-set race mix for a Quick world: how much of the land humans hold, and how the other races
+/// divide the rest. Edited in the People step's race mix dialog (<see cref="RaceMixDialog"/>) and
+/// written onto MapConfig's Custom Race Mix rows by <see cref="ApplyTo"/>, so a world handed to
+/// Complex shows the same mix in the grid.
+///
+/// A mix left at its defaults is not a mix: the page drops it (<see cref="IsDefault"/>), so a world
+/// made without touching the dialog is the world the fantasy choice alone makes.
+/// </summary>
+public sealed class QuickRaceMix
+{
+    /// <summary>What every race's weight starts at, as in MapConfig.</summary>
+    public const int DefaultWeight = 50;
+
+    /// <summary>
+    /// Percent of the land humans hold. 0 follows the fantasy choice (85% low, 35% high), and the
+    /// page puts it back to 0 when that choice changes: the weights are a matter of taste, the
+    /// human share is most of what Low and High mean.
+    /// </summary>
+    public int HumanShare { get; set; }
+
+    public int Dwarves { get; set; } = DefaultWeight;
+    public int HighElves { get; set; } = DefaultWeight;
+    public int WoodElves { get; set; } = DefaultWeight;
+    public int Orcs { get; set; } = DefaultWeight;
+    public int Gnomes { get; set; } = DefaultWeight;
+    public int Giantkin { get; set; } = DefaultWeight;
+    public int DuskElves { get; set; } = DefaultWeight;
+    public int Hornkin { get; set; } = DefaultWeight;
+
+    public QuickRaceMix Clone() => (QuickRaceMix)MemberwiseClone();
+
+    /// <summary>One race's row: its name, the ground it favours, and its weight.</summary>
+    internal sealed record Row(MapGen.RaceArchetype Race, string Name, string Ground,
+        Func<QuickRaceMix, int> Get, Action<QuickRaceMix, int> Set);
+
+    /// <summary>The races, in the order the dialog lists them. The ground is Ethnicities' affinity table in words.</summary>
+    internal static readonly Row[] Rows =
+    [
+        new(MapGen.RaceArchetype.Dwarf, "Dwarves", "mountains and hills", m => m.Dwarves, (m, v) => m.Dwarves = v),
+        new(MapGen.RaceArchetype.HighElf, "High elves", "plains and farmland", m => m.HighElves, (m, v) => m.HighElves = v),
+        new(MapGen.RaceArchetype.WoodElf, "Wood elves", "forest and taiga", m => m.WoodElves, (m, v) => m.WoodElves = v),
+        new(MapGen.RaceArchetype.Orc, "Orcs", "mountains, desert, steppe", m => m.Orcs, (m, v) => m.Orcs = v),
+        new(MapGen.RaceArchetype.Gnome, "Gnomes", "wetlands, desert, hills", m => m.Gnomes, (m, v) => m.Gnomes = v),
+        new(MapGen.RaceArchetype.Giantkin, "Giantkin", "arctic and mountains", m => m.Giantkin, (m, v) => m.Giantkin = v),
+        new(MapGen.RaceArchetype.DuskElf, "Dusk elves", "hills and fens", m => m.DuskElves, (m, v) => m.DuskElves = v),
+        new(MapGen.RaceArchetype.Hornkin, "Hornkin", "steppe and dry scrub", m => m.Hornkin, (m, v) => m.Hornkin = v),
+    ];
+
+    /// <summary>The human share Low or High uses, in percent: the generator's own figure.</summary>
+    public static int DefaultHumanShare(QuickFantasy level) => (int)Math.Round(100 * MapGen.Ethnicities.HumanShareFor(
+        level == QuickFantasy.Low ? MapConfig.FantasyRaceMode.LowFantasy : MapConfig.FantasyRaceMode.HighFantasy));
+
+    /// <summary>The human share this mix comes to at a fantasy level, in percent.</summary>
+    public int HumanPercent(QuickFantasy level) => HumanShare > 0 ? HumanShare : DefaultHumanShare(level);
+
+    /// <summary>Each race's share of the whole land, in percent, in <see cref="Rows"/> order.</summary>
+    public double[] RaceShares(QuickFantasy level)
+    {
+        double rest = 100 - HumanPercent(level);
+        double total = Rows.Sum(r => Math.Max(0, r.Get(this)));
+        return [.. Rows.Select(r => total > 0 ? rest * Math.Max(0, r.Get(this)) / total : 0.0)];
+    }
+
+    /// <summary>Nothing moved: the fantasy choice's own mix.</summary>
+    public bool IsDefault => HumanShare == 0 && Rows.All(r => r.Get(this) == DefaultWeight);
+
+    /// <summary>Every other race turned off, which leaves a world of humans: the None choice, not a mix.</summary>
+    public bool NoOtherRaces => Rows.All(r => r.Get(this) <= 0);
+
+    /// <summary>Onto the config's Custom Race Mix rows.</summary>
+    public void ApplyTo(MapConfig cfg)
+    {
+        cfg.CustomRaceMix = true;
+        cfg.RaceMixHumanShare = HumanShare;
+        cfg.RaceMixDwarves = Dwarves;
+        cfg.RaceMixHighElves = HighElves;
+        cfg.RaceMixWoodElves = WoodElves;
+        cfg.RaceMixOrcs = Orcs;
+        cfg.RaceMixGnomes = Gnomes;
+        cfg.RaceMixGiantkin = Giantkin;
+        cfg.RaceMixDuskElves = DuskElves;
+        cfg.RaceMixHornkin = Hornkin;
+    }
+
+    /// <summary>
+    /// The mix in a few words, for the Review row, the Fantasy card and the run log: the human
+    /// share, the two biggest races, and which are left out — "40% human · dwarves 21%, orcs 12% ·
+    /// no gnomes".
+    /// </summary>
+    public string Describe(QuickFantasy level)
+    {
+        var shares = RaceShares(level);
+        var parts = new List<string> { $"{HumanPercent(level)}% human" };
+
+        var biggest = Rows.Select((r, i) => (r.Name, Share: shares[i]))
+            .Where(s => s.Share > 0)
+            .OrderByDescending(s => s.Share)
+            .Take(2)
+            .Select(s => $"{s.Name.ToLowerInvariant()} {Math.Round(s.Share):0}%")
+            .ToList();
+        if (biggest.Count > 0) parts.Add(string.Join(", ", biggest));
+
+        var off = Rows.Where(r => r.Get(this) <= 0).Select(r => r.Name.ToLowerInvariant()).ToList();
+        if (off.Count is > 0 and <= 3) parts.Add("no " + string.Join(" or ", off));
+        else if (off.Count > 3) parts.Add($"{off.Count} races left out");
+
+        return string.Join("  ·  ", parts);
     }
 }
 

@@ -42,6 +42,7 @@ public sealed partial class MainForm
         _quick.LaunchRequested += LaunchGame;
         _quick.OpenFolderRequested += OpenModFolder;
         _quick.CustomizeRequested += CustomizeQuickWorld;
+        _quick.See3DRequested += () => ShowGroundIn3DAsync().Forget("3D ground");
         _quick.GameFolderRequested += PickGameFolder;
         _quick.PlayPauseRequested += () => SetHistoryPlaying(!_historyClock.Enabled);
         _quick.PaceRequested += () =>
@@ -497,5 +498,46 @@ public sealed partial class MainForm
     {
         if (_busy) return;
         SelectWorkspace(Workspace.World);
+    }
+
+    private GroundViewWindow? _groundWindow;
+    private bool _groundPending;
+
+    /// <summary>
+    /// The done screen's "See in 3D": the written world's CK3 ground draped over its shipped relief,
+    /// in a window of its own. One at a time; opening it again replaces it with the world as it
+    /// now stands, since a history accepted in between rewrites the mod.
+    /// </summary>
+    private async Task ShowGroundIn3DAsync()
+    {
+        if (_busy || _groundPending || _result is not { } result || _written is not { } written) return;
+
+        _groundPending = true;
+        Cursor = Cursors.WaitCursor;
+        try
+        {
+            // The processed fields are usually ready: every build prepares them for the 3D tab.
+            var fields = _processedSource is { } s && _processedPacked is { } p
+                ? (s, p)
+                : await Task.Run(() => ProcessedFields(result));
+            var ground = await Task.Run(() => GroundPreview.Render(result, written));
+
+            // The world moved on while this was rendering; what was drawn no longer describes it.
+            if (!ReferenceEquals(result, _result)) return;
+
+            _groundWindow?.Close();
+            _groundWindow = new GroundViewWindow(_modName ?? "World", fields.Item1, fields.Item2, ground);
+            // A modeless window disposes itself on close; only the reference needs letting go.
+            _groundWindow.FormClosed += (sender, _) =>
+            {
+                if (ReferenceEquals(sender, _groundWindow)) _groundWindow = null;
+            };
+            _groundWindow.Show(this);
+        }
+        finally
+        {
+            _groundPending = false;
+            Cursor = Cursors.Default;
+        }
     }
 }

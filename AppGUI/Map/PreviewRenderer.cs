@@ -1467,7 +1467,7 @@ public static class PreviewRenderer
         RaceArchetype.Orc => "rough_hewn.dds",
         RaceArchetype.Giantkin => "towering.dds",
         RaceArchetype.Gnome => "diminutive.dds",
-        RaceArchetype.Deepkin => "dusk_adapted.dds",
+        RaceArchetype.DuskElf => "dusk_adapted.dds",
         RaceArchetype.Hornkin => "horned.dds",
         _ => null // Humans have no special icon
     };

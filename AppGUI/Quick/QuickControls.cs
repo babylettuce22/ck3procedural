@@ -395,6 +395,17 @@ internal static class LaunchUi
             foreach (var (v, card) in _options)
                 if (EqualityComparer<T>.Default.Equals(v, value)) card.Enabled = enabled;
         }
+
+        /// <summary>Changes the line under one card's title. The caller re-lays the step, since the card may now wrap.</summary>
+        public void SetSubtitle(T value, string subtitle)
+        {
+            foreach (var (v, card) in _options)
+            {
+                if (!EqualityComparer<T>.Default.Equals(v, value) || card.Subtitle == subtitle) continue;
+                card.Subtitle = subtitle;
+                card.Invalidate();
+            }
+        }
     }
 
     /// <summary>

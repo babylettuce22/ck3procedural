@@ -24,7 +24,7 @@ gen_world_weary_eligible_trigger = {
 	age >= 80
 	NOT = { has_game_rule = off_elderly_health }
 	# A truly immortal character (ruler designer / console) never fades. Checked by TRAIT, not by
-	# the is_immortal flag — the flag is deliberately on every elf and deepkin now, the engine
+	# the is_immortal flag — the flag is deliberately on every elf, dusk elves included, now, the engine
 	# `immortal = yes` property lives only on this trait.
 	NOT = { has_trait = immortal }
 }
@@ -66,7 +66,7 @@ gen_dwarf_ailment_eligible_trigger = {
 # a rare, chosen pregnancy back in the years past 45 (the offer is gen_aging.0010).
 #
 # Windows follow each race's aging, not a flat number:
-#   - Elves and deepkin: from 45 until world_weary reaches its first level (25 XP, usually a few
+#   - Elves, dusk elves included: from 45 until world_weary reaches its first level (25 XP, usually a few
 #     years after onset at ~85). The fading is the end of the fertile life too.
 #   - Dwarves: from 45 to 61. life_expectancy = 20 moves their ailments to 65, and the window
 #     closes just ahead of that.

@@ -36,8 +36,13 @@ public static class TerrainTextureWriter
     /// How far the fine jitter may push a selector, on the selectors' own 0-1 scale. Enough to
     /// cross the palette's variant thresholds regularly; not so much that the biome-scale trend
     /// underneath stops deciding anything.
+    ///
+    /// Was 0 until 2026-09-29, which left the selectors as pure warped fBm: every palette bucket
+    /// edge became a clean contour line, drawn as winding bands. Turned on with
+    /// <see cref="MidDither"/> after rendering drylands against vanilla (ck3devtools/TerrainRender)
+    /// broke the bands into mottling; central and steppe renders came out unchanged.
     /// </summary>
-    private const double MaterialJitter = 0.0;
+    private const double MaterialJitter = 0.15;
 
     /// <summary>
     /// How hard the tail selector is dithered per pixel, on the selectors' own 0-1 scale.
@@ -57,7 +62,7 @@ public static class TerrainTextureWriter
     /// dominant is currently sitting where it should. Calibrate against slot 1 at 23.1% and slot 2
     /// at 35.0% of adjacent land pairs, with slot 0 held near 11.3%.
     /// </summary>
-    private const double MidDither = 0.0;
+    private const double MidDither = 0.10;
 
     /// <summary>
     /// How far a pixel's weights may be scattered about themselves, as a fraction. Only the
@@ -800,6 +805,10 @@ public static class TerrainTextureWriter
     private const double RuggedLoPercentile = 0.60;
     private const double RuggedHiPercentile = 0.92;
 
+    /// <summary>Stencil of the slope measure behind lowland slope stone, in multiples of the
+    /// rugged stencil. 3 matches a sigma-1.5 blur of the heightmap without storing one.</summary>
+    private const int SlopeStoneSpan = 3;
+
     /// <summary>
     /// Two gradient thresholds off this map's own coast: where cliff rock starts showing, and where
     /// it has taken the face over completely.
@@ -981,6 +990,19 @@ public static class TerrainTextureWriter
         float ruggedRange = Math.Max(1e-4f, ruggedHi - ruggedLo);
         bool hasRelief = ruggedLo < float.MaxValue;
 
+        // The same measure across a wider stencil, for the slope stone lowland ground takes on.
+        // Across one texel the gradient follows every rill the erosion cut, and stone painted from
+        // it drew a web of lines on hillsides; a three-texel difference reads the valley walls and
+        // ridges instead (checked against a sigma-1.5 blur of the heightmap: mean share error 0.030
+        // against 0.066). One Gradient call either way, so no field is stored. Percentiles of its
+        // own, since a wider stencil reads lower.
+        int slopeSpan = ruggedSpan * SlopeStoneSpan;
+        var (slopeLo, slopeHi) = hasRelief
+            ? GradientPercentiles(elevation, hWidth, hHeight, slopeSpan,
+                IsLand, RuggedLoPercentile, RuggedHiPercentile)
+            : (float.MaxValue, float.MaxValue);
+        float slopeRange = Math.Max(1e-4f, slopeHi - slopeLo);
+
         Console.WriteLine(hasRelief
             ? $"  terrain: hill rock from gradient {ruggedLo:F2} (full at {ruggedHi:F2}), " +
               $"measured over {ruggedSpan} px"
@@ -1088,6 +1110,13 @@ public static class TerrainTextureWriter
                             / ruggedRange, 0, 1))
                         : 0.0;
 
+                    double slope = slopeLo < float.MaxValue
+                        ? Smooth(Math.Clamp((Gradient(elevation, hWidth, hHeight,
+                            Math.Clamp((int)hx, 0, hWidth - 1),
+                            Math.Clamp((int)hy, 0, hHeight - 1), slopeSpan) - slopeLo)
+                            / slopeRange, 0, 1))
+                        : 0.0;
+
                     byte self = label[pSrc];
 
                     // Dry ground the province map calls sea — the sliver where a province coast and
@@ -1100,7 +1129,7 @@ public static class TerrainTextureWriter
 
                     var blend = TerrainPalette.For(TerrainPalette.TerrainOf(self),
                         TerrainPalette.ClimateFromLabel(self), relief, nA, nB, nC,
-                        canopyDensity, zoneA, zoneB, rugged);
+                        canopyDensity, zoneA, zoneB, rugged, slope);
 
                     // Distance from here to the nearest ground of a different class, measured
                     // inside its own region. A smooth function of a real distance is what makes a
@@ -1203,7 +1232,7 @@ public static class TerrainTextureWriter
                                 byte winner = boundaryOther[pSrc];
                                 var neighbour = TerrainPalette.For(TerrainPalette.TerrainOf(winner),
                                     TerrainPalette.ClimateFromLabel(winner), relief, nA, nB, nC,
-                                    canopyDensity, zoneA, zoneB, rugged);
+                                    canopyDensity, zoneA, zoneB, rugged, slope);
 
                                 blend = TerrainPalette.Merge(blend, neighbour, a);
 
@@ -1213,7 +1242,7 @@ public static class TerrainTextureWriter
                                     var runnerUp = TerrainPalette.For(
                                         TerrainPalette.TerrainOf(second),
                                         TerrainPalette.ClimateFromLabel(second), relief, nA, nB, nC,
-                                        canopyDensity, zoneA, zoneB, rugged);
+                                        canopyDensity, zoneA, zoneB, rugged, slope);
 
                                     blend = TerrainPalette.Merge(blend, runnerUp, b);
                                 }

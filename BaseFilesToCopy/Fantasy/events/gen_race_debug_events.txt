@@ -1,0 +1,226 @@
+﻿namespace = gen_race_debug
+
+# The race inspector: why is this character the race they are?
+#
+# A character's race is three claims that should agree -- the phenotype trait, the ethnicity the
+# engine rolled their body from, and the culture the yearly pulse copies from -- and nearly every
+# race bug so far has been two of them disagreeing (a gnome minority stamped phenotype_human by
+# culture; a minority culture head spreading their race to the whole culture). This window puts
+# the three side by side, with the markers and relatives that explain a birth roll.
+#
+# Two ways in, both debug only:
+#   gen_race_debug_inspect_interaction  right-click anyone         common/character_interactions/
+#   the generated debug panel's Events tab                          fires on you, so inspects you
+#
+# The target arrives as scope:gen_rdbg_target. With none (the panel's route), root is inspected.
+# The vocabulary lives in common/customizable_localization/00_gen_race_debug_loc.txt.
+
+gen_race_debug.0001 = {
+	type = character_event
+	title = gen_race_debug.0001.t
+	theme = learning
+
+	left_portrait = {
+		character = scope:gen_rdbg_target
+		animation = personality_rational
+	}
+
+	# The culture head, because they are who the pulse copies from.
+	right_portrait = {
+		trigger = {
+			exists = scope:gen_rdbg_head
+			NOT = { scope:gen_rdbg_head = scope:gen_rdbg_target }
+		}
+		character = scope:gen_rdbg_head
+		animation = idle
+	}
+
+	immediate = {
+		if = {
+			limit = { NOT = { exists = scope:gen_rdbg_target } }
+			root = { save_scope_as = gen_rdbg_target }
+		}
+
+		# Cleared first. Saved scopes travel into every event this one re-fires, so a culture head
+		# saved while inspecting somebody else would otherwise stand in for a target whose culture
+		# has none.
+		clear_saved_scope = gen_rdbg_head
+
+		scope:gen_rdbg_target.culture.culture_head ?= { save_scope_as = gen_rdbg_head }
+	}
+
+	desc = {
+		desc = gen_race_debug.0001.desc.claims
+
+		# Relatives: the culture head is what the pulse copies from, and the parents are what the
+		# birth roll read.
+		triggered_desc = {
+			trigger = { exists = scope:gen_rdbg_head }
+			desc = gen_race_debug.0001.desc.head
+		}
+		triggered_desc = {
+			trigger = {
+				exists = scope:gen_rdbg_head
+				scope:gen_rdbg_head = { has_character_flag = gen_phenotype_from_gene }
+			}
+			desc = gen_race_debug.0001.desc.head_minority
+		}
+		triggered_desc = {
+			trigger = { NOT = { exists = scope:gen_rdbg_head } }
+			desc = gen_race_debug.0001.desc.no_head
+		}
+		triggered_desc = {
+			trigger = { exists = scope:gen_rdbg_target.mother }
+			desc = gen_race_debug.0001.desc.mother
+		}
+		triggered_desc = {
+			trigger = { exists = scope:gen_rdbg_target.father }
+			desc = gen_race_debug.0001.desc.father
+		}
+
+		# The verdict: the first thing wrong, or that nothing is.
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_rdbg_target = { gen_has_conflicting_phenotype_trigger = yes } }
+				desc = gen_race_debug.0001.desc.verdict_conflict
+			}
+			triggered_desc = {
+				trigger = { scope:gen_rdbg_target = { gen_phenotype_contradicts_genes_trigger = yes } }
+				desc = gen_race_debug.0001.desc.verdict_contradicts
+			}
+			triggered_desc = {
+				trigger = { scope:gen_rdbg_target = { NOT = { gen_has_phenotype_trigger = yes } } }
+				desc = gen_race_debug.0001.desc.verdict_undecided
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_rdbg_target = {
+						gen_has_fantasy_phenotype_trigger = yes
+						gen_has_fantasy_race_ethnicity_trigger = yes
+						NOT = { gen_race_debug_trait_matches_ethnicity_trigger = yes }
+					}
+				}
+				desc = gen_race_debug.0001.desc.verdict_mismatch
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_rdbg_target = {
+						has_trait = phenotype_human
+						has_character_flag = gen_phenotype_human
+						gen_has_fantasy_race_ethnicity_trigger = yes
+					}
+				}
+				desc = gen_race_debug.0001.desc.verdict_mixed_line
+			}
+			desc = gen_race_debug.0001.desc.verdict_ok
+		}
+
+		# Markers, as one line built from pieces.
+		desc = gen_race_debug.0001.desc.markers
+		triggered_desc = {
+			trigger = { scope:gen_rdbg_target = { has_character_flag = gen_phenotype_from_gene } }
+			desc = gen_race_debug.0001.desc.m_from_gene
+		}
+		triggered_desc = {
+			trigger = { scope:gen_rdbg_target = { has_character_flag = gen_phenotype_human } }
+			desc = gen_race_debug.0001.desc.m_mixed_human
+		}
+		triggered_desc = {
+			trigger = { scope:gen_rdbg_target = { has_character_flag = gen_half_orc } }
+			desc = gen_race_debug.0001.desc.m_half_orc
+		}
+		triggered_desc = {
+			trigger = { scope:gen_rdbg_target = { gen_long_lived_race_trigger = yes } }
+			desc = gen_race_debug.0001.desc.m_long_lived
+		}
+		triggered_desc = {
+			trigger = { scope:gen_rdbg_target = { has_trait = hornborn } }
+			desc = gen_race_debug.0001.desc.m_hornborn
+		}
+		triggered_desc = {
+			trigger = { scope:gen_rdbg_target = { gen_has_horns_trigger = yes } }
+			desc = gen_race_debug.0001.desc.m_horns
+		}
+		triggered_desc = {
+			trigger = { scope:gen_rdbg_target = { has_character_flag = gen_horns_filed } }
+			desc = gen_race_debug.0001.desc.m_horns_filed
+		}
+		triggered_desc = {
+			trigger = { scope:gen_rdbg_target = { gen_has_tusks_trigger = yes } }
+			desc = gen_race_debug.0001.desc.m_tusks
+		}
+		triggered_desc = {
+			trigger = { scope:gen_rdbg_target = { gen_has_broken_tusk_trigger = yes } }
+			desc = gen_race_debug.0001.desc.m_tusk_broken
+		}
+		triggered_desc = {
+			trigger = {
+				scope:gen_rdbg_target = {
+					NOT = { has_character_flag = gen_phenotype_from_gene }
+					NOT = { has_character_flag = gen_phenotype_human }
+					NOT = { has_character_flag = gen_half_orc }
+					NOT = { gen_long_lived_race_trigger = yes }
+					NOT = { gen_has_horns_trigger = yes }
+					NOT = { gen_has_tusks_trigger = yes }
+				}
+			}
+			desc = gen_race_debug.0001.desc.m_none
+		}
+
+		# Against you, for marriage: the one consumer of gen_is_different_race_than.
+		triggered_desc = {
+			trigger = {
+				NOT = { scope:gen_rdbg_target = root }
+				scope:gen_rdbg_target = { gen_is_different_race_than = { TARGET = root } }
+			}
+			desc = gen_race_debug.0001.desc.vs_you_different
+		}
+		triggered_desc = {
+			trigger = {
+				NOT = { scope:gen_rdbg_target = root }
+				scope:gen_rdbg_target = { NOT = { gen_is_different_race_than = { TARGET = root } } }
+			}
+			desc = gen_race_debug.0001.desc.vs_you_same
+		}
+	}
+
+	# Run the yearly pulse's three steps on this one character, in the pulse's own order, and look
+	# again. The quickest way to see whether a fix to the pulse fixes the character in front of you.
+	option = {
+		name = gen_race_debug.0001.a
+		scope:gen_rdbg_target = {
+			gen_sanitize_phenotype_effect = yes
+			gen_reconcile_phenotype_with_genes_effect = yes
+			gen_assign_phenotype_effect = yes
+		}
+		trigger_event = gen_race_debug.0001
+	}
+
+	option = {
+		name = gen_race_debug.0001.b
+		trigger = { exists = scope:gen_rdbg_target.mother }
+		scope:gen_rdbg_target.mother = { save_scope_as = gen_rdbg_target }
+		trigger_event = gen_race_debug.0001
+	}
+
+	option = {
+		name = gen_race_debug.0001.c
+		trigger = { exists = scope:gen_rdbg_target.father }
+		scope:gen_rdbg_target.father = { save_scope_as = gen_rdbg_target }
+		trigger_event = gen_race_debug.0001
+	}
+
+	option = {
+		name = gen_race_debug.0001.d
+		trigger = {
+			exists = scope:gen_rdbg_head
+			NOT = { scope:gen_rdbg_head = scope:gen_rdbg_target }
+		}
+		scope:gen_rdbg_head = { save_scope_as = gen_rdbg_target }
+		trigger_event = gen_race_debug.0001
+	}
+
+	option = {
+		name = gen_race_debug.0001.e
+	}
+}

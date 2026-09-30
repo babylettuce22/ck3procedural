@@ -336,7 +336,7 @@ public static class Retinues
             ["Wardens", "Stone", "Watch", "Highlanders"],
             "They hold passes a hundred men could not force.",
             ["mountaineer", "heavy_infantry"],
-            [RaceArchetype.Dwarf, RaceArchetype.Deepkin, RaceArchetype.Giantkin]),
+            [RaceArchetype.Dwarf, RaceArchetype.DuskElf, RaceArchetype.Giantkin]),
 
         new(Doctrine.MarshRunners, "skirmishers", (1.1, 0.95, 1.35, 1.25),
             [TerrainClass.Wetlands, TerrainClass.Floodplains, TerrainClass.Jungle],

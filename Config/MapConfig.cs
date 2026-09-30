@@ -250,6 +250,38 @@ public sealed class VanillaRegionConverter : StringConverter
             : base.ConvertFrom(context, culture, value);
 }
 
+/// <summary>
+/// <see cref="MapConfig.RaceMixHumanShare"/>'s 0, shown as what it means: the race mode's own share.
+/// Built like <see cref="FollowWorldYearConverter"/>.
+/// </summary>
+public sealed class FollowRaceModeConverter : Int32Converter
+{
+    public const string Follow = "0 (Race mode's own)";
+
+    public override object? ConvertTo(ITypeDescriptorContext? context, CultureInfo? culture,
+        object? value, Type destinationType)
+        => destinationType == typeof(string) && value is 0
+            ? Follow
+            : base.ConvertTo(context, culture, value, destinationType);
+
+    public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture,
+        object value)
+    {
+        // The picked sentinel starts with its 0, so it is matched whole rather than parsed.
+        if (value is string text && (text.Trim().StartsWith("0 (", StringComparison.Ordinal)
+                                     || text.Contains("mode", StringComparison.OrdinalIgnoreCase)))
+            return 0;
+
+        return base.ConvertFrom(context, culture, value);
+    }
+
+    public override bool GetStandardValuesSupported(ITypeDescriptorContext? context) => true;
+    public override bool GetStandardValuesExclusive(ITypeDescriptorContext? context) => false;
+
+    public override StandardValuesCollection GetStandardValues(ITypeDescriptorContext? context)
+        => new(new[] { 0 });
+}
+
 public sealed class FollowWorldYearConverter : Int32Converter
 {
     public const string Follow = "0 (Follow World Year)";
@@ -3437,12 +3469,12 @@ public sealed class MapConfig : CustomTypeDescriptor
     {
         HumanOnly,      // Realistic human phenotypes adapted to latitude/climate
         LowFantasy,     // Humans dominant (~85%), with rare Elven, Dwarven, or Orcish realms (~15%)
-        HighFantasy,    // Balanced distribution of Elves, Dwarves, Humans, Orcs, Beastfolk, Deepkin
+        HighFantasy,    // Balanced distribution of Elves, Dwarves, Humans, Orcs, Beastfolk, Dusk Elves
         ExoticSurreal   // Wild procedural morphs (exotic skin hues, vibrant hair/eyes, extreme heights)
     }
 
     [Category("14 Fantasy/Ethnicities")]
-    [Description("Enable procedural fantasy racial phenotypes (Elves, Dwarves, Orcs, Giants, Deepkin, etc.).")]
+    [Description("Enable procedural fantasy racial phenotypes (Elves, Dwarves, Orcs, Giants, Dusk Elves, etc.).")]
     public bool EnableFantasyEthnicities { get; set; } = false;
 
     /// <summary>
@@ -3547,6 +3579,80 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("14 Fantasy/Ethnicities")]
     [Description("When the mode's human:fantasy land ratio leaves no room for every guaranteed race to hold territory of its own, let the overflow races live as small minorities (~13% of characters) inside a well-suited human culture instead of not appearing at all. Minority members look their race and carry their race's phenotype trait, resolved at game start from their own genes rather than from their host culture — they are a people living among another, not a faction with land. Off means the guarantee simply wins the land and the ratio is sacrificed with a warning.")]
     public bool AllowMinorityRaces { get; set; } = true;
+
+    /// <summary>
+    /// Whether the world's race shares are set by hand rather than by <see cref="RaceMode"/>.
+    ///
+    /// The mode still decides how pronounced the races look (their morph and skin intensity); this
+    /// takes over only how much land each one holds. Off, the rows below are hidden and ignored, and
+    /// a seed makes exactly the world it made before the mix existed. See Ethnicities.MixBudget for
+    /// how the shares are spent.
+    /// </summary>
+    [Category("14 Fantasy/Ethnicities")]
+    [DisplayName("Custom Race Mix")]
+    [RefreshProperties(RefreshProperties.All)]
+    [Description("Set how much of the land each race holds, instead of the race mode's own split. The mode still decides how strongly the races look like themselves. Races settle whole peoples, so the shares are targets rather than exact figures, and a small share often turns up as a minority living among another people instead of a realm of its own.")]
+    public bool CustomRaceMix { get; set; } = false;
+
+    /// <summary>
+    /// The share of counties humans hold under <see cref="CustomRaceMix"/>, in percent. 0 follows the
+    /// race mode (85% low fantasy, 35% high, 12% exotic). Anything else is held to
+    /// <see cref="MinRaceMixHumanShare"/>..<see cref="MaxRaceMixHumanShare"/>: humans are the
+    /// fallback for land no race's terrain allows and the hosts every minority lives among, so a
+    /// world cannot be made without some, and a fantasy world with none of the other races is the
+    /// None setting, not a mix.
+    /// </summary>
+    [Category("14 Fantasy/Ethnicities")]
+    [DisplayName("Mix: Humans (% of land)")]
+    [TypeConverter(typeof(FollowRaceModeConverter))]
+    [Description("With Custom Race Mix: the share of counties humans hold, in percent. 0 follows the race mode (85% low fantasy, 35% high, 12% exotic). Kept between 10 and 95: humans are who the land falls to where no race fits, and who minorities live among. The other races divide the rest by the weights below.")]
+    public int RaceMixHumanShare { get; set; } = 0;
+
+    public const int MinRaceMixHumanShare = 10;
+    public const int MaxRaceMixHumanShare = 95;
+
+    [Category("14 Fantasy/Ethnicities")]
+    [DisplayName("Mix: Dwarves")]
+    [Description("With Custom Race Mix: how much of the non-human land dwarves get, relative to the other races' weights (0-100). 0 leaves them out of the world.")]
+    public int RaceMixDwarves { get; set; } = 50;
+
+    [Category("14 Fantasy/Ethnicities")]
+    [DisplayName("Mix: High Elves")]
+    [Description("With Custom Race Mix: how much of the non-human land high elves get, relative to the other races' weights (0-100). 0 leaves them out of the world.")]
+    public int RaceMixHighElves { get; set; } = 50;
+
+    [Category("14 Fantasy/Ethnicities")]
+    [DisplayName("Mix: Wood Elves")]
+    [Description("With Custom Race Mix: how much of the non-human land wood elves get, relative to the other races' weights (0-100). 0 leaves them out of the world.")]
+    public int RaceMixWoodElves { get; set; } = 50;
+
+    [Category("14 Fantasy/Ethnicities")]
+    [DisplayName("Mix: Orcs")]
+    [Description("With Custom Race Mix: how much of the non-human land orcs get, relative to the other races' weights (0-100). 0 leaves them out of the world.")]
+    public int RaceMixOrcs { get; set; } = 50;
+
+    [Category("14 Fantasy/Ethnicities")]
+    [DisplayName("Mix: Gnomes")]
+    [Description("With Custom Race Mix: how much of the non-human land gnomes get, relative to the other races' weights (0-100). 0 leaves them out of the world.")]
+    public int RaceMixGnomes { get; set; } = 50;
+
+    [Category("14 Fantasy/Ethnicities")]
+    [DisplayName("Mix: Giantkin")]
+    [Description("With Custom Race Mix: how much of the non-human land giantkin get, relative to the other races' weights (0-100). 0 leaves them out of the world.")]
+    public int RaceMixGiantkin { get; set; } = 50;
+
+    [Category("14 Fantasy/Ethnicities")]
+    [DisplayName("Mix: Dusk Elves")]
+    [Description("With Custom Race Mix: how much of the non-human land dusk elves get, relative to the other races' weights (0-100). 0 leaves them out of the world.")]
+    public int RaceMixDuskElves { get; set; } = 50;
+
+    [Category("14 Fantasy/Ethnicities")]
+    [DisplayName("Mix: Hornkin")]
+    [Description("With Custom Race Mix: how much of the non-human land hornkin get, relative to the other races' weights (0-100). 0 leaves them out of the world.")]
+    public int RaceMixHornkin { get; set; } = 50;
+
+    /// <summary>The rows <see cref="GetProperties(Attribute[])"/> shows only under <see cref="CustomRaceMix"/>.</summary>
+    private static bool IsRaceMixRow(string name) => name.StartsWith("RaceMix", StringComparison.Ordinal);
 
 
     // =========================================================================
@@ -3714,6 +3820,9 @@ public sealed class MapConfig : CustomTypeDescriptor
 
             // Only a vanilla world has a region of vanilla's map to choose.
             if (property.Name == nameof(VanillaRegion) && ContentSource != ContentSourceMode.VanillaWorld) continue;
+
+            // The mix's shares mean nothing until the mix is switched on.
+            if (!CustomRaceMix && IsRaceMixRow(property.Name)) continue;
 
             shown.Add(imported && property.Attributes[typeof(AzgaarIncompatAttribute)]
                           is AzgaarIncompatAttribute incompat

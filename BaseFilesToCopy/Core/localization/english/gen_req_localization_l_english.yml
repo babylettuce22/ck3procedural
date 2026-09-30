@@ -14,6 +14,8 @@
  gen_bs_horn_boss:0 "Horn Base"
  # The giantkin brow and jaw (common/genes/gen_bs_giant_face.txt).
  gen_bs_giant_face:0 "Giant's Brow"
+ # The orc brow (common/genes/gen_bs_orc_brow.txt).
+ gen_bs_orc_brow:0 "Orcish Brow"
 
  gen_early_realm_stability:0 "A Stable Realm"
  gen_early_realm_stability_desc:0 "This realm is in a period of internal alignment."

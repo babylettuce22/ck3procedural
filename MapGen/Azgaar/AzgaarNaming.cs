@@ -100,7 +100,9 @@ public static class AzgaarNaming
         if (tag.Length == 0) return null;
 
         if (tag.Contains("human")) return RaceArchetype.Human;
-        if (tag.Contains("dark elf") || tag.Contains("drow")) return RaceArchetype.Deepkin;
+        if (tag.Contains("dusk elf") || tag.Contains("dusk elv") || tag.Contains("dark elf") || tag.Contains("dark elv")
+            || tag.Contains("drow"))
+            return RaceArchetype.DuskElf;
         if (tag.Contains("elf") || tag.Contains("elv")) return RaceArchetype.HighElf;
         if (tag.Contains("dwarf") || tag.Contains("dwarv")) return RaceArchetype.Dwarf;
         if (tag.Contains("orc") || tag.Contains("ork") || tag.Contains("goblin")) return RaceArchetype.Orc;

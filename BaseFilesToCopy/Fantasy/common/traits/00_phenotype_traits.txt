@@ -5,9 +5,24 @@
 # load — one error.log line per trait per boot. Mutual exclusivity is carried entirely by the
 # `opposites` lists, which is also how vanilla does it for flat traits.
 
+# Race feeling is carried by `compatibility`, not opinion (same_opinion/opposite_opinion were removed
+# 2026-09-29; only the orcs keep a general_opinion). Compatibility is not an opinion modifier: vanilla
+# reads it through `compatibility_modifier`/`trait_compatibility` in befriend, seduce, court and
+# mentor schemes, hunt/feast/tour relation events and elective succession votes — so race shapes who
+# bonds with, courts and votes for whom, without stacking on top of the different-culture opinion
+# penalty (race mostly IS culture here). It is DIRECTIONAL: each block is how the holder regards a
+# character carrying the listed trait, so the table below may be asymmetric on purpose.
+#
+# Keep to these steps. Vanilla's own are 5/15/30, and 00_ai_values.txt says only ~8% of characters
+# sum past +-26–31 from their whole personality — a race entry at 30 would drown the personality.
+@race_kin = 15
+@race_warm = 5
+@race_cool = -5
+@race_hostile = -15
+
 # Human — the baseline race, made visible. On a fantasy map every character of a human culture
 # carries this (stamped by Emit/HistoryWriter.cs, spread by the culture pulse), which is what lets
-# humans participate in the same_opinion/opposite_opinion web instead of being the one people with
+# humans participate in the compatibility web instead of being the one people with
 # no stance. Deliberately light on modifiers: the fantasy races are the deviation, humans are what
 # the rest of the game already balances for — their identity is fecundity and fast learning.
 #
@@ -35,11 +50,25 @@ phenotype_human = {
     # Placeholder art, same policy as world_weary in 01_gen_aging_traits.txt: a vanilla icon that
     # reads well enough until a bespoke human.dds exists beside the race icons.
     icon = "human_phenotype.dds"
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = { NOT = { exists = this } }
+                desc = trait_phenotype_human_desc
+            }
+            desc = trait_phenotype_human_character_desc
+        }
+    }
 
     fertility = 0.1
     monthly_lifestyle_xp_gain_mult = 0.1
-    same_opinion = 5
-    opposite_opinion = -5
+
+    compatibility = {
+        phenotype_human = @race_warm
+        phenotype_diminutive = @race_warm
+        phenotype_rough_hewn = @race_cool
+        phenotype_dusk_adapted = @race_cool
+    }
 }
 
 # High elf (the wood elf is phenotype_sylvan below)
@@ -60,6 +89,15 @@ phenotype_gracile = {
         phenotype_sylvan
     }
     icon = "gracile.dds"
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = { NOT = { exists = this } }
+                desc = trait_phenotype_gracile_desc
+            }
+            desc = trait_phenotype_gracile_character_desc
+        }
+    }
 
     # No forest block: that is the wood elf's (phenotype_sylvan), and it only fires for a culture
     # holding Forest Fighters, which a plains-dwelling high elf almost never does. A flat +1 learning
@@ -69,7 +107,6 @@ phenotype_gracile = {
     prowess = 1
     movement_speed = 0.05
     stress_loss_mult = 0.05
-    same_opinion = 10
     life_expectancy = 50
     health = 1.25
     # Slow-breeding, not sterile. At -0.5 this matched vanilla's Infertile trait: base fertility is
@@ -79,7 +116,14 @@ phenotype_gracile = {
     # (gen_aging.0010).
     fertility = -0.35
 
-	opposite_opinion = -2
+    # Cousins to the wood elves; old enmity with the dusk elves and the orcs.
+    compatibility = {
+        phenotype_gracile = @race_kin
+        phenotype_sylvan = @race_warm
+        phenotype_stocky = @race_cool
+        phenotype_rough_hewn = @race_hostile
+        phenotype_dusk_adapted = @race_hostile
+    }
 
     # Elves do not decay. `is_immortal` is a SCRIPT flag, not engine immortality (that is the
     # separate `immortal = yes` property, which stays off): it is what every vanilla elderly-health
@@ -120,6 +164,15 @@ phenotype_sylvan = {
     }
     # Placeholder art: gracile's icon until a bespoke sylvan.dds exists beside it.
     icon = "gracile.dds"
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = { NOT = { exists = this } }
+                desc = trait_phenotype_sylvan_desc
+            }
+            desc = trait_phenotype_sylvan_character_desc
+        }
+    }
 
     culture_modifier = {
         parameter = forest_trait_bonuses
@@ -131,12 +184,17 @@ phenotype_sylvan = {
     prowess = 1
     movement_speed = 0.05
     stress_loss_mult = 0.05
-    same_opinion = 10
     life_expectancy = 50
     health = 1.25
     fertility = -0.35 # see phenotype_gracile
 
-	opposite_opinion = -2
+    compatibility = {
+        phenotype_sylvan = @race_kin
+        phenotype_gracile = @race_warm
+        phenotype_stocky = @race_cool
+        phenotype_dusk_adapted = @race_cool
+        phenotype_rough_hewn = @race_hostile
+    }
 
     # Long-lived exactly as phenotype_gracile is — see the is_immortal note there.
     flag = is_immortal
@@ -161,12 +219,20 @@ phenotype_stocky = {
         phenotype_sylvan
     }
     icon = "stocky.dds"
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = { NOT = { exists = this } }
+                desc = trait_phenotype_stocky_desc
+            }
+            desc = trait_phenotype_stocky_character_desc
+        }
+    }
 
     stewardship = 1
     prowess = 2
     health = 0.5
     defender_advantage = 3
-    same_opinion = 15
 	life_expectancy = 20
 
     # Dwarves age like humans, twenty years late. Vanilla hard-codes its ailment onset ages (45 for
@@ -183,8 +249,16 @@ phenotype_stocky = {
         mountains_attrition_mult = -0.15
         desert_mountains_attrition_mult = -0.15
     }
-	
-	opposite_opinion = -10
+
+    # Close-knit; friends to the gnomes, wary of elves and giants, feuding with orcs.
+    compatibility = {
+        phenotype_stocky = @race_kin
+        phenotype_diminutive = @race_warm
+        phenotype_gracile = @race_cool
+        phenotype_sylvan = @race_cool
+        phenotype_towering = @race_cool
+        phenotype_rough_hewn = @race_hostile
+    }
 }
 
 # Orc
@@ -205,15 +279,33 @@ phenotype_rough_hewn = {
         phenotype_sylvan
     }
     icon = "rough_hewn.dds"
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = { NOT = { exists = this } }
+                desc = trait_phenotype_rough_hewn_desc
+            }
+            desc = trait_phenotype_rough_hewn_character_desc
+        }
+    }
 
     health = -0.1
     martial = 1
     prowess = 3
     dread_baseline_add = 15
     dread_gain_mult = 0.3
-    general_opinion = -5
-    same_opinion = 5
-	opposite_opinion = -15
+    general_opinion = -5 # the one race opinion kept: orcs are feared and disliked by everyone
+
+    # Cool to most, returning the elves' and dwarves' hostility; some fellowship with the giants.
+    compatibility = {
+        phenotype_rough_hewn = @race_warm
+        phenotype_towering = @race_warm
+        phenotype_human = @race_cool
+        phenotype_diminutive = @race_cool
+        phenotype_gracile = @race_hostile
+        phenotype_sylvan = @race_hostile
+        phenotype_stocky = @race_hostile
+    }
 }
 
 # Giant
@@ -234,15 +326,28 @@ phenotype_towering = {
         phenotype_sylvan
     }
     icon = "towering.dds"
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = { NOT = { exists = this } }
+                desc = trait_phenotype_towering_desc
+            }
+            desc = trait_phenotype_towering_character_desc
+        }
+    }
 
 	learning = -2 # was -4, which made every giant ruler a poor one; vanilla's Giant has no learning cost
     prowess = 8
     knight_effectiveness_mult = 0.15
     advantage = 2
     dread_gain_mult = 0.10
-    same_opinion = 5
-    # No opposite_opinion: giants are neutral towards other races. It used to be +5, which made
-    # them exactly as warm to strangers as to their own kind.
+
+    # Mostly neutral towards other races; small folk are beneath notice.
+    compatibility = {
+        phenotype_towering = @race_warm
+        phenotype_rough_hewn = @race_warm
+        phenotype_diminutive = @race_cool
+    }
 }
 
 # Gnome
@@ -263,14 +368,30 @@ phenotype_diminutive = {
         phenotype_sylvan
     }
     icon = "diminutive.dds"
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = { NOT = { exists = this } }
+                desc = trait_phenotype_diminutive_desc
+            }
+            desc = trait_phenotype_diminutive_character_desc
+        }
+    }
 
     intrigue = 1
     prowess = -4
 	learning = 2
     owned_hostile_scheme_success_chance_add = 15
     stress_loss_mult = 0.10
-    same_opinion = 5
-    # No opposite_opinion: neutral towards other races, as the giants are (it was +5).
+
+    # Admire the dwarves (more than the dwarves return), get on with humans; wary of the big and rough.
+    compatibility = {
+        phenotype_diminutive = @race_warm
+        phenotype_stocky = @race_kin
+        phenotype_human = @race_warm
+        phenotype_towering = @race_cool
+        phenotype_rough_hewn = @race_cool
+    }
 }
 
 # Drow
@@ -291,6 +412,15 @@ phenotype_dusk_adapted = {
         phenotype_sylvan
     }
     icon = "dusk_adapted.dds"
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = { NOT = { exists = this } }
+                desc = trait_phenotype_dusk_adapted_desc
+            }
+            desc = trait_phenotype_dusk_adapted_character_desc
+        }
+    }
 
     intrigue = 4
     owned_hostile_scheme_success_chance_add = 10
@@ -298,13 +428,16 @@ phenotype_dusk_adapted = {
     life_expectancy = 50
     health = 1.25
     fertility = -0.35 # see phenotype_gracile
-    # Clannish rather than merely hostile. It was -20 to every other race and no same_opinion at
-    # all, so the one thing deepkin felt strongly about was everyone else.
-    same_opinion = 10
-	opposite_opinion = -10
+    # Clannish rather than merely hostile; the high elves are the old enemy.
+    compatibility = {
+        phenotype_dusk_adapted = @race_kin
+        phenotype_human = @race_cool
+        phenotype_sylvan = @race_cool
+        phenotype_gracile = @race_hostile
+    }
 
     # Same deal as phenotype_gracile above: script-only flag that switches off the vanilla
-    # elderly-decay system; the deepkin fade (world_weary) instead of falling apart.
+    # elderly-decay system; the dusk elves fade (world_weary) instead of falling apart.
     flag = is_immortal
     no_prowess_loss_from_age = yes
 }
@@ -316,7 +449,7 @@ phenotype_dusk_adapted = {
 #
 # Hardy and proud rather than feared: horns are ordinary among their own, so no dread and no general
 # opinion cost here — that belongs to the Hornborn (00_hornborn_trait.txt), the horned born among
-# peoples who are not. Clannish: strong same_opinion, a mild distrust of the unhorned.
+# peoples who are not. Clannish: strong kinship, a mild distrust of the settled peoples.
 phenotype_horned = {
     physical = yes
     inherit_chance = 0
@@ -334,11 +467,26 @@ phenotype_horned = {
         phenotype_sylvan
     }
     icon = "horned.dds"
+    desc = {
+        first_valid = {
+            triggered_desc = {
+                trigger = { NOT = { exists = this } }
+                desc = trait_phenotype_horned_desc
+            }
+            desc = trait_phenotype_horned_character_desc
+        }
+    }
 
     prowess = 2
     martial = 1
     health = 0.25
     movement_speed = 0.05
-    same_opinion = 10
-    opposite_opinion = -5
+
+    compatibility = {
+        phenotype_horned = @race_kin
+        phenotype_human = @race_cool
+        phenotype_gracile = @race_cool
+        phenotype_stocky = @race_cool
+        phenotype_diminutive = @race_cool
+    }
 }

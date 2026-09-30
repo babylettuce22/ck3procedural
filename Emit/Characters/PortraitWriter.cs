@@ -259,7 +259,7 @@ public static class PortraitWriter
             added.Append($"\n{indent}gen_race_skin={{ \"gen_skin_human\" 0 \"gen_skin_human\" 0 }}");
 
         // The pointed-ear gene, likewise ours and likewise registered on every map. Only the elves'
-        // ethnicities (high, wood, deepkin) name it; everyone else gets the empty template.
+        // ethnicities (high, wood, dusk) name it; everyone else gets the empty template.
         if (!seen.Contains(RaceHeadWriter.Gene))
             added.Append($"\n{indent}{RaceHeadWriter.Gene}={{ \"{RaceHeadWriter.NoneTemplate}\" 0 \"{RaceHeadWriter.NoneTemplate}\" 0 }}");
 
@@ -270,6 +270,10 @@ public static class PortraitWriter
         // The giantkin face, which only giantkin ethnicities name.
         if (!seen.Contains(GiantFace.Gene))
             added.Append($"\n{indent}{GiantFace.Gene}={{ \"{GiantFace.NoneTemplate}\" 0 \"{GiantFace.NoneTemplate}\" 0 }}");
+
+        // The orc brow, which only orc ethnicities name.
+        if (!seen.Contains(OrcBrow.Gene))
+            added.Append($"\n{indent}{OrcBrow.Gene}={{ \"{OrcBrow.NoneTemplate}\" 0 \"{OrcBrow.NoneTemplate}\" 0 }}");
 
         // The horns' skin mound (static in Core, always registered)...
         if (!seen.Contains(Horns.BossGene))

@@ -1257,6 +1257,7 @@ colony_refresh_presence_effect = {
 		limit = { has_character_modifier = overseeing_the_settlement }
 		remove_character_modifier = overseeing_the_settlement
 	}
+	colony_remove_oversight_yield_effect = yes
 
 	every_held_title = {
 		limit = {
@@ -1277,7 +1278,50 @@ colony_refresh_presence_effect = {
 		location.county ?= {
 			add_county_modifier = settlement_overseen
 		}
+
+		# What the colony renders him, by how far along it is. See overseeing_yield_gold_1 for why
+		# this is a ladder and why a tribal lord is paid in prestige. The rung is read here, so a colony
+		# that grows while he is in it pays the new rate from the next refresh — settlement_02/03's
+		# on_complete asks for one.
+		location.county.title_province ?= { save_scope_as = overseen_province }
+		if = {
+			limit = { exists = scope:overseen_province }
+			if = {
+				limit = { government_has_flag = government_is_tribal }
+				if = {
+					limit = { scope:overseen_province = { has_building = settlement_03 } }
+					add_character_modifier = overseeing_yield_prestige_3
+				}
+				else_if = {
+					limit = { scope:overseen_province = { has_building = settlement_02 } }
+					add_character_modifier = overseeing_yield_prestige_2
+				}
+				else = { add_character_modifier = overseeing_yield_prestige_1 }
+			}
+			else = {
+				if = {
+					limit = { scope:overseen_province = { has_building = settlement_03 } }
+					add_character_modifier = overseeing_yield_gold_3
+				}
+				else_if = {
+					limit = { scope:overseen_province = { has_building = settlement_02 } }
+					add_character_modifier = overseeing_yield_gold_2
+				}
+				else = { add_character_modifier = overseeing_yield_gold_1 }
+			}
+		}
 	}
+}
+
+# Character scope. Takes off whichever oversight yield he carries. Every removal of
+# overseeing_the_settlement must be paired with this, or the income outlives the presence.
+colony_remove_oversight_yield_effect = {
+	if = { limit = { has_character_modifier = overseeing_yield_gold_1 }  remove_character_modifier = overseeing_yield_gold_1 }
+	if = { limit = { has_character_modifier = overseeing_yield_gold_2 }  remove_character_modifier = overseeing_yield_gold_2 }
+	if = { limit = { has_character_modifier = overseeing_yield_gold_3 }  remove_character_modifier = overseeing_yield_gold_3 }
+	if = { limit = { has_character_modifier = overseeing_yield_prestige_1 }  remove_character_modifier = overseeing_yield_prestige_1 }
+	if = { limit = { has_character_modifier = overseeing_yield_prestige_2 }  remove_character_modifier = overseeing_yield_prestige_2 }
+	if = { limit = { has_character_modifier = overseeing_yield_prestige_3 }  remove_character_modifier = overseeing_yield_prestige_3 }
 }
 
 
@@ -1551,6 +1595,48 @@ wilderness_clear_hardest_obstacle_effect = {
 	else_if = { limit = { has_building = scree_slopes }   remove_building = scree_slopes }
 }
 
+
+# Character scope: the liege answering wilderness_colonization.0051 with money. Needs
+# scope:petitioning_colonist and scope:struggling_colony, which that event saves.
+#
+# The aid pays for the work; it does not do it. The first version removed the blocker or added the
+# next settlement rung on the spot, which was wrong twice over: a year of hunting or ditching finished
+# the moment a letter was answered, and `add_building = settlement_02` does not upgrade a holding's
+# primary building — the engine took settlement_01 out of the primary slot and filed the new rung in
+# an ordinary building slot, leaving a colony with no primary building at all.
+#
+# CK3 has no script effect that starts construction of a province building (begin_create_holding is
+# holdings only; the domicile effects are domiciles only). What it has is
+# ai_attempt_to_build_building_effect, which runs the AI's own build pass: the colonist, now holding
+# the coin, starts the job through the build queue like any other construction. The chain upgrade is
+# the engine's, so the primary slot is handled correctly, and the building's own on_complete fires
+# the clearing events and the Wilds catalyst — which is why nothing here fires them.
+#
+# The petition only ever comes from an AI colonist (wilderness_yearly_colonist_development_aid_check),
+# and every clearing and settlement rung weighs +1000 for a colonist, so the pass picks the work the
+# money was sent for. If construction is already under way it starts nothing and the coin stays in
+# the colonist's chest for the next job, which is where a liege's gift would have gone anyway.
+colony_aid_fund_works_effect = {
+	pay_short_term_gold = {
+		target = scope:petitioning_colonist
+		gold = scope:struggling_colony.var:colony_aid_cost
+	}
+
+	scope:petitioning_colonist = { ai_attempt_to_build_building_effect = yes }
+}
+
+# Landed-title scope (the colony county). Forgets what 0051 diagnosed, whichever way it was answered.
+colony_aid_clear_diagnosis_effect = {
+	remove_variable = clearing_beast_dens
+	remove_variable = clearing_bandit_camps
+	remove_variable = clearing_dense_growth
+	remove_variable = clearing_flooded_lands
+	remove_variable = clearing_scree_slopes
+	remove_variable = clearing_killing_cold
+	remove_variable = upgrading_settlement_01
+	remove_variable = upgrading_settlement_02
+	remove_variable = colony_aid_cost
+}
 
 wilderness_obstacle_cleared_effect = {
 	save_scope_as = cleared_province

@@ -1,0 +1,68 @@
+﻿l_english:
+ # Race inspector (events/gen_race_debug_events.txt) and its right-click door. Debug only.
+ gen_race_debug_inspect_interaction:0 "Race inspector"
+ gen_race_debug_inspect_interaction_desc:0 "Debug: show why [recipient.GetShortUIName] is the race they are: trait, ethnicity, culture head and parents side by side."
+
+ gen_race_debug.0001.t:0 "Race Inspector: [gen_rdbg_target.GetFullName]"
+
+ gen_race_debug.0001.desc.claims:0 "#high Trait:#! [gen_rdbg_target.Custom('GenRaceTrait')]\n#high Ethnicity:#! [gen_rdbg_target.Custom('GenRaceEthnicity')]\n#high Yearly pulse:#! [gen_rdbg_target.Custom('GenRacePulseRoute')]\n#weak Culture: [gen_rdbg_target.GetCulture.GetName]#!\n"
+ gen_race_debug.0001.desc.head:0 "\n#high Culture head:#! [gen_rdbg_head.GetShortUIName], [gen_rdbg_head.Custom('GenRaceTrait')]"
+ gen_race_debug.0001.desc.head_minority:0 " #weak (race from own ethnicity, so the pulse will not copy from them)#!"
+ gen_race_debug.0001.desc.no_head:0 "\n#high Culture head:#! none"
+ gen_race_debug.0001.desc.mother:0 "\n#high Mother:#! [gen_rdbg_target.GetMother.GetShortUIName], [gen_rdbg_target.GetMother.Custom('GenRaceTrait')]"
+ gen_race_debug.0001.desc.father:0 "\n#high Father:#! [gen_rdbg_target.GetFather.GetShortUIName], [gen_rdbg_target.GetFather.Custom('GenRaceTrait')]"
+
+ gen_race_debug.0001.desc.verdict_conflict:0 "\n\n#N Two races at once.#! The yearly pulse strips this back to one (fantasy races outrank human). Ruler designer or console, most likely."
+ gen_race_debug.0001.desc.verdict_contradicts:0 "\n\n#N Trait says human, ethnicity says otherwise.#! A minority member the reconcile has not reached. It should have run at game start; the yearly pulse catches them too."
+ gen_race_debug.0001.desc.verdict_undecided:0 "\n\n#N No race yet.#! Normal for somebody the engine invented this year; the pulse will decide from the route above."
+ gen_race_debug.0001.desc.verdict_mismatch:0 "\n\n#N Trait and ethnicity name different races.#! Expected for a child of two fantasy races, who takes one parent's race while the engine may roll the other's ethnicity. A bug on a history character."
+ gen_race_debug.0001.desc.verdict_mixed_line:0 "\n\n#P Mixed-line human.#! Carries a fantasy ethnicity from a parent but the birth roll came out human, which is what the flag records. Consistent."
+ gen_race_debug.0001.desc.verdict_ok:0 "\n\n#P No contradictions.#!"
+
+ gen_race_debug.0001.desc.markers:0 "\n#high Markers:#!"
+ gen_race_debug.0001.desc.m_from_gene:0 " race from own ethnicity;"
+ gen_race_debug.0001.desc.m_mixed_human:0 " mixed-line human flag;"
+ gen_race_debug.0001.desc.m_half_orc:0 " half-orc;"
+ gen_race_debug.0001.desc.m_long_lived:0 " long-lived race;"
+ gen_race_debug.0001.desc.m_hornborn:0 " Hornborn;"
+ gen_race_debug.0001.desc.m_horns:0 " horns: [gen_rdbg_target.Custom('GenRaceHornStyle')];"
+ gen_race_debug.0001.desc.m_horns_filed:0 " filed down;"
+ gen_race_debug.0001.desc.m_tusks:0 " tusks;"
+ gen_race_debug.0001.desc.m_tusk_broken:0 " a tusk broken;"
+ gen_race_debug.0001.desc.m_none:0 " none"
+
+ gen_race_debug.0001.desc.vs_you_different:0 "\n#high Against you:#! a different race, so the AI's cross-race marriage reluctance applies."
+ gen_race_debug.0001.desc.vs_you_same:0 "\n#high Against you:#! the same race, for marriage purposes."
+
+ gen_race_debug.0001.a:0 "Run the race pulse on them now"
+ gen_race_debug.0001.b:0 "Inspect their mother"
+ gen_race_debug.0001.c:0 "Inspect their father"
+ gen_race_debug.0001.d:0 "Inspect their culture head"
+ gen_race_debug.0001.e:0 "Close"
+
+ # Custom loc vocabulary (common/customizable_localization/00_gen_race_debug_loc.txt)
+ gen_race_debug_name_human:0 "human"
+ gen_race_debug_name_gracile:0 "high elf (Gracile)"
+ gen_race_debug_name_sylvan:0 "wood elf (Sylvan)"
+ gen_race_debug_name_stocky:0 "dwarf (Stocky)"
+ gen_race_debug_name_rough_hewn:0 "orc (Rough-Hewn)"
+ gen_race_debug_name_towering:0 "giantkin (Towering)"
+ gen_race_debug_name_diminutive:0 "gnome (Diminutive)"
+ gen_race_debug_name_dusk_adapted:0 "dusk elf (Umbral)"
+ gen_race_debug_name_horned:0 "hornkin (Horned)"
+ gen_race_debug_trait_none:0 "#N none yet#!"
+ gen_race_debug_trait_conflict:0 "#N more than one!#!"
+ gen_race_debug_ethnicity_silent:0 "no fantasy ethnicity #weak (so the culture decides)#!"
+
+ gen_race_debug_route_settled:0 "leaves them alone; their race is decided"
+ gen_race_debug_route_ethnicity:0 "would take it from their own ethnicity"
+ gen_race_debug_route_head:0 "would copy their culture head"
+ gen_race_debug_route_liege:0 "would copy their liege (same culture)"
+ gen_race_debug_route_host:0 "would copy their host (same culture)"
+ gen_race_debug_route_none:0 "#N has no source; waits for next year#!"
+
+ gen_race_debug_horns_ibex:0 "ibex"
+ gen_race_debug_horns_ram:0 "ram"
+ gen_race_debug_horns_forward:0 "forward"
+ gen_race_debug_horns_nubs:0 "nubs"
+ gen_race_debug_horns_unstyled:0 "no style yet"

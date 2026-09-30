@@ -73,7 +73,7 @@ internal sealed class AzgaarExportSummary
     private static string RaceName(RaceArchetype race) => race switch
     {
         RaceArchetype.HighElf => "Elves",
-        RaceArchetype.Deepkin => "Dark elves",
+        RaceArchetype.DuskElf => "Dusk elves",
         RaceArchetype.Dwarf => "Dwarves",
         RaceArchetype.Orc => "Orcs",
         RaceArchetype.Gnome => "Halflings",

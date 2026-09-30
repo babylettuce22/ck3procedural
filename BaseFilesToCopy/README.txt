@@ -77,7 +77,7 @@ Gated so a realistic map ships none of it: no race chips in the ruler designer, 
 no phenotype pulses. A few fantasy-adjacent things deliberately stay in Core because they are
 written into every mod regardless of mode:
   - common/genes/gen_race_skin.txt, gen_bs_elf_ears.txt, gen_bs_orc_tusks.txt,
-    gen_bs_horn_boss.txt and gen_bs_giant_face.txt — Emit/PortraitWriter.cs writes these genes into every persistent DNA
+    gen_bs_horn_boss.txt, gen_bs_giant_face.txt and gen_bs_orc_brow.txt —Emit/PortraitWriter.cs writes these genes into every persistent DNA
     record on every map, so the declarations must always exist (they are inert without the traits).
   - their loc lines in localization/english/gen_req_localization_l_english.yml.
 

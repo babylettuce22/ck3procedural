@@ -2385,6 +2385,10 @@ wilderness_colonization.0051 = {
 	}
 
 	# --- Option A: Fund the Work Completely (Generous) ---
+	#
+	# A and B pay for the work and the colonist starts it; neither does the work. See
+	# colony_aid_fund_works_effect for why, and for why the clearing events and the Wilds catalyst are
+	# no longer fired from here — the building's own on_complete fires them when the work is done.
 	option = {
 		name = wilderness_colonization.0051.a
 		skill = stewardship
@@ -2396,7 +2400,8 @@ wilderness_colonization.0051 = {
 			scope:struggling_colony = { has_variable = colony_aid_cost }
 			gold >= scope:struggling_colony.var:colony_aid_cost
 		}
-		remove_short_term_gold = scope:struggling_colony.var:colony_aid_cost
+
+		colony_aid_fund_works_effect = yes
 
 		scope:petitioning_colonist = {
 			add_opinion = {
@@ -2406,77 +2411,7 @@ wilderness_colonization.0051 = {
 			}
 		}
 
-		# The Wilds situation's catalyst, when the aid clears a blocker rather than upgrading the
-		# settlement. Fired here rather than inside the ladder below, once, the same as every other
-		# clearance route. See wilderness_clear_hardest_obstacle_effect.
-		if = {
-			limit = {
-				scope:struggling_colony = {
-					OR = {
-						has_variable = clearing_beast_dens
-						has_variable = clearing_bandit_camps
-						has_variable = clearing_dense_growth
-						has_variable = clearing_flooded_lands
-						has_variable = clearing_scree_slopes
-						has_variable = clearing_killing_cold
-					}
-				}
-			}
-			wilds_situation_obstacle_cleared_effect = { COUNTY = scope:struggling_colony }
-		}
-
-		scope:struggling_colony = {
-			title_province = {
-				if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_beast_dens } }
-					remove_building = beast_dens
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_bandit_camps } }
-					remove_building = bandit_camps
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_dense_growth } }
-					remove_building = dense_growth
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_flooded_lands } }
-					remove_building = flooded_lands
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_scree_slopes } }
-					remove_building = scree_slopes
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_killing_cold } }
-					remove_building = killing_cold
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = upgrading_settlement_01 } }
-					add_building = settlement_02
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = upgrading_settlement_02 } }
-					add_building = settlement_03
-				}
-			}
-
-			remove_variable = clearing_beast_dens
-			remove_variable = clearing_bandit_camps
-			remove_variable = clearing_dense_growth
-			remove_variable = clearing_flooded_lands
-			remove_variable = clearing_scree_slopes
-			remove_variable = clearing_killing_cold
-			remove_variable = upgrading_settlement_01
-			remove_variable = upgrading_settlement_02
-			remove_variable = colony_aid_cost
-		}
+		scope:struggling_colony = { colony_aid_clear_diagnosis_effect = yes }
 
 		stress_impact = {
 			generous = minor_stress_impact_loss
@@ -2505,7 +2440,8 @@ wilderness_colonization.0051 = {
 			scope:struggling_colony = { has_variable = colony_aid_cost }
 			gold >= scope:struggling_colony.var:colony_aid_cost
 		}
-		remove_short_term_gold = scope:struggling_colony.var:colony_aid_cost
+
+		colony_aid_fund_works_effect = yes
 
 		scope:petitioning_colonist = {
 			add_opinion = {
@@ -2520,75 +2456,7 @@ wilderness_colonization.0051 = {
 			type = favor_hook
 		}
 
-		# The Wilds catalyst, as in option a.
-		if = {
-			limit = {
-				scope:struggling_colony = {
-					OR = {
-						has_variable = clearing_beast_dens
-						has_variable = clearing_bandit_camps
-						has_variable = clearing_dense_growth
-						has_variable = clearing_flooded_lands
-						has_variable = clearing_scree_slopes
-						has_variable = clearing_killing_cold
-					}
-				}
-			}
-			wilds_situation_obstacle_cleared_effect = { COUNTY = scope:struggling_colony }
-		}
-
-		scope:struggling_colony = {
-			title_province = {
-				if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_beast_dens } }
-					remove_building = beast_dens
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_bandit_camps } }
-					remove_building = bandit_camps
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_dense_growth } }
-					remove_building = dense_growth
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_flooded_lands } }
-					remove_building = flooded_lands
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_scree_slopes } }
-					remove_building = scree_slopes
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = clearing_killing_cold } }
-					remove_building = killing_cold
-					wilderness_obstacle_cleared_effect = yes
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = upgrading_settlement_01 } }
-					add_building = settlement_02
-				}
-				else_if = {
-					limit = { scope:struggling_colony = { has_variable = upgrading_settlement_02 } }
-					add_building = settlement_03
-				}
-			}
-
-			remove_variable = clearing_beast_dens
-			remove_variable = clearing_bandit_camps
-			remove_variable = clearing_dense_growth
-			remove_variable = clearing_flooded_lands
-			remove_variable = clearing_scree_slopes
-			remove_variable = clearing_killing_cold
-			remove_variable = upgrading_settlement_01
-			remove_variable = upgrading_settlement_02
-			remove_variable = colony_aid_cost
-		}
+		scope:struggling_colony = { colony_aid_clear_diagnosis_effect = yes }
 
 		stress_impact = {
 			cynical = minor_stress_impact_loss
@@ -2606,11 +2474,22 @@ wilderness_colonization.0051 = {
 	}
 
 	# --- Option C: Deny Aid ---
+	#
+	# Refusing is a choice only for a liege who could have paid. One who cannot gets D instead, and
+	# exactly one of the two is ever on offer. C also stands in when nothing was diagnosed at all, so
+	# the event always has an answer.
 	option = {
 		name = wilderness_colonization.0051.c
 		trait = callous
 		add_internal_flag = dangerous
 		highlight_portrait = scope:petitioning_colonist
+
+		trigger = {
+			OR = {
+				NOT = { scope:struggling_colony ?= { has_variable = colony_aid_cost } }
+				gold >= scope:struggling_colony.var:colony_aid_cost
+			}
+		}
 
 		if = {
 			limit = { exists = scope:petitioning_colonist }
@@ -2626,17 +2505,7 @@ wilderness_colonization.0051 = {
 
 		if = {
 			limit = { exists = scope:struggling_colony }
-			scope:struggling_colony = {
-				remove_variable = clearing_beast_dens
-				remove_variable = clearing_bandit_camps
-				remove_variable = clearing_dense_growth
-				remove_variable = clearing_flooded_lands
-				remove_variable = clearing_scree_slopes
-				remove_variable = clearing_killing_cold
-				remove_variable = upgrading_settlement_01
-				remove_variable = upgrading_settlement_02
-				remove_variable = colony_aid_cost
-			}
+			scope:struggling_colony = { colony_aid_clear_diagnosis_effect = yes }
 		}
 
 		stress_impact = {
@@ -2652,6 +2521,27 @@ wilderness_colonization.0051 = {
 			modifier = { add = 40 gold < { value = scope:struggling_colony.var:colony_aid_cost multiply = 1.5 } }
 			modifier = { factor = 0 has_trait = generous }
 		}
+	}
+
+	# --- Option D: The Treasury Cannot Cover It ---
+	#
+	# An empty chest is not a refusal, and the colonist is not insulted by it: no opinion either way.
+	# He asked, the answer was honest, and the work waits for his own coin. His cooldown was set when
+	# he wrote, so he does not ask again next year.
+	option = {
+		name = wilderness_colonization.0051.d
+		highlight_portrait = scope:petitioning_colonist
+
+		trigger = {
+			scope:struggling_colony ?= { has_variable = colony_aid_cost }
+			gold < scope:struggling_colony.var:colony_aid_cost
+		}
+
+		scope:struggling_colony = { colony_aid_clear_diagnosis_effect = yes }
+
+		custom_tooltip = colonize_aid_cannot_afford_tt
+
+		ai_chance = { base = 100 }
 	}
 }
 

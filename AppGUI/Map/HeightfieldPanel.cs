@@ -21,6 +21,10 @@ public sealed class HeightfieldPanel : Control
     private HeightfieldView _view = HeightfieldView.Default;
 
     private Bitmap? _frame;
+
+    // The view the frame on screen was rendered from. The compass reads this, not _view, so the
+    // needle turns with the picture rather than a frame ahead of it mid-drag.
+    private HeightfieldView _frameView = HeightfieldView.Default;
     private bool _running;
     private bool _dirty;
     private bool _draft;
@@ -159,6 +163,7 @@ public sealed class HeightfieldPanel : Control
                 {
                     _frame?.Dispose();
                     _frame = PreviewRenderer.ToBitmap(task.Result);
+                    _frameView = view;
                     Invalidate();
                 }
 
@@ -177,6 +182,16 @@ public sealed class HeightfieldPanel : Control
     {
         base.OnMouseDown(e);
         Focus();
+
+        // A click on the compass turns the camera to face north, keeping tilt, zoom and pan.
+        if (e.Button == MouseButtons.Left && _source is not null && OnCompass(e.Location))
+        {
+            _view = _view with { Yaw = 0 };
+            ViewChanged?.Invoke(_view);
+            Request(draft: false);
+            return;
+        }
+
         _drag = e.Location;
         _dragging = e.Button;
     }
@@ -266,6 +281,58 @@ public sealed class HeightfieldPanel : Control
         g.PixelOffsetMode = PixelOffsetMode.Half;
 
         g.DrawImage(_frame, new Rectangle(0, 0, Width, Height));
+
+        DrawCompass(g);
+    }
+
+    private const int CompassRadius = 26;
+    private const int CompassMargin = 14;
+
+    private PointF CompassCentre => new(Width - CompassMargin - CompassRadius, Height - CompassMargin - CompassRadius);
+
+    private bool OnCompass(Point p)
+    {
+        var c = CompassCentre;
+        double dx = p.X - c.X, dy = p.Y - c.Y;
+        return dx * dx + dy * dy <= CompassRadius * CompassRadius;
+    }
+
+    /// <summary>
+    /// A dial in the corner with the needle pointing at north on screen. The field runs +X east and
+    /// +Y north, and the camera looks along (sin yaw, cos yaw), so north lands on screen at
+    /// (-sin yaw, -cos yaw) in y-down pixels — straight up at yaw 0, up-left at the default.
+    /// </summary>
+    private void DrawCompass(Graphics g)
+    {
+        var c = CompassCentre;
+        float r = CompassRadius;
+        double yaw = _frameView.Yaw;
+
+        PointF At(double angle, float dist) =>
+            new(c.X - (float)Math.Sin(angle) * dist, c.Y - (float)Math.Cos(angle) * dist);
+
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.PixelOffsetMode = PixelOffsetMode.Default;
+
+        using (var face = new SolidBrush(Color.FromArgb(170, 20, 24, 32)))
+            g.FillEllipse(face, c.X - r, c.Y - r, 2 * r, 2 * r);
+        using (var rim = new Pen(Color.FromArgb(200, 150, 158, 172), 1.2f))
+            g.DrawEllipse(rim, c.X - r, c.Y - r, 2 * r, 2 * r);
+
+        // East, south and west as short ticks; north gets the red end of the needle.
+        using (var tick = new Pen(Color.FromArgb(200, 150, 158, 172), 1.5f))
+            for (int q = 1; q < 4; q++)
+                g.DrawLine(tick, At(yaw - q * Math.PI / 2, r - 6), At(yaw - q * Math.PI / 2, r - 2));
+
+        var tip = At(yaw, r - 11);
+        var tail = At(yaw + Math.PI, r - 11);
+        var left = At(yaw + Math.PI / 2, 4.5f);
+        var right = At(yaw - Math.PI / 2, 4.5f);
+
+        using (var north = new SolidBrush(Color.FromArgb(220, 70, 60)))
+            g.FillPolygon(north, new[] { tip, left, right });
+        using (var south = new SolidBrush(Color.FromArgb(215, 220, 228)))
+            g.FillPolygon(south, new[] { tail, right, left });
     }
 
     protected override void Dispose(bool disposing)

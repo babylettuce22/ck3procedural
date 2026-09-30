@@ -1,0 +1,27 @@
+﻿# Right-click anyone -> Race inspector. Debug only.
+#
+# The door into gen_race_debug.0001 for characters other than you; the debug panel's Events tab
+# covers you. Shape copied from vanilla's change_character_weight_interaction
+# (common/character_interactions/00_debug_interactions.txt): the debug category, no range limit,
+# auto-accepted.
+
+gen_race_debug_inspect_interaction = {
+	category = interaction_debug_main
+	use_diplomatic_range = no
+	ignores_pending_interaction_block = yes
+	common_interaction = no
+	icon = icon_contract_modification_single
+
+	desc = gen_race_debug_inspect_interaction_desc
+
+	is_shown = {
+		debug_only = yes
+	}
+
+	on_accept = {
+		scope:recipient = { save_scope_as = gen_rdbg_target }
+		scope:actor = { trigger_event = gen_race_debug.0001 }
+	}
+
+	auto_accept = yes
+}

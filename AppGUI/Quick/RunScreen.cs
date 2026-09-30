@@ -40,6 +40,9 @@ internal sealed class RunScreen : Panel
     /// </summary>
     public event Action? ContinueHistoryRequested;
 
+    /// <summary>The done view's "See in 3D": the written world's CK3 ground, draped over its relief.</summary>
+    public event Action? See3DRequested;
+
     private enum Mode { Idle, Running, History, Done }
     private Mode _mode;
     private bool _failed;
@@ -99,6 +102,7 @@ internal sealed class RunScreen : Panel
     private readonly MapPreview _doneMap = new();
     private readonly PillButton _launch = new() { Text = "Launch Crusader Kings III", Kind = PillKind.Primary, Glyph = "" };
     private readonly PillButton _openFolder = new() { Text = "Open mod folder", Glyph = "" };
+    private readonly PillButton _see3d = new() { Text = "See in 3D", Glyph = "" };
     private readonly PillButton _customize = new() { Text = "Customize in Complex", Glyph = "" };
     private readonly PillButton _another = new() { Text = "Make another", Kind = PillKind.Quiet, Glyph = "" };
     private readonly PillButton _retry = new() { Text = "Back to review", Kind = PillKind.Primary, Glyph = "" };
@@ -122,6 +126,7 @@ internal sealed class RunScreen : Panel
         _cancel.Name = namePrefix + "Cancel";
         _launch.Name = namePrefix + "Launch";
         _openFolder.Name = namePrefix + "OpenFolder";
+        _see3d.Name = namePrefix + "See3D";
         _customize.Name = namePrefix + "Customize";
         _another.Name = namePrefix + "Another";
         _retry.Name = namePrefix + "Retry";
@@ -296,7 +301,7 @@ internal sealed class RunScreen : Panel
         var picture = fromHistory ? _historyMap.Image : _runMap.Image;
         _doneMap.Image = picture is { } img ? new Bitmap(img) : null;
         _doneMap.Chip = "Drawing the realms…";
-        foreach (var b in (Control[])[_launch, _openFolder, _customize, _another]) b.Visible = true;
+        foreach (var b in (Control[])[_launch, _openFolder, _see3d, _customize, _another]) b.Visible = true;
         foreach (var b in (Control[])[_retry, _details]) b.Visible = false;
         _continueHistory.Visible = _historyOffered;
         _continueHistory.Text = ask ? "Simulate its history" : "Continue its history";
@@ -328,7 +333,7 @@ internal sealed class RunScreen : Panel
         _donePath.Text = "";
         _doneMap.Image = _runMap.Image is { } img ? new Bitmap(img) : null;
         _doneMap.Chip = cancelled ? "Cancelled" : "Stopped here";
-        foreach (var b in (Control[])[_launch, _openFolder, _customize, _another, _continueHistory]) b.Visible = false;
+        foreach (var b in (Control[])[_launch, _openFolder, _see3d, _customize, _another, _continueHistory]) b.Visible = false;
         foreach (var b in (Control[])[_retry, _details]) b.Visible = true;
         HandFeedToDone("Made before it stopped");
         Show(_donePanel);
@@ -627,11 +632,13 @@ internal sealed class RunScreen : Panel
 
     private void BuildDoneView()
     {
-        _donePanel.Controls.AddRange([_doneTitle, _doneSubtitle, _donePath, _doneMap, _launch, _openFolder, _continueHistory, _customize,
+        _donePanel.Controls.AddRange([_doneTitle, _doneSubtitle, _donePath, _doneMap, _launch, _openFolder, _continueHistory, _see3d, _customize,
             _another, _retry, _details, _talliesTitle, _tallies]);
         _continueHistory.Click += (_, _) => ContinueHistoryRequested?.Invoke();
         _launch.Click += (_, _) => LaunchRequested?.Invoke();
         _openFolder.Click += (_, _) => OpenFolderRequested?.Invoke();
+        _see3d.Click += (_, _) => See3DRequested?.Invoke();
+        _tips.SetToolTip(_see3d, "Look at the world in relief, wearing its ground as CK3's terrain textures paint it.");
         _customize.Click += (_, _) => CustomizeRequested?.Invoke();
         _details.Click += (_, _) => CustomizeRequested?.Invoke();
         _another.Click += (_, _) => AnotherRequested?.Invoke();
@@ -657,6 +664,8 @@ internal sealed class RunScreen : Panel
             List<Control> buttons = _failed ? [_retry, _details] : [_launch, _openFolder, _customize, _another];
             // Beside Launch while it is still a question; after Open mod folder once it has been run.
             if (!_failed && _historyOffered) buttons.Insert(_historyStarted ? 2 : 1, _continueHistory);
+            // Beside the history button, or Launch when there is none.
+            if (!_failed) buttons.Insert(buttons.IndexOf(_historyOffered ? _continueHistory : _launch) + 1, _see3d);
             foreach (var b in buttons) if (b is PillButton p) p.FitWidth();
 
             // Buttons flow into as many rows as the map's width needs.

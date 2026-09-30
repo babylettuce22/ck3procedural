@@ -11,9 +11,11 @@ namespace Ck3MapGen.MapGen;
 /// <param name="MaskLo">Ear-bone skin weight below which a vertex does not move. Weighting fades out
 /// across the join with the skull, so this keeps the cheek and scalp still.</param>
 /// <param name="PivotHeight">Where along the ear's height (0 lobe, 1 top) the stretch starts from.</param>
+/// <param name="Curl">How far the tip bends out through the flap (grows as t^2.5): a leaf's flick.</param>
+/// <param name="Bulge">How much wider the flap gets mid-way (sin πt): a leaf's belly.</param>
 internal sealed record EarShape(
     double Length, double Out, double Up, double Back, double Taper, double Thin,
-    double MaskLo = 0.25, double PivotHeight = 0.45)
+    double MaskLo = 0.25, double PivotHeight = 0.45, double Curl = 0, double Bulge = 0)
 {
     /// <summary>
     /// Long, swept up and back, tapering to a fine point. Seen in game 2026-09-28 at Out 0.22; raised
@@ -21,6 +23,20 @@ internal sealed record EarShape(
     /// portraits in (0.50 began to splay).
     /// </summary>
     public static readonly EarShape HighElf = new(Length: 4.2, Out: 0.40, Up: 0.80, Back: 0.56, Taper: 0.72, Thin: 0.35);
+
+    /// <summary>
+    /// Wood elves: a leaf beside the high elf's blade — shorter, a fuller belly, and the tip flicking
+    /// outward. A plain shorter ear read as a small high-elf ear from the front; the curl is what sets
+    /// it apart. "Leaf B" of the renders of 2026-09-29 (<c>Desktop/ck3devtools/ear_probe/styles.py</c>).
+    /// </summary>
+    public static readonly EarShape Sylvan = new(Length: 3.3, Out: 0.50, Up: 0.70, Back: 0.40, Taper: 0.66, Thin: 0.28,
+        Curl: 1.5, Bulge: 0.32);
+
+    /// <summary>
+    /// Dusk elves (drow): long and narrow, swept back along the skull almost level. Picked over a
+    /// "blade" that stood straight out, as the style that still reads as kin to the high elves.
+    /// </summary>
+    public static readonly EarShape Drow = new(Length: 5.0, Out: 0.30, Up: 0.42, Back: 0.86, Taper: 0.82, Thin: 0.40);
 }
 
 /// <summary>
@@ -58,6 +74,8 @@ internal static class PointedEars
     public const string Gene = "gen_bs_elf_ears";
     public const string NoneTemplate = "gen_elf_ears_none";
     public const string HighTemplate = "gen_elf_ears_high";
+    public const string SylvanTemplate = "gen_elf_ears_sylvan";
+    public const string DrowTemplate = "gen_elf_ears_drow";
 
     public const string LeftEarBone = "bn_h_ear_l_main";
     public const string RightEarBone = "bn_h_ear_r_main";
@@ -181,10 +199,10 @@ internal static class PointedEars
             double t1 = Math.Min(1.0, t);
 
             double along2 = along + s.Length * t * t;
-            double u2 = u * (1.0 - s.Taper * Math.Pow(t1, 1.5));
+            double u2 = u * (1.0 - s.Taper * Math.Pow(t1, 1.5)) * (1.0 + s.Bulge * Math.Sin(Math.PI * t1));
             double h2 = h * (1.0 - s.Thin * t1 * t1);
 
-            var target = Add(pivot, Add(Add(Mul(dir, along2), Mul(across, u2)), Mul(through, h2 + mid)));
+            var target = Add(pivot, Add(Add(Mul(dir, along2), Mul(across, u2)), Mul(through, h2 + mid + s.Curl * Math.Pow(t1, 2.5))));
             for (int k = 0; k < 3; k++)
             {
                 double old = p[v * 3 + k];

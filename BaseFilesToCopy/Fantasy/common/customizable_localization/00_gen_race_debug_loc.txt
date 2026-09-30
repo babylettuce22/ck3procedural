@@ -1,0 +1,180 @@
+﻿# The race inspector's vocabulary: one short phrase per answer, for gen_race_debug.0001.
+#
+# A character's race is three separate claims that are supposed to agree, and most race bugs have
+# been two of them disagreeing:
+#
+#   GenRaceTrait      what the phenotype trait says                  (00_phenotype_traits.txt)
+#   GenRaceEthnicity  what the engine-rolled ethnicity says          (99_gen_race_ethnicity_triggers.txt)
+#   GenRacePulseRoute where gen_assign_phenotype_effect would take   (00_phenotype_effects.txt)
+#                     this character's race from, if it ran now
+#
+# GenRacePulseRoute mirrors the branch order of gen_assign_phenotype_effect exactly. If that effect
+# changes, change this with it, or the inspector will describe a pulse that no longer exists.
+#
+# Keys in localization/english/gen_race_debug_l_english.yml.
+
+GenRaceTrait = {
+	type = character
+
+	# Two races at once first, so a doubled character never reads as whichever trait won the list.
+	text = {
+		trigger = { gen_has_conflicting_phenotype_trigger = yes }
+		localization_key = gen_race_debug_trait_conflict
+	}
+	text = {
+		trigger = { has_trait = phenotype_gracile }
+		localization_key = gen_race_debug_name_gracile
+	}
+	text = {
+		trigger = { has_trait = phenotype_sylvan }
+		localization_key = gen_race_debug_name_sylvan
+	}
+	text = {
+		trigger = { has_trait = phenotype_stocky }
+		localization_key = gen_race_debug_name_stocky
+	}
+	text = {
+		trigger = { has_trait = phenotype_rough_hewn }
+		localization_key = gen_race_debug_name_rough_hewn
+	}
+	text = {
+		trigger = { has_trait = phenotype_towering }
+		localization_key = gen_race_debug_name_towering
+	}
+	text = {
+		trigger = { has_trait = phenotype_diminutive }
+		localization_key = gen_race_debug_name_diminutive
+	}
+	text = {
+		trigger = { has_trait = phenotype_dusk_adapted }
+		localization_key = gen_race_debug_name_dusk_adapted
+	}
+	text = {
+		trigger = { has_trait = phenotype_horned }
+		localization_key = gen_race_debug_name_horned
+	}
+	text = {
+		trigger = { has_trait = phenotype_human }
+		localization_key = gen_race_debug_name_human
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_race_debug_trait_none
+	}
+}
+
+GenRaceEthnicity = {
+	type = character
+
+	text = {
+		trigger = { gen_is_high_elf_ethnicity_trigger = yes }
+		localization_key = gen_race_debug_name_gracile
+	}
+	text = {
+		trigger = { gen_is_wood_elf_ethnicity_trigger = yes }
+		localization_key = gen_race_debug_name_sylvan
+	}
+	text = {
+		trigger = { gen_is_dwarf_ethnicity_trigger = yes }
+		localization_key = gen_race_debug_name_stocky
+	}
+	text = {
+		trigger = { gen_is_orc_ethnicity_trigger = yes }
+		localization_key = gen_race_debug_name_rough_hewn
+	}
+	text = {
+		trigger = { gen_is_giantkin_ethnicity_trigger = yes }
+		localization_key = gen_race_debug_name_towering
+	}
+	text = {
+		trigger = { gen_is_gnome_ethnicity_trigger = yes }
+		localization_key = gen_race_debug_name_diminutive
+	}
+	text = {
+		trigger = { gen_is_deepkin_ethnicity_trigger = yes }
+		localization_key = gen_race_debug_name_dusk_adapted
+	}
+	text = {
+		trigger = { gen_is_hornkin_ethnicity_trigger = yes }
+		localization_key = gen_race_debug_name_horned
+	}
+	# Silent, not human. A human ethnicity and a history character with no rolled fantasy ethnicity
+	# look the same to script, and gen_assign_phenotype_from_genes_effect treats both as "the body
+	# said nothing, ask the culture".
+	text = {
+		fallback = yes
+		localization_key = gen_race_debug_ethnicity_silent
+	}
+}
+
+GenRacePulseRoute = {
+	type = character
+
+	text = {
+		trigger = { gen_has_phenotype_trigger = yes }
+		localization_key = gen_race_debug_route_settled
+	}
+	text = {
+		trigger = { gen_has_fantasy_race_ethnicity_trigger = yes }
+		localization_key = gen_race_debug_route_ethnicity
+	}
+	text = {
+		trigger = {
+			culture.culture_head ?= {
+				gen_has_phenotype_trigger = yes
+				NOT = { has_character_flag = gen_phenotype_from_gene }
+			}
+		}
+		localization_key = gen_race_debug_route_head
+	}
+	text = {
+		trigger = {
+			save_temporary_scope_as = gen_rdbg_route_self
+			liege ?= {
+				gen_has_phenotype_trigger = yes
+				has_same_culture_as = scope:gen_rdbg_route_self
+			}
+		}
+		localization_key = gen_race_debug_route_liege
+	}
+	text = {
+		trigger = {
+			save_temporary_scope_as = gen_rdbg_route_self
+			host ?= {
+				gen_has_phenotype_trigger = yes
+				has_same_culture_as = scope:gen_rdbg_route_self
+			}
+		}
+		localization_key = gen_race_debug_route_host
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_race_debug_route_none
+	}
+}
+
+# Horn style, for the markers line. Only asked about characters with horns.
+GenRaceHornStyle = {
+	type = character
+
+	text = {
+		trigger = { has_character_flag = gen_horn_style_ibex }
+		localization_key = gen_race_debug_horns_ibex
+	}
+	text = {
+		trigger = { has_character_flag = gen_horn_style_ram }
+		localization_key = gen_race_debug_horns_ram
+	}
+	text = {
+		trigger = { has_character_flag = gen_horn_style_forward }
+		localization_key = gen_race_debug_horns_forward
+	}
+	text = {
+		trigger = { has_character_flag = gen_horn_style_nubs }
+		localization_key = gen_race_debug_horns_nubs
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_race_debug_horns_unstyled
+	}
+}

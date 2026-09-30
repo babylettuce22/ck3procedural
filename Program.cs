@@ -690,6 +690,34 @@ public static class Program
                     };
                     break;
 
+                // A custom race mix, as the grid's Custom Race Mix rows: "human=40,dwarf=80,gnome=0".
+                // Races not named keep their default weight; human is a percentage of the land, the
+                // rest are weights. Needs --races to turn races on.
+                case "--race-mix" when i + 1 < args.Length:
+                    cfg.CustomRaceMix = true;
+                    foreach (string pair in args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    {
+                        var kv = pair.Split('=', 2, StringSplitOptions.TrimEntries);
+                        if (kv.Length != 2 || !int.TryParse(kv[1], out int value))
+                            throw new ArgumentException($"--race-mix: '{pair}' is not race=number");
+                        switch (kv[0].ToLowerInvariant())
+                        {
+                            case "human": cfg.RaceMixHumanShare = value; break;
+                            case "dwarf": cfg.RaceMixDwarves = value; break;
+                            case "highelf": cfg.RaceMixHighElves = value; break;
+                            case "woodelf": cfg.RaceMixWoodElves = value; break;
+                            case "orc": cfg.RaceMixOrcs = value; break;
+                            case "gnome": cfg.RaceMixGnomes = value; break;
+                            case "giantkin": cfg.RaceMixGiantkin = value; break;
+                            case "duskelf":
+                            case "deepkin": cfg.RaceMixDuskElves = value; break;
+                            case "hornkin": cfg.RaceMixHornkin = value; break;
+                            default:
+                                throw new ArgumentException($"--race-mix: unknown race '{kv[0]}' (human, dwarf, highelf, woodelf, orc, gnome, giantkin, duskelf, hornkin)");
+                        }
+                    }
+                    break;
+
                 // Render the heightmap in 3D and write the frames out, without generating
                 // anything. The same renderer the GUI's Source view drives, reachable headlessly
                 // so a heightmap can be judged from a terminal or a script.

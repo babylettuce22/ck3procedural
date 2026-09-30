@@ -667,7 +667,7 @@ public static class Cultures
             (["tradition_stalwart_defenders", "tradition_winter_warriors", "tradition_only_the_strong"],
              ["tradition_stalwart_defenders", "tradition_winter_warriors", "tradition_only_the_strong"]),
         ],
-        [RaceArchetype.Deepkin] =
+        [RaceArchetype.DuskElf] =
         [
             (["tradition_hidden_cities", "tradition_mystical_ancestors"],
              ["tradition_hidden_cities", "tradition_mystical_ancestors"]),

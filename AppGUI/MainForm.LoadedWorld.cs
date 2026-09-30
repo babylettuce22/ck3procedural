@@ -23,6 +23,12 @@ public sealed partial class MainForm
         _realmFocus.Clear();
         ClearLoadedFrames();
         _loadedWorld = loaded;
+        _loadedFieldShown = null;
+        _sourceShown = false;   // nothing reloads the generator's source over the mod's heightmap
+        _solid.SetField(null, null, "Nothing to show.");
+        // Cleared first so a drape chosen for the last world is not rendered for this one on open.
+        _drape.Items.Clear();
+        RefreshDrapeChoices();
         _lastModDir = loaded.World.DirectoryPath;
         _titles.LoadExisting(loaded.Roots);
 
@@ -56,11 +62,12 @@ public sealed partial class MainForm
         _grid.Enabled = true; // The loaded-world summary itself has read-only properties.
         _sections.Enabled = _settingsSearch.Enabled = _advanced.Enabled = false;
         _seed.Enabled = _roll.Enabled = _browse.Enabled = _recent.Enabled = _azgaar.Enabled = false;
-        _savePreset.Enabled = _loadPreset.Enabled = _preview.Enabled = _drape.Enabled = false;
+        _savePreset.Enabled = _loadPreset.Enabled = _preview.Enabled = false;
         _forge.Enabled = false;
 
-        // The 3D view shows a heightmap source, and an opened mod is edited without one.
-        _worldViewButtons[WorldView.ThreeD].Enabled = false;
+        // The 3D view shows the mod's own heightmap.png (ShowLoadedHeightmapAsync), wearing any view
+        // the loaded world can draw.
+        _drape.Enabled = enabled;
         _writeMod.Text = "Save edits";
         _writeMod.Enabled = enabled;
         _browse.Text = "Existing world";
@@ -119,6 +126,50 @@ public sealed partial class MainForm
         ShowReadout(_viewer.Zoom, null);
     }
 
+    /// <summary>The loaded world whose heightmap the 3D view holds or is reading, so it is read once per world.</summary>
+    private LoadedWorldView? _loadedFieldShown;
+
+    /// <summary>
+    /// The 3D view for an opened mod: its own map_data/heightmap.png, the heightmap the game draws.
+    /// Read when the 3D view is first opened, as the generator's source is, and not at open time —
+    /// a full-size heightmap is seconds to decode and pack, for a view nobody may ask for.
+    /// </summary>
+    private async Task ShowLoadedHeightmapAsync(LoadedWorldView loaded)
+    {
+        if (ReferenceEquals(_loadedFieldShown, loaded)) return;
+        _loadedFieldShown = loaded;
+
+        int generation = ++_sourceGeneration;
+        _sourceCts?.Cancel();
+        _solid.SetField(null, null, "Reading the mod's heightmap…");
+        try
+        {
+            var (source, packed) = await Task.Run(loaded.ReadHeightfields);
+            if (generation != _sourceGeneration || !ReferenceEquals(loaded, _loadedWorld)) return;
+
+            const string label = "Heightmap as shipped";
+            if (!label.Equals(_sourceMode.Items[0])) _sourceMode.Items[0] = label;
+            _solid.SetField(source, packed, "Nothing to show.");
+        }
+        catch (Exception error)
+        {
+            if (generation != _sourceGeneration) return;
+            _solid.SetField(null, null, $"Could not read the mod's heightmap: {error.Message}");
+        }
+    }
+
+    /// <summary>
+    /// A pixel of the view on show, moved onto the grid the loaded world's probes read. Every
+    /// political view is drawn on that grid already; the CK3 ground is drawn at its own, finer one.
+    /// </summary>
+    private Point OnLoadedGrid(Point pixel)
+    {
+        if (_loadedWorld is not { } loaded || !_rendered.TryGetValue(_view, out var shown)) return pixel;
+        int cols = Math.Max(1, loaded.Raster.Width / loaded.Step), rows = Math.Max(1, loaded.Raster.Height / loaded.Step);
+        if (shown.Width == cols) return pixel;
+        return new Point(pixel.X * cols / Math.Max(1, shown.Width), pixel.Y * rows / Math.Max(1, shown.Height));
+    }
+
     private void LoadedEditsChanged()
     {
         if (_loadedWorld is null) return;
@@ -129,9 +180,15 @@ public sealed partial class MainForm
         Post(() =>
         {
             if (_loadedWorld is null) return;
+            // The ground is drawn from the terrain files, which no edit here touches: kept rather
+            // than redrawn, which is seconds on a full-size map.
+            _rendered.Remove("CK3 ground", out var ground);
             ClearLoadedFrames();
+            if (ground is not null) _rendered["CK3 ground"] = ground;
             SelectLoadedView(_view);
             foreach (var inspector in _inspectors.Values) inspector.RefreshLoaded();
+            // The 3D view's drape too; not the ground, which no edit here changes and is seconds to redraw.
+            if (_drape.SelectedItem is string drape && drape != "CK3 ground") UpdateDrape();
         });
     }
 
@@ -181,6 +238,13 @@ public sealed partial class MainForm
         foreach (var inspector in _inspectors.Values) { inspector.Inspect([]); inspector.Hide(); }
         _loadedWorld = null;
         _realmFocus.Clear();
+
+        // The 3D view goes back to the generator's heightmap source the next time it is opened.
+        _loadedFieldShown = null;
+        _sourceGeneration++;
+        _sourceShown = false;
+        _solid.SetField(null, null, "Nothing to show.");
+        RefreshDrapeChoices();
         Text = "CK3 Procedural Map Tool";
         ClearLoadedFrames();
         _titles.UnloadExisting();
@@ -193,7 +257,6 @@ public sealed partial class MainForm
         // control the loaded mode switched off, through SetEnabled.
         ApplySource();
         _workspaceBar.SetSingle(false);
-        _worldViewButtons[WorldView.ThreeD].Enabled = true;
         SelectWorldView(WorldView.Map);
         SelectView("Relief");
         _status.Text = "Generator ready — choose a heightmap or build a preview";

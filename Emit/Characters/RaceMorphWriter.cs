@@ -46,7 +46,7 @@ public static class RaceMorphWriter
         (RaceArchetype.Orc, "phenotype_rough_hewn"),
         (RaceArchetype.Gnome, "phenotype_diminutive"),
         (RaceArchetype.Giantkin, "phenotype_towering"),
-        (RaceArchetype.Deepkin, "phenotype_dusk_adapted"),
+        (RaceArchetype.DuskElf, "phenotype_dusk_adapted"),
         (RaceArchetype.Hornkin, "phenotype_horned"),
     ];
 
@@ -74,6 +74,7 @@ public static class RaceMorphWriter
         (PointedEars.Gene, PointedEars.NoneTemplate),
         (OrcTusks.Gene, OrcTusks.NoneTemplate),
         (GiantFace.Gene, GiantFace.NoneTemplate),
+        (OrcBrow.Gene, OrcBrow.NoneTemplate),
     ];
 
     /// <summary>
@@ -205,14 +206,16 @@ public static class RaceMorphWriter
 
         ParadoxText.WriteBom(path, b.ToString());
         Console.WriteLine($"  race morphs written: {Races.Length + 3} shape (incl. half-elf, half-orc, mixed-human), " +
-                          $"{Races.Length + 1} skin{(horns ? $", {HornEntries} horn" : "")}, {maleEntries} male-face and 3 weight/muscle " +
+                          $"{Races.Length + 1} skin{(horns ? $", {HornEntries} horn" : "")}, {maleEntries} per-sex face and 3 weight/muscle " +
                           "enforcement entries to 99_gen_race_morphs.txt");
     }
 
     /// <summary>
-    /// The male face corrections of <see cref="RaceMorphs.MaleOf"/>, one entry per race that has
-    /// any. Its own group, after the shape group, because it overwrites one of that group's genes
-    /// (jaw width) for men and must stack with it rather than compete. Returns the entry count.
+    /// The per-sex face corrections — <see cref="RaceMorphs.MaleOf"/> for men and
+    /// <see cref="RaceMorphs.FemaleOf"/> for women — one entry per race and sex that has any. Its
+    /// own group, after the shape group, because it overwrites one of that group's genes (jaw width)
+    /// and must stack with it rather than compete. The women's entries share the group: a character
+    /// matches at most one sex. Returns the entry count. (The group keeps its original name.)
     /// </summary>
     private static int MaleFaceGroup(JominiBuilder b, float intensity)
     {
@@ -236,6 +239,22 @@ public static class RaceMorphWriter
                     using (b.Block("dna_modifiers"))
                         ForcedMorphs(b, morphs, intensity);
                     Weight(b, $"has_trait = {trait}", weight: 100, "is_female = no");
+                }
+
+                b.Blank();
+                count++;
+            }
+
+            foreach (var (archetype, trait) in Races)
+            {
+                var morphs = RaceMorphs.FemaleOf(archetype);
+                if (morphs.Count == 0) continue;
+
+                using (b.Block($"gen_race_female_face_{archetype.ToString().ToLowerInvariant()}"))
+                {
+                    using (b.Block("dna_modifiers"))
+                        ForcedMorphs(b, morphs, intensity);
+                    Weight(b, $"has_trait = {trait}", weight: 100, "is_female = yes");
                 }
 
                 b.Blank();
@@ -516,7 +535,7 @@ public static class RaceMorphWriter
     /// <c>gen_race_skin</c> template; ck3-tiger accepts that, but the game refuses it at load
     /// ("Reading an interface trigger 'has_gene' in forbidden area") and it answers no forever. So
     /// every minority-race member stayed phenotype_human with their race's skin in their DNA — seen
-    /// in game as a lowborn human with deepkin violet skin. <c>has_ethnicity</c> is script-legal, and
+    /// in game as a lowborn human with dusk elf violet skin. <c>has_ethnicity</c> is script-legal, and
     /// an engine-generated character's ethnicity is exactly the roll that gave them their genome.
     ///
     /// Generated because ethnicity keys are, and BaseFilesToCopy may not name them. All seven triggers

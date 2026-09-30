@@ -1087,6 +1087,12 @@ public sealed partial class MainForm : ChromeForm
     /// </summary>
     private void EnsureSourceShown()
     {
+        if (_loadedWorld is { } loaded)
+        {
+            ShowLoadedHeightmapAsync(loaded).Forget("loaded heightmap");
+            return;
+        }
+
         if (_sourceShown) return;
         _sourceShown = true;
 
@@ -1171,12 +1177,18 @@ public sealed partial class MainForm : ChromeForm
         var reset = Theme.MakeButton("Reset view", 82);
         reset.Click += (_, _) => _solid.ResetView();
 
-        _drape.Items.Add("Terrain preview");
+        _drape.Items.Add(HeightTints);
         _drape.SelectedIndex = 0;
-        _drape.SelectedIndexChanged += (_, _) => { if (!_drapeRefreshing) UpdateDrape(); };
+        _drape.SelectedIndexChanged += (_, _) =>
+        {
+            if (_drapeRefreshing) return;
+            _drapeTintsChosen = _drape.SelectedIndex == 0;
+            UpdateDrape();
+        };
         _tips.SetToolTip(_drape,
             "What the terrain wears: the built-in height tints, or any generated map mode " +
-            "draped over the relief. Fills in after a preview.");
+            "draped over the relief. Once a mod is written it wears CK3 ground, the game's own " +
+            "textures blended as CK3 blends them.");
 
         var export3d = Theme.MakeButton("Export…", 74);
         _tips.SetToolTip(export3d, "Save the current view as a PNG (Ctrl+E)");
@@ -1334,21 +1346,7 @@ public sealed partial class MainForm : ChromeForm
 
         try
         {
-            var (source, packed) = await Task.Run(() =>
-            {
-                var cfg = result.Config;
-                var full = Emit.MapDataWriter.ShippedHeightmap(cfg, result.Provinces, result.Terra);
-
-                var field = Heightfield.Downsample(
-                    full, cfg.Width, cfg.Height, Heightfield.PreviewCols);
-                var asRendered = Heightfield.Downsample(
-                    Emit.HeightmapPacker.Reconstruct(
-                        full, cfg.Width, cfg.Height, cfg.HeightmapSagBudget,
-                        Emit.HeightmapPacker.TileStepFor(cfg), cfg.BalanceNeighbourLods),
-                    cfg.Width, cfg.Height, Heightfield.PreviewCols);
-
-                return (field, asRendered);
-            });
+            var (source, packed) = await Task.Run(() => ProcessedFields(result));
 
             if (generation != _sourceGeneration) return;
 
@@ -1370,6 +1368,26 @@ public sealed partial class MainForm : ChromeForm
             // Not worth wiping a good frame over; the tab just keeps whatever it was showing.
             Console.WriteLine($"Could not prepare the processed heightmap for the 3D view: {error.Message}");
         }
+    }
+
+    /// <summary>
+    /// The shipped heightmap at preview size, and the same after the packer's round-trip. Seconds
+    /// of work on a full-size map; run it off the UI thread.
+    /// </summary>
+    private static (Heightfield Source, Heightfield Packed) ProcessedFields(GenerationResult result)
+    {
+        var cfg = result.Config;
+        var full = Emit.MapDataWriter.ShippedHeightmap(cfg, result.Provinces, result.Terra);
+
+        var field = Heightfield.Downsample(
+            full, cfg.Width, cfg.Height, Heightfield.PreviewCols);
+        var asRendered = Heightfield.Downsample(
+            Emit.HeightmapPacker.Reconstruct(
+                full, cfg.Width, cfg.Height, cfg.HeightmapSagBudget,
+                Emit.HeightmapPacker.TileStepFor(cfg), cfg.BalanceNeighbourLods),
+            cfg.Width, cfg.Height, Heightfield.PreviewCols);
+
+        return (field, asRendered);
     }
 
     /// <summary>Drops a processed heightmap that no longer describes what the next build ships.</summary>
@@ -2424,14 +2442,19 @@ public sealed partial class MainForm : ChromeForm
 
         _drapeRefreshing = true;
         _drape.Items.Clear();
-        _drape.Items.Add("Terrain preview");
+        _drape.Items.Add(HeightTints);
 
-        if (_result is not null)
+        bool world = _result is not null || _loadedWorld is not null;
+        if (world)
             foreach (var mode in MapModes.All)
                 if (Available(mode)) _drape.Items.Add(mode.Name);
 
+        // A written world wears its CK3 ground unless the tints were picked on purpose: the tints
+        // are a height key, not a look, and reading them as the game's ground is the mistake this
+        // default exists to stop. Before a write there is no ground to show, so they stay.
+        keep ??= _drapeTintsChosen ? null : GroundDrape;
         _drape.SelectedIndex = Math.Max(0, keep is null ? 0 : _drape.Items.IndexOf(keep));
-        _drape.Enabled = _result is not null;
+        _drape.Enabled = world;
         _drapeRefreshing = false;
 
         // Explicit rather than via the event: a kept selection keeps its index, and the drape
@@ -2441,7 +2464,28 @@ public sealed partial class MainForm : ChromeForm
 
     private void UpdateDrape()
     {
-        if (_result is null || _drape.SelectedIndex <= 0
+        int token = ++_drapeToken;
+
+        if (_loadedWorld is { } loaded)
+        {
+            string? view = _drape.SelectedIndex > 0 ? _drape.SelectedItem as string : null;
+            if (view is null || !loaded.Available(view)) { _solid.SetDrape(null); return; }
+
+            // Off the UI thread for the same reason as below: CK3 ground's first render decodes
+            // the game's textures. A newer choice, or another opened world, wins.
+            Task.Run(() => loaded.RenderImage(view)).ContinueWith(t =>
+            {
+                if (t.IsCompletedSuccessfully && token == _drapeToken && ReferenceEquals(loaded, _loadedWorld))
+                    _solid.SetDrape(t.Result);
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+            return;
+        }
+
+        // A drape from another world must not sit on this one's relief while the new one renders.
+        if (!ReferenceEquals(_drapedResult, _result)) _solid.SetDrape(null);
+        _drapedResult = _result;
+
+        if (_result is not { } result || _drape.SelectedIndex <= 0
             || _drape.SelectedItem is not string name
             || MapModes.Find(name) is not { } mode || !Available(mode))
         {
@@ -2449,8 +2493,31 @@ public sealed partial class MainForm : ChromeForm
             return;
         }
 
-        using (new WaitCursorFor(this)) _solid.SetDrape(mode.Render(_result, _written));
+        // Off the UI thread, as the Quick page renders its modes: CK3 ground decodes the game's
+        // textures on its first render (~1.3 s) and would otherwise freeze the window after every
+        // write. The tints stay on screen until it lands; a newer choice or result wins.
+        var written = _written;
+        Task.Run(() => mode.Render(result, written)).ContinueWith(t =>
+        {
+            if (t.IsCompletedSuccessfully && token == _drapeToken && ReferenceEquals(result, _result))
+                _solid.SetDrape(t.Result);
+        }, TaskScheduler.FromCurrentSynchronizationContext());
     }
+
+    /// <summary>The built-in hypsometric drape — a height key, not what the game draws.</summary>
+    private const string HeightTints = "Height tints";
+
+    /// <summary>The drape a written world defaults to.</summary>
+    private const string GroundDrape = "CK3 ground";
+
+    /// <summary>Set when the tints are picked by hand, so a refresh does not overrule it.</summary>
+    private bool _drapeTintsChosen;
+
+    /// <summary>Bumped per drape request; a render that finishes after a newer one is dropped.</summary>
+    private int _drapeToken;
+
+    /// <summary>The result the drape on screen belongs to.</summary>
+    private GenerationResult? _drapedResult;
 
     private void ApplySource()
     {
@@ -2681,7 +2748,10 @@ public sealed partial class MainForm : ChromeForm
                 // generator writes from; an opened mod has no world of its own to have built it.
                 if (MapGen.VanillaVocabulary.Current is null && Core.GameLocator.IsGameDir(gameDir))
                     MapGen.VanillaVocabulary.Read(gameDir);
-                return new LoadedWorldView(Core.LoadedWorld.Open(path));
+                return new LoadedWorldView(Core.LoadedWorld.Open(path))
+                {
+                    GameDir = Core.GameLocator.IsGameDir(gameDir) ? gameDir : null,
+                };
             });
             UseWaitCursor = false;
             AdoptLoadedWorld(world);
@@ -4304,7 +4374,7 @@ public sealed partial class MainForm : ChromeForm
     {
         if (_loadedWorld is not null)
         {
-            string under = pixel is { } loadedPixel ? _loadedWorld.Probe(_view, loadedPixel) : "";
+            string under = pixel is { } loadedPixel ? _loadedWorld.Probe(_view, OnLoadedGrid(loadedPixel)) : "";
             _readout.Text = under.Length > 0 ? $"{under}   ·   {zoom * 100:F0}%" : $"{_view}   {zoom * 100:F0}%";
             return;
         }

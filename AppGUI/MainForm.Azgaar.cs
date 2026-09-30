@@ -26,6 +26,7 @@ public sealed partial class MainForm
         _azgaarPage.LaunchRequested += LaunchGame;
         _azgaarPage.OpenFolderRequested += OpenModFolder;
         _azgaarPage.CustomizeRequested += CustomizeQuickWorld;
+        _azgaarPage.See3DRequested += () => ShowGroundIn3DAsync().Forget("3D ground");
         _azgaarPage.GameFolderRequested += PickGameFolder;
         _azgaarPage.GuideRequested += ShowAzgaarGuide;
         return _azgaarPage;

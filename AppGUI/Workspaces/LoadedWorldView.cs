@@ -30,11 +30,23 @@ public sealed class LoadedWorldView
     private readonly Dictionary<string, Title> _seatByCharacter = [];
     private readonly PreviewRenderer.ProvinceRaster _provinces;
 
+    /// <summary>Each title's colour field as the mod was opened, to tell which ones have been recoloured since.</summary>
+    private readonly Dictionary<string, string> _openedColours;
+
+    /// <summary>
+    /// Realms whose primary title has been given a new colour, by seat. Handed to the realm graph as
+    /// its kept colours, so the Realms view paints them in it; every other realm keeps the palette's
+    /// hue (see <see cref="RealmPalette"/> for why title colours are not the default). Kept up to
+    /// date in place by <see cref="RefreshShells"/>.
+    /// </summary>
+    private readonly Dictionary<Title, (byte R, byte G, byte B)> _recoloured = [];
+
     public LoadedWorldView(LoadedWorld world)
     {
         World = world;
         Raster = WorldRaster.Read(world);
         _entries = world.Entries.ToDictionary(e => (e.Kind, e.Key));
+        _openedColours = world.Titles.ToDictionary(p => p.Key, p => p.Value.Field("color")?.Read() ?? "");
 
         var perTier = new Dictionary<string, int>();
         foreach (var entry in world.Titles.Values)
@@ -95,7 +107,7 @@ public sealed class LoadedWorldView
             string? lord = titles.Select(t => World.Lieges.GetValueOrDefault(t.Key)).FirstOrDefault(l => l is not null);
             if (lord is not null && Titles.TryGetValue(lord, out var lordTitle)) liege[primary] = lordTitle;
         }
-        return RealmGraph.From(new RealmMap { HolderCounty = holderCounty, Liege = liege }, Counties);
+        return RealmGraph.From(new RealmMap { HolderCounty = holderCounty, Liege = liege }, Counties, _recoloured);
     }
 
     private IEnumerable<Title> Counties => MapGen.Titles.Flatten(Roots).Where(t => t.Tier == "c");
@@ -123,7 +135,11 @@ public sealed class LoadedWorldView
     }
 
     public bool Available(string mode) => mode is "Provinces" or "Counties" or "Duchies" or "Kingdoms" or "Empires"
-        or "Realms" or "Dynasties" or "Cultures" or "Faiths" or "Government" or "Wilderness" or "Development";
+        or "Realms" or "Dynasties" or "Cultures" or "Faiths" or "Government" or "Wilderness" or "Development"
+        or "CK3 ground";
+
+    /// <summary>The CK3 install the ground view takes its terrain textures from; found on demand when null.</summary>
+    public string? GameDir { get; init; }
 
     // --- Families, arms, names -------------------------------------------------------------------
 
@@ -164,6 +180,17 @@ public sealed class LoadedWorldView
             var entry = World.Titles[key];
             title.Name = entry.Name;
             title.Color = Rgb(entry);
+        }
+
+        _recoloured.Clear();
+        if (Realm is null) return;
+        foreach (var (key, holder) in World.Holders)
+        {
+            if (World.Titles.GetValueOrDefault(key)?.Field("color")?.Read() is not { } colour
+                || colour == _openedColours.GetValueOrDefault(key)
+                || !_seatByCharacter.TryGetValue(holder, out var seat)
+                || Realm.Primary(seat) != Titles[key]) continue;
+            _recoloured[seat] = Titles[key].Color;
         }
     }
 
@@ -275,8 +302,13 @@ public sealed class LoadedWorldView
 
     // --- Rendering --------------------------------------------------------------------------------
 
-    public Bitmap Render(string mode) => PreviewRenderer.ToBitmap(mode switch
+    public Bitmap Render(string mode) => PreviewRenderer.ToBitmap(RenderImage(mode));
+
+    /// <summary>A view as an image rather than a bitmap, which is what the 3D view drapes.</summary>
+    public PreviewRenderer.Image RenderImage(string mode) => mode switch
     {
+        "CK3 ground" => GroundPreview.Render(World.DirectoryPath, GameDir, Raster.Width, Raster.Height,
+            cell => Raster.Ids[cell] is var id && (id < 1 || id > _provinces.LandCount)),
         "Provinces" => PreviewRenderer.RenderTitles(_provinces, "b"),
         "Duchies" => PreviewRenderer.RenderTitles(_provinces, "d"),
         "Kingdoms" => PreviewRenderer.RenderTitles(_provinces, "k"),
@@ -293,7 +325,41 @@ public sealed class LoadedWorldView
         "Government" => PreviewRenderer.RenderByCounty(_provinces, c => PreviewRenderer.GovernmentColour(GovernmentOf(c) ?? "")),
         "Wilderness" => PreviewRenderer.RenderByCounty(_provinces, _ => ((byte)108, (byte)114, (byte)122)),
         _ => PreviewRenderer.RenderTitles(_provinces, "c"),
-    });
+    };
+
+    /// <summary>
+    /// The mod's own <c>map_data/heightmap.png</c> at 3D preview size, and the same after the
+    /// packer's round-trip for "As CK3 will render it". The round-trip runs at the default packing
+    /// settings, since the ones the mod was written with are not on disk. Seconds of work on a
+    /// full-size map, and the full heightmap is let go before it returns; run it off the UI thread.
+    /// </summary>
+    public (Heightfield Source, Heightfield Packed) ReadHeightfields()
+    {
+        string path = Path.Combine(World.DirectoryPath, "map_data", "heightmap.png");
+        if (!File.Exists(path)) throw new FileNotFoundException("the mod has no map_data/heightmap.png", path);
+
+        // L16 either way: an 8-bit heightmap widens by 257, which is the writer's own Step255.
+        using var image = SixLabors.ImageSharp.Image.Load<L16>(path);
+        int width = image.Width, height = image.Height;
+        var full = new ushort[(long)width * height];
+        image.ProcessPixelRows(rows =>
+        {
+            for (int y = 0; y < height; y++)
+            {
+                var row = rows.GetRowSpan(y);
+                long at = (long)y * width;
+                for (int x = 0; x < width; x++) full[at + x] = row[x].PackedValue;
+            }
+        });
+
+        var defaults = new Config.MapConfig { Width = width, Height = height };
+        var source = Heightfield.Downsample(full, width, height, Heightfield.PreviewCols);
+        var packed = Heightfield.Downsample(
+            Emit.HeightmapPacker.Reconstruct(full, width, height, defaults.HeightmapSagBudget,
+                Emit.HeightmapPacker.TileStepFor(defaults), defaults.BalanceNeighbourLods),
+            width, height, Heightfield.PreviewCols);
+        return (source, packed);
+    }
 
     public Bitmap RenderRealmsFocused(Title seat)
         => PreviewRenderer.ToBitmap(PreviewRenderer.RenderRealmsFocused(_provinces, Realm!, seat));

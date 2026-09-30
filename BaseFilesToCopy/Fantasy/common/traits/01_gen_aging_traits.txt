@@ -1,6 +1,6 @@
 ﻿# The long-lived races' replacement for vanilla elderly decay.
 #
-# Elves (phenotype_gracile) and deepkin (phenotype_dusk_adapted) carry `flag = is_immortal` in
+# Elves (phenotype_gracile) and dusk elves (phenotype_dusk_adapted) carry `flag = is_immortal` in
 # 00_phenotype_traits.txt, which turns off every vanilla age-ailment gate — no faltering heart, no
 # clouded eyes, no infirm. In their place this single trait arrives late in life (the onset event in
 # events/gen_aging_events.txt), climbs its track over decades (the yearly pulse in

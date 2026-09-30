@@ -508,6 +508,8 @@ public static partial class ContentWriter
             Wilderness = wilderness,
             Development = development,
             Holdings = holdings,
+            ModDir = modDir,
+            GameDir = gameDir,
             EraHoldings = eraHoldings,
             ProvinceHistory = provinceRows,
             WorldCenters = worldCenters,
@@ -918,8 +920,11 @@ public static partial class ContentWriter
 
             Source = azgaar is null ? "procedural" : "Azgaar import",
             Races = cfg.EnableFantasyEthnicities
-                ? cfg.RaceMode.ToString()
+                ? cfg.RaceMode + (cfg.CustomRaceMix ? " (custom mix)" : "")
                 : "human only",
+            // The same condition the Fantasy file set ships on, further up in this file.
+            FantasyRaces = cfg.EnableFantasyEthnicities
+                && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly,
             Wilderness = cfg.EnableWilderness,
             Magic = cfg.EnableMagic,
             Retinues = retinues is not null,

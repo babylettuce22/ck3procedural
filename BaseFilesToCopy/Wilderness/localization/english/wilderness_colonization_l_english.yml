@@ -416,6 +416,18 @@ wilderness_colonization.0029.t:0 "The Starving Winter"
  # --- Presence -----------------------------------------------------------------------------
  overseeing_the_settlement:0 "Overseeing the Settlement"
  overseeing_the_settlement_desc:0 "We are here. Not sending word, not reading reports — here, where the work is, for as long as we choose to stay."
+ overseeing_yield_gold_1:0 "Dues of a Palisade"
+ overseeing_yield_gold_1_desc:0 "The first harvests and pelts come to our table. It is not much, but it is ours."
+ overseeing_yield_gold_2:0 "Dues of a Growing Settlement"
+ overseeing_yield_gold_2_desc:0 "Fields, cartways and a market day. The settlement pays its lord what it can, and it can pay more each year."
+ overseeing_yield_gold_3:0 "Dues of an Established Colony"
+ overseeing_yield_gold_3_desc:0 "The colony is nearly a holding in its own right, and it pays like one."
+ overseeing_yield_prestige_1:0 "Chief Among the Settlers"
+ overseeing_yield_prestige_1_desc:0 "Our people see us felling timber beside them. That is worth more than coin."
+ overseeing_yield_prestige_2:0 "Founder of the Settlement"
+ overseeing_yield_prestige_2_desc:0 "The settlement is growing, and the tale of who built it grows with it."
+ overseeing_yield_prestige_3:0 "Founder of a People"
+ overseeing_yield_prestige_3_desc:0 "Songs are already sung of the chief who lived among the first settlers."
  settlement_overseen:0 "The Lord Is Here"
  settlement_overseen_desc:0 "Their lord sleeps within the palisade. Disputes are settled the same week, the work is inspected by whoever is paying for it, and nobody is waiting on a rider."
 
@@ -499,15 +511,17 @@ wilderness_colonization.0051.t:0 "A Plea from the Palisade"
  wilderness_colonization.0051.desc.upgrade_02:0 "\n\nThe colony is poised on the brink of full establishment, but lacks the coin to raise the final stone foundations and roads."
  wilderness_colonization.0051.desc.fallback:0 "\n\nThe local settlement chest is empty and tools are broken."
  
- wilderness_colonization.0051.desc.outro:0 "\n\n[petitioning_colonist.GetSheHe|U] asks for #bold [struggling_colony.MakeScope.Var('colony_aid_cost').GetValue|0] gold#! to immediately give assistance and resume work."
+ wilderness_colonization.0051.desc.outro:0 "\n\n[petitioning_colonist.GetSheHe|U] asks for #bold [struggling_colony.MakeScope.Var('colony_aid_cost').GetValue|0] gold#! so the work can begin."
 
- wilderness_colonization.0051.a:0 "Send the wagons with gold. Clear the way immediately."
+ wilderness_colonization.0051.a:0 "Send the wagons with gold. Let the work begin."
  wilderness_colonization.0051.b:0 "We will pay, but [petitioning_colonist.GetFirstNameNoTooltip] will owe us a heavy debt."
  wilderness_colonization.0051.c:0 "They were granted land, not an endless draft on our treasury."
+ wilderness_colonization.0051.d:0 "Our own coffers are bare. There is nothing to send."
 
- colonize_aid_funded_tt:0 "#P The gold is dispatched; the obstacle is cleared and work on [struggling_colony.GetName] advances immediately.#!"
- colonize_aid_hook_tt:0 "#P You fund the clearance immediately and gain a Hook on [petitioning_colonist.GetShortUIName].#!"
+ colonize_aid_funded_tt:0 "#P The gold goes to [petitioning_colonist.GetShortUIName], who begins the works on [struggling_colony.GetName]. They finish in the usual time.#!"
+ colonize_aid_hook_tt:0 "#P You pay for the works on [struggling_colony.GetName] and gain a Hook on [petitioning_colonist.GetShortUIName]. The works finish in the usual time.#!"
  colonize_aid_refused_tt:0 "#N [petitioning_colonist.GetShortUIName] is denied funds, leaving the obstacle in place.#!"
+ colonize_aid_cannot_afford_tt:0 "[petitioning_colonist.GetShortUIName] understands. The works wait for the colony's own coin, and nobody is offended."
  
  # --- The overseeing activity -----------------------------------------------------------------
  # Replaces oversee_colony_interaction, which could not hold a lord anywhere — see the note at the
@@ -736,7 +750,7 @@ return_home_from_colony_decision:0 "Return Home from the Colony"
  colonize_return_home_button_effect_tt:0 "Conclude overseeing this settlement and journey back to your capital."
  
 OVERSEE_COLONY_ACTIVITY_STATUS:0 "You are dwelling among the settlers, directing the expansion firsthand."
- OVERSEEING_THE_SETTLEMENT_TOOLTIP:0 "#T Overseeing the Settlement#!\n#positive @gold_icon! +2.0#! Monthly Income\n#negative @prestige_icon! -0.5#! Monthly Prestige\n\n#flavor The lord dwells in the palisade, directing the work firsthand.#!"
+ OVERSEEING_THE_SETTLEMENT_TOOLTIP:0 "#T Overseeing the Settlement#!\n#negative @prestige_icon! -0.5#! Monthly Prestige\n\nThe colony also pays its lord while he stays, more as it grows: #positive @gold_icon! +0.5 / +1.0 / +1.5#! Monthly Income by settlement level, or #positive @prestige_icon! +0.5 / +1.0 / +1.5#! Monthly Prestige for a tribal lord.\n\n#flavor The lord dwells in the palisade, directing the work firsthand.#!"
  SETTLEMENT_OVERSEEN_TOOLTIP:0 "#T Colony Growth#!\n#positive @development_icon! +30%#! Development Growth\n#positive @control_icon! +0.5#! Monthly Control Growth\n#positive +20#! County Opinion\n#positive -15%#! Construction Time\n\n#flavor A colony develops rapidly when its lord is present to govern it.#!"
  
  # --- Was promised colony, now what

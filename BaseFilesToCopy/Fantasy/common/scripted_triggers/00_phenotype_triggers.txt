@@ -59,7 +59,7 @@ gen_has_horn_style_trigger = {
 	}
 }
 
-# The three elves — high, wood and deepkin — who share the pointed ear. What a human child needs one
+# The three elves — high, wood and dusk — who share the pointed ear. What a human child needs one
 # parent to be to come out half-elf (gen_resolve_half_race_effect).
 gen_is_elf_phenotype_trigger = {
 	OR = {
@@ -163,7 +163,7 @@ gen_has_conflicting_phenotype_trigger = {
 # This used to read the gen_race_skin gene with `has_gene`, and never worked: has_gene is an
 # INTERFACE trigger, which ck3-tiger accepts and the game refuses at load ("Reading an interface
 # trigger 'has_gene' in forbidden area" in error.log), so it answered no for every character. Every
-# minority member stayed phenotype_human wearing their race's skin — a lowborn human with deepkin
+# minority member stayed phenotype_human wearing their race's skin — a lowborn human with dusk elf
 # violet skin was the bug that surfaced it.
 #
 # The seven gen_is_<race>_ethnicity_trigger live in the GENERATED

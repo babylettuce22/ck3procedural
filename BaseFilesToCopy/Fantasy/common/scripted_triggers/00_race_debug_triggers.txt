@@ -1,0 +1,20 @@
+﻿# Triggers only the race debug tools ask. See events/gen_race_debug_events.txt.
+
+# Does the phenotype trait name the same race as the ethnicity?
+#
+# Only meaningful when both are fantasy. A "no" there is not always a bug: a child of an orc and a
+# dwarf takes one parent's race at birth (gen_take_parent_race_effect) while the engine may roll
+# their ethnicity from the other. It is a bug on a history character, whose trait came from their
+# culture and whose ethnicity came from the same culture's list.
+gen_race_debug_trait_matches_ethnicity_trigger = {
+	OR = {
+		AND = { has_trait = phenotype_gracile gen_is_high_elf_ethnicity_trigger = yes }
+		AND = { has_trait = phenotype_sylvan gen_is_wood_elf_ethnicity_trigger = yes }
+		AND = { has_trait = phenotype_stocky gen_is_dwarf_ethnicity_trigger = yes }
+		AND = { has_trait = phenotype_rough_hewn gen_is_orc_ethnicity_trigger = yes }
+		AND = { has_trait = phenotype_towering gen_is_giantkin_ethnicity_trigger = yes }
+		AND = { has_trait = phenotype_diminutive gen_is_gnome_ethnicity_trigger = yes }
+		AND = { has_trait = phenotype_dusk_adapted gen_is_deepkin_ethnicity_trigger = yes }
+		AND = { has_trait = phenotype_horned gen_is_hornkin_ethnicity_trigger = yes }
+	}
+}

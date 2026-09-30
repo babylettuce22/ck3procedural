@@ -28,7 +28,7 @@
  # ============ A Late Child ============
  gen_aging.0010.t: "A Late Child"
  gen_aging.0010.desc.elf: "Human women stop bearing children in their forties. Elven women do not, though a late child is rare among elves, and they say one only comes when both parents truly want it.\n\n"
- gen_aging.0010.desc.deepkin: "Deepkin women can bear children for decades after a human woman could not. It seldom happens, and the deepkin say it never happens by accident.\n\n"
+ gen_aging.0010.desc.dusk_elf: "Like all elven women, dusk elf women can bear children for decades after a human woman could not. It seldom happens, and the dusk elves say it never happens by accident.\n\n"
  gen_aging.0010.desc.dwarf: "Dwarven women bear children later in life than human women do, though not much later and not often. Among dwarves, a late child is taken as a good sign for a house.\n\n"
  gen_aging.0010.desc.mother: "Lately you have found yourself wanting another child. When you raised it with [father.GetFirstName], [father.GetSheHe] did not say no. The decision is yours."
  gen_aging.0010.desc.father: "Last night [mother.GetFirstName] told you that [mother.GetSheHe] has been thinking about another child. [mother.GetSheHe|U] is still able to have one, and [mother.GetSheHe] wants to know what you think."
@@ -47,7 +47,7 @@
  # ============ Core debug inspector (console: event gen_aging.0090) ============
  gen_aging.0090.t: "Core Debug: Phenotype & Aging"
  gen_aging.0090.race_elf: "#weak Race:#! Elf (phenotype_gracile / phenotype_sylvan) — long-lived, fades.\n"
- gen_aging.0090.race_deepkin: "#weak Race:#! Deepkin (phenotype_dusk_adapted) — long-lived, fades.\n"
+ gen_aging.0090.race_dusk_elf: "#weak Race:#! Dusk elf (phenotype_dusk_adapted, Umbral) — long-lived, fades.\n"
  gen_aging.0090.race_dwarf: "#weak Race:#! Dwarf (phenotype_stocky) — mortal aging, ailments from 65.\n"
  gen_aging.0090.race_orc: "#weak Race:#! Orc (phenotype_rough_hewn) — mortal aging.\n"
  gen_aging.0090.race_giant: "#weak Race:#! Giant (phenotype_towering) — mortal aging.\n"

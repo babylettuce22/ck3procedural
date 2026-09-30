@@ -41,5 +41,29 @@ morph_genes = {
 			boy = male
 			girl = male
 		}
+
+		# Wood elves: shorter and broader, a leaf. Indices are only ever appended.
+		gen_elf_ears_sylvan = {
+			index = 2
+			visible = no
+			male = {
+				setting = { required_tags = "not(snug_headgear)" attribute = "gen_bs_elf_ears_sylvan"  value = { min = 0.0 max = 1.0 }  age = age_preset_child_features_wide_range }
+			}
+			female = male
+			boy = male
+			girl = male
+		}
+
+		# Dusk elves (drow): long and narrow, swept back along the skull.
+		gen_elf_ears_drow = {
+			index = 3
+			visible = no
+			male = {
+				setting = { required_tags = "not(snug_headgear)" attribute = "gen_bs_elf_ears_drow"  value = { min = 0.0 max = 1.0 }  age = age_preset_child_features_wide_range }
+			}
+			female = male
+			boy = male
+			girl = male
+		}
 	}
 }

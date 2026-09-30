@@ -25,15 +25,15 @@
  trait_phenotype_towering_character_desc:0 "Standing heads above others with massive physical reach, [ROOT.GetCharacter.GetFirstNameNoTooltip] commands an overwhelming presence on and off the battlefield."
 
  trait_phenotype_diminutive:0 "Diminutive"
- trait_phenotype_diminutive_desc:0 "Noticeably small in stature, these individuals find themselves making up for their stature with their ability to easily slip through tight spaces and their natural intellect."
- trait_phenotype_diminutive_character_desc:0 "Noticeably small in stature and light of step, [ROOT.GetCharacter.GetFirstNameNoTooltip] easily slips through tight spaces and goes unnoticed in the shadows."
+ trait_phenotype_diminutive_desc:0 "Small in stature and light of step, individuals with this trait slip through tight spaces and pass unnoticed in a crowd, and make up for their size with a quick mind."
+ trait_phenotype_diminutive_character_desc:0 "Small in stature and light of step, [ROOT.GetCharacter.GetFirstNameNoTooltip] slips through tight spaces, passes unnoticed in a crowd, and makes up for [ROOT.GetCharacter.GetHerHis] size with a quick mind."
 
- trait_phenotype_dusk_adapted:0 "Dusk-Adapted"
- trait_phenotype_dusk_adapted_desc:0 "Adapted to subterranean depths and nocturnal life, individuals with this trait possess acute senses and a calm, calculating demeanor in the dark."
- trait_phenotype_dusk_adapted_character_desc:0 "Adapted to subterranean depths and nocturnal life, [ROOT.GetCharacter.GetFirstNameNoTooltip] possesses acute senses and a calm, calculating demeanor in the dark."
+ trait_phenotype_dusk_adapted:0 "Umbral"
+ trait_phenotype_dusk_adapted_desc:0 "Born to the twilight of the fens, where mist hangs over the reeds from dusk to dawn, individuals with this trait see clearly in half-light and keep their own counsel, and few secrets get past them."
+ trait_phenotype_dusk_adapted_character_desc:0 "Born to the twilight of the fens, where mist hangs over the reeds from dusk to dawn, [ROOT.GetCharacter.GetFirstNameNoTooltip] sees clearly in half-light, keeps [ROOT.GetCharacter.GetHerHis] own counsel, and lets few secrets slip past."
 
  trait_phenotype_horned:0 "Horned"
- trait_phenotype_horned_desc:0 "Born of the horned people, herders of the high pastures and the open steppe. Their horns grow from the brow in childhood and are as ordinary among their own kind as a beard."
+ trait_phenotype_horned_desc:0 "Born of the horned people, herders of the high pastures and the open steppe. Their horns grow from the brow in childhood and are as ordinary among their own kind as a beard is to others."
  trait_phenotype_horned_character_desc:0 "Born of the horned people, [ROOT.GetCharacter.GetFirstNameNoTooltip] carries the horns of [ROOT.GetCharacter.GetHerHis] kin and the hardiness of a life spent with the herds."
 
  # HORNBORN
@@ -55,4 +55,3 @@
  # Marriage stuff
  AI_DIFFERENT_RACE_MARRIAGE_PENALTY:0 "Different Heritage/Race: $VALUE|=+0$"
  AI_HORNS_SHOWING_MARRIAGE_PENALTY:0 "Hornborn, Horns Showing: $VALUE|=+0$"
- AI_DIFFERENT_RACE_ISOLATIONIST_PENALTY:0 "Isolationist Culture: $VALUE|=+0$"

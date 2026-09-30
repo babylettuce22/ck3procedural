@@ -8,13 +8,14 @@ namespace Ck3MapGen.Emit;
 
 /// <summary>
 /// Emits the race head shapes — the elves' pointed ears (one style shared by high elves, wood elves
-/// and deepkin) as blendshapes of the vanilla head, and the orcs' tusks as geometry added to the
+/// and dusk elves) as blendshapes of the vanilla head, and the orcs' tusks as geometry added to the
 /// vanilla teeth — plus the head and teeth assets that declare them:
 ///
 /// <code>
 /// gfx/models/portraits/{male,female}_head/{sex}_head.asset                       (vanilla + 3 lines)
 /// gfx/models/portraits/{male,female}_head/blendshapes/{sex}_bs_gen_elf_ears_high.mesh
 /// gfx/models/portraits/{male,female}_head/blendshapes/{sex}_bs_gen_giant_face.mesh   (see GiantFace)
+/// gfx/models/portraits/{male,female}_head/blendshapes/{sex}_bs_gen_orc_brow.mesh     (see OrcBrow)
 /// gfx/models/portraits/{male,female}_head/{sex}_teeth/{sex}_teeth.asset         (see PatchTeethAsset)
 /// gfx/models/portraits/{male,female}_head/{sex}_teeth/*.mesh                    (see BuildTeeth)
 /// </code>
@@ -56,6 +57,8 @@ public static class RaceHeadWriter
     private static readonly (string Style, EarShape Shape)[] Styles =
     [
         ("high", EarShape.HighElf),
+        ("sylvan", EarShape.Sylvan),
+        ("drow", EarShape.Drow),
     ];
 
     /// <summary>The attribute a gene template sets and the head asset maps to a blendshape.</summary>
@@ -98,23 +101,28 @@ public static class RaceHeadWriter
             ears.Clear();
         }
 
-        // The giantkin face, before the tusks and horns: both mirror it as a follow shape, since it
-        // moves the lip a tusk exits from and the brow skin under a horn root.
-        var giant = new Dictionary<string, (PdxNode Root, PointedEars.Result Shape)>();
-        try
+        // The face shapes (giantkin face, orc brow), before the tusks and horns: both mirror them as
+        // follow shapes, since they move the lip a tusk exits from and the brow skin under a horn root.
+        // Each is all-or-nothing across both sexes on its own.
+        var faces = new List<(FaceShape Face, Dictionary<string, (PdxNode Root, PointedEars.Result Shape)> BySex)>();
+        foreach (var face in FaceShapes)
         {
-            foreach (string sex in Sexes)
-                giant[sex] = BuildGiantFace(portraits, sex);
-        }
-        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            Console.WriteLine($"  WARNING: giantkin face skipped, giantkin keep the plain brow and jaw: {e.Message}");
-            giant.Clear();
+            try
+            {
+                var bySex = new Dictionary<string, (PdxNode Root, PointedEars.Result Shape)>();
+                foreach (string sex in Sexes)
+                    bySex[sex] = BuildFaceShape(portraits, sex, face);
+                faces.Add((face, bySex));
+            }
+            catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                Console.WriteLine($"  WARNING: {face.Label} skipped, {face.Fallback}: {e.Message}");
+            }
         }
 
         // Generated head shapes the tusks and horns must follow, per sex: (id, positions, attributes).
         List<(string Id, float[] P, string[] Attributes)> Generated(string sex) =>
-            giant.TryGetValue(sex, out var g) ? [(GiantFace.BlendShapeId(sex), g.Shape.P, [GiantFace.Attribute])] : [];
+            [.. faces.Select(f => (f.Face.Id(sex), f.BySex[sex].Shape.P, new[] { f.Face.Attribute }))];
 
         var teeth = new List<TeethOutput>();
         try
@@ -140,7 +148,7 @@ public static class RaceHeadWriter
             horns.Clear();
         }
 
-        if (ears.Count == 0 && teeth.Count == 0 && horns.Count == 0 && giant.Count == 0) return;
+        if (ears.Count == 0 && teeth.Count == 0 && horns.Count == 0 && faces.Count == 0) return;
 
         var assets = new List<(string Path, byte[] Bytes)>();
         try
@@ -148,7 +156,7 @@ public static class RaceHeadWriter
             foreach (string sex in Sexes)
                 assets.Add((Path.Combine(outPortraits, $"{sex}_head", $"{sex}_head.asset"),
                     PatchAsset(File.ReadAllBytes(Path.Combine(portraits, $"{sex}_head", $"{sex}_head.asset")), sex,
-                        ears.Count > 0, teeth.Count > 0, horns.Count > 0, giant.Count > 0)));
+                        ears.Count > 0, teeth.Count > 0, horns.Count > 0, [.. faces.Select(f => f.Face)])));
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
@@ -157,8 +165,9 @@ public static class RaceHeadWriter
         }
 
         foreach (var (path, root, _) in ears) PdxMesh.Write(path, root);
-        foreach (var (sex, (root, _)) in giant)
-            PdxMesh.Write(Path.Combine(outPortraits, $"{sex}_head", "blendshapes", $"{GiantFace.BlendShapeId(sex)}.mesh"), root);
+        foreach (var (face, bySex) in faces)
+            foreach (var (sex, (root, _)) in bySex)
+                PdxMesh.Write(Path.Combine(outPortraits, $"{sex}_head", "blendshapes", $"{face.Id(sex)}.mesh"), root);
         foreach (var t in teeth)
         {
             string dir = Path.Combine(outPortraits, $"{t.Sex}_head", $"{t.Sex}_teeth");
@@ -183,8 +192,8 @@ public static class RaceHeadWriter
             Console.WriteLine($"  pointed ears written: {ears.Count} blendshapes " +
                               $"(tip travel {ears.Max(m => m.Shape.MaxShift):0.00}, " +
                               $"{ears.Min(m => m.Shape.Moved)}-{ears.Max(m => m.Shape.Moved)} vertices moved)");
-        if (giant.Count > 0)
-            Console.WriteLine($"  giantkin face written: {string.Join(", ", giant.Select(g => $"{g.Key} {g.Value.Shape.Moved} vertices moved, max {g.Value.Shape.MaxShift:0.00}"))}");
+        foreach (var (face, bySex) in faces)
+            Console.WriteLine($"  {face.Label} written: {string.Join(", ", bySex.Select(g => $"{g.Key} {g.Value.Shape.Moved} vertices moved, max {g.Value.Shape.MaxShift:0.00}"))}");
         if (teeth.Count > 0)
             Console.WriteLine($"  orc tusks written: {string.Join(", ", teeth.Select(t => $"{t.Sex} {t.Meshes.Count} teeth meshes, {t.Follows} lip-follow shapes"))}");
         if (horns.Count > 0)
@@ -193,13 +202,26 @@ public static class RaceHeadWriter
                               $"{bands} crowns worn as bands over horns");
     }
 
-    // ---- Giantkin face -----------------------------------------------------------------------
+    // ---- Face shapes (giantkin face, orc brow) ------------------------------------------------
+
+    /// <summary>A face-bone head blendshape: its log label, what the race keeps if it fails, its
+    /// attribute, its per-sex blendshape id, and the shape builder.</summary>
+    private sealed record FaceShape(
+        string Label, string Fallback, string Attribute, Func<string, string> Id,
+        Func<float[], float[], float[], int[], string[], bool, PointedEars.Result> Build);
+
+    private static readonly FaceShape[] FaceShapes =
+    [
+        new("giantkin face", "giantkin keep the plain brow and jaw", GiantFace.Attribute, GiantFace.BlendShapeId, GiantFace.Shape),
+        new("orc brow", "orcs keep the plain brow", OrcBrow.Attribute, OrcBrow.BlendShapeId, OrcBrow.Shape),
+    ];
 
     /// <summary>
-    /// One sex's giantkin face (<see cref="GiantFace"/>) on a vanilla head blendshape as the
-    /// container, as the ears are. The fields place themselves by each vertex's dominant bone.
+    /// One sex's face shape (<see cref="GiantFace"/>, <see cref="OrcBrow"/>) on a vanilla head
+    /// blendshape as the container, as the ears are. The fields place themselves by each vertex's
+    /// dominant bone.
     /// </summary>
-    private static (PdxNode Root, PointedEars.Result Shape) BuildGiantFace(string portraits, string sex)
+    private static (PdxNode Root, PointedEars.Result Shape) BuildFaceShape(string portraits, string sex, FaceShape face)
     {
         string headDir = Path.Combine(portraits, $"{sex}_head");
         var head = PdxMesh.Read(Path.Combine(headDir, $"{sex}_head.mesh"));
@@ -225,13 +247,13 @@ public static class RaceHeadWriter
             dominant[v] = names.GetValueOrDefault(ix[v * per + best], "");
         }
 
-        var shape = GiantFace.Shape(p, mesh.Floats("n"), mesh.Floats("ta"), mesh.Ints("tri"), dominant, sex == "female");
+        var shape = face.Build(p, mesh.Floats("n"), mesh.Floats("ta"), mesh.Ints("tri"), dominant, sex == "female");
 
         var root = PdxMesh.Read(Path.Combine(headDir, "blendshapes", $"{sex}_bs_ear_size_max.mesh"));
         var tm = Find(root, "mesh") ?? throw new InvalidDataException("ear blendshape has no mesh node");
         if (!tm.Ints("tri").AsSpan().SequenceEqual(mesh.Ints("tri")))
             throw new InvalidDataException($"{sex}_bs_ear_size_max.mesh no longer matches the head's topology");
-        (Find(root, "object") ?? throw new InvalidDataException("ear blendshape has no object")).Children[0].Name = $"{GiantFace.BlendShapeId(sex)}Shape";
+        (Find(root, "object") ?? throw new InvalidDataException("ear blendshape has no object")).Children[0].Name = $"{face.Id(sex)}Shape";
         tm.Set("p", PdxProp.Of(shape.P));
         tm.Set("n", PdxProp.Of(shape.N));
         tm.Set("ta", PdxProp.Of(shape.Ta));
@@ -983,7 +1005,7 @@ public static class RaceHeadWriter
     /// attribute; and, with tusks, the tusk attribute declared on the head as <c>{sex}_bs_neutral</c> —
     /// what vanilla does for its own teeth attributes (<c>teeth_bs_lower_down</c>), and EK2 for its tusks.
     /// </summary>
-    private static byte[] PatchAsset(byte[] raw, string sex, bool withEars, bool withTusks, bool withHorns, bool withGiant)
+    private static byte[] PatchAsset(byte[] raw, string sex, bool withEars, bool withTusks, bool withHorns, FaceShape[] faces)
     {
         byte[] bom = [0xEF, 0xBB, 0xBF];
         bool hasBom = raw.AsSpan().StartsWith(bom);
@@ -1012,8 +1034,8 @@ public static class RaceHeadWriter
         if (withHorns)
             attributes.Add($"\tattribute = {{ name = \"{Horns.BossAttribute}\"\t\tblend_shape = \"{sex}_bs_gen_horn_boss\" }}\t# Ck3MapGen horns (skin mound)");
 
-        if (withGiant)
-            attributes.Add($"\tattribute = {{ name = \"{GiantFace.Attribute}\"\t\tblend_shape = \"{GiantFace.BlendShapeId(sex)}\" }}\t# Ck3MapGen giantkin face");
+        foreach (var face in faces)
+            attributes.Add($"\tattribute = {{ name = \"{face.Attribute}\"\t\tblend_shape = \"{face.Id(sex)}\" }}\t# Ck3MapGen {face.Label}");
 
         lines.InsertRange(lastAttribute + 1, attributes);
 
@@ -1023,8 +1045,8 @@ public static class RaceHeadWriter
                 $"\t\tblend_shape = {{ id = \"{BlendShapeId(sex, s.Style)}\"\t\ttype = \"blendshapes/{BlendShapeId(sex, s.Style)}.mesh\" }}\t# Ck3MapGen race head"));
         if (withHorns)
             shapes.Add($"\t\tblend_shape = {{ id = \"{sex}_bs_gen_horn_boss\"\t\ttype = \"blendshapes/{sex}_bs_gen_horn_boss.mesh\" }}\t# Ck3MapGen horns (skin mound)");
-        if (withGiant)
-            shapes.Add($"\t\tblend_shape = {{ id = \"{GiantFace.BlendShapeId(sex)}\"\t\ttype = \"blendshapes/{GiantFace.BlendShapeId(sex)}.mesh\" }}\t# Ck3MapGen giantkin face");
+        foreach (var face in faces)
+            shapes.Add($"\t\tblend_shape = {{ id = \"{face.Id(sex)}\"\t\ttype = \"blendshapes/{face.Id(sex)}.mesh\" }}\t# Ck3MapGen {face.Label}");
         lines.InsertRange(lastShape + 1, shapes);
 
         byte[] body = Encoding.UTF8.GetBytes(string.Join(nl, lines));
