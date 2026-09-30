@@ -26,6 +26,7 @@ this machine and must not be blindly overwritten by a regenerated one. Local cha
   - 2026-09-29: workshop table refreshed (AGOT is numeric 2962333032 again, EK2 added), and
     pointers added to this repo's own verification tooling (mod-verify skill).
   - 2026-09-30: references/offline-renders.md added (TerrainRender + portrait_render in ck3devtools).
+  - 2026-09-30: references/event-flow.md added (EventFlow: event-chain outlines and flow checks).
 -->
 
 # CK3 Modding
@@ -186,10 +187,13 @@ last play session will list stale effect/trigger names and mislead you. Confirm 
    warnings swing run to run). Tiger is not the oracle: it passes things the engine rejects
    (CB-group fields, `?=` on unset `var:`, barony-only triggers on counties, gene weight sums
    over 255, missing `meshsettings`) — `error.log` / `debug.log` from a real launch settle it.
-6. For a **visual** change (terrain palette, race genes, portrait modifiers), render it offline
+6. For **events, story cycles, decisions or interactions**, run EventFlow (`references/event-flow.md`):
+   `chain <namespace>` before writing to see the chain you are joining, and `check` after, for
+   scopes a caller never saved, silent options, dead flags/variables and unreachable events.
+7. For a **visual** change (terrain palette, race genes, portrait modifiers), render it offline
    first with the ck3devtools renderers (`references/offline-renders.md`): ground in ~15 s a panel,
    a sheet of heads in ~1 s. Only then ask for a game launch.
-7. Verify in-game: give the user the exact test steps (`-debug_mode`, console command), ask them
+8. Verify in-game: give the user the exact test steps (`-debug_mode`, console command), ask them
    to run the game, then read the logs yourself and confirm or fix (see "Game logs"). For GUI
    work, use the test-window feedback loop in `references/gui.md`.
 
@@ -204,6 +208,7 @@ last play session will list stale effect/trigger names and mislead you. Confirm 
 | GUI: custom windows, HUD widgets, scripted_widgets, data binding, scripted_guis | `references/gui.md` | vanilla `gui/preload/defaults.gui`, AGOT's `gui/` (PoD's `gui/POD_windows/` is cited upstream but PoD is not installed) |
 | Validating mod code (ck3-tiger) | `references/validation.md` | — |
 | Debugging, console, logs, graphics/portraits, tooling | `references/debugging.md` | game `tests/` |
+| Following or checking an event chain: who fires an event, which scopes it can rely on, what each option shows, dead flags, unreachable events | `references/event-flow.md` | `ck3devtools\EventFlow` |
 | Seeing a change without launching: map ground (detail textures, colormap) or character heads (genes, ethnicities, portrait modifiers, head blendshapes) | `references/offline-renders.md` | `ck3devtools\TerrainRender`, `ck3devtools\portrait_render` |
 | Design patterns: AI-initiated drama, story cycles, narrated ai_accept, duels, secrets, alerts, tiered meters, perf budgeting | grep `<workshop>\2962333032` | AGOT mod folder |
 | Mod-vs-mod conflicts, total-conversion submods, compatch strategy | `references/compat.md` + `scripts/check_compat.sh` | — |

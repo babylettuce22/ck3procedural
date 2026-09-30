@@ -211,11 +211,12 @@ public static partial class RaceHeadWriter
             File.WriteAllBytes(assetPath, b.Asset);
         }
 
-        int bands = 0;
+        int bands = 0, hatRules = 0;
         if (horns.Count > 0)
         {
             WriteHorns(modDir, horns);
             bands = WriteHornCrowns(modDir, gameDir, log);
+            hatRules = WriteHornHeadgear(modDir, gameDir, log);
         }
 
         if (ears.Count > 0)
@@ -229,7 +230,7 @@ public static partial class RaceHeadWriter
         if (horns.Count > 0)
             log.Add($"  horns written: {Horns.Styles.Length} styles, {Horns.OrnamentMeshes().Count()} ornament shapes x {Horns.Metals.Length} metals, " +
                               $"{string.Join(", ", horns.Select(h => $"{h.Sex} {h.Meshes.Count} meshes"))}, " +
-                              $"{bands} crowns worn as bands over horns");
+                              $"{bands} crowns worn as bands over horns, {hatRules} hats re-ruled for horns (HornHeadgear)");
     }
 
     // ---- Face shapes (giantkin face, orc brow) ------------------------------------------------
@@ -553,6 +554,9 @@ public static partial class RaceHeadWriter
                 accessories.Append(filed
                     ? $"\tset_tags = \"{Horns.StyleTag(style)}\"\n"
                     : $"\tset_tags = \"{HornsWornTag},{Horns.StyleTag(style)}\"\n");
+                // HornHeadgear's measured verdicts come first: they override the tag rules below.
+                accessories.Append($"\tentity = {{ required_tags = \"{HornHeadgear.FullTag}\" shared_pose_entity = head entity = \"{h.Sex}_gen_horns_{style}_entity\" }}\n")
+                    .Append($"\tentity = {{ required_tags = \"{HornHeadgear.StumpTag}\" shared_pose_entity = head entity = \"{h.Sex}_gen_horns_{Horns.Filed}_entity\" }}\n");
                 accessories.Append("\tentity = { required_tags = \"enclosed_helmet\" shared_pose_entity = head }\n");
                 if (!filed)
                     accessories.Append($"\tentity = {{ required_tags = \"crown\" shared_pose_entity = head entity = \"{h.Sex}_gen_horns_{style}_entity\" }}\n");
@@ -570,8 +574,12 @@ public static partial class RaceHeadWriter
                 foreach (var (metal, _, _, _) in Horns.Metals)
                 {
                     string Entity(string style) => $"{OrnamentMeshName(h.Sex, style, Horns.ShapeOn(style, kind))}_{metal}_entity";
-                    accessories.Append($"{h.Sex}_{Horns.OrnamentTemplateOf(kind, metal)} = {{\n")
-                        .Append("\tentity = { required_tags = \"enclosed_helmet\" shared_pose_entity = head }\n");
+                    accessories.Append($"{h.Sex}_{Horns.OrnamentTemplateOf(kind, metal)} = {{\n");
+                    foreach (string style in Horns.Styles)
+                        accessories.Append($"\tentity = {{ required_tags = \"{HornHeadgear.FullTag},{Horns.StyleTag(style)}\" shared_pose_entity = head entity = \"{Entity(style)}\" }}\n");
+                    foreach (string style in Horns.Styles)
+                        accessories.Append($"\tentity = {{ required_tags = \"{HornHeadgear.StumpTag},{Horns.StyleTag(style)}\" shared_pose_entity = head entity = \"{Entity(Horns.Filed)}\" }}\n");
+                    accessories.Append("\tentity = { required_tags = \"enclosed_helmet\" shared_pose_entity = head }\n");
                     foreach (string style in Horns.Styles.Where(s => s != Horns.Filed))
                         accessories.Append($"\tentity = {{ required_tags = \"crown,{Horns.StyleTag(style)}\" shared_pose_entity = head entity = \"{Entity(style)}\" }}\n");
                     foreach (string style in Horns.Styles.Where(s => s != Horns.Filed))
@@ -671,17 +679,8 @@ public static partial class RaceHeadWriter
     /// </summary>
     private static int WriteHornCrowns(string modDir, string gameDir, List<string> log)
     {
-        string accDir = Path.Combine(gameDir, "gfx", "portraits", "accessories");
-        if (!Directory.Exists(accDir)) return 0;
-
-        // Last definition wins, in the engine's load order: filename order.
-        var declared = new Dictionary<string, string[]>(StringComparer.Ordinal);
-        foreach (string file in Directory.GetFiles(accDir, "*.txt").OrderBy(f => Path.GetFileName(f), StringComparer.Ordinal))
-        {
-            string[] lines = File.ReadAllLines(file);
-            foreach (var (key, first, last, closed) in ScriptScan.TopLevelDeclarations(lines, c => char.IsLetterOrDigit(c) || c == '_'))
-                if (closed) declared[key] = lines[first..(last + 1)];
-        }
+        var declared = DeclaredAccessories(gameDir);
+        if (declared.Count == 0) return 0;
 
         var band = new Dictionary<string, string>();
         foreach (string sex in Sexes)

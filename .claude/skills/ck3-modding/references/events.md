@@ -1,5 +1,9 @@
 # Events, on_actions, decisions, interactions, story cycles
 
+> **On this machine:** `references/event-flow.md` (EventFlow) prints any chain across events,
+> scripted effects, on_actions and story cycles, and flags scopes a caller never saved, silent
+> options, dead flags and unreachable events. Use it before and after touching a chain.
+
 ## Events
 
 Files in `events/`. Full schema: `events/_events.info`. Best example: `events/tutorial_events.txt`.
