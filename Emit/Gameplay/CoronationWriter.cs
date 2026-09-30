@@ -267,6 +267,9 @@ public static class CoronationWriter
         {
             b.Field("scope", "none");
             b.Field("hidden", "yes");
+            // 1.20: a same-id event only replaces vanilla's (priority 0) with a higher priority;
+            // otherwise the engine logs "Duplicated event ID" and keeps vanilla's.
+            b.Field("id_override_priority", "1");
             b.Blank();
 
             using (b.Block("immediate"))

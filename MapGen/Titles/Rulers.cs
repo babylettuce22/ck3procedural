@@ -235,10 +235,13 @@ public sealed class RulerMap
 
             var culture = cultures.For(county);
             var faith = faiths.For(county);
-            bool female = HistoryWriter.RulerIsFemale(county, faith, cfg);
+
+            // With the government, so a theocrat is of the sex his clergy is; prehistory asks the
+            // same overload when it marries him (see HistoryWriter.AsClergy).
+            string government = governments.For(county);
+            bool female = HistoryWriter.RulerIsFemale(county, faith, cfg, government);
             var (firstName, _) = HistoryWriter.RulerNames(county, culture, female, cfg);
             var primaryTitle = HistoryWriter.Primary(county, realms);
-            string government = governments.For(county);
 
             // The writer's own stream. Birth year is drawn from a fresh copy of it by
             // GetRulerBirthYear (prehistory needs the year before any ruler exists); month, day and

@@ -9,6 +9,9 @@
 #
 # Everything below is vanilla's own definition verbatim, with ONE line added.
 #
+# Re-copied from 1.20.0.2 on 2026-09-30: vanilla's tooltip now names $LAAMP$ and $TARGET$ instead of
+# scope:actor/scope:recipient (see the tiger note at the bottom). The added line is unchanged.
+#
 # ---- Why this trigger ----
 #
 # A landless adventurer has no diplomatic range in the ordinary sense, so vanilla gates every
@@ -47,12 +50,15 @@
 # lives in the mod — tiger does not check vanilla against vanilla. It is not caused by the added
 # line, and it says nothing about this file. Do not "fix" it by dropping the subject/object lines:
 # they are what makes the tooltip name the two characters everywhere else.
+#
+# Vanilla fixed this itself in 1.20: subject/object are now the trigger's own $LAAMP$/$TARGET$
+# arguments, which every call site passes, so the re-copy should no longer draw those warnings.
 
 ep3_laamp_diplo_range_trigger = {
 	custom_description = {
 		text = ep3_laamp_diplo_range_trigger_tt
-		subject = scope:actor
-		object = scope:recipient
+		subject = $LAAMP$
+		object = $TARGET$
 
 		# THE ONE ADDED LINE. The dummy holds land the way a wall holds a field in: there is nobody
 		# there to bargain with, threaten, court or murder.

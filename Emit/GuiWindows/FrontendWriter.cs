@@ -25,6 +25,13 @@ public static class FrontendWriter
     /// <summary>Block headers to comment out wholesale.</summary>
     private static readonly string[] Openers = ["widget = {", "portrait_button = {"];
 
+    // The two 12-point lines carry an explicit fontsize_min. text_single (gui/preload/labels.gui)
+    // declares fontsize_min = 12, and the engine insists the minimum be strictly below the size, so
+    // at fontsize = 12 each logged "Illegal Property Value: 'fontsize_min' should be ... less than
+    // 12" on every menu build. 10 is a floor vanilla's own small labels use too.
+    //
+    // The link's tooltip is raw_tooltip, not tooltip: `tooltip` is a localisation key, and a URL is
+    // not one ("Unlocalized text ... use the raw_text property").
     private const string GeneratorInfoText = """
         flowcontainer = {
             name = "generator_info_box"
@@ -43,16 +50,18 @@ public static class FrontendWriter
             text_single = {
                 parentanchor = right
                 fontsize = 12
+                fontsize_min = 10
                 raw_text = "Check regularly for updates:"
                 default_format = "#low"
             }
 
             button_group = {
                 parentanchor = right
-                tooltip = "https://github.com/babylettuce22/ck3procedural"
+                raw_tooltip = "https://github.com/babylettuce22/ck3procedural"
 
                 text_single = {
                     fontsize = 12
+                    fontsize_min = 10
                     raw_text = "https://github.com/babylettuce22/ck3procedural"
                     default_format = "#clickable"
                 }
@@ -60,7 +69,13 @@ public static class FrontendWriter
         }
     """;
 
-    public static void WriteFrontend(string modDir, string gameDir)
+    /// <param name="keepPortraits">
+    /// Leave the main-menu portrait widgets in (<see cref="Config.MapConfig.MenuPortraits"/>). On trial
+    /// from 2026-09-30: that day's 1.20 crash showed the menu falls back to three vanilla bookmark
+    /// portraits our replace_path deletes (see PortraitWriter.WriteMainMenuCharacters), which may
+    /// also have been the unexplained August crash.
+    /// </param>
+    public static void WriteFrontend(string modDir, string gameDir, bool keepPortraits = false)
     {
         string source = Path.Combine(gameDir, "gui", "frontend_main.gui");
         if (!File.Exists(source))
@@ -91,7 +106,7 @@ public static class FrontendWriter
         // ------------------------------------------------------------------------------------------
         var disabled = new List<string>();
 
-        while (true)
+        while (!keepPortraits)
         {
             int anchor = lines.FindIndex(IsLiveTrigger);
             if (anchor < 0) break;
@@ -142,7 +157,9 @@ public static class FrontendWriter
         Directory.CreateDirectory(dir);
         ParadoxText.WriteBom(Path.Combine(dir, "frontend_main.gui"), fullText + "\n");
 
-        Console.WriteLine(disabled.Count == 0
+        Console.WriteLine(keepPortraits
+            ? "  frontend: main-menu portraits kept (trial), info box injected"
+            : disabled.Count == 0
             ? "  frontend: no main-menu portrait widgets found to suppress, info box injected"
             : $"  frontend: {disabled.Count} main-menu portrait widgets suppressed "
               + $"(lines {string.Join(", ", disabled)}), info box injected");

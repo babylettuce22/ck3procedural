@@ -118,7 +118,11 @@ public sealed class VanillaVocabulary
     /// <summary>Doctrine group key to the doctrines that satisfy it.</summary>
     public Dictionary<string, List<string>> DoctrineGroups { get; } = [];
 
-    /// <summary>The three-pick tenet pool, which is its own doctrine group.</summary>
+    /// <summary>
+    /// The tenets a generated faith draws its three from: <c>common/religion/tenet_types</c>
+    /// since 1.20, the <c>doctrine_core_tenets</c> group before it. By God Alone's own tenets are
+    /// left out; see <see cref="ReadTenets"/>.
+    /// </summary>
     public List<string> Tenets { get; } = [];
 
     /// <summary>
@@ -297,10 +301,15 @@ public sealed class VanillaVocabulary
         v.ReadPillars(Path.Combine(gameDir, "common", "culture", "pillars"));
         v.ReadCultures(Path.Combine(gameDir, "common", "culture", "cultures"),
             Path.Combine(gameDir, "gfx", "interface", "coat_of_arms", "frames"));
-        v.ReadDoctrines(Path.Combine(gameDir, "common", "religion", "doctrine_group_types"));
-        v.ReadDoctrineConflicts(Path.Combine(gameDir, "common", "religion", "doctrine_types"));
-        v.ReadReligions(Path.Combine(gameDir, "common", "religion", "religion_types"),
-            Path.Combine(gameDir, "gfx", "interface", "icons", "faith"));
+        string religionDir = Path.Combine(gameDir, "common", "religion");
+        v.ReadDoctrines(Path.Combine(religionDir, "doctrine_group_types"),
+            Path.Combine(religionDir, "doctrine_types"));
+        v.ReadTenets(Path.Combine(religionDir, "tenet_types"));
+        v.ReadDoctrineConflicts(Path.Combine(religionDir, "doctrine_types"));
+        v.ReadDoctrineConflicts(Path.Combine(religionDir, "tenet_types"));
+        v.ReadReligions(Path.Combine(religionDir, "religion_types"),
+            Path.Combine(gameDir, "gfx", "interface", "icons", "faith"),
+            Path.Combine(religionDir, "faith_types"));
         v.ReadInnovationDefs(Path.Combine(gameDir, "common", "culture", "innovations"));
         v.ReadInnovations(Path.Combine(gameDir, "history", "cultures"));
         v.ReadMenAtArms(gameDir);
@@ -316,6 +325,9 @@ public sealed class VanillaVocabulary
         int late = v.InnovationDefs.Values.Count(d => d.Era == "culture_era_late_medieval");
 
         Console.WriteLine($"  vocabulary: {v.Ethos.Count} ethos, {v.Traditions.Count} traditions, {v.Looks.Count} looks");
+        Console.WriteLine($"  religion vocabulary: {v.DoctrineGroups.Count} doctrine groups, {v.Tenets.Count} tenets, "
+                          + $"{v.IncompatibleDoctrines.Count} doctrines with a can_pick clash, {v.FaithIcons.Count} faith icons, "
+                          + $"{v.GraphicalFaiths.Count} temple art sets");
         Console.WriteLine($"  innovations harvested: {tribal} tribal, {early} early medieval, {high} high medieval, {late} late medieval");
         Console.WriteLine($"  men-at-arms harvested: {v.MaaArchetypes.Values.Sum(a => a.Count)} regiments across " +
                           $"{v.MaaArchetypes.Count} archetypes, {v.MaaIcons.Count} icons");
@@ -436,16 +448,50 @@ public sealed class VanillaVocabulary
         Looks.AddRange(looks.OrderBy(l => l.ClothingGfx, StringComparer.Ordinal));
     }
 
-    private void ReadDoctrines(string dir)
+    /// <summary>
+    /// Doctrine groups and their members.
+    ///
+    /// Since 1.20 a group file no longer lists its doctrines: each doctrine names its own group
+    /// (<c>doctrine_group_type = …</c>), so a mod can add one without touching the group. Members
+    /// are ordered by the doctrine's <c>index</c>, which is the order the game itself uses (and
+    /// reads divergence along), with file order breaking ties as the engine does. The 1.19 shape —
+    /// a <c>doctrine_types = { … }</c> list inside each group — is still read when it is there.
+    /// </summary>
+    private void ReadDoctrines(string groupDir, string doctrineDir)
     {
-        if (!Directory.Exists(dir)) return;
+        if (Directory.Exists(doctrineDir))
+        {
+            var byGroup = new Dictionary<string, List<(int Index, int Order, string Key)>>(StringComparer.Ordinal);
+            int order = 0;
 
-        foreach (string path in Directory.GetFiles(dir, "*.txt").OrderBy(p => p, StringComparer.Ordinal))
+            foreach (string path in Directory.GetFiles(doctrineDir, "*.txt").OrderBy(p => p, StringComparer.Ordinal))
+            {
+                foreach (var (key, body) in TopLevelBlocks(File.ReadAllText(path)))
+                {
+                    var group = Regex.Match(body, @"(^|\n)\s*doctrine_group_type\s*=\s*(\w+)");
+                    if (!group.Success) continue;
+
+                    var index = Regex.Match(body, @"(^|\n)\s*index\s*=\s*(-?\d+)");
+                    int at = index.Success ? int.Parse(index.Groups[2].Value, CultureInfo.InvariantCulture) : 0;
+
+                    string g = group.Groups[2].Value;
+                    if (!byGroup.TryGetValue(g, out var list)) byGroup[g] = list = [];
+                    list.Add((at, order++, key));
+                }
+            }
+
+            foreach (var (group, list) in byGroup)
+                DoctrineGroups[group] = list.OrderBy(d => d.Index).ThenBy(d => d.Order).Select(d => d.Key).ToList();
+        }
+
+        if (!Directory.Exists(groupDir)) return;
+
+        foreach (string path in Directory.GetFiles(groupDir, "*.txt").OrderBy(p => p, StringComparer.Ordinal))
         {
             foreach (var (key, body) in TopLevelBlocks(File.ReadAllText(path)))
             {
                 string? list = Block(body, "doctrine_types");
-                if (list is null) continue;
+                if (list is null || DoctrineGroups.ContainsKey(key)) continue;
 
                 var members = new List<string>();
                 foreach (string raw in list.Split('\n'))
@@ -466,13 +512,45 @@ public sealed class VanillaVocabulary
     }
 
     /// <summary>
+    /// The tenet pool, from <c>common/religion/tenet_types</c> (1.20 on). A no-op on an older
+    /// install, where <see cref="ReadDoctrines"/> has already filled it from the group.
+    ///
+    /// Tenets gated on <c>by_god_alone</c> are skipped. They are the expansion's Christian
+    /// liturgy — Transubstantiation, Apostolic Succession, Hesychasm — shown only to Christians and
+    /// dropped outright for a player without the DLC, so a generated faith that drew one would be
+    /// a faith short of its three for most players. What is left is the 1.19 pool less the two
+    /// tenets 1.20 retired (<c>tenet_monasticism</c>, now its own doctrine group, and
+    /// <c>tenet_rite</c>). Older DLC tenets stay, as they always have.
+    /// </summary>
+    private void ReadTenets(string dir)
+    {
+        if (!Directory.Exists(dir)) return;
+
+        var read = new List<string>();
+        foreach (string path in Directory.GetFiles(dir, "*.txt").OrderBy(p => p, StringComparer.Ordinal))
+        {
+            foreach (var (key, body) in TopLevelBlocks(File.ReadAllText(path)))
+            {
+                if (Regex.IsMatch(body, @"(^|\n)\s*requires_dlc_flag\s*=\s*by_god_alone\b")) continue;
+                if (Regex.IsMatch(body, @"(^|\n)\s*visible\s*=\s*no\b")) continue;
+                read.Add(key);
+            }
+        }
+
+        if (read.Count == 0) return;
+        Tenets.Clear();
+        Tenets.AddRange(read);
+    }
+
+    /// <summary>
     /// Matches, in priority order: a comment, a `doctrine:x` reference, a `name = {` block opener,
     /// a bare brace. Comments come first so a doctrine named in one is not read as a reference, and
     /// the reference beats the block opener so `doctrine:x = {` is read as a reference and not as a
-    /// block called "doctrine:x".
+    /// block called "doctrine:x". Since 1.20 a tenet is referenced as `tenet:x` rather than
+    /// `doctrine:x`, and both prefixes name the same kind of thing here.
     /// </summary>
     private const string ConflictToken =
-        @"#[^\n]*|doctrine:(?<ref>\w+)|(?<block>[A-Za-z_][\w.]*)\s*=\s*\{|\{|\}";
+        @"#[^\n]*|(?:doctrine|tenet):(?<ref>\w+)|(?<block>[A-Za-z_][\w.]*)\s*=\s*\{|\{|\}";
 
     /// <summary>
     /// The <c>can_pick</c> triggers, which are where CK3 keeps its doctrine incompatibilities.
@@ -538,7 +616,12 @@ public sealed class VanillaVocabulary
         static bool Transparent(string block) => block is "OR" or "custom_description";
     }
 
-    private void ReadReligions(string dir, string iconDir)
+    /// <param name="dir">common/religion/religion_types.</param>
+    /// <param name="extraDirs">Folders that hold faith icons and art since 1.20, when faiths left
+    /// the religion file: faith_types. Scanned for icons and graphical faiths only; everything else
+    /// still lives on the religion. rite_types is deliberately not one: its icons are By God
+    /// Alone's colour variants of Christian crosses, which would put crosses in a pagan pool.</param>
+    private void ReadReligions(string dir, string iconDir, params string[] extraDirs)
     {
         if (!Directory.Exists(dir)) return;
 
@@ -549,14 +632,24 @@ public sealed class VanillaVocabulary
         var sins = new HashSet<string>(StringComparer.Ordinal);
         string? bestTemplate = null;
 
+        foreach (string path in extraDirs.Where(Directory.Exists)
+                     .SelectMany(d => Directory.GetFiles(d, "*.txt")).OrderBy(p => p, StringComparer.Ordinal))
+        {
+            string text = File.ReadAllText(path);
+            foreach (Match m in Regex.Matches(text, @"^\s*icon\s*=\s*""?(\w+)", RegexOptions.Multiline))
+                icons.Add(m.Groups[1].Value);
+            foreach (Match m in Regex.Matches(text, @"\bgraphical_faith\s*=\s*""?(\w+)"))
+                graphical.Add(m.Groups[1].Value);
+        }
+
         foreach (string path in Directory.GetFiles(dir, "*.txt").OrderBy(p => p, StringComparer.Ordinal))
         {
             string text = File.ReadAllText(path);
 
-            foreach (Match m in Regex.Matches(text, @"^\s*icon\s*=\s*(\w+)", RegexOptions.Multiline))
+            foreach (Match m in Regex.Matches(text, @"^\s*icon\s*=\s*""?(\w+)", RegexOptions.Multiline))
                 icons.Add(m.Groups[1].Value);
 
-            foreach (Match m in Regex.Matches(text, @"\bgraphical_faith\s*=\s*(\w+)"))
+            foreach (Match m in Regex.Matches(text, @"\bgraphical_faith\s*=\s*""?(\w+)"))
                 graphical.Add(m.Groups[1].Value);
 
             // Prefer a pagan religion's tag set: it is the archetype the generated ones follow, so
@@ -742,9 +835,12 @@ public sealed class VanillaVocabulary
     {
         if (list is null) return;
 
-        // Strip the weighting syntax first, so `stubborn = { scale = 2 }` and `brave = 0.5` both
-        // reduce to the bare trait and the leftovers are trait names and nothing else.
-        string cleaned = Regex.Replace(list, @"=\s*\{[^}]*\}", " ");
+        // Strip comments, then the weighting syntax, so `stubborn = { scale = 2 }` and `brave = 0.5`
+        // both reduce to the bare trait and the leftovers are trait names and nothing else. 1.20
+        // glosses Hindu virtues in comments (`honest = { … } # Satya`), and read as tokens those
+        // became traits called "atya" and "antosha" that the game has never heard of.
+        string cleaned = Regex.Replace(list, "#[^\n]*", " ");
+        cleaned = Regex.Replace(cleaned, @"=\s*\{[^}]*\}", " ");
         cleaned = Regex.Replace(cleaned, @"=\s*[\d.]+", " ");
 
         foreach (Match m in Regex.Matches(cleaned, @"[a-z][a-z0-9_]*")) into.Add(m.Value);

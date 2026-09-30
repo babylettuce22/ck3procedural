@@ -27,8 +27,14 @@
 #
 # Localisation for the four keys lives in localization/english/zz_gen_unsettled_hostility_l_english.yml;
 # vanilla leaves the parameter strings empty for its hidden overrides and so does this.
+#
+# Since 1.20 every doctrine names its group, and the group no longer lists its doctrines. Both sit in
+# gen_unsettled_hostility (doctrine_group_types/zz_gen_unsettled_hostility.txt): one group, because a
+# faith only ever holds one of the two.
 
 gen_unsettled_marker_doctrine = {
+	doctrine_group_type = gen_unsettled_hostility
+	index = 0
 	visible = no
 	icon = doctrine_pluralism_righteous # Never drawn while hidden; borrowed so the key has a file behind it.
 	parameters = {
@@ -37,6 +43,8 @@ gen_unsettled_marker_doctrine = {
 }
 
 gen_settled_doctrine = {
+	doctrine_group_type = gen_unsettled_hostility
+	index = 1
 	visible = no
 	icon = doctrine_pluralism_righteous
 	parameters = {

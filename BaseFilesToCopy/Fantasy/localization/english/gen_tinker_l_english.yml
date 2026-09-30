@@ -1,6 +1,6 @@
 ﻿l_english:
- # ============ The Tinker's Bench (tradition) ============
- tradition_gen_tinkers_bench_name: "The Tinker's Bench"
+ # ============ Tinkerers (tradition) ============
+ tradition_gen_tinkers_bench_name: "Tinkerers"
  tradition_gen_tinkers_bench_desc: "Every household of this people has a workbench, and every workbench has something on it that ticks, whirrs or smokes. Their rulers build contraptions of their own, and other lords pay well to borrow the knack."
  culture_parameter_gen_tinkering: "Learned rulers may #V Start a Contraption#!: a clockwork curio, waterworks, a war engine, a clockwork limb or a grand invention. Other rulers may commission one from a gnome"
 

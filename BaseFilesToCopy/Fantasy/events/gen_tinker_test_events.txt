@@ -50,7 +50,7 @@ gen_tinker.0010 = {
 			modifier = {
 				add = 20
 				OR = {
-					has_trait = scholar
+					has_trait = erudite # 'scholar' until 1.20 renamed it
 					has_trait = curious
 				}
 			}
@@ -177,7 +177,7 @@ gen_tinker.0010 = {
 			modifier = {
 				add = 25
 				OR = {
-					has_trait = scholar
+					has_trait = erudite
 					has_trait = curious
 				}
 			}

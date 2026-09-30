@@ -253,7 +253,7 @@ cult_charge_give_taint_effect = {
 cult_charge_give_defile_site_effect = {
 	location = { save_scope_as = cult_charge_member_location }
 	global_var:cult_host_faith = {
-		every_holy_site = {
+		every_holy_site_barony = {
 			county = {
 				if = {
 					limit = { cult_charge_defile_site_target_trigger = yes }

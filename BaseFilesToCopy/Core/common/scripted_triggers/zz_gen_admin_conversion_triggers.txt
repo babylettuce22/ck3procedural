@@ -9,6 +9,13 @@
 # The first four loosen who may adopt a bureaucracy; the last two (minister eligibility, at the
 # bottom of this file) tighten who may staff one, and fix a crash rather than a tooltip.
 #
+# Re-copied from 1.20.0.2 on 2026-09-30. Two of the six changed upstream and took vanilla's edits
+# under ours: tgp_should_become_meritocratic_trigger (the admin test is now
+# government_has_mechanic = administrative; vanilla also dropped world_burma, which our player
+# test had already replaced) and tgp_has_access_to_ministry_trigger (now also requires
+# government_uses_ministry_budget, which celestial_government carries). The other four are
+# identical in 1.20.
+#
 # The "Adopt <X> Government" items of convert_to_administrative_decision (06_ep3_admin_decisions.txt)
 # gate on the first three. Vanilla ties them to Earth: the Hegemony of China, Han ancestry, the
 # world_asia/world_tibet/world_burma/world_steppe_east regions, and a Japanese top liege. None of
@@ -56,7 +63,7 @@ tgp_should_become_meritocratic_trigger = {
 				is_independent_ruler = yes
 				liege = {
 					NOT = {
-						government_has_flag = government_is_administrative
+						government_has_mechanic = administrative
 					}
 				}
 			}
@@ -94,18 +101,24 @@ tgp_can_become_celestial_trigger = {
 tgp_has_access_to_ministry_trigger = {
 	highest_held_title_tier = tier_hegemony
 	government_has_flag = government_is_celestial
+	government_has_flag = government_uses_ministry_budget
 }
 
 # The player-side loosening, shared by the Ritsuryō decision gate above and by
 # japan_administrative_government.can_get_government (common/governments/zz_gen_japan_government_types.txt)
 # so the engine's own validity check agrees with the decision that offers it.
+#
+# The liege test mirrors vanilla's in tgp_should_become_meritocratic_trigger, and moved with it in
+# 1.20: vanilla now asks government_has_mechanic = administrative, which every bureaucracy carries
+# (administrative, meritocratic, celestial, steppe admin, Ritsuryō), where the old
+# government_is_administrative flag sits on plain administrative_government alone.
 gen_player_may_found_bureaucracy_trigger = {
 	is_ai = no
 	OR = {
 		is_independent_ruler = yes
 		liege = {
 			NOT = {
-				government_has_flag = government_is_administrative
+				government_has_mechanic = administrative
 			}
 		}
 	}

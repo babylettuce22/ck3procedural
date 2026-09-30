@@ -366,6 +366,23 @@ public static class NativeTitles
     }
 
     /// <summary>
+    /// The draws a language family's grammar makes, as <see cref="Coin"/> makes them: whether it marks
+    /// a feminine, which feminine marker, and which realm ending. For coining further words
+    /// (<see cref="Sees.CoinWords"/>) that must agree with the ranks.
+    /// </summary>
+    public static (bool Gendered, int Marker, int Ending) GrammarOf(Language tongue, int seed)
+    {
+        var root = tongue;
+        while (root.Parent is not null) root = root.Parent;
+
+        var grammar = Rng.For(seed, GrammarStream, Rng.StableHash(root.Key));
+        bool gendered = grammar.Chance(0.75);
+        int marker = grammar.Int(0, 7);
+        int ending = grammar.Int(0, 7);
+        return (gendered, marker, ending);
+    }
+
+    /// <summary>
     /// One language's words. Titles are coined whether or not they are kept, and before the realm
     /// words, so that neither option can change what the other one produces.
     /// </summary>

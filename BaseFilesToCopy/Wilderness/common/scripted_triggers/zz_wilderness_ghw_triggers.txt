@@ -14,6 +14,9 @@
 # the wilderness trait counts for nothing, so a later change to the dummy faith cannot readmit it.
 #
 # Vanilla's two clauses are kept as written; only the holder test is added to each.
+#
+# Rebased on 1.20 (Crozier), where hostility is between rites: vanilla now scopes into
+# $FAITH$.main_rite and hands is_hostile_enough_for_holy_war_trigger a RITE, not a FAITH.
 
 valid_ghw_target_trigger = {
 	exists = capital_vassal.capital_vassal
@@ -22,8 +25,8 @@ valid_ghw_target_trigger = {
 		tier = tier_county
 		count >= 5
 		NOT = { holder = { has_trait = wilderness } }
-		$FAITH$ = {
-			is_hostile_enough_for_holy_war_trigger = { FAITH = prev.holder.top_liege.faith }
+		$FAITH$.main_rite = {
+			is_hostile_enough_for_holy_war_trigger = { RITE = prev.holder.top_liege.rite }
 		}
 	}
 	NOT = {
@@ -31,8 +34,8 @@ valid_ghw_target_trigger = {
 			continue = { tier > tier_county }
 			tier = tier_county
 			NOT = { holder = { has_trait = wilderness } }
-			$FAITH$ = {
-				is_hostile_enough_for_holy_war_trigger = { FAITH = prev.holder.top_liege.faith }
+			$FAITH$.main_rite = {
+				is_hostile_enough_for_holy_war_trigger = { RITE = prev.holder.top_liege.rite }
 				prev.holder.top_liege.current_military_strength > { value = scope:faith_strength }
 			}
 		}

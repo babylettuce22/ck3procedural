@@ -19,17 +19,23 @@
 #      check and the decision that offers the government cannot disagree.
 #
 #   3. japan_feudal_government.can_get_government is unchanged: Sōryō is only ever reached from
-#      inside a Ritsuryō/Sōryō realm (vanilla's own clauses), which the loosened Ritsuryō gate
-#      now makes possible on a generated map.
+#      inside a Ritsuryō/Sōryō realm (vanilla's own clauses, which 1.20 moved into
+#      tgp_can_become_japanese_feudal_trigger), which the loosened Ritsuryō gate now makes
+#      possible on a generated map.
 #
 # Re-copy from vanilla and re-apply the three changes when the game patches this file.
+#
+# Re-copied from 1.20.0.2 on 2026-09-30. What moved upstream: the `administrative = yes` government
+# rule is gone ("Unexpected enum found: administrative", and the admin tiers then logged as illegal
+# for a non-administrative government) -- Ritsuryō is admin now through `mechanic_type =
+# administrative`; both governments gained the japanese family-aspiration and bureaucracy flags and
+# `possible_grant_vassal_governments`; Ritsuryō gained `ai = { use_legends = yes }`.
 
 japan_administrative_government = { # Ritsuryo
 	government_rules = {
 		create_cadet_branches = yes
 		rulers_should_have_dynasty = yes
 		dynasty_named_realms = no
-		administrative = yes
 		legitimacy = yes
 		landless_playable = yes
 		use_as_base_on_landed = yes
@@ -45,7 +51,7 @@ japan_administrative_government = { # Ritsuryo
 
 	royal_court = any
 	blocked_subject_courts = { meritocratic_government celestial_government japan_administrative_government administrative_government steppe_admin_government }
-
+	mechanic_type = administrative
 	domicile_type = japanese_manor
 	main_administrative_tier = county
 	min_appointment_tier = county
@@ -109,7 +115,15 @@ japan_administrative_government = { # Ritsuryo
 		government_uses_domicile_but_not_adventurer
 		has_unique_government_perks
 		government_uses_admin_province_obligations
+		government_uses_japanese_family_aspirations
 		government_has_house_blocs
+		government_uses_japanese_bureaucracy
+	}
+
+	possible_grant_vassal_governments = { theocracy_government ecclesiastical_government }
+
+	ai = {
+		use_legends = yes
 	}
 
 	color = { 250 90 150 }
@@ -161,12 +175,7 @@ japan_feudal_government = { # Soryo
 	vassal_contract_group = japan_feudal_vassal
 
 	can_get_government = {
-		has_tgp_dlc_trigger = yes
-		OR = {
-			top_liege = { government_is_japanese_trigger = yes } # Soryo not created outside Ritsuryo/Soryo Realms
-			domicile ?= { is_domicile_type = japanese_manor } # Vassalized Ritsuryo/Soryo stay Soryo
-			has_character_flag = can_become_japanese_feudal
-		}
+		tgp_can_become_japanese_feudal_trigger = yes
 	}
 
 	# The Regent always remains in the same place.
@@ -189,8 +198,12 @@ japan_feudal_government = { # Soryo
 		government_is_settled
 		government_uses_domicile_but_not_adventurer
 		has_unique_government_perks
+		government_uses_japanese_family_aspirations
 		government_has_house_blocs
+		government_uses_japanese_bureaucracy
 	}
+
+	possible_grant_vassal_governments = { theocracy_government ecclesiastical_government }
 
 	color = { 68 100 250 }
 	realm_mask_offset = { 0.0 0.075 }

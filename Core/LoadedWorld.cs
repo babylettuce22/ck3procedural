@@ -103,6 +103,13 @@ public sealed class LoadedWorld
         foreach (var root in titles.Script!.Roots) world.AddTitle(titles, root, null);
         world.ReadEntries("common/culture/cultures/00_generated_cultures.txt", "Culture");
         world.ReadEntries("common/religion/religion_types/00_generated_religions.txt", "Religion");
+        // CK3 1.20 moved faiths out of the religion file. A world written before that still nests
+        // them, which ReadEntries picks up from the religion; one written after has both files.
+        if (File.Exists(Path.Combine(path, FaithTypesFile)))
+        {
+            world.ReadEntries(FaithTypesFile, "Faith");
+            world.MirrorMainRites();
+        }
         world.ReadEntries("history/characters/00_generated_characters.txt", "Character");
         world.ReadEntries("history/provinces/00_generated_provinces.txt", "Province");
         world.ReadEntries("common/dynasties/00_generated_dynasties.txt", "Dynasty");
@@ -228,6 +235,53 @@ public sealed class LoadedWorld
                       "They can be assigned to provinces and characters, but their definitions are the base game's and are not edited here.");
     }
 
+    private const string FaithTypesFile = "common/religion/faith_types/00_generated_faiths.txt";
+    private const string RiteTypesFile = "common/religion/rite_types/00_generated_rites.txt";
+
+    /// <summary>
+    /// Keeps each generated faith's main rite in step with the faith as it is edited.
+    ///
+    /// ReligionWriter gives every faith one rite of the same key carrying a copy of its colour,
+    /// tenets and doctrines, and in game the rite's copy is the one that counts: a rite's tenets and
+    /// doctrines override its faith's, and a rite's colour is what the map draws. So an edit to the
+    /// faith's field is written to the rite's too, and a reset reverts both.
+    /// </summary>
+    private void MirrorMainRites()
+    {
+        if (!File.Exists(Path.Combine(DirectoryPath, RiteTypesFile))) return;
+        var file = Read(RiteTypesFile);
+
+        foreach (var rite in file.Script!.Roots.Where(n => n.IsBlock))
+        {
+            if (Entries.FirstOrDefault(e => e.Kind == "Faith" && e.Key == rite.Key) is not { } faith) continue;
+
+            foreach (string key in new[] { "color", "tenets", "doctrines" })
+            {
+                int at = faith.Fields.FindIndex(f => f.Name == key);
+                if (at < 0 || rite.ChildrenNamed(key).FirstOrDefault(n => n.IsBlock) is not { } mirror) continue;
+
+                var field = faith.Fields[at];
+                var range = file.ValueRange(mirror);
+                faith.Fields[at] = new WorldField
+                {
+                    Name = field.Name, Category = field.Category, Read = field.Read,
+                    Description = field.Description, ColorScale = field.ColorScale, IsList = field.IsList,
+                    Options = field.Options,
+                    Write = field.Write is null ? null : value =>
+                    {
+                        field.Write(value);
+                        file.Set(range, " " + field.Read().Trim() + " ");
+                    },
+                    Reset = () =>
+                    {
+                        field.Reset?.Invoke();
+                        file.RevertRange(range);
+                    },
+                };
+            }
+        }
+    }
+
     private void ReadEntries(string relative, string kind)
     {
         if (!File.Exists(Path.Combine(DirectoryPath, relative)))
@@ -294,7 +348,7 @@ public sealed class LoadedWorld
                 entry.Fields.Add(new WorldField { Name = date.Field("birth") == "yes" ? "Birth date" : "Death date", Category = "History", Read = () => date.Key });
             AddStanding(entry, file, node);
         }
-        else if (kind == "Province") AddFields(entry, file, node, "culture", "religion", "holding", "special_building_slot", "special_building");
+        else if (kind == "Province") AddFields(entry, file, node, "culture", "religion", "faith", "holding", "special_building_slot", "special_building");
         else if (kind is "Dynasty" or "House")
         {
             (kind == "Dynasty" ? Dynasties : Houses).Add(node.Key, entry);
@@ -321,6 +375,14 @@ public sealed class LoadedWorld
             AddLocalisation(entry, node.Key + "_desc", "Description");
             AddFields(entry, file, node, "color", "ethos", "martial_custom", "head_determination", "traditions",
                 "clothing_gfx", "unit_gfx", "building_gfx", "coa_gfx", "doctrine", "icon", "holy_site");
+
+            // A 1.20 faith: its colour and icon sit under faith_details, its tenets, doctrines and
+            // holy sites in lists of their own.
+            if (node.ChildrenNamed("faith_details").FirstOrDefault(n => n.IsBlock) is { } details)
+            {
+                AddFields(entry, file, details, "color", "icon");
+                AddFields(entry, file, node, "tenets", "doctrines", "eminent_holy_sites", "holy_sites");
+            }
             if (kind == "Culture") AddCultureWords(entry);
         }
         // Read-only information keeps historical relations and identities inspectable without
@@ -583,17 +645,21 @@ public sealed class LoadedWorld
                 string ReadValue() => node.IsBlock
                     ? string.Join(" ", Regex.Replace(file.Read(range), "#[^\\r\\n]*", "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
                     : Unquote(file.Read(range));
+                // A province's faith is written `faith =` since CK3 1.20 and `religion =` before it;
+                // either way the world knows the field as "religion", which is what every view and
+                // inspector asks for.
+                string role = key == "faith" ? "religion" : key;
                 entry.Fields.Add(new WorldField
                 {
-                    Name = prefix + (nodes.Count == 1 ? key : $"{key} {i + 1}"), Category = "Properties",
+                    Name = prefix + (nodes.Count == 1 ? role : $"{role} {i + 1}"), Category = "Properties",
                     ColorScale = key == "color" ? (entry.Kind == "Faith" || node.Head.Contains("hsv") ? 1 : 255) : null,
                     IsList = node.IsBlock,
-                    Options = OptionsFor(entry, key, node),
+                    Options = OptionsFor(entry, role, node),
                     Read = ReadValue,
                     Write = value =>
                     {
                         if (value == ReadValue()) return;
-                        ValidateValue(entry, key, value, node);
+                        ValidateValue(entry, role, value, node);
                         file.Set(range, node.IsBlock ? " " + value.Trim() + " " : quoted ? Quote(value.Trim()) : value.Trim());
                         if (entry.Kind == "Character" && key is "culture" or "religion")
                             foreach (var bookmark in _bookmarkCharacters.GetValueOrDefault(entry.Key) ?? [])
@@ -647,6 +713,9 @@ public sealed class LoadedWorld
             "building_gfx" => () => Plain(Looks(l => l.BuildingGfx)),
             "coa_gfx" => () => Plain(Looks(l => l.CoaGfx)),
             "icon" => () => Plain(vocabulary()?.FaithIcons ?? []),
+            "tenets" => () => Plain(vocabulary()?.Tenets ?? []),
+            "doctrines" => () => Plain(vocabulary()?.DoctrineGroups.Values.SelectMany(d => d) ?? []),
+            "holy_sites" or "eminent_holy_sites" => () => Kind("HolySite"),
             "doctrine" => () => Plain(Unquote(node.Value ?? "").StartsWith("tenet_")
                 ? vocabulary()?.Tenets ?? []
                 : vocabulary()?.DoctrineGroups.Values.SelectMany(d => d) ?? []),

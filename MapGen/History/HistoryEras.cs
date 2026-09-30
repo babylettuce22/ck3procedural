@@ -71,7 +71,7 @@ internal static class HistoryEras
                 if (heldOnce && ruinsEnabled) ruins.Add(county);
                 else unsettled.Add(county);
             }
-            var wild = new WildernessMap(unsettled, ruins, ruinsEnabled);
+            var wild = new WildernessMap(unsettled, ruins, ruinsEnabled, generatedWilderness.Ships);
 
             var map = Realms.FromHistory(fresh, empires, development, wild, cfg, new Rng(cfg.Seed ^ 0x2E18 ^ year),
                 adjacency, quiet: true);

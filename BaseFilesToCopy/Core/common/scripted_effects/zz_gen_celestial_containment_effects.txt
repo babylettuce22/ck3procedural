@@ -17,9 +17,10 @@
 # ---- Why the admin branch is spelled out ----
 #
 # It is vanilla's `else = { # Administrative }` arm of change_to_administrative_effect
-# (00_administrative_effects.txt), line for line. The effect itself cannot be called: its whole
-# government block is gated on the character NOT already allowing `administrative`, and celestial
-# does, so it would convert nobody. The byz_admin flag is what makes the domicile conversion issue a
+# (00_administrative_effects.txt), line for line (checked against 1.20.0.2: that arm is unchanged).
+# The effect itself cannot be called: its whole government block is gated on the character NOT
+# already being administrative (`government_allows = administrative` up to 1.19,
+# `government_has_mechanic = administrative` since), and celestial is, so it would convert nobody. The byz_admin flag is what makes the domicile conversion issue a
 # duchy-tier noble-family title in place of the county-tier celestial one, as vanilla's admin does.
 gen_leave_celestial_effect = {
 	if = {

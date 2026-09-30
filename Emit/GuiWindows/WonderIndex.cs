@@ -444,8 +444,14 @@ public static class WonderIndex
             gen_wonder_index_window = {
             	scope = character
 
+            	# Guarded: since 1.20 the window is asked once more while quitting, with no player
+            	# character, and an unguarded has_variable logs an invalid-scope error each time.
             	is_shown = {
-            		has_variable = gen_wonder_index_open
+            		trigger_if = {
+            			limit = { exists = this }
+            			has_variable = gen_wonder_index_open
+            		}
+            		trigger_else = { always = no }
             	}
 
             	effect = {

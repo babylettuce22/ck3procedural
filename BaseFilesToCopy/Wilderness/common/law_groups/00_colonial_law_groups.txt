@@ -1,0 +1,7 @@
+﻿# The colony governance law group. Its laws are in common/laws/00_colonial_laws.txt and name this
+# group with law_group_type; CK3 1.20 (Crozier) split law groups into a database of their own.
+
+colony_governance_laws = {
+	default = colony_law_balanced
+	flag = realm_law
+}

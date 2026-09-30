@@ -33,6 +33,18 @@ namespace Ck3MapGen.Emit;
 /// Earth province (location = province:4828, Baghdad). Those three ids are never picked, or a
 /// generated city would get Baghdad's sight-seeing event, and the "Will trigger a Sight-Seeing
 /// Event" tooltip is dropped because nothing will.
+///
+/// ---- Everything else is vanilla's, read from the installed game ----
+///
+/// Both objects are whole-object overrides, so everything in them has to be restated. Up to
+/// 2026-09-30 the on_visit blocks were 1.19 text pasted in here; 1.20 (Crozier) changed the grand
+/// city's gold reward and rebuilt the battlefield visit around an 80/20 roll between martial
+/// experience and a commander trait, and the pasted copies went on paying out 1.19. Now each object
+/// is taken from the installed game and only three things are replaced: the province list, the
+/// Earth sight-seeing tooltip, and the battlefield visit's trait switches, which name Earth
+/// provinces (Hastings gives aggressive_attacker). A generated battlefield teaches the commander
+/// trait of the ground it was fought on (<see cref="TraitFor"/>), the way Red Cliffs teaches
+/// forder. If vanilla stops declaring an object, it is reported and not written.
 /// </summary>
 public static class PoiWriter
 {
@@ -46,21 +58,40 @@ public static class PoiWriter
     /// <summary>
     /// Writes both types and the battlefield names. <paramref name="chronicle"/> is null with
     /// --no-history, which leaves no battlefields and still writes the cities.
+    /// <paramref name="provinceTerrain"/> picks each battlefield's trait; without it every
+    /// battlefield teaches open_terrain_expert.
     /// </summary>
-    public static (int Cities, int Battles) WriteAll(string modDir, List<Title> empires,
-        Dictionary<Title, int> development, WildernessMap wilderness, ChronicleMap? chronicle, int startYear)
+    public static (int Cities, int Battles) WriteAll(string modDir, string gameDir, List<Title> empires,
+        Dictionary<Title, int> development, WildernessMap wilderness, ChronicleMap? chronicle, int startYear,
+        TerrainClass[]? provinceTerrain = null)
     {
         var cities = GrandCities(empires, development, wilderness);
-        var battles = Battlefields(chronicle, wilderness, startYear);
+        var battles = Battlefields(chronicle, wilderness, startYear, provinceTerrain);
 
-        WritePoiTypes(modDir, cities, battles);
+        WritePoiTypes(modDir, gameDir, cities, battles);
         WriteBattleLoc(modDir, battles);
 
         Console.WriteLine($"  points of interest: {cities.Count} grand cities, {battles.Count} historical battlefields");
         return (cities.Count, battles.Count);
     }
 
-    private sealed record Battlefield(Title County, int Year, string Text);
+    private sealed record Battlefield(Title County, int Year, string Text, string Trait);
+
+    /// <summary>
+    /// The commander trait a battlefield teaches, from the ground it was fought on: the terrain
+    /// trait that ground asks for, as vanilla's own list pairs Red Cliffs with forder and Talas with
+    /// desert_warrior. Every key is a vanilla 1.20 commander trait.
+    /// </summary>
+    private static string TraitFor(TerrainClass terrain) => terrain switch
+    {
+        TerrainClass.Mountains or TerrainClass.Hills or TerrainClass.DesertMountains => "rough_terrain_expert",
+        TerrainClass.Desert or TerrainClass.Drylands or TerrainClass.Oasis => "desert_warrior",
+        TerrainClass.Forest or TerrainClass.Taiga => "forest_fighter",
+        TerrainClass.Jungle => "jungle_stalker",
+        TerrainClass.Wetlands or TerrainClass.Floodplains => "forder",
+        TerrainClass.Arctic => "winter_soldier",
+        _ => "open_terrain_expert",
+    };
 
     private static List<Title> GrandCities(List<Title> empires, Dictionary<Title, int> development,
         WildernessMap wilderness)
@@ -78,7 +109,8 @@ public static class PoiWriter
         return best.Take(count).Select(kv => kv.Key).ToList();
     }
 
-    private static List<Battlefield> Battlefields(ChronicleMap? chronicle, WildernessMap wilderness, int startYear)
+    private static List<Battlefield> Battlefields(ChronicleMap? chronicle, WildernessMap wilderness, int startYear,
+        TerrainClass[]? provinceTerrain)
     {
         if (chronicle is null) return [];
 
@@ -93,7 +125,8 @@ public static class PoiWriter
             .OrderByDescending(x => x.Event.Tension).ThenByDescending(x => x.Event.Year).ThenBy(x => x.County!.Index)
             .Take(MaxBattles)
             .OrderBy(x => x.Event.Year).ThenBy(x => x.County!.Index)
-            .Select(x => new Battlefield(x.County!, Math.Max(1, x.Event.Year), x.Event.Text))
+            .Select(x => new Battlefield(x.County!, Math.Max(1, x.Event.Year), x.Event.Text,
+                TraitFor(provinceTerrain is null ? TerrainClass.Plains : Development.DominantTerrain(x.County!, provinceTerrain))))
             .ToList();
     }
 
@@ -107,43 +140,166 @@ public static class PoiWriter
 
     private static int ProvinceOf(Title county) => county.Capital!.ProvinceId;
 
-    private static void WritePoiTypes(string modDir, List<Title> cities, List<Battlefield> battles)
+    private static void WritePoiTypes(string modDir, string gameDir, List<Title> cities, List<Battlefield> battles)
     {
-        var b = new JominiBuilder();
-        b.Comment("Generated by PoiWriter. Whole-object overrides of two vanilla points of interest");
-        b.Comment("whose province lists are Earth ids; the on_visit blocks are vanilla's.");
-        b.Blank();
+        var sb = new System.Text.StringBuilder();
+        sb.Append("# Generated by PoiWriter. Whole-object overrides of two vanilla points of interest whose\n")
+          .Append("# province lists are Earth ids. Everything but the lists and the Earth trait switches is\n")
+          .Append("# vanilla's own, read from the installed game when the world was written.\n\n");
 
-        using (b.Block("poi_grand_city"))
+        var cityList = new System.Text.StringBuilder("build_province_list = {\n");
+        foreach (var county in cities)
+            cityList.Append($"\t\t# {county.Name}\n\t\tprovince:{ProvinceOf(county)} = {{ add_to_list = provinces }}\n");
+        cityList.Append("\t}");
+
+        var battleList = new System.Text.StringBuilder("build_province_list = {\n");
+        foreach (var battle in battles)
+            battleList.Append($"\t\tif = {{ # {battle.County.Name}, {battle.Year}\n")
+                      .Append($"\t\t\tlimit = {{ game_start_date > {battle.Year}.12.31 }}\n")
+                      .Append($"\t\t\tprovince:{ProvinceOf(battle.County)} = {{ add_to_list = provinces }}\n")
+                      .Append("\t\t}\n");
+        battleList.Append("\t}");
+
+        int written = 0;
+
+        if (VanillaObject(gameDir, "poi_grand_city") is { } city)
         {
-            using (b.Block("build_province_list"))
-                foreach (var county in cities)
-                {
-                    b.Comment(county.Name);
-                    using (b.Block($"province:{ProvinceOf(county)}")) b.Field("add_to_list", "provinces");
-                }
-            b.Raw(GrandCityOnVisit);
+            city = ReplaceBlock(city, "build_province_list", cityList.ToString());
+            // The sight-seeing tooltip promises one of three events that each test an Earth province.
+            city = RemoveEnclosingIf(city, "poi_grand_city_visit_event_tt");
+            sb.Append(city).Append("\n\n");
+            written++;
         }
-        b.Blank();
 
-        using (b.Block("poi_battles_historical"))
+        if (VanillaObject(gameDir, "poi_battles_historical") is { } field)
         {
-            using (b.Block("build_province_list"))
-                foreach (var battle in battles)
-                {
-                    b.Comment($"{battle.County.Name}, {battle.Year}");
-                    using (b.Block("if"))
-                    {
-                        using (b.Block("limit")) b.Token($"game_start_date > {battle.Year}.12.31");
-                        using (b.Block($"province:{ProvinceOf(battle.County)}")) b.Field("add_to_list", "provinces");
-                    }
-                }
-            b.Raw(BattlesOnVisit);
+            field = ReplaceBlock(field, "build_province_list", battleList.ToString());
+            field = RewriteTraitSwitches(field, battles);
+            sb.Append(field).Append('\n');
+            written++;
         }
 
         string dir = Path.Combine(modDir, "common", "travel", "point_of_interest_types");
+        string path = Path.Combine(dir, PoiFile);
+        if (written == 0)
+        {
+            // Nothing to override: a stale file from an earlier write must not linger.
+            if (File.Exists(path)) File.Delete(path);
+            return;
+        }
+
         Directory.CreateDirectory(dir);
-        ParadoxText.WriteBom(Path.Combine(dir, PoiFile), b.ToString());
+        ParadoxText.WriteBom(path, sb.ToString());
+    }
+
+    /// <summary>
+    /// <paramref name="key"/>'s whole block as the installed game declares it, line endings
+    /// normalised, or null (reported) when no vanilla file declares it any more.
+    /// </summary>
+    private static string? VanillaObject(string gameDir, string key)
+    {
+        string dir = Path.Combine(gameDir, "common", "travel", "point_of_interest_types");
+        var header = new System.Text.RegularExpressions.Regex(
+            $@"(?m)^{System.Text.RegularExpressions.Regex.Escape(key)}\s*=\s*\{{");
+
+        if (Directory.Exists(dir))
+            foreach (string file in Directory.GetFiles(dir, "*.txt").OrderBy(f => f, StringComparer.Ordinal))
+            {
+                string text = File.ReadAllText(file).Replace("\r\n", "\n");
+                var m = header.Match(text);
+                if (!m.Success) continue;
+
+                int end = ScriptScan.BlockEnd(text, m.Index);
+                if (end > 0) return text[m.Index..end];
+            }
+
+        Console.WriteLine($"  points of interest: WARNING vanilla no longer declares {key}; not overriding it");
+        return null;
+    }
+
+    /// <summary>The first <c>name = { … }</c> in <paramref name="block"/> swapped for
+    /// <paramref name="replacement"/>, or the block unchanged when it has none.</summary>
+    private static string ReplaceBlock(string block, string name, string replacement)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(block,
+            $@"\b{System.Text.RegularExpressions.Regex.Escape(name)}\s*=\s*\{{");
+        if (!m.Success) return block;
+
+        int end = ScriptScan.BlockEnd(block, m.Index);
+        return end < 0 ? block : block[..m.Index] + replacement + block[end..];
+    }
+
+    /// <summary>
+    /// <paramref name="block"/> without the innermost <c>if = { … }</c> that mentions
+    /// <paramref name="needle"/>, whole lines included, or unchanged when nothing does.
+    /// </summary>
+    private static string RemoveEnclosingIf(string block, string needle)
+    {
+        int at = block.IndexOf(needle, StringComparison.Ordinal);
+        for (int open = at < 0 ? -1 : block.LastIndexOf("if = {", at, StringComparison.Ordinal);
+             open >= 0;
+             open = open == 0 ? -1 : block.LastIndexOf("if = {", open - 1, StringComparison.Ordinal))
+        {
+            int end = ScriptScan.BlockEnd(block, open);
+            if (end <= at) continue;
+
+            int start = block.LastIndexOf('\n', open) + 1;
+            int stop = block.IndexOf('\n', end - 1);
+            return block[..start] + block[(stop < 0 ? block.Length : stop + 1)..];
+        }
+        return block;
+    }
+
+    /// <summary>
+    /// Each <c>switch = { … }</c> in the battlefield visit whose arms are Earth provinces, with its
+    /// arms rebuilt for the generated battlefields.
+    ///
+    /// The arm vanilla writes first is the template: its province id and the trait it names
+    /// (<c>add_trait = X</c> in the tooltip switch, <c>TRAIT = X</c> in the effect one) are swapped
+    /// for each battlefield's, so whatever shape vanilla gives an arm is kept. Vanilla's comments
+    /// inside the switch name Earth battles and go with their arms.
+    /// </summary>
+    private static string RewriteTraitSwitches(string block, List<Battlefield> battles)
+    {
+        var arm = new System.Text.RegularExpressions.Regex(@"^(\s*)province:\d+\s*=\s*\{.*\}\s*$");
+        var trait = new System.Text.RegularExpressions.Regex(@"\b(add_trait|TRAIT)(\s*=\s*)\w+");
+
+        var output = new System.Text.StringBuilder();
+        int from = 0;
+        for (int at = block.IndexOf("switch = {", StringComparison.Ordinal); at >= 0;
+             at = block.IndexOf("switch = {", from, StringComparison.Ordinal))
+        {
+            int end = ScriptScan.BlockEnd(block, at);
+            if (end < 0) break;
+
+            var lines = block[at..end].Split('\n');
+            string? template = lines.FirstOrDefault(l => arm.IsMatch(l) && trait.IsMatch(l));
+
+            output.Append(block[from..at]);
+            if (template is null)
+            {
+                output.Append(block[at..end]);
+            }
+            else
+            {
+                string indent = arm.Match(template).Groups[1].Value;
+                var kept = lines.Skip(1).Take(lines.Length - 2)
+                                .Where(l => !arm.IsMatch(l) && !l.TrimStart().StartsWith('#'));
+                output.Append(lines[0]).Append('\n');
+                foreach (string line in kept) output.Append(line).Append('\n');
+                foreach (var battle in battles)
+                {
+                    string line = System.Text.RegularExpressions.Regex.Replace(template, @"province:\d+",
+                        $"province:{ProvinceOf(battle.County)}");
+                    line = trait.Replace(line, m => $"{m.Groups[1].Value}{m.Groups[2].Value}{battle.Trait}");
+                    output.Append($"{indent}# {battle.County.Name}, {battle.Year}\n").Append(line.TrimEnd()).Append('\n');
+                }
+                output.Append(lines[^1]);
+            }
+            from = end;
+        }
+        output.Append(block[from..]);
+        return output.ToString();
     }
 
     private static void WriteBattleLoc(string modDir, List<Battlefield> battles)
@@ -181,87 +337,4 @@ public static class PoiWriter
         }
         loc.Write(Path.Combine(modDir, "localization", "english", "gen_battle_poi_l_english.yml"));
     }
-
-    // Vanilla's on_visit, less the sight-seeing tooltip: see the class comment.
-    private const string GrandCityOnVisit = """
-	on_visit = {
-		trigger_event = {
-			on_action = on_visited_grand_city
-		}
-		if = {
-			limit = {
-				NOT = {
-					has_trait = lifestyle_traveler
-				}
-			}
-			add_trait = lifestyle_traveler
-			traveler_travel_xp_effect = {
-				MIN = 1
-				MAX = 3
-			}
-			if = {
-				limit = {
-					is_landless_adventurer = yes
-					has_perk = organized_muster_rolls_perk
-				}
-				send_interface_toast = {
-					title = poi_grand_city.visit
-					left_icon = root
-					add_gold = minor_gold_laamps_value
-				}
-			}
-		}
-		else = {
-			send_interface_toast = {
-				title = poi_grand_city.visit
-				left_icon = root
-				traveler_travel_xp_effect = {
-					MIN = 3
-					MAX = 5
-				}
-				if = {
-					limit = {
-						has_government = landless_adventurer_government
-						has_perk = organized_muster_rolls_perk
-					}
-					add_gold = minor_gold_laamps_value
-				}
-			}
-		}
-		wanderer_lifestyle_destination_effect = yes
-		visiting_poi_effect = yes
-	}
-
-""";
-
-    private const string BattlesOnVisit = """
-	on_visit = {
-		send_interface_toast = {
-			title = travel_point_historical_name_visit_message
-			left_icon = root
-			if = {
-				limit = {
-					OR = {
-						has_variable = battle_poi_trait_gained
-						number_of_commander_traits > 1
-					}
-				}
-				add_poi_martial_experience_effect = yes
-			}
-			else = {
-				poi_lifestyle_experience_effect = {
-					LIFESTYLE = martial
-					VALUE = travel_minor_lifestyle_xp
-				}
-			}
-			traveler_danger_xp_effect = {
-				MIN = 1
-				MAX = 3
-			}
-			wanderer_lifestyle_destination_effect = yes
-		}
-		visiting_poi_effect = yes
-	}
-
-""";
 }

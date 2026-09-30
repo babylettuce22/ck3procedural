@@ -1563,6 +1563,182 @@ public static partial class CompatibilityWriter
     [System.Text.RegularExpressions.GeneratedRegex(@"(?<![A-Za-z0-9_])desc\s*=\s*([A-Za-z0-9_.]+)")]
     private static partial System.Text.RegularExpressions.Regex DynamicDescFallback();
 
+    /// <summary>A vanilla scripted effect <see cref="WriteHistoricalSetupStubs"/> re-declares empty.</summary>
+    /// <param name="Key">Vanilla's key, unchanged, so every caller reaches the stub.</param>
+    /// <param name="ProceduralOnly">Left alone on a VanillaWorld map, where the effect can still find
+    /// what it needs.</param>
+    /// <param name="Why">Written above the stub.</param>
+    private readonly record struct HistoricalStub(string Key, bool ProceduralOnly, string Why);
+
+    /// <summary>
+    /// The effects <see cref="WriteHistoricalSetupStubs"/> stubs, and why each one can only fail here.
+    /// </summary>
+    private static readonly HistoricalStub[] HistoricalStubs =
+    [
+        new("set_up_historical_monastic_orders_effect", false,
+            """
+            1.20's game-start monasteries (game_start.txt, behind has_pam_dlc_trigger). Each order is
+            seated on a vanilla barony (b_cento, b_farfa, b_cassino... 256 title references), led by
+            one of vanilla's abbots (character:benedictine_1... 113 character references) and founded
+            by that barony's count. No world has the abbots, so create_holy_order runs with a null
+            leader and an unset founder and tests every holy order type's trigger against it: with
+            the military setup below, about 6,950 errors at game start on 2026-09-30 — mostly
+            "scope:founder trigger [ Failed context switch ]" in common/holy_orders.
+            """),
+        new("set_up_historical_military_orders_effect", false,
+            """
+            Its military counterpart, called at every game start whatever the DLC: the Templars at
+            b_saida, the Hospitallers at b_hebron, and their leases in Iberia (54 title references),
+            under vanilla grandmasters and founders (character:st_amand_1, character:223523).
+            """),
+        new("spawn_historical_characters_effect", true,
+            """
+            The yearly pulse's historical figures, each born at a vanilla barony in a vanilla date
+            window (216 barony references: b_nagapattinam, b_kanchipuram...). None of those baronies
+            exists on a procedural world, so it never spawns anyone and only logs. A VanillaWorld map
+            carries vanilla barony keys across its window, where a figure can still be born.
+            """),
+        new("create_artifact_fp2_votive_crowns_effect", true,
+            """
+            The Visigothic votive crowns, a Christian holy relic (Fate of Iberia). The game-start
+            generator (historical_artifacts.0023) gives five of them to holders of counties in
+            world_europe_west_iberia, with no faith test, and CompatibilityWriter re-declares that
+            region over generated counties, so generated rulers of generated faiths started with a
+            Christian relic they can never use ("Is Holy Relic but not for" their faith). The event's
+            other region-seeded relics (Excalibur, Orthodox icons) test for Christianity and never
+            fire here. Seen 2026-09-30. Nothing else calls this effect.
+            """),
+    ];
+
+    /// <summary>
+    /// Re-declares, as empty stubs, the vanilla setup effects that stage real history on real
+    /// places — 1.20's historical monastic and military orders, and the historical figures the
+    /// yearly pulse spawns.
+    ///
+    /// A single-object override rather than a blanked file, because neither file is only this.
+    /// 00_holy_order_effects.txt holds the twenty-odd effects the rest of the holy order machinery
+    /// calls (sending a child to an order, the monastic lifestyle experience), and
+    /// 00_historical_characters_scripted_effects.txt holds historical_character_finalization_effect,
+    /// which PAM's heresy founders call.
+    ///
+    /// The stub should also take the vanilla body's references out of error.log, not only its
+    /// runtime, because an overridden definition is not parsed. That is measured for decisions —
+    /// 2026-09-30's error.log has none of the Earth references inside the ones
+    /// <see cref="WriteDecisionBlocks"/> overrides (c_kiev at 00_fp1_major_decisions.txt:323 among
+    /// them) while the same keys still fail everywhere else — and assumed for scripted effects,
+    /// which go through the same override (database_conflicts.log reports both from
+    /// game_database.h). If the b_cento lines outlive this stub, that assumption is what broke.
+    ///
+    /// The two holy order setups are stubbed on a VanillaWorld map too. Its window can carry
+    /// b_cento, but the orders' leaders and founders are vanilla characters no world imports —
+    /// <see cref="MapGen.VanillaCharacters"/> brings in the rulers it seats, under gen_char ids, and
+    /// their families — so the effect fails the same way there.
+    ///
+    /// Checked against the installed game, like <see cref="WriteDecisionBlocks"/>: a stub for a key
+    /// vanilla no longer defines is not an override but a new unused effect, so a rename in a later
+    /// patch is reported rather than shipped.
+    /// </summary>
+    public static void WriteHistoricalSetupStubs(string modDir, string gameDir, Config.MapConfig cfg)
+    {
+        string source = Path.Combine(gameDir, "common", "scripted_effects");
+        if (!Directory.Exists(source)) return;
+
+        bool procedural = cfg.ContentSource == Config.MapConfig.ContentSourceMode.Procedural;
+        var wanted = HistoricalStubs.Where(s => procedural || !s.ProceduralOnly)
+                                    .ToDictionary(s => s.Key, StringComparer.Ordinal);
+
+        // Last file wins, as it does for the engine: that is the definition being overridden.
+        var origin = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string path in Directory.GetFiles(source, "*.txt"))
+            foreach (var (key, _, _, _) in ScriptScan.TopLevelDeclarations(
+                         File.ReadAllLines(path), c => char.IsLetterOrDigit(c) || c is '_'))
+                if (wanted.ContainsKey(key)) origin[key] = Path.GetFileName(path);
+
+        foreach (string missing in wanted.Keys.Where(k => !origin.ContainsKey(k)))
+            Console.WriteLine($"  historical setup: WARNING vanilla no longer defines {missing} — "
+                              + "renamed or moved in a patch; whatever replaced it is running unstubbed");
+
+        var stubs = wanted.Values.Where(s => origin.ContainsKey(s.Key)).ToList();
+        if (stubs.Count == 0) return;
+
+        var b = new JominiBuilder();
+        b.Comment("""
+                  Vanilla setup effects that stage real history on real places, re-declared empty.
+                  Each needs vanilla titles or characters this world does not have, so on it the
+                  vanilla body can only log. Written by CompatibilityWriter.WriteHistoricalSetupStubs.
+
+                  common/scripted_effects has no subfolders, so this zz_ file loads after every
+                  vanilla one and its definitions win (database_conflicts.log names the winner).
+                  """);
+        b.Blank();
+
+        foreach (var stub in stubs)
+        {
+            b.Comment($"{origin[stub.Key]}\n{stub.Why}");
+            using (b.Block(stub.Key)) { }
+            b.Blank();
+        }
+
+        string dir = Path.Combine(modDir, "common", "scripted_effects");
+        Directory.CreateDirectory(dir);
+        ParadoxText.WriteBom(Path.Combine(dir, "zz_gen_historical_setup_stubs.txt"), b.ToString());
+
+        Console.WriteLine($"  historical setup: {stubs.Count} vanilla effects stubbed "
+                          + $"({string.Join(", ", stubs.Select(s => s.Key))})");
+    }
+
+    /// <summary>
+    /// The holy order type files <see cref="WriteHolyOrderTypeBlanks"/> blanks on a procedural
+    /// world. 00_generic_holy_orders.txt is deliberately not one of them.
+    /// </summary>
+    private static readonly string[] FaithHolyOrderTypeFiles =
+        ["00_christian_holy_orders.txt", "00_muslim_holy_orders.txt"];
+
+    /// <summary>
+    /// Blanks 1.20's named holy order types — the Benedictines, the Templars, the ghazis — on a
+    /// procedural world, which can never pick one. The runtime half of their errors went with
+    /// <see cref="WriteHistoricalSetupStubs"/>; this is the load-time half.
+    ///
+    /// <c>create_holy_order</c> draws a type from common/holy_orders by trigger and weight. Every
+    /// type in these two files gates its trigger on a vanilla religion, faith or rite
+    /// (<c>is_western_christian_faith</c>, <c>religion:islam_religion</c>), and a procedural
+    /// world's faiths all belong to generated religions, so none is ever eligible. What they do
+    /// cost is 168 "Failed to fetch a valid landed title" lines on every launch (2026-09-30), for
+    /// the counties their weights and triggers name (c_modena, c_sevilla, c_sankt_gallen).
+    ///
+    /// Blanking is safe here, against this class's rule, because nothing names a holy order type:
+    /// the engine picks among them, vanilla script only ever asks for
+    /// <c>random_holy_order_type = military</c> or <c>monastic</c>, and 00_generic_holy_orders.txt —
+    /// the types a generated faith actually gets, and the empty-trigger fallbacks the engine wants
+    /// (_holy_orders.info) — is left alone. common/holy_orders has no subfolders, so a file of the
+    /// same name replaces vanilla's outright.
+    ///
+    /// A VanillaWorld map keeps them: its Christian and Muslim faiths are vanilla's own.
+    /// </summary>
+    public static void WriteHolyOrderTypeBlanks(string modDir, string gameDir, Config.MapConfig cfg)
+    {
+        if (cfg.ContentSource != Config.MapConfig.ContentSourceMode.Procedural) return;
+
+        string source = Path.Combine(gameDir, "common", "holy_orders");
+        if (!Directory.Exists(source)) return;
+
+        string destination = Path.Combine(modDir, "common", "holy_orders");
+
+        int blanked = 0;
+        foreach (string file in FaithHolyOrderTypeFiles)
+        {
+            if (!File.Exists(Path.Combine(source, file))) continue;
+
+            Directory.CreateDirectory(destination);
+            ParadoxText.WriteBom(Path.Combine(destination, file), "\n");
+            blanked++;
+        }
+
+        if (blanked > 0)
+            Console.WriteLine($"  holy order types: {blanked} faith-specific files blanked "
+                              + "(no procedural faith can found those orders)");
+    }
+
     /// <summary>
     /// Rebinds vanilla's 322 holy sites onto generated counties.
     ///

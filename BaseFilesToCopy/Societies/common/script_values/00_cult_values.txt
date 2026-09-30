@@ -4,7 +4,7 @@
 cult_holy_site_count_value = {
 	value = 0
 	global_var:cult_host_faith = {
-		every_holy_site = { add = 1 }
+		every_holy_site_barony = { add = 1 }
 	}
 	min = 1
 }
@@ -12,7 +12,7 @@ cult_holy_site_count_value = {
 cult_sworn_holy_site_count_value = {
 	value = 0
 	global_var:cult_host_faith = {
-		every_holy_site = {
+		every_holy_site_barony = {
 			limit = {
 				county = { cult_sworn_county_trigger = yes }
 			}

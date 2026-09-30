@@ -12,6 +12,13 @@
 # Vanilla's own condition is preserved verbatim below — Saharan desert baronies cannot take a
 # holding — with ours added beside it.
 #
+# Re-copied from 1.20.0.2 on 2026-09-30. 1.20 narrowed vanilla's half from the whole Saharan desert
+# to nineteen named "corridor" provinces. Those are Earth province ids, so on a generated map that
+# half is all but inert: it needs a desert barony that is both inside the generator's one-county
+# world_africa_sahara stub and numbered 6650-6668, and most maps stop well short of 6650. It stays verbatim
+# so this override is never stricter or looser than vanilla on the map vanilla was written for.
+# Our half is unchanged.
+#
 # NOTE: this governs the *contents* of the build menu. Vanilla also draws a "Build New Holding"
 # button on an empty barony slot regardless of whether anything is constructible, so hiding that
 # prompt is done separately, in Emit/GuiWriter.cs. Both are needed: this one stops the AI and the
@@ -25,7 +32,34 @@ barony_cannot_construct_holding = {
 				terrain = desert
 				terrain = desert_mountains
 			}
-			geographical_region = world_africa_sahara
+			# the corridors
+			trigger_if = {
+				limit = { geographical_region = world_africa_sahara }
+				OR = {
+					this = province:6650
+					this = province:6651
+					this = province:6652
+					this = province:6653
+					this = province:6654
+					this = province:6655
+					this = province:6656
+					this = province:6657
+					this = province:6658
+					this = province:6659
+					this = province:6660
+					this = province:6661
+					this = province:6662
+					this = province:6663
+					this = province:6664
+					this = province:6665
+					this = province:6666
+					this = province:6667
+					this = province:6668
+				}
+			}
+			trigger_else = {
+				always = no
+			}
 		}
 
 		# --- Ours: nothing is built around an unfinished colonisation --------------------------

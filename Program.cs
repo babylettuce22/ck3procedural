@@ -548,6 +548,16 @@ public static class Program
                     cfg.NativeRealmNames = true;
                     break;
 
+                // Generated clerical regions and regional rites (MapGen/Peoples/Sees.cs), on by default.
+                case "--no-sees":
+                    cfg.GeneratedSees = false;
+                    break;
+
+                // Keep the main-menu 3D portraits (FrontendWriter), on trial; off by default.
+                case "--menu-portraits":
+                    cfg.MenuPortraits = true;
+                    break;
+
                 case "--no-rank-tooltips":
                     cfg.NativeRankTooltips = false;
                     break;

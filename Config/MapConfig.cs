@@ -3044,6 +3044,24 @@ public sealed class MapConfig : CustomTypeDescriptor
     public bool GenerateFaithIcons { get; set; } = true;
 
     /// <summary>
+    /// Generated clerical regions (CK3 1.20's archdioceses) for faiths with an institutional clergy,
+    /// and the regional rites their great sees found. See <see cref="MapGen.Sees"/>.
+    /// </summary>
+    [Category("10 Cultures and faiths")]
+    [DisplayName("Generated sees")]
+    [Description("Give faiths with an institutional clergy (organised, not lay clergy) clerical regions, as 1.20 gives Christianity: archbishops of the faith hold sees over their settled heartland, the head of faith's own see is the primate see, and the largest are great sees. Large faiths also start with regional rites founded by their great sees, about one per hundred counties. The sees' words come from the faith's holy tongue when native rank titles are on. Off leaves every faith with one rite and no sees.")]
+    public bool GeneratedSees { get; set; } = true;
+
+    /// <summary>
+    /// Keep the main menu's 3D character portraits instead of blanking them. On trial from 2026-09-30;
+    /// see <see cref="Emit.FrontendWriter.WriteFrontend"/>. Off until cold boots confirm it.
+    /// </summary>
+    [Category("99 Experimental")]
+    [DisplayName("Main-menu portraits (trial)")]
+    [Description("Show the 3D characters on the main menu instead of hiding them. They were hidden because the menu crashed on load; the cause found on 2026-09-30 is now fixed, so this tests whether hiding them is still needed. If the game crashes at the main menu, turn it off.")]
+    public bool MenuPortraits { get; set; } = true;
+
+    /// <summary>
     /// Rulers styled in their own people's language: every generated culture's words for its ranks,
     /// coined from its tongue, with variants for sovereigns, special contracts, titles held and
     /// converts. Off by default — the English vocabularies of <see cref="Emit.TitleTierWriter"/>
@@ -3051,7 +3069,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("10 Cultures and faiths")]
     [DisplayName("Native rank titles")]
-    [Description("Style rulers in their own people's language: each culture's counts, dukes, kings and emperors get words built from its tongue, and sister cultures get related words. Variants follow the ruler's situation: a sovereign duke is a prince; march, palatinate and castellany contracts have their own titles; holding two or more duchies or kingdoms makes a grand duke or high king; a people that converts takes its kings' titles from the holy tongue of its new religion. A realm uses its top liege's culture's words. Off keeps the usual English titles.")]
+    [Description("Style rulers in their own people's language: each culture's counts, dukes, kings and emperors get words built from its tongue, and sister cultures get related words. Variants follow the ruler's situation: a sovereign duke is a prince; march, palatinate and castellany contracts have their own titles; holding two or more duchies or kingdoms makes a grand duke or high king; a people that converts takes its kings' titles from the holy tongue of its new religion. A realm uses its top liege's culture's words. The church gets words too, coined in each religion's holy tongue: its sees, great sees and primacy (with Generated sees on) and its archbishops, who take the faith's own word for bishop. Off keeps the usual English titles, and the church uses See, Great See, Primacy and Hierarch.")]
     public bool NativeRankTitles { get; set; } = false;
 
     /// <summary>The realm half of <see cref="NativeRankTitles"/>; either works without the other.</summary>
@@ -3337,7 +3355,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("12 Wilderness")]
     [AzgaarIncompat("Wilderness is the ground the export left unclaimed, which is a statement rather than " +
-                    "the habitability guess this scores. Read again only if the export claims every county.")]
+                    "the habitability guess this scores. An export that gives every county to a state starts " +
+                    "with no wilderness at all rather than carving populated states, so this is never read on " +
+                    "an import. Ruins and failed colonies still have somewhere to go.")]
     [Description("Share of counties left as unsettled wilderness, placed on the least liveable ground. Clumps too small to read as a region are given back and replaced, so the delivered share lands close to this.")]
     public double WildernessShare { get; set; } = 0.12;
 
@@ -3351,7 +3371,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("12 Wilderness")]
     [AzgaarIncompat("Wilderness is the ground the export left unclaimed, which is a statement rather than " +
-                    "the habitability guess this scores. Read again only if the export claims every county.")]
+                    "the habitability guess this scores. An export that gives every county to a state starts " +
+                    "with no wilderness at all rather than carving populated states, so this is never read on " +
+                    "an import. Ruins and failed colonies still have somewhere to go.")]
     [Description("Pull wilderness toward the map edges (1), ignore position (0), or pull it inland (-1). Edge-biased reads as a frontier at the rim of the world; inland-biased makes the interior the wasteland.")]
     public double WildernessEdgeBias { get; set; } = 0.75;
 
@@ -3367,7 +3389,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("12 Wilderness")]
     [AzgaarIncompat("Wilderness is the ground the export left unclaimed, which is a statement rather than " +
-                    "the habitability guess this scores. Read again only if the export claims every county.")]
+                    "the habitability guess this scores. An export that gives every county to a state starts " +
+                    "with no wilderness at all rather than carving populated states, so this is never read on " +
+                    "an import. Ruins and failed colonies still have somewhere to go.")]
     [Description("How strongly wilderness follows hostile terrain — mountains, ice, desert, marsh, jungle — against the edge bias. At 0 it ignores terrain entirely and can leave empty farmland.")]
     public double WildernessTerrainWeight { get; set; } = 0.75;
 
@@ -3386,7 +3410,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     [AdvancedSetting]
     [Category("12 Wilderness")]
     [AzgaarIncompat("Wilderness is the ground the export left unclaimed, which is a statement rather than " +
-                    "the habitability guess this scores. Read again only if the export claims every county.")]
+                    "the habitability guess this scores. An export that gives every county to a state starts " +
+                    "with no wilderness at all rather than carving populated states, so this is never read on " +
+                    "an import. Ruins and failed colonies still have somewhere to go.")]
     [Description("Smallest connected run of counties kept as wilderness. Lone wild counties surrounded by settled land read as a bug, so runts below this are given back. Set to 1 to allow singletons.")]
     public int WildernessMinClump { get; set; } = 2;
 
@@ -3409,7 +3435,9 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     [Category("12 Wilderness")]
     [AzgaarIncompat("Wilderness is the ground the export left unclaimed, which is a statement rather than " +
-                    "the habitability guess this scores. Read again only if the export claims every county.")]
+                    "the habitability guess this scores. An export that gives every county to a state starts " +
+                    "with no wilderness at all rather than carving populated states, so this is never read on " +
+                    "an import. Ruins and failed colonies still have somewhere to go.")]
     [Description("How strongly wilderness avoids the interior of a kingdom, preferring borders and coasts. Placement otherwise follows mountain ranges straight through the middle of realms and splits them in two. 0 ignores realm shape.")]
     public double WildernessAvoidRealmInteriors { get; set; } = 0.6;
 

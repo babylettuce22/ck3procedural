@@ -441,7 +441,7 @@ public static partial class ContentWriter
             provinces, order, result.LandCount, empires, counties, realms, cultures, world.Ethnicities, faiths,
             governments, worldCenters, wilderness, development, world.TitlePlan, eraGovernments,
             retinues, result.Azgaar, written.Calendar, flatmap, wilds.Wilds, cultureAssets: false, lineage,
-            pastRulers, diplomacy, seatParents, past));
+            pastRulers, diplomacy, seatParents, past, world.ProvinceTerrain));
 
         Core.Stage.Time("debug panel", () => DebugPanel.Write(modDir, gameDir, DebugFacts(
             modDir, cfg, provinces, empires, counties, cultures, faiths, wilderness, worldCenters,
@@ -555,7 +555,7 @@ public static partial class ContentWriter
         WorldCalendar? calendar, Flatmap flatmap, FrontierMap frontier, bool cultureAssets = true,
         IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null, List<PastRuler>? pastRulers = null,
         SimDiplomacy? diplomacy = null, IReadOnlyDictionary<Title, PastRuler>? seatParents = null,
-        RememberedPast? past = null)
+        RememberedPast? past = null, TerrainClass[]? provinceTerrain = null)
     {
         PrehistoryMap? prehistory = null;
         RulerMap? rulers = null;
@@ -566,7 +566,10 @@ public static partial class ContentWriter
         prehistory = Core.Stage.Time("prehistory", () => PrehistoryMap.Build(
             counties, provinces, order, landCount, realms, cultures, faiths,
             governments, worldCenters, wilderness, cfg, new Rng(cfg.Seed ^ 0x4821 ^ cfg.PeopleSalt), lineage,
-            diplomacy, seatParents));
+            diplomacy, seatParents,
+            raceOf: cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly
+                ? c => ethnicities.For(c).Archetype
+                : null));
 
         // An applied history's predecessors, beside the ancestors prehistory invents. Before the
         // rulers and everything that writes about them, so the character file and the title
@@ -750,7 +753,8 @@ public static partial class ContentWriter
         // The historical battlefields are the chronicle's wars, so after it. The --no-history
         // branch writes the grand cities alone.
         Core.Stage.Time("points of interest",
-            () => PoiWriter.WriteAll(modDir, empires, development, wilderness, chronicle, cfg.StartYear));
+            () => PoiWriter.WriteAll(modDir, gameDir, empires, development, wilderness, chronicle, cfg.StartYear,
+                provinceTerrain));
 
         // After the chronicle, which is the thing that decides where a struggle is. Reads
         // the counties for its membership and the chronicle only for its tension, so it

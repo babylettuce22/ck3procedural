@@ -70,11 +70,12 @@ internal static class ShowcaseItems
     /// the whole-map picture of a layer, drawn the way the World workspace's map modes draw it.
     /// </summary>
     public static AppGUI.PreviewRenderer.Image CountyPicture(ProvinceMap provinces, int[] order, int baronyCount,
-        int landCount, List<Title> empires, WildernessMap? wilderness, Func<Title, (byte R, byte G, byte B)?> colourOf)
+        int landCount, List<Title> empires, WildernessMap? wilderness, Func<Title, (byte R, byte G, byte B)?> colourOf,
+        (byte R, byte G, byte B)? wildColour = null)
         => AppGUI.PreviewRenderer.RenderByCounty(
             new AppGUI.PreviewRenderer.ProvinceRaster(provinces.Width, provinces.Height, i => order[provinces.Label[i]],
                 baronyCount, landCount, empires, wilderness is null ? null : wilderness.Contains),
-            colourOf);
+            colourOf, wildColour);
 
     /// <summary>The peoples' map: every county in its culture's colour.</summary>
     public static AppGUI.PreviewRenderer.Image CulturePicture(CultureMap cultures, ProvinceMap provinces, int[] order,
@@ -89,6 +90,105 @@ internal static class ShowcaseItems
             county => faiths.ByCounty.TryGetValue(county, out var faith)
                 ? (ToByte(faith.Color.R), ToByte(faith.Color.G), ToByte(faith.Color.B))
                 : null);
+
+    /// <summary>
+    /// The sees' map: every county inside a clerical region in the colour of the rite it keeps (its
+    /// faith's own colour for the main rite), each see a shade lighter or darker than its neighbours
+    /// in the list so the regions read apart. Counties outside every see are left in parchment.
+    /// </summary>
+    public static AppGUI.PreviewRenderer.Image SeePicture(FaithMap faiths, ProvinceMap provinces, int[] order,
+        int baronyCount, int landCount, List<Title> empires, WildernessMap? wilderness)
+    {
+        float[] shades = [1.0f, 0.78f, 1.18f, 0.9f];
+        var colourOf = new Dictionary<Title, (byte R, byte G, byte B)>();
+        foreach (var faith in faiths.Faiths)
+        {
+            var riteOf = new Dictionary<Title, Rite>();
+            foreach (var rite in faith.Rites)
+                foreach (var county in rite.Counties) riteOf[county] = rite;
+
+            for (int i = 0; i < faith.Sees.Count; i++)
+            {
+                var see = faith.Sees[i];
+                foreach (var county in see.Counties)
+                {
+                    var (r, g, b) = riteOf.TryGetValue(county, out var rite) ? rite.Color
+                        : see.Rite?.Color ?? faith.Color;
+                    float s = shades[i % shades.Length];
+                    colourOf[county] = (ToByte(Math.Min(1, r * s)), ToByte(Math.Min(1, g * s)), ToByte(Math.Min(1, b * s)));
+                }
+            }
+        }
+
+        // Land outside every see, wilderness included, in plain parchment: the usual wilderness gold
+        // would read as one more see beside a gold faith's.
+        return CountyPicture(provinces, order, baronyCount, landCount, empires, wilderness,
+            county => colourOf.TryGetValue(county, out var c) ? c : null, ((byte)196, (byte)188, (byte)168));
+    }
+
+    /// <summary>
+    /// The faiths with the most sees, each shown by its primate see with its great sees listed, then
+    /// the largest regional rites with what sets them apart. Nothing when no faith has sees.
+    /// </summary>
+    public static IEnumerable<ShowcaseItem> Sees(FaithMap faiths, Places? places = null,
+        WildernessMap? wilderness = null)
+    {
+        var organised = faiths.Faiths
+            .Where(f => f.Sees.Count > 0)
+            .OrderByDescending(f => f.Sees.Count)
+            .ThenBy(f => f.Key, StringComparer.Ordinal)
+            .Take(3);
+
+        foreach (var faith in organised)
+        {
+            var words = faith.Religion.SeeWords;
+            var primate = faith.Sees.FirstOrDefault(s => s.Rank == SeeRank.Primate)
+                          ?? faith.Sees.MaxBy(s => s.Counties.Count)!;
+            string word = primate.Rank == SeeRank.Primate ? words?.Primacy ?? "Primacy" : words?.See ?? "See";
+            var (r, g, b) = faith.Color;
+            yield return new ShowcaseItem
+            {
+                Kind = "See",
+                Title = $"{word} of {primate.Seat.Name}",
+                Subtitle = $"{faith.Name} · {Plural(faith.Sees.Count, "see")}"
+                         + (faith.Rites.Count > 0 ? $" · {faith.Rites.Count + 1} rites" : ""),
+                Chips = faith.Sees.Where(s => s != primate)
+                    .OrderByDescending(s => s.Rank)
+                    .ThenByDescending(s => s.Counties.Count)
+                    .Take(4)
+                    .Select(s => s.Rank == SeeRank.Great
+                        ? $"{words?.GreatSee ?? "Great See"} of {s.Seat.Name}"
+                        : $"{words?.See ?? "See"} of {s.Seat.Name}")
+                    .ToList(),
+                Color = (ToByte(r), ToByte(g), ToByte(b)),
+                MapAt = places?.County(primate.Seat),
+                PinGlyph = nameof(WonderArchetype.Sanctuary),
+            };
+        }
+
+        var rites = faiths.Faiths.SelectMany(f => f.Rites)
+            .OrderByDescending(r => r.Counties.Count)
+            .ThenBy(r => r.Key, StringComparer.Ordinal)
+            .Take(3);
+
+        foreach (var rite in rites)
+        {
+            var keeps = rite.Tenets.Except(rite.Faith.Tenets).Select(Readable)
+                .Concat(rite.DoctrineOverrides.Values.Select(Readable))
+                .Where(s => s.Length > 0)
+                .ToList();
+            var (r, g, b) = rite.Color;
+            yield return new ShowcaseItem
+            {
+                Kind = "Rite",
+                Title = rite.Name,
+                Subtitle = $"Of the {rite.Faith.Name} · founded at {rite.Founder.Seat.Name} · {rite.Counties.Count} counties",
+                Chips = keeps,
+                Color = (ToByte(r), ToByte(g), ToByte(b)),
+                MapAt = places?.Heart(rite.Counties, wilderness),
+            };
+        }
+    }
 
     /// <summary>The largest realms on the map, named, with a crown on the greatest one's seat.</summary>
     public static IEnumerable<ShowcaseItem> Realms(RealmMap realms, Places? places = null)
@@ -336,6 +436,8 @@ internal static class ShowcaseItems
 
     private static string GamePath(string gameDir, string relative)
         => Path.Combine(gameDir, relative.Replace('/', Path.DirectorySeparatorChar));
+
+    private static string Plural(int n, string noun) => n == 1 ? $"1 {noun}" : $"{n} {noun}s";
 
     private static byte ToByte(double channel) => (byte)Math.Clamp((int)Math.Round(channel * 255), 0, 255);
 

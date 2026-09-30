@@ -53,7 +53,7 @@ gen_tinker_start_project_decision = {
 			OR = {
 				has_trait = diligent
 				has_trait = ambitious
-				has_trait = scholar
+				has_trait = erudite # 'scholar' until 1.20 renamed it (common/traits/trait_conversion.lookup)
 			}
 		}
 		modifier = {

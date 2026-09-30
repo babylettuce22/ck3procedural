@@ -63,6 +63,18 @@ public static class ModWriter
         "history/characters",
         "history/provinces",
         "history/titles",
+
+        // Not covered by the line above, for the same reason as map_object_data/generated — and
+        // measured this time: 2026-09-30's error.log is full of this folder's file, loaded under
+        // replace_path="history/titles" alone.
+        //
+        // 1.20 keeps the Church's title history here (00_ecclesiastical_titles.txt), and it is the
+        // one place clerical regions are bound to land: `clerical_region = et_867_roma_region` on
+        // the d_et_ archbishoprics, naming vanilla geographical regions. CompatibilityWriter
+        // re-declares every such region with one generated county and shims every d_et_ title, so
+        // each binding took — 2026-09-30 showed vanilla archdioceses ("Roma", "Cologne") on one
+        // random county apiece — and its popes and archbishops logged 1,033 missing holders.
+        "history/titles/ce3",
         "history/wars",
         "history/struggles",
         "history/situations",
@@ -200,7 +212,14 @@ public static class ModWriter
                + Path.DirectorySeparatorChar;
     }
 
-    public static void WriteDescriptors(string modDir, string name = "Procedural Map")
+    /// <summary>
+    /// CK3 1.20's faith history (17 files): each vanilla faith's dated main rite, its rites and its
+    /// permitted tenets. It names only vanilla faiths, so a world of generated faiths loads it as a
+    /// wall of missing-faith errors; a vanilla-content world has those faiths and keeps it.
+    /// </summary>
+    private const string FaithHistoryPath = "history/faiths";
+
+    public static void WriteDescriptors(string modDir, string name = "Procedural Map", bool vanillaFaiths = false)
     {
         string folder = Path.GetFileName(modDir.TrimEnd(Path.DirectorySeparatorChar));
 
@@ -212,7 +231,8 @@ public static class ModWriter
         // with thumbnail.png sitting in the folder. (The Workshop upload finds the file by name.)
         // ContentWriter writes the file itself later in the run.
         string replacements =
-            string.Concat(ReplacePaths.Select(p => $"replace_path=\"{p}\"\n"));
+            string.Concat(ReplacePaths.Append(vanillaFaiths ? null : FaithHistoryPath).OfType<string>()
+                .Select(p => $"replace_path=\"{p}\"\n"));
 
         string descriptor =
             $$"""

@@ -1,0 +1,13 @@
+# The group of the one hidden doctrine that gives a generated faith CK3 1.20's clerical regions
+# (doctrine_types/zz_gen_clerical_regions.txt).
+#
+# Shaped like vanilla's is_christian_faith group: special, and kept by any faith created from one that
+# holds it, so a reformation or a new faith founded out of a faith with sees keeps its hierarchy.
+
+gen_clerical_regions = {
+	category = special
+
+	is_available_on_create = {
+		has_doctrine = special_doctrine_gen_clerical_regions
+	}
+}

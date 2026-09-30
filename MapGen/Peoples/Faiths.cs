@@ -57,6 +57,21 @@ public sealed class Faith
 
     public HeadOfFaith? Head { get; set; }
 
+    /// <summary>This faith's clerical regions, empty for most. Built by <see cref="MapGen.Sees"/>.</summary>
+    public List<See> Sees { get; } = [];
+
+    /// <summary>
+    /// Regional rites founded by this faith's great sees. The main rite, keyed like the faith, is not
+    /// listed. Built by <see cref="MapGen.Sees"/>.
+    /// </summary>
+    public List<Rite> Rites { get; } = [];
+
+    /// <summary>
+    /// The main rite's own adjective ("Kelian") once the faith has regional rites, from the primate
+    /// see's seat; null while the main rite simply reads as the faith. Set by <see cref="MapGen.Sees"/>.
+    /// </summary>
+    public string? MainRiteAdjective { get; set; }
+
     public bool IsOrganized { get; set; } = true;
     public bool IsDominant { get; set; } = false;
 
@@ -171,6 +186,18 @@ public sealed class Religion
     /// Null unless native rank titles or realm names are on. See <see cref="NativeTitles"/>.
     /// </summary>
     public NativeRanks? SacredRanks { get; set; }
+
+    /// <summary>
+    /// Its tongue's words for its sees, or null: coined only when native rank titles are on and one of
+    /// its faiths has sees. See <see cref="MapGen.Sees.CoinWords"/>.
+    /// </summary>
+    public SeeWords? SeeWords { get; set; }
+
+    /// <summary>
+    /// True when one of its faiths has clerical regions. Such a religion names ecclesiastical
+    /// government as its theocracy (see ReligionWriter), as vanilla's Christianity does.
+    /// </summary>
+    public bool HasSees => Faiths.Any(f => f.Sees.Count > 0);
 }
 
 public sealed class FaithMap
@@ -246,6 +273,55 @@ public static class Faiths
         "doctrine_pilgrimage", "doctrine_funeral", "doctrine_coronation",
     ];
 
+    /// <summary>
+    /// Doctrines a group declares that a generated religion is never given. Conditional clerical
+    /// appointment (1.20) is By God Alone's Investiture Controversy lever: vanilla sets it on
+    /// Christian rites at game start, reform never offers it, and its can_pick admits only a rite
+    /// that already has it.
+    /// </summary>
+    private static readonly HashSet<string> NeverDrawn = new(StringComparer.Ordinal)
+    {
+        "doctrine_clerical_succession_conditional",
+    };
+
+    /// <summary>
+    /// The doctrine groups CK3 1.20 added that every religion now fills: monasticism (which
+    /// replaced <c>tenet_monasticism</c>), sacraments and preservation.
+    ///
+    /// Drawn on a stream of their own, keyed by the religion, after everything
+    /// <see cref="FilledGroups"/> draws — so adding them moved no other roll. The shares copy
+    /// vanilla's own religions, counted by family on 1.20.0.2: pagan religions are monasticism
+    /// absent (37 of 38), sacraments absent (38 of 38) and oral (26) or mythic-literary (11); the
+    /// Abrahamic ones are mostly scriptural (4 of 5), split on monasticism, and only Christianity
+    /// holds the sacraments central.
+    /// </summary>
+    private static void FillPatchGroups(Dictionary<string, string> doctrines, string religionKey,
+        bool abrahamic, bool monotheist, VanillaVocabulary vocab, MapConfig cfg)
+    {
+        var rng = Rng.For(cfg.Seed, 0xD0C7, Rng.StableHash(religionKey));
+
+        Fill("monasticism_group", abrahamic
+            ? rng.Chance(0.4) ? "doctrine_monasticism_encouraged"
+              : rng.Chance(0.5) ? "doctrine_monasticism_accepted" : "doctrine_monasticism_absent"
+            : "doctrine_monasticism_absent");
+
+        Fill("sacraments_group", abrahamic && rng.Chance(0.2)
+            ? "doctrine_sacraments_central"
+            : "doctrine_sacraments_absent");
+
+        Fill("preservation", abrahamic || monotheist && rng.Chance(0.5)
+            ? rng.Chance(0.8) ? "doctrine_scriptural" : "doctrine_oral_storytelling"
+            : rng.Chance(0.3) ? "doctrine_mythic_literary" : "doctrine_oral_storytelling");
+
+        // Only what this install declares, and only beside what the religion already holds.
+        void Fill(string group, string pick)
+        {
+            if (doctrines.ContainsKey(group) || !vocab.DoctrineGroups.TryGetValue(group, out var members)
+                || !members.Contains(pick) || !vocab.Compatible(pick, doctrines.Values)) return;
+            doctrines[group] = pick;
+        }
+    }
+
     private static readonly Dictionary<string, string> ForcedDoctrines = new()
     {
         ["doctrine_head_of_faith"] = "doctrine_no_head",
@@ -314,7 +390,8 @@ public static class Faiths
 
                 var religion = CreateReligion(religions.Count, tribalShare, vocab, usedNames, cfg,
                     rng, monotheistOverride: AzgaarFaiths.IsMonotheist(planned.Root),
-                    theismPreference: AzgaarFaiths.TheismPreference(planned.Root));
+                    theismPreference: AzgaarFaiths.TheismPreference(planned.Root),
+                    theocratic: Theocratic(groupCounties));
                 religions.Add(religion);
 
                 // The religion answers to the root tradition's form word - "Shamanism",
@@ -412,7 +489,7 @@ public static class Faiths
             }
 
             var religion = CreateReligion(religions.Count, tribalShare, vocab, usedNames, cfg, rng,
-                liturgical: liturgical);
+                liturgical: liturgical, theocratic: Theocratic(members.Select(i => counties[i])));
             religions.Add(religion);
 
             // Determine Faith Distribution Archetype
@@ -585,6 +662,13 @@ public static class Faiths
 
             return total == 0 ? 1.0 : tribal / (double)total;
         }
+
+        // Whether a landed theocrat sits anywhere in this ground, which keeps its religion off lay
+        // clergy (see CreateReligion). Only an Azgaar Theocracy state puts one there today: the
+        // generated cascade in Governments.Build never assigns theocracy_government, so on the
+        // generated path this is false and the religion is drawn exactly as before.
+        bool Theocratic(IEnumerable<Title> of)
+            => of.Any(county => governments.For(county) == GovernmentMap.Theocracy);
     }
 
     /// <summary>
@@ -923,10 +1007,14 @@ public static class Faiths
         return rng.Pick(pool.Count > 0 ? pool : vocab.GraphicalFaiths);
     }
 
+    /// <param name="theocratic">
+    /// Some county of this religion is held under <see cref="GovernmentMap.Theocracy"/>, which keeps
+    /// the religion off lay clergy. See the roll below.
+    /// </param>
     private static Religion CreateReligion(int index, double tribalShare, VanillaVocabulary vocab,
         HashSet<string> usedNames, MapConfig cfg, Rng rng, bool? monotheistOverride = null,
         string[]? theismPreference = null, string? keyOverride = null, Language? liturgical = null,
-        bool shapeable = true)
+        bool shapeable = true, bool theocratic = false)
     {
         string tongueKey = $"religion_tongue_{keyOverride ?? index.ToString()}";
         var language = liturgical is not null
@@ -952,7 +1040,22 @@ public static class Faiths
         // Half of the Abrahamic religions let rulers own the temples, which is what makes a
         // temporal head possible later: vanilla refuses doctrine_temporal_head beside temporal
         // theocracy or a spiritually appointed clergy, so both groups follow this one roll.
-        bool layClergy = abrahamic && rng.Chance(0.5);
+        //
+        // Never for a religion that already has a landed theocracy on the map, which only an Azgaar
+        // state of the Theocracy form gives it today. On 1.20 both theocratic governments gate on
+        // theocratic_lay_clergy_trigger (pam_scripted_triggers.txt): under a lay-clergy rite only a
+        // cardinal, the holder of a clerical region or a LANDLESS cleric may be a theocrat. A
+        // generated see has none of the three, so its bishop could keep the government history
+        // hands him but no successor could get it: the engine's fallback makes the next one feudal.
+        // Vanilla never pairs the two either — Adopt Theocratic Rule refuses an independent ruler of
+        // a lay-clergy rite, and no vanilla landed theocracy follows one. A spiritual head is not
+        // affected: he holds only a titular title, and is_landed counts counties and baronies.
+        //
+        // The coin is still tossed, and tossed first, so a religion with no theocracy in it draws
+        // exactly what it always did. One that has one and lost the toss draws differently from
+        // here on (no temporal-head roll in Mint), which moves the faiths drawn after it — on the
+        // Azgaar worlds with a Theocracy state that also rolled lay clergy, and nowhere else.
+        bool layClergy = abrahamic && rng.Chance(0.5) && !theocratic;
 
         // Rolled before the loop because two groups read it: the clergy's sex follows the faith's,
         // rather than being drawn again from a hat and leaving a faith that bars women from land
@@ -976,8 +1079,11 @@ public static class Faiths
                 continue;
             }
 
-            if (!vocab.DoctrineGroups.TryGetValue(group, out var members) || members.Count == 0)
+            if (!vocab.DoctrineGroups.TryGetValue(group, out var declared) || declared.Count == 0)
                 continue;
+
+            var members = declared.Where(d => !NeverDrawn.Contains(d)).ToList();
+            if (members.Count == 0) continue;
 
             doctrines[group] = group switch
             {
@@ -1037,6 +1143,8 @@ public static class Faiths
                 if (free.Count > 0) doctrines[group] = rng.Pick(free);
             }
         }
+
+        FillPatchGroups(doctrines, key, abrahamic, monotheist, vocab, cfg);
 
         // Read back rather than trusting the roll. The repair loop above may replace any pick, and
         // a temporal head beside temporal theocracy or a spiritually appointed clergy is exactly
@@ -1245,7 +1353,7 @@ public static class Faiths
     /// pagan"), and unreformed faiths do exist here for it to point at. PaganOnly keeps the pool
     /// whole, as it always was.
     /// </summary>
-    private static List<string> TenetPool(Religion religion, VanillaVocabulary vocab, MapConfig cfg)
+    internal static List<string> TenetPool(Religion religion, VanillaVocabulary vocab, MapConfig cfg)
     {
         IEnumerable<string> pool = vocab.Tenets;
 
@@ -1434,7 +1542,7 @@ public static class Faiths
     /// the first compatible run is always found, and a short draw means the install harvested
     /// almost nothing rather than that the constraints were tight.
     /// </summary>
-    private static List<string> SampleCompatible(List<string> pool, int count,
+    internal static List<string> SampleCompatible(List<string> pool, int count,
         IEnumerable<string> alongside, VanillaVocabulary vocab, Rng rng)
     {
         if (pool.Count == 0) return [];

@@ -250,6 +250,7 @@ internal sealed class RunScreen : Panel
         ["Empires"] = "Drawing the empires",
         ["Cultures"] = "Placing the peoples",
         ["Faiths"] = "Spreading the faiths",
+        ["Sees"] = "Drawing the sees",
     };
 
     /// <summary>

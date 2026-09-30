@@ -141,7 +141,7 @@ gen_tinker.0100 = {
 						add = 6
 						OR = {
 							has_trait = curious
-							has_trait = scholar
+							has_trait = erudite # 'scholar' until 1.20 renamed it
 							has_trait = eccentric
 						}
 					}
@@ -347,7 +347,7 @@ gen_tinker.0101 = {
 		name = gen_tinker.0101.e
 		trigger = {
 			OR = {
-				has_trait = scholar
+				has_trait = erudite
 				has_trait = intellect_good
 			}
 		}

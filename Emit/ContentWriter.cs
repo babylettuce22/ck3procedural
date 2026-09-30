@@ -202,6 +202,8 @@ public static partial class ContentWriter
                 Realms.HegemonRealmCounties(realms, empires, wilderness), riverside);
             CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, generatedFaiths);
             CompatibilityWriter.WriteDecisionBlocks(modDir, gameDir);
+            CompatibilityWriter.WriteHistoricalSetupStubs(modDir, gameDir, cfg);
+            CompatibilityWriter.WriteHolyOrderTypeBlanks(modDir, gameDir, cfg);
         });
 
         // After the regions it points at, and nothing reads what it writes.
@@ -242,6 +244,12 @@ public static partial class ContentWriter
             baronyCount, landCount, empires, generatedWilderness));
         Core.Showcase.Publish(() => ShowcaseItems.Faiths(generatedFaiths, modDir, gameDir, new(provinces, order),
             generatedWilderness));
+        if (generatedFaiths.Faiths.Any(f => f.Sees.Count > 0))
+        {
+            Core.Showcase.Picture("Sees", () => ShowcaseItems.SeePicture(generatedFaiths, provinces, order,
+                baronyCount, landCount, empires, generatedWilderness));
+            Core.Showcase.Publish(() => ShowcaseItems.Sees(generatedFaiths, new(provinces, order), generatedWilderness));
+        }
 
         // After the religions, whose crown-or-regalia answer it writes into CK3's triggers, and
         // after the titles it reads seats off. It writes nothing anything else reads.
@@ -273,7 +281,7 @@ public static partial class ContentWriter
         Core.Stage.Time("casus belli", () => CasusBelliWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("council tasks", () => CouncilTaskWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("faction rules", () => FactionWriter.WriteAll(modDir, gameDir, cfg));
-        Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir));
+        Core.Stage.Time("frontend", () => FrontendWriter.WriteFrontend(modDir, gameDir, cfg.MenuPortraits));
         Core.Stage.Time("GUI changes",
             () => GuiWriter.WriteAll(modDir, gameDir, cfg.EnableSocieties || cfg.EnableSocietyPrototype, cfg.EnableWilderness,
                 cfg.EnableChronicle));
@@ -428,7 +436,8 @@ public static partial class ContentWriter
                 var layer = WriteHistoryLayer(modDir, gameDir, cfg, provinces, order, landCount, empires,
                     counties, realms, cultures, ethnicities, faiths, governments, worldCenters, wilderness,
                     development, titlePlan, eraGovernments, retinues, azgaar, calendar, flatmap, frontier,
-                    lineage: world.Lineage, pastRulers: world.PastRulers, diplomacy: world.AppliedDiplomacy, seatParents: world.SeatParents, past: world.AppliedPast);
+                    lineage: world.Lineage, pastRulers: world.PastRulers, diplomacy: world.AppliedDiplomacy, seatParents: world.SeatParents, past: world.AppliedPast,
+                    provinceTerrain: provinceTerrain);
 
                 prehistory = layer.Prehistory;
                 rulers = layer.Rulers;
@@ -449,7 +458,7 @@ public static partial class ContentWriter
 
             // No chronicle, so no historical battlefields; the grand cities need only the map.
             Core.Stage.Time("points of interest",
-                () => PoiWriter.WriteAll(modDir, empires, development, wilderness, null, cfg.StartYear));
+                () => PoiWriter.WriteAll(modDir, gameDir, empires, development, wilderness, null, cfg.StartYear));
         }
         });
         }
@@ -641,7 +650,13 @@ public static partial class ContentWriter
             jb.Blank();
         }
 
-        var wildCapital = wilderness.Unsettled.FirstOrDefault();
+        // Written whenever the system ships, not only when a county starts wild: an Azgaar export that
+        // claims every county starts with none, and the Wilderness and Ruins sets still hand every
+        // abandoned or fallen county to this title's holder first (abandon_county_effect). With no
+        // wild county to point at, the capital is the first county of the de jure tree — a landless
+        // titular title's capital is a pointer and nobody's seat, as with k_gen_ruins below.
+        var wildCapital = wilderness.Unsettled.FirstOrDefault()
+            ?? (wilderness.Ships ? Titles.Flatten(empires).FirstOrDefault(t => t.Tier == "c") : null);
         if (wildCapital is not null)
         {
             jb.Comment("The wilderness realm. Titular: it exists so unsettled land has a name.");
@@ -910,8 +925,8 @@ public static partial class ContentWriter
             Empires = all.Count(t => t.Tier == "e"),
             Kingdoms = all.Count(t => t.Tier == "k")
                      + faithHeadKingdoms
-                     + (wilderness.Unsettled.Any() ? 1 : 0)
-                     + (wilderness.RuinsEnabled && wilderness.Counties.Any() ? 1 : 0),
+                     + (wilderness.Unsettled.Any() || wilderness.Ships ? 1 : 0)
+                     + (wilderness.RuinsEnabled && (wilderness.Counties.Any() || wilderness.Ships) ? 1 : 0),
             Duchies = all.Count(t => t.Tier == "d") + faithHeads,
             LandlessDuchies = faithHeads,
             Counties = counties.Count,
@@ -1363,7 +1378,8 @@ public static partial class ContentWriter
     /// <see cref="WrittenContent.Holdings"/> so that there is a single place to move it.
     /// </summary>
     public sealed record ProvinceRow(
-        int ProvinceId, string Culture, string Faith, string? SpecialSlot, string? SpecialBuilding);
+        int ProvinceId, string Culture, string Faith, string? SpecialSlot, string? SpecialBuilding,
+        string? Rite = null);
 
     /// <summary>
     /// What a province is on an additional bookmark where that differs from the start date: its
@@ -1492,7 +1508,11 @@ public static partial class ContentWriter
             {
                 string holding = holdings.GetValueOrDefault(row.ProvinceId, "none");
                 b.Field("culture", row.Culture);
-                b.Field("religion", row.Faith);
+                // `faith`, which CK3 1.20's province history documents (vanilla's own now names
+                // the rite). The engine seats the county in the faith's main rite.
+                b.Field("faith", row.Faith);
+                // Both, as _provinces.info advises: the rite wins, and the faith is the fallback.
+                if (row.Rite is { } rite) b.Field("rite", rite);
                 b.Field("holding", holding);
 
                 if (row.SpecialSlot is { } slot) b.Field("special_building_slot", slot);
@@ -1514,7 +1534,15 @@ public static partial class ContentWriter
                     using (b.Block(date))
                     {
                         if (then.Culture != state.Culture) b.Field("culture", then.Culture);
-                        if (then.Faith != state.Faith) b.Field("religion", then.Faith);
+                        if (then.Faith != state.Faith)
+                        {
+                            b.Field("faith", then.Faith);
+                            // The start date's regional rite wins over any `faith` a later block sets,
+                            // so a bookmark where the county keeps another faith names that faith's
+                            // main rite (keyed like the faith), and the start date's rite comes back
+                            // with the start date's faith.
+                            if (row.Rite is { } regional) b.Field("rite", then.Faith == row.Faith ? regional : then.Faith);
+                        }
                         if (then.Holding != state.Holding) b.Field("holding", then.Holding);
                     }
                     state = then;
@@ -1576,11 +1604,22 @@ public static partial class ContentWriter
         var wondersByBarony = worldCenters.Centers
             .ToDictionary(wc => wc.CapitalBarony, wc => wc.Wonder);
 
+        // Counties that keep a regional rite rather than their faith's main one (MapGen/Peoples/Sees.cs).
+        // Sees and rites are built from the generated faith map, and an applied history's conversions
+        // are overlaid later (ChangePeoples) on the same Faith objects, so a rite's county list can name a
+        // county that has since converted. Province history lets the rite win over the faith, so writing
+        // it there would quietly undo the conversion: only a rite of the county's current faith is kept.
+        var riteOf = faiths.Faiths.SelectMany(f => f.Rites)
+            .SelectMany(r => r.Counties.Select(c => (County: c, Rite: r)))
+            .ToDictionary(p => p.County, p => p.Rite);
+
         foreach (var county in counties ?? [.. Titles.Flatten(empires).Where(t => t.Tier == "c")])
         {
             int level = development.GetValueOrDefault(county);
             string cultureKey = cultures.For(county).Key;
             string faith = faiths.For(county).Key;
+            string? rite = riteOf.TryGetValue(county, out var regional) && regional.Faith.Key == faith
+                ? regional.Key : null;
             string government = governments.For(county);
             bool wild = wilderness.Contains(county);
 
@@ -1660,7 +1699,7 @@ public static partial class ContentWriter
                     building = market;
                 }
 
-                rows.Add(new ProvinceRow(barony.ProvinceId, cultureKey, faith, slot, building));
+                rows.Add(new ProvinceRow(barony.ProvinceId, cultureKey, faith, slot, building, rite));
             }
         }
 
@@ -1797,6 +1836,12 @@ public static partial class ContentWriter
             Path.Combine("map_data", "geographical_regions"),
             Path.Combine("history", "provinces"),
             Path.Combine("history", "titles"),
+
+            // 1.20's Church title history, in a folder of its own so the line above never reached
+            // it: each target is blanked at its top level only, as replace_path only replaces the
+            // top level. What it did to a generated map is at its entry in ModWriter.ReplacePaths.
+            Path.Combine("history", "titles", "ce3"),
+
             Path.Combine("history", "characters"),
             Path.Combine("history", "struggles"),
             Path.Combine("history", "situations"),

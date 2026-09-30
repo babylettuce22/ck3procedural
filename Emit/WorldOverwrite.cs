@@ -206,7 +206,7 @@ public static class WorldOverwrite
         // WriteAll covers the faith localisation as well, so a faith edit subsumes the rewrite a
         // title rename would otherwise need. Only when it did not run does that have to happen
         // separately — holy site names are read live off the county title.
-        if (aspects.HasFlag(WorldAspect.Faiths)) ReligionWriter.WriteAll(modDir, written.Faiths.Declared(), result.Config.Seed, result.Config.ReligionTooltips);
+        if (aspects.HasFlag(WorldAspect.Faiths)) ReligionWriter.WriteAll(modDir, written.Faiths.Declared(), result.Config.Seed, result.Config.ReligionTooltips, fromGeneration: false);
         else if (aspects.HasFlag(WorldAspect.TitleNames))
             ReligionWriter.WriteLocalisation(modDir, written.Faiths.Declared(), result.Config.Seed, result.Config.ReligionTooltips);
 
@@ -352,6 +352,38 @@ public static class WorldOverwrite
                                       + "the hordes this mod was written with — a horde outside the "
                                       + "situation can never migrate. Revert the government, or "
                                       + "write the mod again to cut the belt around it.");
+            }
+
+            // The other mechanic a government edit can break: a theocrat whose religion has lay
+            // clergy. Generation never makes one — Faiths.CreateReligion keeps any religion with a
+            // theocracy in it off lay clergy — but the faiths are not redrawn after an edit. On 1.20
+            // both theocratic governments refuse a LANDED cleric of a lay-clergy rite
+            // (theocratic_lay_clergy_trigger), so the ruler keeps what history hands him and the
+            // engine gives his successor its fallback, feudal. Counted per ruler, like the rest.
+            if (written is { Realms: { } seated, Governments: { } nowGoverned })
+            {
+                var theocrats = seated.HolderCounty.Values.Distinct()
+                    .Where(seat => nowGoverned.For(seat) == MapGen.GovernmentMap.Theocracy)
+                    .ToList();
+                int layClergy = theocrats.Count(seat => written.Faiths.For(seat).Religion.LayClergy);
+
+                if (layClergy > 0)
+                    Console.WriteLine($"  WARNING {layClergy} {(layClergy == 1 ? "theocrat follows" : "theocrats follow")} "
+                                      + "a religion with lay clergy, which CK3 1.20 does not let a landed "
+                                      + "cleric rule under — the next holder will be feudal. Pick a "
+                                      + "realm of another religion, or write the mod again.");
+
+                // Cosmetic, like the purses above, but worth a line because it contradicts the faith
+                // in plain sight: a ruler moved onto a theocracy keeps the sex, consort and children
+                // generation gave him as a lord (HistoryWriter.AsClergy, IsCelibateTheocrat). Only
+                // the ones the edit made theocrats — Ruler.Government is what he was generated under.
+                int moved = theocrats.Count(seat => written.Rulers?.TryGet(seat, out var ruler) == true
+                                                    && ruler.Government != MapGen.GovernmentMap.Theocracy);
+                if (moved > 0)
+                    Console.WriteLine($"  {moved} {(moved == 1 ? "ruler" : "rulers")} moved onto a theocracy "
+                                      + "keep the consort, children and sex generation gave them, even "
+                                      + "where their clergy may not marry or is of the other sex — the "
+                                      + "sex can be changed on the ruler (Ruler…)");
             }
         }
 

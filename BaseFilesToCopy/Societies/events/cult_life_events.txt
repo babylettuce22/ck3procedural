@@ -389,7 +389,7 @@ cult.0204 = {
 		is_ai = no
 		is_landed = yes
 		global_var:cult_host_faith = {
-			any_holy_site = {
+			any_holy_site_barony = {
 				county = { cult_sworn_county_trigger = yes }
 			}
 		}
@@ -400,7 +400,7 @@ cult.0204 = {
 		cult_save_scopes_effect = yes
 		add_character_flag = { flag = cult_life_seen_0204 years = 12 }
 		global_var:cult_host_faith = {
-			random_holy_site = {
+			random_holy_site_barony = {
 				limit = {
 					county = { cult_sworn_county_trigger = yes }
 				}

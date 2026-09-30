@@ -434,7 +434,11 @@ public static partial class ContentWriter
                 development, VanillaCatalog.Read(gameDir), vocabulary, new Rng(cfg.Seed ^ 0x7A12),
                 titlePlan?.State.ToDictionary(kv => kv.Key, kv => kv.Value.Faith)));
 
-        if (wilderness.Count > 0)
+        // On the system shipping, not on a county being wild: both dummies are born with this culture
+        // and faith, and county_has_unsettled_identity_trigger reads them off the k_gen_wilderness
+        // holder, on a world that starts with no wild county too (an Azgaar export that claims
+        // everything). Each draws from its own stream, so adding them moves nothing else.
+        if (wilderness.Count > 0 || wilderness.Ships)
         {
             var unsettledCulture = MapGen.Cultures.CreateUnsettled(
                 cultures.Heritages[0], vocabulary, cfg, new Rng(cfg.Seed ^ 0x0C55));
@@ -465,6 +469,18 @@ public static partial class ContentWriter
         // religion is part of the decision and this is the first point every faith exists; off
         // every stream the rest of the world draws from, so it moves no other name.
         Core.Stage.Time("native ranks", () => MapGen.NativeTitles.Assign(cultures, faiths, cfg));
+
+        // Clerical regions and the rites their great sees found. After the native ranks, whose
+        // toggle decides whether a religion coins its see words; after the governments, since only
+        // settled land gets a see. Its own streams: turning sees off moves nothing else.
+        Core.Stage.Time("sees", () =>
+        {
+            var seeCounties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
+            var seeGraph = MapGen.CountyNetwork.Graph(seeCounties, provinces, order, landCount, provinceTerrain,
+                _ => 1.0, 0.0);
+            MapGen.Sees.Build(faiths, seeCounties, seeGraph, governments, development, worldCenters, cultures,
+                vocabulary, cfg);
+        });
 
         // Farmland and oases, placed from settlement and drainage rather than from climate. Runs
         // here, after every social layer has been decided, so nothing reads a terrain that only

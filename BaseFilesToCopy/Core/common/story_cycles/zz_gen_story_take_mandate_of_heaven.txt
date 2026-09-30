@@ -16,6 +16,11 @@
 # is_landed = yes, matching the condition the end-of-story tick already uses, and the primary_title
 # read is ?= so a title lost between ticks cannot fail the switch. The database is last-wins and
 # this directory has no subfolders, so a zz_ file replaces the object without touching vanilla's.
+#
+# Re-copied from 1.20.0.2 on 2026-09-30. Vanilla 1.20 added the same `is_landed = yes` to the AI
+# tick itself, so that line is now vanilla's own (with vanilla's comment) and the ?= is the one edit
+# left. With the landed guard upstream the ?= is belt and braces; if a later patch makes that read
+# safe too, this whole override can go.
 
 story_take_mandate_of_heaven = {
 	
@@ -58,7 +63,8 @@ story_take_mandate_of_heaven = {
 			trigger = {
 				story_owner = {
 					is_ai = yes
-					is_landed = yes # Added: a landless heir inherits the story and rules nothing to budget or war with.
+					# End-cycle group pulses every 900-1800 days
+					is_landed = yes
 					NOT = { can_execute_decision = situation_dynastic_cycle_claim_mandate_decision }
 				}
 			}

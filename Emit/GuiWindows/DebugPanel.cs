@@ -1107,8 +1107,14 @@ public static class DebugPanel
             gen_debug_panel_window = {
             	scope = character
 
+            	# Guarded: since 1.20 the window is asked once more while quitting, with no player
+            	# character, and an unguarded has_variable logs an invalid-scope error each time.
             	is_shown = {
-            		has_variable = gen_debug_panel_open
+            		trigger_if = {
+            			limit = { exists = this }
+            			has_variable = gen_debug_panel_open
+            		}
+            		trigger_else = { always = no }
             	}
 
             	effect = {

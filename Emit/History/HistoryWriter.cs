@@ -58,6 +58,7 @@ public static class HistoryWriter
         WriteHouseRelationsOnAction(modDir, cfg, prehistory);
         ContentWriter.WriteNobleFamilyTitles(modDir, prehistory);
         WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wilderness, wild, prehistory);
+        WriteSees(modDir, cfg, faiths, cultures, ethnicities, realms, wilderness);
         WriteDynastyLocalisation(modDir, prehistory, calendar);
         // Removed when there are none: a re-emit without them would otherwise keep the file an
         // earlier write left, naming rulers the character file no longer has.
@@ -148,6 +149,68 @@ public static class HistoryWriter
 
         return Rng.For(seed, 0x48A2, Rng.StableHash(faith.Key)).Chance(share);
     }
+
+    /// <summary>
+    /// <see cref="RulerIsFemale(Title, Faith, MapConfig)"/> for a seat whose government is known:
+    /// the same answer, except that a theocrat is a cleric and is of the sex the clergy is.
+    /// See <see cref="AsClergy"/>.
+    ///
+    /// For the ruler of the seat and for everything that has to agree with him — his consort, whose
+    /// sex is the other one, and which of the pair his children's mother is. NOT for his dead
+    /// parent: the line runs through the parent of the sex the land passes to, and a bishop's
+    /// father was a lord under the land's law like anyone else's.
+    ///
+    /// An applied history's own person on the seat still wins, as in the overload it wraps: its
+    /// simulation named and dated that person, and a sex changed here would leave the name for the
+    /// other one.
+    /// </summary>
+    public static bool RulerIsFemale(Title county, Faith faith, MapConfig cfg, string government)
+        => cfg.SeatPeople?.ContainsKey(county.Index) == true
+            ? RulerIsFemale(county, faith, cfg)
+            : AsClergy(RulerIsFemale(county, faith, cfg.Seed, cfg.PeopleSalt), faith, government);
+
+    /// <summary>
+    /// A ruler's drawn sex, corrected for a theocrat by the faith's
+    /// <c>doctrine_clerical_gender</c>: never a woman where only men are clergy, always one where
+    /// only women are, and the draw untouched where either may be — or where the ruler is not a
+    /// theocrat at all.
+    ///
+    /// Not flavour on 1.20, whose patch notes put it plainly: theocratic gender succession follows
+    /// the Clerical Gender doctrine. The draw it corrects reads the faith's doctrine_gender, which
+    /// is about who inherits land, and gave the first Azgaar world tested (Poily, seed 4242) two
+    /// bishops of a male-only priesthood out of 49 theocrats.
+    ///
+    /// Corrects rather than redraws, so the seat's own stream (0x6ED5) is read exactly as before and
+    /// every seat that is not a theocrat's comes out the same.
+    /// </summary>
+    public static bool AsClergy(bool female, Faith faith, string government)
+    {
+        if (government != GovernmentMap.Theocracy) return female;
+
+        return faith.DoctrineOf("doctrine_clerical_gender") switch
+        {
+            "doctrine_clerical_gender_male_only" => false,
+            "doctrine_clerical_gender_female_only" => true,
+            _ => female,
+        };
+    }
+
+    /// <summary>
+    /// Whether the ruler of a seat is a theocrat whose faith forbids its clergy to marry
+    /// (<c>doctrine_clerical_marriage_disallowed</c>), and who is therefore written unmarried and
+    /// without children, as vanilla writes its own prince-bishops and popes.
+    ///
+    /// Vanilla goes further: of the 1,559 clerics in its 1.20 history/characters/ecclesiastical.txt
+    /// none is married and 25 have a dynasty, and the theocratic succession pool will not seat a
+    /// married candidate at all (<c>is_valid_auto_title_holder_clergy</c>). The house is kept here on
+    /// purpose. 1.20 builds its playable theocracy on it — Designate Theocratic Heir needs the
+    /// theocrat to have a dynasty, and a clergyman of the house can be named heir — and a house is
+    /// what the rest of the character's history (parents, brothers, claims, feuds) hangs from.
+    /// Where the doctrine lets clergy marry, a theocrat marries like anyone else.
+    /// </summary>
+    public static bool IsCelibateTheocrat(string government, Faith faith)
+        => government == GovernmentMap.Theocracy
+           && faith.DoctrineOf("doctrine_clerical_marriage") == "doctrine_clerical_marriage_disallowed";
 
     public static (string FirstName, string DynastyName) RulerNames(Title county, Culture culture,
         bool female, int seed, int salt)
@@ -927,7 +990,9 @@ public static class HistoryWriter
     private static void WriteWildernessHolder(string modDir, MapConfig cfg, List<Title> wild,
         WildernessMap wilderness)
     {
-        if (wild.Count == 0) return;
+        // A full-claim Azgaar export has no wild county yet still ships the system, so the ruins
+        // have their holders to hand counties to (WildernessMap.Ships).
+        if (wild.Count == 0 && !wilderness.Ships) return;
 
         string dir = Path.Combine(modDir, "history", "characters");
         Directory.CreateDirectory(dir);
@@ -1168,11 +1233,11 @@ public static class HistoryWriter
 
         // The noble families, granted on the same day their holders got their land.
         //
-        // Second date block, and its DATE is the start date rather than the grant date, because
-        // that is what destroy_landless_title_no_dlc_effect tests: it fires only when the game being
-        // started IS that date, so a player without Roads to Power opens a world with no landless
-        // family titles in it instead of one where every governor holds a duchy the engine has no
-        // machinery for. Vanilla writes exactly this beside each of Byzantium's sixty-one.
+        // Up to 1.19 a second block on the start date ran destroy_landless_title_no_dlc_effect, so a
+        // player without Roads to Power opened a world with no landless family titles, as vanilla
+        // did beside each of Byzantium's sixty-one. 1.20 (Crozier) deleted that effect and dropped
+        // the block from its own noble families; naming it made the engine reject every family's
+        // history ("Failed to read title history, not a valid date"), so it is gone here too.
         foreach (var family in prehistory?.NobleFamilies ?? [])
         {
             using (b.Block(family.TitleKey))
@@ -1188,10 +1253,6 @@ public static class HistoryWriter
                     b.Field("government", family.Government);
                     b.Inline("succession_laws", "noble_family_succession_law");
                 }
-
-                using (b.Block(cfg.StartDate))
-                using (b.Block("effect"))
-                    b.Inline("destroy_landless_title_no_dlc_effect", $"DATE = {cfg.StartDate}");
 
                 // A family of the start date's bureaucracy, gone by a later bookmark whose realms
                 // are not built as one.
@@ -1212,7 +1273,7 @@ public static class HistoryWriter
         // k_gen_ruins is seated whenever the system ships, even with no ruined county under it, so
         // a county that falls in play has a holder to be handed to. A titular title cannot be minted
         // at runtime, and neither can a character be given a birth in history after the game starts.
-        if (wild.Count > 0)
+        if (wild.Count > 0 || wilderness.Ships)
         {
             // A county wild on one bookmark and held on another — the frontier an applied history
             // moved — is written date by date with the realms (WriteEraTitleHistory). These are the
@@ -1221,7 +1282,7 @@ public static class HistoryWriter
                 : [.. wild.Where(c => eras.Eras.All(e => (e.Realms.Wilderness ?? wilderness).Contains(c)))];
 
             var unsettled = always.Where(c => !wilderness.IsRuin(c)).Select(c => c.Key).ToList();
-            if (wild.Any(c => !wilderness.IsRuin(c))) unsettled.Insert(0, WildernessMap.TitleKey);
+            if (wilderness.Ships || wild.Any(c => !wilderness.IsRuin(c))) unsettled.Insert(0, WildernessMap.TitleKey);
 
             var ruined = wilderness.RuinsEnabled
                 ? [WildernessMap.RuinsTitleKey, .. always.Where(wilderness.IsRuin).Select(c => c.Key)]
@@ -1264,7 +1325,7 @@ public static class HistoryWriter
                         using (b.Block(era.GrantDate))
                         {
                             b.Field("holder", head);
-                            if (era.Priests.Any(p => p.Id == head)) b.Field("government", "theocracy_government");
+                            if (era.Priests.Any(p => p.Id == head)) b.Field("government", HeadGovernment(faith));
                         }
                     }
                 }
@@ -1283,7 +1344,7 @@ public static class HistoryWriter
                     else
                     {
                         b.Field("holder", $"gen_hof_{hofIndex++}");
-                        b.Field("government", "theocracy_government");
+                        b.Field("government", HeadGovernment(faith));
                     }
                 }
 
@@ -1292,6 +1353,163 @@ public static class HistoryWriter
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_titles.txt"), b.ToString());
+    }
+
+    /// <summary>
+    /// A spiritual head's government: ecclesiastical when the faith has clerical regions, since the
+    /// head also holds the primate see (as the Pope holds d_et_roma) and a region's holder is
+    /// ecclesiastical; plain theocracy otherwise.
+    /// </summary>
+    private static string HeadGovernment(Faith faith)
+        => faith.Sees.Count > 0 ? "ecclesiastical_government" : "theocracy_government";
+
+    private const string SeeFile = "01_generated_sees.txt";
+
+    /// <summary>
+    /// The archbishops of every generated see (MapGen/Peoples/Sees.cs) and the sees' title history:
+    /// each held from the start date's grant by a cleric of the see's rite and seat culture, under
+    /// ecclesiastical government, bound to its region with <c>clerical_region</c>, and a vassal of the
+    /// top liege of its seat's county. The primate see goes to the faith's head of faith when it has
+    /// a spiritual one, as vanilla's Pope holds Rome's see; that holder answers to no one.
+    ///
+    /// Held from the start date only: an earlier bookmark starts before the sees were founded, which
+    /// is the plan's "sees grow over time" at its simplest.
+    /// </summary>
+    private static void WriteSees(string modDir, MapConfig cfg, FaithMap faiths, CultureMap cultures,
+        EthnicityMap ethnicities, RealmMap realms, WildernessMap wilderness)
+    {
+        string charPath = Path.Combine(modDir, "history", "characters", SeeFile);
+        string titlePath = Path.Combine(modDir, "history", "titles", SeeFile);
+
+        var sees = faiths.Faiths.SelectMany(f => f.Sees).ToList();
+        if (sees.Count == 0)
+        {
+            if (File.Exists(charPath)) File.Delete(charPath);
+            if (File.Exists(titlePath)) File.Delete(titlePath);
+            return;
+        }
+
+        // The head of faith's character id, numbered as WriteHeadOfFaithCharacters numbers them.
+        var hofIds = new Dictionary<Faith, string>();
+        int hofIndex = 0;
+        foreach (var faith in faiths.Faiths)
+        {
+            if (faith.Head is null || TemporalHeadHolder(faith, realms, faiths, wilderness) is not null) continue;
+            hofIds[faith] = $"gen_hof_{hofIndex++}";
+        }
+
+        string grantDate = $"{Math.Max(1, cfg.StartYear - 5)}.1.1";
+        var characters = new JominiBuilder();
+        var titles = new JominiBuilder();
+        characters.Comment("Archbishops of the generated sees. See MapGen/Peoples/Sees.cs.");
+        characters.Blank();
+        titles.Comment("Generated sees: clerical regions bound to et_gen_N_region. See MapGen/Peoples/Sees.cs.");
+        titles.Blank();
+
+        int dissolved = 0;
+        foreach (var see in sees)
+        {
+            var faith = see.Faith;
+            string holder;
+
+            // A seat an applied history left wild or in ruins: the see dissolves, as the plan has it
+            // for now (titular sees later). Its title and region are still declared, unheld and
+            // unbound; without this the archbishop was seated as the wilderness dummy's vassal.
+            if (wilderness.Contains(see.Seat))
+            {
+                dissolved++;
+                continue;
+            }
+
+            if (see.Rank == SeeRank.Primate && hofIds.TryGetValue(faith, out var hof))
+            {
+                holder = hof;
+            }
+            else
+            {
+                holder = $"gen_see_{see.Key["d_et_gen_".Length..]}";
+                var culture = cultures.For(see.Seat);
+                bool female = SeeHolderIsFemale(see, cfg.Seed);
+                var (firstName, _) = RulerNames(see.Seat, culture, female, cfg.Seed, SeeHolderSalt);
+                var rng = Rng.For(cfg.Seed, 0x5EE4, Rng.StableHash(see.Key));
+
+                using (characters.Block(holder))
+                {
+                    characters.Quoted("name", NameTokens(cultures)(firstName));
+                    if (female) characters.Field("female", "yes");
+                    characters.Field("trait", GetPhenotypeTrait(culture, ethnicities, cfg));
+                    // Vanilla's clergy are nearly all learned (1,516 of 1,559 in ecclesiastical.txt).
+                    characters.Field("trait", rng.Chance(0.5) ? "education_learning_3" : "education_learning_4");
+
+                    // A regional rite's archbishop keeps it; history accepts `rite =` on characters.
+                    if (see.Rite is { } rite) characters.Field("rite", rite.Key);
+                    else characters.Field("religion", faith.Key);
+                    characters.Field("culture", culture.Key);
+                    characters.Inline($"{cfg.StartYear - rng.Int(35, 62)}.1.1", "birth = yes");
+
+                    using (characters.Block(cfg.StartDate))
+                    using (characters.Block("effect"))
+                        characters.Field("add_piety", see.Rank == SeeRank.Ordinary ? "150" : "300");
+                }
+
+                characters.Blank();
+            }
+
+            using (titles.Block(see.Key))
+            using (titles.Block(grantDate))
+            {
+                titles.Field("holder", holder);
+                titles.Field("government", "ecclesiastical_government");
+                titles.Field("clerical_region", see.RegionKey);
+
+                // Under the seat's top liege, as a realm's archbishops are; the head of faith is no one's.
+                if (holder.StartsWith("gen_see_", StringComparison.Ordinal) && SeeLiege(see.Seat, realms) is { } liege)
+                    titles.Field("liege", liege.Key);
+            }
+
+            titles.Blank();
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(charPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(titlePath)!);
+        ParadoxText.WriteBom(charPath, characters.ToString());
+        ParadoxText.WriteBom(titlePath, titles.ToString());
+        if (dissolved > 0) Console.WriteLine($"  sees: {dissolved} dissolved, their seats wild or in ruins on the start date");
+    }
+
+    private const int SeeHolderSalt = 0x5EE5;
+
+    /// <summary>The clergy's sex by <c>doctrine_clerical_gender</c>; an open clergy leans as the faith does, per see.</summary>
+    private static bool SeeHolderIsFemale(See see, int seed)
+    {
+        string clerical = see.Faith.DoctrineOf("doctrine_clerical_gender");
+        if (clerical == "doctrine_clerical_gender_female_only") return true;
+        if (clerical == "doctrine_clerical_gender_male_only") return false;
+
+        double share = MapGen.Faiths.GenderOf(see.Faith) switch
+        {
+            "doctrine_gender_female_dominated" => 0.85,
+            "doctrine_gender_equal" => 0.45,
+            _ => 0.10,
+        };
+        return Rng.For(seed, 0x5EE3, Rng.StableHash(see.Key)).Chance(share);
+    }
+
+    /// <summary>The primary title of the top liege of the ruler whose realm holds <paramref name="seat"/>.</summary>
+    private static Title? SeeLiege(Title seat, RealmMap realms)
+    {
+        // The county's holder first: Primary reads a ruler's own seat, and a see often sits in a vassal's county.
+        if (!realms.HolderCounty.TryGetValue(seat, out var holderSeat)) return null;
+        var current = Primary(holderSeat, realms);
+        var seen = new HashSet<Title>();
+        while (seen.Add(current) && realms.Liege.TryGetValue(current, out var liege)) current = liege;
+
+        // A see is duchy tier, and a liege must outrank its vassal: under a sovereign duke or count
+        // the archbishop stands on his own, as vanilla's sees in petty realms do. Never the
+        // wilderness or ruins dummy's realm.
+        return current.Key.Length > 0 && Title.TierRank(current.Tier) > Title.TierRank("d")
+               && current.Key is not (WildernessMap.TitleKey or WildernessMap.RuinsTitleKey)
+            ? current : null;
     }
 
     /// <summary>

@@ -755,7 +755,7 @@ cult_defile_relic_interaction = {
 
 		# Which holy place: an untainted one first.
 		global_var:cult_host_faith = {
-			random_holy_site = {
+			random_holy_site_barony = {
 				limit = {
 					county = {
 						cult_power_county_under_trigger = { LORD = scope:recipient }
@@ -768,7 +768,7 @@ cult_defile_relic_interaction = {
 		if = {
 			limit = { NOT = { exists = scope:cult_defiled_county } }
 			global_var:cult_host_faith = {
-				random_holy_site = {
+				random_holy_site_barony = {
 					limit = {
 						county = { cult_power_county_under_trigger = { LORD = scope:recipient } }
 					}

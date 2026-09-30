@@ -10,6 +10,9 @@
 # Everything below is vanilla's own definition verbatim, with ONE line added — the
 # `NOT = { has_trait = wilderness }` at the top.
 #
+# Re-copied from 1.20.0.2 on 2026-09-30 (vanilla reworked the travelling clause into a trigger_if
+# and dropped `exists = liege` from the diarch one); the added line is unchanged.
+#
 # ---- Why one rule instead of ten files ----
 #
 # AGOT solves this by editing every activity type it ships — feast, hunt, tour, pilgrimage, wedding,
@@ -34,19 +37,20 @@ can_be_activity_guest = {
 	NOT = { has_trait = wilderness }
 
 	is_available_allow_travelling = yes
-	OR = {
-		is_travelling = no
-		# If travelling then it must be already to this activity after it has been created
-		AND = {
-			exists = scope:host.involved_activity
-			exists = current_travel_plan.travel_plan_activity
-			scope:host.involved_activity = current_travel_plan.travel_plan_activity
+	# If travelling then it must be already to this activity after it has been created
+	trigger_if = {
+		limit = {
+			NAND = {
+				exists = scope:host.involved_activity
+				exists = current_travel_plan.travel_plan_activity
+				scope:host.involved_activity = current_travel_plan.travel_plan_activity
+			}
 		}
+		is_travelling = no
 	}
 	# Diarchs with official responsibilities can't come out to play, unless within their liege's realm.
 	trigger_if = {
 		limit = {
-			exists = liege
 			OR = {
 				is_diarch = yes
 				is_designated_diarch = yes

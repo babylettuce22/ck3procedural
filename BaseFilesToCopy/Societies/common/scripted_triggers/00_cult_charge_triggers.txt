@@ -122,7 +122,7 @@ cult_charge_defile_site_target_trigger = {
 
 cult_charge_defile_site_possible_trigger = {
 	global_var:cult_host_faith = {
-		any_holy_site = {
+		any_holy_site_barony = {
 			county = { cult_charge_defile_site_target_trigger = yes }
 		}
 	}

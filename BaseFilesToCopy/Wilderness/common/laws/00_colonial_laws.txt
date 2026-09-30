@@ -1,11 +1,14 @@
-﻿colony_governance_laws = {
-	default = colony_law_balanced
-	flag = realm_law
+﻿# The colony governance laws. Since 1.20 (Crozier) a law names its group (law_group_type) and the
+# group itself - its default and flag - is declared in common/law_groups/00_colonial_law_groups.txt.
+# Up to 1.19 the laws sat nested inside the group block, which 1.20 no longer reads: every
+# has_realm_law = colony_law_* logged "Cannot find ... in law database".
 
 	# =====================================================================================
 	#  1. Balanced Administration (Default)
 	# =====================================================================================
 	colony_law_balanced = {
+		law_group_type = colony_governance_laws
+		index = 0
 		can_have = {
 			OR = {
 				is_colonist_trigger = yes
@@ -34,6 +37,8 @@
 	#  2. Martial Vigilance & Fortified Watch (Defense & Control)
 	# =====================================================================================
 	colony_law_garrison = {
+		law_group_type = colony_governance_laws
+		index = 1
 		can_have = {
 			OR = {
 				is_colonist_trigger = yes
@@ -73,6 +78,8 @@
 	#  3. Corvée Clearance & Forced Labor (Speed & Cheap Clearance)
 	# =====================================================================================
 	colony_law_corvee = {
+		law_group_type = colony_governance_laws
+		index = 2
 		can_have = {
 			OR = {
 				is_colonist_trigger = yes
@@ -138,6 +145,8 @@
 	#  4. Pioneer Homesteading & Freeholds (Morale & Growth)
 	# =====================================================================================
 	colony_law_homestead = {
+		law_group_type = colony_governance_laws
+		index = 3
 		can_have = {
 			OR = {
 				is_colonist_trigger = yes
@@ -177,6 +186,8 @@
 	#  5. Commercial Extraction & Fur Trapping (Immediate Revenue)
 	# =====================================================================================
 	colony_law_extraction = {
+		law_group_type = colony_governance_laws
+		index = 4
 		can_have = {
 			OR = {
 				is_colonist_trigger = yes
@@ -209,4 +220,3 @@
 			if = { limit = { has_trait = generous } add = -30 }
 		}
 	}
-}

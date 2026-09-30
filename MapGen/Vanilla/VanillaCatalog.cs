@@ -249,12 +249,13 @@ public sealed class VanillaCatalog
         Loc = loc;
         string Text(string key) => Clean(loc.Text(key)) ?? key;
 
+        ReadRiteFaiths(Path.Combine(gameDir, "common", "religion", "rite_types"));
         var provinceState = ReadProvinceHistory(Path.Combine(gameDir, "history", "provinces"));
         var (countyProvinces, titleNodes, constants) = ReadLandedTitles(Path.Combine(gameDir, "common", "landed_titles"));
 
         ReadCultures(Path.Combine(gameDir, "common", "culture", "cultures"), Text);
         ReadNameLists(Path.Combine(gameDir, "common", "culture", "name_lists"), loc);
-        ReadReligions(Path.Combine(gameDir, "common", "religion", "religion_types"), Text);
+        ReadReligions(Path.Combine(gameDir, "common", "religion"), Text);
         ReadHolySites(Path.Combine(gameDir, "common", "religion", "holy_site_types"));
 
         foreach (var (key, node) in titleNodes)
@@ -535,11 +536,25 @@ public sealed class VanillaCatalog
         }
     }
 
-    private void ReadReligions(string dir, Func<string, string> text)
+    /// <summary>
+    /// Vanilla's religions and faiths, in either shape the game has used.
+    ///
+    /// Up to 1.19 a religion file nested its faiths (<c>faiths = { catholic = { … } }</c>) and each
+    /// faith listed tenets and doctrines alike as <c>doctrine = …</c>. From 1.20 the religion keeps
+    /// its family and art under <c>religion_details</c>, faiths live in <c>faith_types</c> with
+    /// theirs under <c>faith_details</c>, and a faith's core tenets and its own doctrine choices
+    /// sit on its main rite in <c>rite_types</c>. <see cref="FaithDef.Doctrines"/> is kept as the
+    /// flat list it always was — faith doctrines, then the main rite's tenets and doctrines — so
+    /// nothing reading it has to know which shape it came from.
+    /// </summary>
+    private void ReadReligions(string religionDir, Func<string, string> text)
     {
+        string dir = Path.Combine(religionDir, "religion_types");
+
         foreach (var (key, node) in TopLevelBlocks(dir))
         {
-            string? family = node.Field("family");
+            var details = node.ChildrenNamed("religion_details").FirstOrDefault(d => d.IsBlock) ?? node;
+            string? family = details.Field("family");
             if (family is null) continue;
 
             var traits = node.ChildrenNamed("traits").FirstOrDefault(t => t.IsBlock);
@@ -549,13 +564,14 @@ public sealed class VanillaCatalog
                 Name = text(key),
                 Family = family,
                 Doctrines = node.ChildrenNamed("doctrine").Select(d => d.Value).OfType<string>().ToList(),
-                GraphicalFaith = Unquote(node.Field("graphical_faith")),
+                GraphicalFaith = Unquote(details.Field("graphical_faith")),
                 Virtues = TraitNames(traits, "virtues"),
                 Sins = TraitNames(traits, "sins"),
             };
 
             Religions[key] = religion;
 
+            // 1.19 and before: faiths nested in the religion.
             foreach (var faiths in node.ChildrenNamed("faiths").Where(f => f.IsBlock))
                 foreach (var faith in faiths.Children.Where(f => f.IsBlock && f.Key.Length > 0))
                 {
@@ -575,6 +591,55 @@ public sealed class VanillaCatalog
                     Faiths[def.Key] = def;
                 }
         }
+
+        // 1.20 on: faiths and rites in folders of their own.
+        var rites = new Dictionary<string, GuiNode>(StringComparer.Ordinal);
+        foreach (var (key, node) in TopLevelBlocks(Path.Combine(religionDir, "rite_types")))
+            rites.TryAdd(key, node);
+
+        foreach (var (key, node) in TopLevelBlocks(Path.Combine(religionDir, "faith_types")))
+        {
+            var details = node.ChildrenNamed("faith_details").FirstOrDefault(d => d.IsBlock);
+            if (details?.Field("religion") is not { } religionKey
+                || !Religions.TryGetValue(religionKey, out var religion)
+                || Faiths.ContainsKey(key)) continue;
+
+            // Core tenets are the main rite's when it names any; an empty list on a rite falls back
+            // to the faith's, which is what vanilla's own mainline rites are written to avoid.
+            var mainRite = node.Field("main_rite") is { } riteKey && rites.TryGetValue(riteKey, out var r) ? r : null;
+            var riteTenets = mainRite is null ? [] : Listed(mainRite, "tenets");
+
+            var doctrines = new List<string>();
+            doctrines.AddRange(Listed(node, "doctrines"));
+            doctrines.AddRange(riteTenets.Count > 0 ? riteTenets : Listed(node, "tenets"));
+            doctrines.AddRange(SelectionPairs(riteTenets.Count > 0 ? mainRite! : node));
+            if (mainRite is not null) doctrines.AddRange(Listed(mainRite, "doctrines"));
+
+            var def = new FaithDef
+            {
+                Key = key,
+                Name = text(key),
+                Religion = religion,
+                Color = ParseUnitColor(details.ChildrenNamed("color").FirstOrDefault()),
+                Icon = Unquote(details.Field("icon")) ?? key,
+                Head = details.Field("religious_head"),
+                // Eminent first: they are the sites that matter faith-wide, as the first of the old
+                // flat list were.
+                HolySites = [.. Listed(node, "eminent_holy_sites"), .. Listed(node, "holy_sites")],
+                Doctrines = doctrines.Distinct(StringComparer.Ordinal).ToList(),
+            };
+
+            religion.Faiths.Add(def);
+            Faiths[def.Key] = def;
+        }
+
+        static List<string> Listed(GuiNode node, string field)
+            => node.ChildrenNamed(field).Where(b => b.IsBlock).SelectMany(Tokens).ToList();
+
+        // The base-game half of each pair: what a player without the DLC is actually given.
+        static IEnumerable<string> SelectionPairs(GuiNode node)
+            => node.ChildrenNamed("tenet_selection_pair").Where(p => p.IsBlock)
+                   .Select(p => p.Field("fallback_tenet") ?? p.Field("tenet")).OfType<string>();
     }
 
     private static List<string> TraitNames(GuiNode? traits, string field)
@@ -685,6 +750,30 @@ public sealed class VanillaCatalog
     /// <c>1.1.1</c>, then one state per dated block that changes either. Provinces with no culture
     /// line (the non-capital baronies) are absent.
     /// </summary>
+    /// <summary>Each vanilla rite's parent faith, from <c>rite_types</c>; see <see cref="FaithIn"/>.</summary>
+    private readonly Dictionary<string, string> _riteFaith = new(StringComparer.Ordinal);
+
+    private void ReadRiteFaiths(string dir)
+    {
+        foreach (var (key, node) in TopLevelBlocks(dir))
+            if (node.Field("faith") is { } faith) _riteFaith.TryAdd(key, faith);
+    }
+
+    /// <summary>
+    /// The faith a history entry puts a province or character in. Since 1.20 vanilla names the
+    /// <em>rite</em> (<c>rite = roman_rite</c>) and seldom the faith; a rite resolves to the parent
+    /// faith its <c>rite_types</c> entry names, which is the faith it starts the game under. A rite
+    /// that history moves to another faith later (Roman to Catholic at the Schism) is therefore
+    /// counted under its 867 parent, the one Chalcedonian faith. <c>faith</c> and the older
+    /// <c>religion</c> are read as they always were.
+    /// </summary>
+    private string? FaithIn(GuiNode node)
+    {
+        if (Unquote(node.Field("rite")) is { } rite)
+            return _riteFaith.GetValueOrDefault(rite, rite);
+        return Unquote(node.Field("faith") ?? node.Field("religion"));
+    }
+
     private Dictionary<int, List<(string Date, string Culture, string Faith)>> ReadProvinceHistory(string dir)
     {
         var states = new Dictionary<int, List<(string, string, string)>>();
@@ -695,14 +784,14 @@ public sealed class VanillaCatalog
                 if (!root.IsBlock || !int.TryParse(root.Key, out int id)) continue;
 
                 string? culture = root.Field("culture");
-                string? faith = root.Field("religion");
+                string? faith = FaithIn(root);
                 var list = new List<(string, string, string)>();
                 if (culture is not null && faith is not null) list.Add(("1.1.1", culture, faith));
 
                 foreach (var dated in root.Children.Where(c => c.IsBlock && IsDate(c.Key)).OrderBy(c => c.Key, DateOrder))
                 {
                     string? c2 = dated.Field("culture");
-                    string? f2 = dated.Field("religion");
+                    string? f2 = FaithIn(dated);
                     if (c2 is null && f2 is null) continue;
                     culture = c2 ?? culture;
                     faith = f2 ?? faith;
@@ -767,12 +856,12 @@ public sealed class VanillaCatalog
             {
                 var states = new List<(string, string?, string?)>
                 {
-                    ("1.1.1", Unquote(root.Field("culture")), Unquote(root.Field("religion") ?? root.Field("faith"))),
+                    ("1.1.1", Unquote(root.Field("culture")), FaithIn(root)),
                 };
                 foreach (var dated in root.Children.Where(c => c.IsBlock && IsDate(c.Key)).OrderBy(c => c.Key, DateOrder))
                 {
                     string? c = Unquote(dated.Field("culture"));
-                    string? f = Unquote(dated.Field("religion") ?? dated.Field("faith"));
+                    string? f = FaithIn(dated);
                     if (c is not null || f is not null) states.Add((dated.Key, c, f));
                 }
                 Characters[root.Key] = states;

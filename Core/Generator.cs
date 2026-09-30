@@ -372,7 +372,8 @@ public static class Generator
         // it ends — otherwise the next write would refuse to clear what this one half wrote.
         RunLog.Claim(modDir, options);
 
-        Emit.ModWriter.WriteDescriptors(modDir, options.ModName);
+        Emit.ModWriter.WriteDescriptors(modDir, options.ModName,
+            vanillaFaiths: cfg.ContentSource == MapConfig.ContentSourceMode.VanillaWorld);
 
         // map_data runs beside the first half of the content instead of in front of it. The two are
         // within milliseconds of each other in length and they share almost nothing: map_data takes

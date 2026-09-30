@@ -8,11 +8,15 @@ public static class ReligionWriter
 {
     /// <param name="seed">The world's seed, which the descriptions are drawn with. See <see cref="FaithDescriptions"/>.</param>
     /// <param name="tooltips">Gloss the religions' gods and clergy words on hover. See <see cref="ReligionGlossary"/>.</param>
-    public static void WriteAll(string modDir, FaithMap faiths, int seed, bool tooltips = true)
+    /// <param name="fromGeneration">False for the editor's overwrite, whose world may have been loaded
+    /// from files that carry no sees in memory; see <see cref="SeeWriter.WriteAll"/>.</param>
+    public static void WriteAll(string modDir, FaithMap faiths, int seed, bool tooltips = true,
+        bool fromGeneration = true)
     {
         WriteHolySites(modDir, faiths);
         WriteReligions(modDir, faiths);
         WriteLocalisation(modDir, faiths, seed, tooltips);
+        SeeWriter.WriteAll(modDir, faiths, removeWhenNone: fromGeneration);
 
         // Here rather than beside the call site, so an editor save that rewrites the faiths
         // redraws the icons from the same edited colours and tenets.
@@ -23,6 +27,30 @@ public static class ReligionWriter
                           $"{faiths.Religions.Count} religions, {sites} holy sites");
     }
 
+    /// <summary>
+    /// How many of a faith's holy sites are eminent: vanilla's own default,
+    /// <c>FAITH_EMINENT_HOLY_SITES_MAX_DEFAULT</c>. The rest are ordinary sites.
+    /// </summary>
+    private const int EminentHolySites = 3;
+
+    /// <summary>
+    /// A faith's holy sites split the way CK3 1.20 splits them: the first
+    /// <see cref="EminentHolySites"/> are eminent, whose faith-wide modifier reaches every follower,
+    /// and the rest are ordinary, which reward only whoever holds the county. Sites are placed
+    /// best first (<c>Faiths.PlaceAllHolySites</c>), so the eminent ones are the faith's greatest.
+    /// </summary>
+    internal static (List<string> Eminent, List<string> Ordinary) SplitHolySites(Faith faith)
+    {
+        var keys = faith.HolySites.Select(s => s.Key).Distinct(StringComparer.Ordinal).ToList();
+        return (keys.Take(EminentHolySites).ToList(), keys.Skip(EminentHolySites).ToList());
+    }
+
+    /// <summary>
+    /// Up to 1.19 a holy site had one <c>character_modifier</c>, applied to every follower of the
+    /// faith holding it; ours was +10% monthly piety. 1.20 replaced it with a faith-wide modifier
+    /// that only an eminent site applies and a modifier for the county's holder that any site
+    /// applies. The faith-wide half keeps the old +10%; the holder's is vanilla's usual +5%.
+    /// </summary>
     private static void WriteHolySites(string modDir, FaithMap faiths)
     {
         string dir = Path.Combine(modDir, "common", "religion", "holy_site_types");
@@ -46,11 +74,11 @@ public static class ReligionWriter
                     b.Field("county", county.Key);
                     b.Blank();
 
-                    using (b.Block("character_modifier"))
-                    {
-                        b.Field("name", $"holy_site_{key}_effect_name");
+                    using (b.Block("county_holder_character_modifier"))
+                        b.Field("monthly_piety_gain_mult", "0.05");
+
+                    using (b.Block("faith_character_modifier"))
                         b.Field("monthly_piety_gain_mult", "0.1");
-                    }
                 }
 
                 b.Blank();
@@ -60,14 +88,34 @@ public static class ReligionWriter
         ParadoxText.WriteBom(Path.Combine(dir, "01_generated_holy_sites.txt"), b.ToString());
     }
 
+    /// <summary>
+    /// Religions, faiths and rites in CK3 1.20's layout: one database each, in
+    /// <c>common/religion/religion_types</c>, <c>faith_types</c> and <c>rite_types</c>.
+    ///
+    /// Every faith gets exactly one rite, its main rite, keyed like the faith and carrying a copy
+    /// of its colour, tenets and doctrines. That is what vanilla does for each of its own
+    /// single-rite faiths (<c>02_mainline_rite_types.txt</c>), and for two reasons it spells out:
+    /// a faith left to the engine gets a dynamic rite with a positional key script and history
+    /// cannot name, and a rite with an empty <c>tenets</c> block falls back to the religion's core
+    /// tenets rather than the faith's, which would silently drop the faith's own. Sharing the key
+    /// also means the rite reads the faith's name, adjective and adherent localisation.
+    /// </summary>
     private static void WriteReligions(string modDir, FaithMap faiths)
     {
-        string dir = Path.Combine(modDir, "common", "religion", "religion_types");
+        string root = Path.Combine(modDir, "common", "religion");
+        string dir = Path.Combine(root, "religion_types");
         Directory.CreateDirectory(dir);
 
         var b = new JominiBuilder();
-        b.Comment("Generated religions and their faiths.");
+        var faithFile = new JominiBuilder();
+        var riteFile = new JominiBuilder();
+        b.Comment("Generated religions. Their faiths are in faith_types, each faith's main rite in rite_types.");
         b.Blank();
+        faithFile.Comment("Generated faiths. Each has one scripted main rite of the same key in rite_types.");
+        faithFile.Blank();
+        riteFile.Comment("Generated main rites, one per faith and keyed like it, carrying the faith's colour,");
+        riteFile.Comment("tenets and doctrines as vanilla's 02_mainline_rite_types.txt does for its own.");
+        riteFile.Blank();
 
         foreach (var religion in faiths.Religions)
         {
@@ -76,8 +124,22 @@ public static class ReligionWriter
                 // The family gates flavour only; the hostility doctrine in the list below is what
                 // decides who this religion may holy-war. Pagan roots exist for the unreformed
                 // doctrine's reform flow, which an Abrahamic-shaped religion never enters.
-                b.Field("family", religion.Abrahamic ? MapGen.Faiths.AbrahamicFamily : MapGen.Faiths.Family);
-                b.Field("graphical_faith", religion.GraphicalFaith);
+                using (b.Block("religion_details"))
+                {
+                    b.Field("family", religion.Abrahamic ? MapGen.Faiths.AbrahamicFamily : MapGen.Faiths.Family);
+                    b.Field("graphical_faith", religion.GraphicalFaith);
+
+                    // A religion with clerical regions names ecclesiastical government for its
+                    // theocrats, as vanilla's Christianity does: grants and Adopt Theocratic Rule hand
+                    // out whatever this names, and without it a see's successor falls back to plain
+                    // theocracy_government, which has no treasury, domicile or lease hierarchy.
+                    if (religion.HasSees)
+                    {
+                        b.Field("theocracy_government_type", "ecclesiastical_government");
+                        b.Field("theocracy_lease_contract_type", "ecclesiastical_lease");
+                    }
+                }
+
                 if (!religion.Abrahamic) b.Field("pagan_roots", "yes");
                 b.Blank();
 
@@ -91,10 +153,14 @@ public static class ReligionWriter
                     : MapGen.Faiths.SettledDoctrine);
                 b.Blank();
 
+                // Weighted as vanilla weights every religion's since 1.20: the weight is what a
+                // virtue adds to, or a sin takes from, a holder's Spiritual Fulfillment, and an
+                // unweighted trait counts 1 against vanilla's 20-30. The first of each list carries
+                // the most, which is the commonest shape vanilla's own lists take.
                 using (b.Block("traits"))
                 {
-                    b.Inline("virtues", string.Join(' ', religion.Virtues));
-                    b.Inline("sins", string.Join(' ', religion.Sins));
+                    WeightedTraits(b, "virtues", religion.Virtues);
+                    WeightedTraits(b, "sins", religion.Sins);
                 }
 
                 b.Blank();
@@ -103,100 +169,168 @@ public static class ReligionWriter
 
                 using (b.Block("localization"))
                     foreach (var (tag, value) in religion.Localization) b.Field(tag, value);
-
-                b.Blank();
-
-                using (b.Block("faiths"))
-                {
-                    foreach (var faith in religion.Faiths)
-                    {
-                        var (r, g, bl) = faith.Color;
-
-                        using (b.Block(faith.Key))
-                        {
-                            b.Inline("color", F(r), F(g), F(bl));
-                            b.Field("icon", faith.Icon);
-
-                            // Unreformed faiths require reformed_icon, otherwise Reformation/Holy Site view causes CTD
-                            if (!faith.IsOrganized)
-                            {
-                                b.Field("doctrine", "unreformed_faith_doctrine");
-                                b.Field("reformed_icon", FaithIcons.HasGeneratedIcon(faith) && faith.ReformedIcon is { } reformed
-                                    ? reformed
-                                    : faith.Icon);
-                            }
-
-                            b.Blank();
-
-                            if (faith.Head is not null && faith.IsOrganized)
-                            {
-                                // A temporal head is a landed ruler who is also the faith's head —
-                                // see HistoryWriter, which hands the title to one — and vanilla
-                                // pairs it with no anointment, so the rite below is left to the
-                                // spiritual kind.
-                                b.Field("doctrine", faith.Head.Temporal
-                                    ? "doctrine_temporal_head"
-                                    : "doctrine_spiritual_head");
-                                b.Field("religious_head", faith.Head.TitleKey);
-
-                                // The anointment rite belongs beside the head that performs it.
-                                //
-                                // Its doctrine group is filled at *religion* level, where
-                                // doctrine_head_of_faith is pinned to doctrine_no_head — so the
-                                // can_pick repair in Faiths.Build correctly rules the two anointment
-                                // doctrines out and every religion lands on doctrine_no_anointment.
-                                // That is right for the religion and wrong for the faiths overridden
-                                // here: they have a head of faith and inherited a rite that assumes
-                                // there is none, which left `crowned_emperor` unreachable on the
-                                // whole map and the imperial branch of the coronation dead.
-                                //
-                                // A faith-level doctrine overrides its religion's for the same
-                                // group, so one line here reconciles them. The dominant faith of a
-                                // religion gets the imperial rite — it is the one whose head is
-                                // expected to crown emperors, and it is what makes the anointment
-                                // option default-on at empire tier — and the rest get the plain
-                                // permission.
-                                //
-                                // Guarded on the religion having drawn a coronation doctrine at
-                                // all, which is this generator's own record of whether the install
-                                // it read defines the group: the doctrines live in a base-game file
-                                // but only since the patch Coronations shipped with, and naming one
-                                // an older install has never heard of is a hard script error rather
-                                // than a feature quietly doing nothing.
-                                if (!faith.Head.Temporal && religion.Doctrines.ContainsKey("doctrine_coronation"))
-                                {
-                                    b.Field("doctrine", faith.IsDominant
-                                        ? "doctrine_imperial_anointment"
-                                        : "doctrine_anointment_permitted");
-                                }
-                            }
-
-                            // Ensure every faith has at least one holy site
-                            if (faith.HolySites.Count > 0)
-                            {
-                                foreach (var (key, _) in faith.HolySites) b.Field("holy_site", key);
-                            }
-                            else if ((faiths.Whole ?? faiths).Faiths.Any(f => f.HolySites.Count > 0))
-                            {
-                                // Fallback to avoid fatal error on empty dummy faiths. From the whole
-                                // map: in a world of vanilla faiths the only sites are theirs.
-                                var fallbackSite = (faiths.Whole ?? faiths).Faiths.First(f => f.HolySites.Count > 0).HolySites[0];
-                                b.Field("holy_site", fallbackSite.Key);
-                            }
-
-                            b.Blank();
-
-                            foreach (string tenet in faith.Tenets) b.Field("doctrine", tenet);
-                        }
-                    }
-                }
             }
 
             b.Blank();
+
+            foreach (var faith in religion.Faiths)
+                WriteFaith(faithFile, riteFile, religion, faith, faiths);
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "00_generated_religions.txt"), b.ToString());
+
+        string faithDir = Path.Combine(root, "faith_types");
+        string riteDir = Path.Combine(root, "rite_types");
+        Directory.CreateDirectory(faithDir);
+        Directory.CreateDirectory(riteDir);
+        ParadoxText.WriteBom(Path.Combine(faithDir, "00_generated_faiths.txt"), faithFile.ToString());
+        ParadoxText.WriteBom(Path.Combine(riteDir, "00_generated_rites.txt"), riteFile.ToString());
     }
+
+    private static void WeightedTraits(JominiBuilder b, string field, IReadOnlyList<string> traits)
+    {
+        using (b.Block(field))
+            for (int i = 0; i < traits.Count; i++)
+                b.Inline(traits[i], "weight", "=", i == 0 ? "30" : "20", "scale", "=", "1");
+    }
+
+    /// <summary>
+    /// One faith in <c>faith_types</c> and its main rite in <c>rite_types</c>.
+    ///
+    /// What the faith and its rite each hold follows the guidance in vanilla's <c>_faith_types.info</c>
+    /// and <c>02_mainline_rite_types.txt</c>: the faith carries its details (religion, colour, icon,
+    /// head), its holy sites and the doctrines intrinsic to it; the rite carries a copy of the
+    /// colour, the core tenets and the same doctrines, so the effective faith is identical to the
+    /// one 1.19 read from a single block.
+    /// </summary>
+    private static void WriteFaith(JominiBuilder b, JominiBuilder rites, Religion religion, Faith faith,
+        FaithMap faiths)
+    {
+        var (r, g, bl) = faith.Color;
+        var doctrines = new List<string>();
+        string? reformedIcon = null;
+
+        // Unreformed faiths require reformed_icon, otherwise Reformation/Holy Site view causes CTD
+        if (!faith.IsOrganized)
+        {
+            doctrines.Add("unreformed_faith_doctrine");
+            reformedIcon = FaithIcons.HasGeneratedIcon(faith) && faith.ReformedIcon is { } reformed
+                ? reformed
+                : faith.Icon;
+        }
+
+        string? head = null;
+        if (faith.Head is not null && faith.IsOrganized)
+        {
+            // A temporal head is a landed ruler who is also the faith's head — see HistoryWriter,
+            // which hands the title to one — and vanilla pairs it with no anointment, so the rite
+            // below is left to the spiritual kind.
+            doctrines.Add(faith.Head.Temporal ? "doctrine_temporal_head" : "doctrine_spiritual_head");
+            head = faith.Head.TitleKey;
+
+            // The anointment rite belongs beside the head that performs it.
+            //
+            // Its doctrine group is filled at *religion* level, where doctrine_head_of_faith is
+            // pinned to doctrine_no_head — so the can_pick repair in Faiths.Build correctly rules the
+            // two anointment doctrines out and every religion lands on doctrine_no_anointment. That
+            // is right for the religion and wrong for the faiths overridden here: they have a head
+            // of faith and inherited a rite that assumes there is none, which left
+            // `crowned_emperor` unreachable on the whole map and the imperial branch of the
+            // coronation dead.
+            //
+            // A faith- or rite-level doctrine overrides its religion's for the same group, so one
+            // entry here reconciles them. The dominant faith of a religion gets the imperial rite —
+            // it is the one whose head is expected to crown emperors, and it is what makes the
+            // anointment option default-on at empire tier — and the rest get the plain permission.
+            //
+            // Guarded on the religion having drawn a coronation doctrine at all, which is this
+            // generator's own record of whether the install it read defines the group: naming one
+            // an older install has never heard of is a hard script error rather than a feature
+            // quietly doing nothing.
+            if (!faith.Head.Temporal && religion.Doctrines.ContainsKey("doctrine_coronation"))
+                doctrines.Add(faith.IsDominant ? "doctrine_imperial_anointment" : "doctrine_anointment_permitted");
+        }
+
+        // Clerical regions: the parameter every clerical-region interaction tests. On the faith, and
+        // restated on its rites below, since a rite's doctrines replace the faith's group by group.
+        if (faith.Sees.Count > 0) doctrines.Add(ClericalRegionsDoctrine);
+
+        var (eminent, ordinary) = SplitHolySites(faith);
+
+        // Ensure every faith has at least one holy site. Fallback to avoid fatal error on empty
+        // dummy faiths. From the whole map: in a world of vanilla faiths the only sites are theirs.
+        if (eminent.Count == 0 && (faiths.Whole ?? faiths).Faiths.FirstOrDefault(f => f.HolySites.Count > 0) is { } donor)
+            eminent.Add(donor.HolySites[0].Key);
+
+        using (b.Block(faith.Key))
+        {
+            b.Field("main_rite", faith.Key);
+
+            using (b.Block("faith_details"))
+            {
+                b.Field("religion", religion.Key);
+                b.Inline("color", F(r), F(g), F(bl));
+                b.Field("icon", faith.Icon);
+                if (reformedIcon is not null) b.Field("reformed_icon", reformedIcon);
+                if (head is not null) b.Field("religious_head", head);
+            }
+
+            b.Blank();
+            if (eminent.Count > 0) b.Inline("eminent_holy_sites", string.Join(' ', eminent));
+            if (ordinary.Count > 0) b.Inline("holy_sites", string.Join(' ', ordinary));
+            b.Blank();
+
+            b.Inline("tenets", string.Join(' ', faith.Tenets));
+            if (doctrines.Count > 0) b.Inline("doctrines", string.Join(' ', doctrines));
+        }
+
+        b.Blank();
+
+        var primate = faith.Sees.FirstOrDefault(s => s.Rank == SeeRank.Primate);
+
+        using (rites.Block(faith.Key))
+        {
+            // Beside regional rites the main rite needs a name of its own, as Roman Rite is not
+            // Chalcedonian Christianity; alone it keeps reading the faith's name by sharing its key.
+            if (faith.Rites.Count > 0) rites.Field("name", MainRiteName(faith));
+            rites.Field("faith", faith.Key);
+            if (primate is not null) rites.Field("founder", primate.Key);
+            rites.Blank();
+            rites.Inline("color", F(r), F(g), F(bl));
+            rites.Blank();
+            rites.Inline("tenets", string.Join(' ', faith.Tenets));
+            if (doctrines.Count > 0) rites.Inline("doctrines", string.Join(' ', doctrines));
+        }
+
+        rites.Blank();
+
+        // Regional rites (MapGen/Peoples/Sees.cs): the faith's core with one tenet and one devotional
+        // doctrine of their own, founded by a great see as vanilla's Ambrosian rite is by Milan.
+        foreach (var rite in faith.Rites)
+        {
+            var (rr, rg, rb) = rite.Color;
+            var riteDoctrines = doctrines.Concat(rite.DoctrineOverrides.Values).ToList();
+
+            using (rites.Block(rite.Key))
+            {
+                rites.Field("faith", faith.Key);
+                rites.Field("founder", rite.Founder.Key);
+                rites.Blank();
+                rites.Inline("color", F(rr), F(rg), F(rb));
+                rites.Blank();
+                rites.Inline("tenets", string.Join(' ', rite.Tenets));
+                if (riteDoctrines.Count > 0) rites.Inline("doctrines", string.Join(' ', riteDoctrines));
+            }
+
+            rites.Blank();
+        }
+    }
+
+    /// <summary>The hidden doctrine that carries <c>has_clerical_regions</c>; see BaseFilesToCopy/Core.</summary>
+    internal const string ClericalRegionsDoctrine = "special_doctrine_gen_clerical_regions";
+
+    /// <summary>The loc key a faith's main rite is named by once the faith has regional rites.</summary>
+    private static string MainRiteName(Faith faith) => $"{faith.Key}_main_rite";
 
     /// <summary>
     /// The icons the game offers when a faith of this religion reforms or a new faith is founded
@@ -271,6 +405,20 @@ public static class ReligionWriter
             if (faith.Head is not null)
                 entries[faith.Head.TitleKey] = faith.Head.Name;
 
+            // Rites follow vanilla's pattern (roman_rite: "Roman Rite", adjective "Roman Rite",
+            // adherent "Roman Christian"): the adherent is the rite's adjective and the faith's word.
+            if (faith.MainRiteAdjective is { } mainAdj && faith.Sees.FirstOrDefault(s => s.Rank == SeeRank.Primate) is { } primate)
+                RiteEntries(entries, MainRiteName(faith), $"{mainAdj} Rite", mainAdj, faith,
+                    $"The {mainAdj} Rite is the {faith.Name} faith as kept at {primate.Seat.Name}, the see of its "
+                    + "head, and the measure the faith's other rites are held against.");
+
+            foreach (var rite in faith.Rites)
+                RiteEntries(entries, rite.Key, rite.Name, rite.Adjective, faith, rite.FromSaint
+                    ? $"{rite.Name} keeps the teaching of a holy founder of the see of {rite.Founder.Seat.Name}, "
+                      + $"and differs from the {faith.Name} of the head's see in the practices it holds most dear."
+                    : $"The {rite.Name} is the {faith.Name} faith as kept in the see of {rite.Founder.Seat.Name} "
+                      + "and the lands around it, with customs of its own.");
+
             foreach (var (key, county) in faith.HolySites)
             {
                 entries[$"holy_site_{key}_name"] = county.Name;
@@ -286,6 +434,16 @@ public static class ReligionWriter
         }
 
         loc.Write(Path.Combine(dir, "gen_faiths_l_english.yml"));
+    }
+
+    private static void RiteEntries(IDictionary<string, string> entries, string key, string name, string adjective,
+        Faith faith, string description)
+    {
+        entries[key] = name;
+        entries[$"{key}_adj"] = adjective;
+        entries[$"{key}_adherent"] = $"{adjective} {faith.Name}";
+        entries[$"{key}_adherent_plural"] = $"{adjective} {Language.Plural(faith.Name)}";
+        entries[$"{key}_desc"] = description;
     }
 
     private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);

@@ -37,7 +37,7 @@ cult_power_holds_host_holy_site_trigger = {
 	cult_active_trigger = yes
 	save_temporary_scope_as = cult_site_lord_check
 	global_var:cult_host_faith = {
-		any_holy_site = {
+		any_holy_site_barony = {
 			county = { cult_power_county_under_trigger = { LORD = scope:cult_site_lord_check } }
 		}
 	}

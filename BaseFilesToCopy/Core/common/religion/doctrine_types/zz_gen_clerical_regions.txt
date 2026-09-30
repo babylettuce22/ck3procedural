@@ -1,0 +1,23 @@
+# The has_clerical_regions parameter for generated faiths with an institutional clergy.
+#
+# In vanilla 1.20 that parameter comes only from special_doctrine_is_christian_faith
+# (40_doctrines_special.txt), and every clerical-region interaction, the ecumenical council and the
+# landed-realm-priest setup at game start test it (faith.has_doctrine_parameter or
+# rite_has_parameter). The engine itself never reads it: a region binds through title history
+# whatever the faith. So a generated faith with sees (MapGen/Peoples/Sees.cs) carries this doctrine,
+# written by ReligionWriter on the faith and on each of its rites, and gets the same interactions a
+# Christian faith does. The Christian-only machinery (cardinals, bulls, the Church situation, the
+# Schism) keys on Christianity separately and stays Christian.
+#
+# Hidden, as vanilla hides its classification doctrines: it is a fact about the faith, not a choice.
+
+special_doctrine_gen_clerical_regions = {
+	doctrine_group_type = gen_clerical_regions
+	index = 0
+	visible = no
+	icon = "special_doctrine_teachings_of_jesus" # Never drawn while hidden; borrowed so the key has a file behind it.
+
+	parameters = {
+		has_clerical_regions
+	}
+}

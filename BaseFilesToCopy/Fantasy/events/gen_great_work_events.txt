@@ -74,7 +74,7 @@ gen_great_work.0010 = {
 			}
 			modifier = {
 				add = 20
-				has_trait = scholar
+				has_trait = erudite # 'scholar' until 1.20 renamed it
 			}
 			modifier = {
 				add = 10

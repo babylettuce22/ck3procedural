@@ -2165,7 +2165,7 @@ restor.1022 = {
 		}
 		ai_chance = {
 			base = 35
-			modifier = { add = 20 has_trait = scholar }
+			modifier = { add = 20 has_trait = erudite } # 'scholar' until 1.20 renamed it
 			modifier = { add = 15 has_trait = humble }
 		}
 	}

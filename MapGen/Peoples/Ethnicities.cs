@@ -2696,7 +2696,7 @@ public static class Ethnicities
 
             case RaceArchetype.Hornkin:
                 // Ashen at low intensity, crimson at the top of the ramp (see gen_skin_hornkin), under
-                // dark weathered hair and the goat-and-ram eyes of herders.
+                // dark hair and amber-to-gold eyes.
                 ApplyRaceSkin(def, archetype, mode);
                 AddColor(def, "hair_color", Hair.Black, weight: 35);
                 AddColor(def, "hair_color", Hair.DarkBrown, weight: 30);

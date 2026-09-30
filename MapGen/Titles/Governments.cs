@@ -10,6 +10,39 @@ public sealed class GovernmentMap
     public const string Tribal = "tribal_government";
     public const string Clan = "clan_government";
     public const string Republic = "republic_government";
+
+    /// <summary>
+    /// The theocracy every theocrat on a generated map is written under: an Azgaar state of the
+    /// Theocracy form (<see cref="AzgaarGovernments"/>), a spiritual head of faith, and whatever the
+    /// editor puts on it. The generated cascade in <see cref="Governments.Build"/> never assigns it.
+    ///
+    /// Not <c>ecclesiastical_government</c>, which CK3 1.20 added beside it. The engine does not
+    /// choose between the two by doctrine: a religion names its theocratic government in
+    /// <c>religion_details.theocracy_government_type</c> (with the matching
+    /// <c>theocracy_lease_contract_type</c>), and only vanilla's Christianity names ecclesiastical —
+    /// every other faith falls back to this one (_faith_types.info). What the ecclesiastical one
+    /// adds is Christian machinery: a treasury fed through clerical regions, cardinals and their
+    /// budget, the ecclesiastical estate, a lease whose hierarchy is the clerical region. A
+    /// generated world has no clerical regions, so a generated religion's theocrat stays here.
+    ///
+    /// Everything else 1.20 gives a theocracy comes with the government and needs nothing in
+    /// history, which is also how vanilla writes its own: a bare <c>government =</c> line once,
+    /// holders after. <c>clerical_appointment_law</c> is picked by its should_start_with for any
+    /// theocrat of county tier or above (its candidates are the holder's council, court and clergy,
+    /// never his family); <c>church_authority</c> starts at level 0 from the government's flag.
+    /// Playing a theocrat at all is By God Alone content (the 1.20 changelog lists Playable
+    /// Theocracies among the paid features, and vanilla's one bookmark of prince-bishops carries
+    /// <c>requires_dlc_flag = by_god_alone</c>), and so are Designate Theocratic Heir, Establish a
+    /// Dynasty and Adopt/Restore Theocratic Rule (<c>has_pam_dlc_trigger</c>). The government, the
+    /// succession law and the church authority law group carry no DLC gate in script, so a world
+    /// loads and its theocrats rule the same way without the expansion.
+    ///
+    /// Two rules the generator keeps so that a theocrat is what 1.20 would make of him: his
+    /// religion is never lay clergy, because the government refuses a landed theocrat of a
+    /// lay-clergy rite (<c>theocratic_lay_clergy_trigger</c>; see Faiths.CreateReligion), and he
+    /// is a cleric in his own person — of the sex his clergy is, and single where his clergy may
+    /// not marry (<see cref="HistoryWriter.AsClergy"/>, <see cref="HistoryWriter.IsCelibateTheocrat"/>).
+    /// </summary>
     public const string Theocracy = "theocracy_government";
     public const string Administrative = "administrative_government";
     public const string Nomad = "nomad_government";
@@ -209,7 +242,8 @@ public sealed class GovernmentMap
     /// The bureaucracies that behave alike: one government across the whole realm, castle seats, and
     /// noble families rather than ordinary vassals.
     ///
-    /// Ritsuryō belongs here on every count — <c>administrative = yes</c>, <c>noble_families</c>,
+    /// Ritsuryō belongs here on every count — <c>mechanic_type = administrative</c> (the
+    /// <c>administrative = yes</c> government rule until 1.20), <c>noble_families</c>,
     /// a castle seat — though the cascade never produces it, so it only answers for the editor.
     /// Sōryō does not: it is the feudal half of that pair, and its vassals are ordinary.
     /// </summary>

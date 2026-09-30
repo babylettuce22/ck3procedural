@@ -98,9 +98,10 @@ gen_bc_ab_kill_effect = {
 	}
 	if = {
 		limit = {
-			$KILLER$ = {
-				faith = { has_doctrine = tenet_cranial_trophies }
-			}
+			# 1.20 moved tenets out of the doctrine database onto rites (and personal tenets), so
+			# `faith = { has_doctrine = tenet_cranial_trophies }` no longer resolves. This is the
+			# test vanilla's single_combat_events.txt now uses before the same beheading effect.
+			$KILLER$ = { tgp_cranial_trophies_collection_trigger = yes }
 		}
 		tgp_cranial_trophies_beheading_effect = {
 			KILLER = $KILLER$

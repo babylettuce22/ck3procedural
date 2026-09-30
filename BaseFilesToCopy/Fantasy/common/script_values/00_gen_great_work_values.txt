@@ -22,7 +22,7 @@ gen_gw_pace_value = {
 		multiply = 0.01
 	}
 	if = {
-		limit = { has_trait = scholar }
+		limit = { has_trait = erudite } # 'scholar' until 1.20 renamed it
 		add = 0.1
 	}
 	if = {

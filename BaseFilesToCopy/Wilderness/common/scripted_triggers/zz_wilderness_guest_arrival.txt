@@ -9,6 +9,9 @@
 #
 # Everything below is vanilla's own definition verbatim, with ONE line added.
 #
+# Re-copied from 1.20.0.2 on 2026-09-30 (vanilla's tier tests became `>= tier_empire`, so hegemony
+# claimants count too, and paiza merchants are kept out); the added line is unchanged.
+#
 # ---- Why this trigger ----
 #
 # The engine hands a landed ruler guests out of the local character pool whether or not anything
@@ -68,9 +71,12 @@ guest_allowed_to_arrive_trigger = {
 	#Isn't too good for host
 	NAND = {
 		OR = {
-			any_claim = { tier = tier_empire }
-			any_close_family_member = { highest_held_title_tier = tier_empire }
+			any_claim = { tier >= tier_empire }
+			any_close_family_member = { highest_held_title_tier >= tier_empire }
 		}
 		$HOST$ = { highest_held_title_tier <= tier_county }
 	}
+
+	# Prevent paiza merchants from arriving as guests
+	NOT = { has_variable = merchant_var }
 } #Note: this trigger used to contain opinion triggers but then some awful rulers could never get guests because everyone hates them

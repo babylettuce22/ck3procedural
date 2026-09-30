@@ -78,12 +78,31 @@ public sealed class WildernessMap
 
     internal WildernessMap(HashSet<Title> counties) : this(counties, [], false) { }
 
-    internal WildernessMap(HashSet<Title> counties, HashSet<Title> ruined, bool ruinsEnabled)
+    internal WildernessMap(HashSet<Title> counties, HashSet<Title> ruined, bool ruinsEnabled,
+        bool ships = false)
     {
         this.counties = counties;
         this.ruined = ruined;
         RuinsEnabled = ruinsEnabled;
+        Ships = ships;
     }
+
+    /// <summary>
+    /// Whether the wilderness system ships on this world at all, which is NOT the same question as
+    /// whether any county starts wild.
+    ///
+    /// An Azgaar export that gives every county to a state starts with no wilderness (the export
+    /// has said nobody's land is empty, and carving populated states to meet a share was the
+    /// takeover the user refused). The Wilderness file set still ships on
+    /// <see cref="Config.MapConfig.EnableWilderness"/> alone, and it — and the Ruins set on top of
+    /// it — hands a falling county to the holder of <c>k_gen_wilderness</c> first
+    /// (<c>abandon_county_effect</c>), reads the Unsettled culture and faith off that holder, and
+    /// converts the capital to wild ground only when that holder exists. So the titular title,
+    /// both dummies and the Unsettled culture and faith are written on this, never on a count —
+    /// the same device <see cref="RuinsEnabled"/> uses for the ruins holder, which already stands
+    /// empty on the default world. False only for <see cref="Empty"/> (the system switched off).
+    /// </summary>
+    public bool Ships { get; }
 
     /// <summary>
     /// Whether the ruins system is shipping at all, which is NOT the same question as whether any
@@ -147,7 +166,7 @@ public sealed class WildernessMap
         var unsettled = new HashSet<Title>(counties.Where(c => !settled.Contains(c) && !fallen.Contains(c)));
         var ruins = new HashSet<Title>(ruined.Where(c => !settled.Contains(c)));
         foreach (var county in fallen.OrderBy(c => c.Index)) ruins.Add(county);
-        return new WildernessMap(unsettled, ruins, RuinsEnabled);
+        return new WildernessMap(unsettled, ruins, RuinsEnabled, Ships);
     }
 }
 
@@ -193,8 +212,13 @@ public static class Wilderness
     /// remote, poor, edge-of-the-map counties — would otherwise carve wilderness out of the middle
     /// of a country the export drew as inhabited.
     ///
-    /// Returns null rather than an empty map when the export claims everything, so the caller falls
-    /// back to generating wilderness instead of shipping a map with none.
+    /// When the export claims everything the answer is an EMPTY map, not a fallback to the
+    /// habitability heuristic (user decision, 2026-09-30). The fallback used to run here, at the
+    /// full <see cref="Config.MapConfig.WildernessShare"/>, and on Ondrerol — every land cell in a
+    /// state, 4 of 2071 baronies ownerless — it carved 86 of 593 counties out of populated states
+    /// (half the hegemon's empire, 13 % of the export's people), while Poily with 20 ownerless
+    /// baronies got 4. A world with no wild county still ships the system: see
+    /// <see cref="WildernessMap.Ships"/>.
     /// </summary>
     private static WildernessMap? FromExport(List<Title> counties, AzgaarImport azgaar)
     {
@@ -216,7 +240,13 @@ public static class Wilderness
             if (total > 0 && ownerless * 2 > total) unclaimed.Add(county);
         }
 
-        if (unclaimed.Count == 0) return null;
+        if (unclaimed.Count == 0)
+        {
+            Console.WriteLine("  wilderness: none — the export gives every county to a state, so no populated " +
+                              "state is carved; the dummies, their titles and the Unsettled culture and faith " +
+                              "still ship for ruins and failed colonies");
+            return new WildernessMap([]);
+        }
 
         Console.WriteLine($"  wilderness: {unclaimed.Count} counties on ground azgaar left unclaimed " +
                           $"({100.0 * unclaimed.Count / counties.Count:F1} % of counties)");
@@ -233,7 +263,10 @@ public static class Wilderness
         var wild = Choose(counties, provinces, order, landCount, provinceTerrain, development,
                           cfg, rng, azgaar);
 
-        return SeedRuins(wild, counties, cfg, rng);
+        // Marked as shipping here, the one place that knows EnableWilderness is on. Copied in
+        // insertion order, so the first county (the titular capital) is unchanged.
+        var seeded = SeedRuins(wild, counties, cfg, rng);
+        return new WildernessMap([.. seeded.Unsettled], [.. seeded.Ruins], seeded.RuinsEnabled, ships: true);
     }
 
     /// <summary>

@@ -561,6 +561,15 @@ public static class GuiWriter
     /// <c>hud.gui</c>, which is the only honest source for "what the tab column opens" — the set
     /// is not documented anywhere and guessing it would mean either missing one, and leaving a
     /// window overlapping ours, or naming a view that does not exist.
+    ///
+    /// The last four were added on 2026-09-30 after checking each window's own anchor, not just
+    /// that hud.gui opens it: the ledger (1.19; top|right, 745 wide, 89% tall, missed when this
+    /// list was first read), and from 1.20 the College of Cardinals (top|right, main-tab size),
+    /// Personal Beliefs (a 1110-wide window centred over the right-hand slot) and the decision
+    /// detail pop-out (top|right beside Decisions, which may outlive Decisions being closed).
+    /// Views 1.20's HUD opens that draw elsewhere stay off: faith and culture_window (the new
+    /// Alt+T/Alt+R buttons) are left-sidebar windows, and the holy war, lineage and focus
+    /// windows are centred popups.
     /// </summary>
     private static readonly string[] RightHandViews =
     [
@@ -568,6 +577,7 @@ public static class GuiWriter
         "factions_window", "decisions", "activity_list_window", "situations",
         "government_administration", "manage_tax_slots", "domicile", "struggle", "diarchy",
         "legends", "epidemics", "task_contract", "house_aspiration_window",
+        "ledger", "cardinals_window", "personal_beliefs_window", "decision_detail",
     ];
 
     // ===========================================================================================
@@ -1064,31 +1074,41 @@ public static class GuiWriter
         // the situation's map_color fields are filled from. The names are the groups' own loc
         // keys. It sits straight above the mini map-mode bar (60 tall at -25) with the bar's
         // backdrop, and shows only while the situation map mode is up.
-        var legend = GuiBuilder.VBox("gen_wilds_map_legend")
+        //
+        // A `widget` at a stated size with rows placed by position, not a vbox. The first build
+        // was a vbox with no size; it took the window's full height and spread the three rows
+        // down the screen with its backdrop behind them (seen in game 2026-09-30). That is
+        // trap 1 in the GUI sizing notes.
+        // 180 wide: "Marcher Lords", the longest name, is ~115 px after the 40 px swatch column.
+        // UI scaling scales the whole panel, text included, so the fit holds at any scale; a
+        // translation with a longer name would clip.
+        const int rowPitch = 24, padY = 10, width = 180;
+        var colors = FrontierWriter.GroupColors;
+        var legend = GuiBuilder.Widget("gen_wilds_map_legend")
             .Visible(GuiExpr.And(isOurs, GuiExpr.Raw("IsMapMode( 'situation' )")))
             .ParentAnchor("bottom|left")
             .Field("widgetanchor", "bottom|right")
             .Position(-250, -90)
-            .Inline("minimumsize", "280", "0")
-            .Margin(12, 8)
-            .Spacing(4)
+            .Size(width, 2 * padY + colors.Length * rowPitch)
+            .AllowOutside()
             .Add(GuiBuilder.Background()
                 .Using("Background_Area_Dark")
                 .Inline("margin", "10", "0")
                 .Color("0.15", "0.15", "0.15", "0.75"));
 
-        foreach (var (group, r, g, b) in FrontierWriter.GroupColors)
+        for (int i = 0; i < colors.Length; i++)
         {
-            legend.Add(GuiBuilder.HBox()
-                .ExpandingH()
-                .Spacing(8)
-                .Add(GuiBuilder.Icon()
-                    .Size(16, 16)
-                    .Texture("gfx/interface/colors/white.dds")
-                    .Color(Channel(r), Channel(g), Channel(b), "1"))
-                .Add(GuiBuilder.TextSingle()
-                    .Text($"{FrontierWriter.TypeKey}_participant_group_{group}"))
-                .Add(GuiBuilder.Expand()));
+            var (group, r, g, b) = colors[i];
+            legend.Add(GuiBuilder.Icon()
+                .Size(16, 16)
+                .Position(14, padY + i * rowPitch + 4)
+                .Texture("gfx/interface/colors/white.dds")
+                .Color(Channel(r), Channel(g), Channel(b), "1"));
+            legend.Add(GuiBuilder.TextSingle()
+                .Position(40, padY + i * rowPitch)
+                .Size(width - 50, rowPitch)
+                .Align("left|vcenter")
+                .Text($"{FrontierWriter.TypeKey}_participant_group_{group}"));
         }
 
         root.Append(legend.Node);
@@ -1386,14 +1406,31 @@ public static class GuiWriter
         {
             doc.NameField("window body", "title_view_main_tab").InsertVisible(unclaimed.IsHidden());
 
-            inserts.Add(Placeholder("WILDERNESS_TITLE_WINDOW", unclaimed,
+            var placeholder = Placeholder("WILDERNESS_TITLE_WINDOW", unclaimed,
                 "[TitleViewWindow.Close]",
                 "[TitleViewWindow.CloseHistory]",
-                "[TitleViewWindow.CloseClaimants]"));
+                "[TitleViewWindow.CloseClaimants]");
+
+            // Its own backdrop. Until 1.20 the window itself drew the sidebar background; 1.20 made
+            // the window `alwaystransparent = yes`, moved `using = Window_Background_Sidebar` into
+            // title_view_main_tab -- the vbox this very placeholder hides -- and gave that vbox an
+            // explicit `alwaystransparent = no`. The placeholder takes both, or its text would float
+            // over the bare map and let clicks through to it.
+            placeholder.Children.First(c => c.Key == "size")
+                .InsertAfter(GuiNode.Leaf("using", "Window_Background_Sidebar"));
+            placeholder.Children.First(c => c.Key == "size")
+                .InsertAfter(GuiNode.Leaf("alwaystransparent", "no"));
+            inserts.Add(placeholder);
         }
         if (chronicle) inserts.Add(TitleLorePanel(unclaimed));
 
-        doc.Leaf("placeholder", "using", "Window_Background_Sidebar")
+        // Both go in at the window root, ahead of vanilla's first `state`. They must not land
+        // inside a layout: the lore panel places itself with `position`, which a vbox refuses
+        // ("Widget cannot have a position in a layout"), and the placeholder has to sit outside
+        // title_view_main_tab to survive that vbox being hidden. The anchor used to be the window's
+        // `using = Window_Background_Sidebar`, which was a root child up to 1.19 and in 1.20 moved
+        // down into title_view_main_tab -- taking both inserts into the layout with it.
+        doc.Block("window root", "state")
            .InsertBefore([.. inserts]);
 
         // Everything below is the lore panel's. With the chronicle off there is no gen_lore_ loc
@@ -1500,9 +1537,11 @@ public static class GuiWriter
     /// what vanilla's own pop-outs look like, and what the colony widget in BaseFilesToCopy does.
     ///
     /// Root level costs it the <c>Title</c> datacontext, which is set further down on the main vbox,
-    /// so it sets its own. x = 660 clears the 650-wide title window completely; the vanilla pop-outs
-    /// sit at 630 and overlap by twenty pixels, which they can afford because they are separate
-    /// windows on their own layer and this is a sibling drawn underneath.
+    /// so it sets its own. x = 630 is where vanilla's own pop-outs (title history, claimants) open,
+    /// from title_view_window_side_pop_out. Up to 1.19 the window was 650 wide, those pop-outs
+    /// overlapped it by twenty pixels, and this panel sat at 660 to clear it, being a sibling drawn
+    /// underneath rather than a window on its own layer; 1.20 narrowed the window to 628, so 630
+    /// now clears it too.
     ///
     /// The wilderness half of the <c>visible</c> is not redundant with the button's placement: the
     /// variable outlives the window, so opening the panel on a real title and then clicking
@@ -1516,9 +1555,12 @@ public static class GuiWriter
                 : GuiExpr.And(
                     GuiExpr.VariableExists("gen_title_lore"),
                     GuiExpr.Not(wilderness.IsShown())))
-            .Gap().Position(660, 80)
+            .Gap().Position(630, 80)
             .Size("480", "60%")
             .AllowOutside()
+            // Explicit, as vanilla 1.20 now is on title_view_main_tab: the window it sits in became
+            // `alwaystransparent = yes` in 1.20, and a panel the mouse falls through is no panel.
+            .AlwaysTransparent(false)
             .Gap().Using("Window_Background", "Window_Decoration")
             .Gap().Add(GuiBuilder.VBox()
                 .Comment("""

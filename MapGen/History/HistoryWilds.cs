@@ -21,7 +21,7 @@ public sealed record WildsGround(WildernessMap Wilderness, WildernessMap Generat
     /// Whether land can fall to ruin: only on a world written with the ruins system, and only with
     /// some wilderness already on it, since a ruin is seated on the dummy the wilderness brings.
     /// </summary>
-    public bool CanRuin => Wilderness.RuinsEnabled && Wilderness.Count > 0;
+    public bool CanRuin => Wilderness.RuinsEnabled && (Wilderness.Count > 0 || Wilderness.Ships);
 }
 
 /// <summary>

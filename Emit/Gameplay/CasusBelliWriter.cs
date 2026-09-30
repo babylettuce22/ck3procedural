@@ -502,11 +502,28 @@ public static class CasusBelliWriter
     ];
 
     /// <summary>
-    /// The two groups with no `allowed_for_character` block of their own. Everything else on
-    /// <see cref="CasusBelliGroups"/> has one, and gets the guard spliced into it.
+    /// Whether <paramref name="group"/>'s own block in the installed file already has an
+    /// `allowed_for_character`, so the guard is spliced into it rather than given a block of its own.
+    ///
+    /// Read from the file rather than listed. Up to 1.19 `independence` and `migration` had none;
+    /// 1.20 (Crozier) gave `independence` one (By God Alone's personal pacifism ban), and a fixed
+    /// list prepended a second block that the engine refused ("Trigger section already read
+    /// earlier: allowed_for_character") — dropping vanilla's, and the ban with it. The test is
+    /// scoped to the group's own block, found with the same brace matcher the patch uses, because
+    /// "the next allowed_for_character" in the file is the following group's.
     /// </summary>
-    private static readonly HashSet<string> GroupsWithoutAllowedForCharacter =
-        ["independence", "migration"];
+    private static bool HasAllowedForCharacter(string vanilla, string group)
+    {
+        var header = System.Text.RegularExpressions.Regex.Match(vanilla,
+            $@"(?m)^{System.Text.RegularExpressions.Regex.Escape(group)} = \{{");
+        if (!header.Success) return false;
+
+        int end = Io.ScriptScan.BlockEnd(vanilla, header.Index);
+        if (end < 0) return false;
+
+        string code = string.Join('\n', vanilla[header.Index..end].Split('\n').Select(Io.ScriptScan.StripComment));
+        return System.Text.RegularExpressions.Regex.IsMatch(code, @"\ballowed_for_character\s*=\s*\{");
+    }
 
     /// <summary>
     /// Refuses the wilderness as a war target, in every casus belli group.
@@ -539,11 +556,12 @@ public static class CasusBelliWriter
     ///
     /// ---- Two shapes of edit ----
     ///
-    /// 17 groups already have `allowed_for_character`, so the guard is spliced INTO it — a second
-    /// block of the same name would shadow vanilla's constraints rather than add to them.
-    /// `independence` (an empty block) and `migration` have none, so they get the whole field.
-    /// Those two are also the pair that never call `herders_and_tributary_constraints`, which is why
-    /// nothing was guarding them at all.
+    /// A group that already has `allowed_for_character` gets the guard spliced INTO it — a second
+    /// block of the same name is refused by the engine and loses vanilla's constraints. A group
+    /// without one gets the whole field. Which is which is read from the installed file
+    /// (<see cref="HasAllowedForCharacter"/>): on 1.19 `independence` and `migration` had none, and
+    /// were the pair that never call `herders_and_tributary_constraints`, so nothing guarded them at
+    /// all; 1.20 gave `independence` a block of its own.
     /// </summary>
     private static void WriteCasusBelliGroups(string modDir, string gameDir)
     {
@@ -565,9 +583,12 @@ public static class CasusBelliWriter
             + "\t\t\t}\n"
             + "\t\t}\n";
 
+        string vanilla = File.ReadAllText(Path.Combine(gameDir, "common", "casus_belli_groups",
+            "00_casus_belli_groups.txt")).Replace("\r\n", "\n");
+
         foreach (string group in CasusBelliGroups)
         {
-            if (GroupsWithoutAllowedForCharacter.Contains(group))
+            if (!HasAllowedForCharacter(vanilla, group))
             {
                 patch.InsertAfter(group, $"\n\tallowed_for_character = {{\n{body}\t}}\n",
                     group + " = {");

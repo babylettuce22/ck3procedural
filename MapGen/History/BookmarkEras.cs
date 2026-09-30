@@ -178,7 +178,9 @@ public sealed partial class BookmarkEras
                 var primary = HistoryWriter.Primary(seat, map);
                 string government = eraGovernments.GetValueOrDefault(seat, GovernmentMap.Feudal);
 
-                bool female = HistoryWriter.RulerIsFemale(seat, faith, cfg.Seed, salt);
+                // A theocrat of this date is of the sex his clergy is, as on the start date.
+                bool female = HistoryWriter.AsClergy(HistoryWriter.RulerIsFemale(seat, faith, cfg.Seed, salt),
+                    faith, government);
                 var names = female ? culture.FemaleNames : culture.MaleNames;
                 string name = names.Count > 0 ? names[rng.Int(0, names.Count - 1)] : culture.Name;
 

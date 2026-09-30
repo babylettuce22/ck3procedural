@@ -34,7 +34,7 @@ cult.0002 = {
 	trigger = { cult_active_trigger = yes }
 	immediate = {
 		global_var:cult_host_faith = {
-			every_holy_site = {
+			every_holy_site_barony = {
 				county = {
 					add_county_modifier = {
 						modifier = cult_county_tainted

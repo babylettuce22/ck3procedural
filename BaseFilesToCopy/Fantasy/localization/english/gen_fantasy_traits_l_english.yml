@@ -33,8 +33,8 @@
  trait_phenotype_dusk_adapted_character_desc:0 "Born to the twilight of the fens, where mist hangs over the reeds from dusk to dawn, [ROOT.GetCharacter.GetFirstNameNoTooltip] sees clearly in half-light, keeps [ROOT.GetCharacter.GetHerHis] own counsel, and lets few secrets slip past.\n\n$gen_race_ties_dusk_adapted$"
 
  trait_phenotype_horned:0 "Horned"
- trait_phenotype_horned_desc:0 "Born of the horned people, herders of the high pastures and the open steppe. Their horns grow from the brow in childhood and are as ordinary among their own kind as a beard is to others.\n\n$gen_race_ties_horned$"
- trait_phenotype_horned_character_desc:0 "Born of the horned people, [ROOT.GetCharacter.GetFirstNameNoTooltip] carries the horns of [ROOT.GetCharacter.GetHerHis] kin and the hardiness of a life spent with the herds.\n\n$gen_race_ties_horned$"
+ trait_phenotype_horned_desc:0 "Ash-grey to ember-red of skin, with eyes of amber or gold and horns that rise from the brow in childhood, the horned people are marked at a glance. Other peoples whisper about where that blood came from; the horned themselves are proud of it, and slow to forgive those who whisper.\n\n$gen_race_ties_horned$"
+ trait_phenotype_horned_character_desc:0 "Ash-grey to ember-red of skin, with eyes of amber or gold and the horns of [ROOT.GetCharacter.GetHerHis] kin, [ROOT.GetCharacter.GetFirstNameNoTooltip] is marked at a glance, and carries the pride of a people others whisper about.\n\n$gen_race_ties_horned$"
 
  # RACE TIES: a readable copy of the `compatibility` blocks in common/traits/00_phenotype_traits.txt,
  # appended to both descriptions of each race trait. Keep in step with that file by hand.

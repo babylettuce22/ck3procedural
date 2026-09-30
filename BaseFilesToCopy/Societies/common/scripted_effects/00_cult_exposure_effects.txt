@@ -358,6 +358,9 @@ cult_excommunicate_effect = {
 	$WHO$ = { save_scope_as = cult_outcast }
 	add_piety = major_piety_loss
 	excommunicate_character = {
+		# 1.20 added this argument: the one who casts out is no longer assumed to be the target's
+		# head of faith. ROOT is both the asker and the head here, as in vanilla's own interaction.
+		EXCOMMUNICATOR = root
 		REQUESTING_CHARACTER = root
 		TARGET_CHARACTER = scope:cult_outcast
 	}

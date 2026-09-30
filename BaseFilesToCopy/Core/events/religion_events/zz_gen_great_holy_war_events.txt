@@ -25,12 +25,17 @@
 # every generated religion (common/religion/doctrine_types/zz_gen_unsettled_hostility.txt), and
 # the arm tests religion, not hostility, so it is restated here on hostility so that a holy site
 # in unclaimed land does not unlock a crusade against nobody.
+#
+# Rebased on 1.20 (Crozier): hostility is judged between rites (the faith's main rite against the
+# holder's rite), and the holy-site barony list is any_holy_site_barony -- any_holy_site now walks
+# the new holy-site objects rather than baronies.
 
 namespace = great_holy_war
 
 great_holy_war.0010 = {
 	hidden = yes
 	scope = faith
+	id_override_priority = 1 # 1.20: a same-id override needs a priority above vanilla's 0 to win
 	trigger = {
 		suitable_faith_for_any_ghw_trigger = yes
 		NOR = {
@@ -42,11 +47,11 @@ great_holy_war.0010 = {
 		OR = {
 			current_date >= 1100.1.1
 			AND = { # Any Faith is seriously under attack.
-				any_holy_site = {
+				any_holy_site_barony = {
 					holder.top_liege = {
 						faith.religion != root.religion
-						root = {
-							is_hostile_enough_for_holy_war_trigger = { FAITH = prev.faith }
+						root.main_rite = {
+							is_hostile_enough_for_holy_war_trigger = { RITE = prev.rite }
 						}
 					}
 					count >= 2
@@ -55,11 +60,11 @@ great_holy_war.0010 = {
 			}
 			AND = { # Someone else has shown the way.
 				has_global_variable = variable_gen_any_ghw_unlocked
-				any_holy_site = {
+				any_holy_site_barony = {
 					holder.top_liege = {
 						faith.religion != root.religion
-						root = {
-							is_hostile_enough_for_holy_war_trigger = { FAITH = prev.faith }
+						root.main_rite = {
+							is_hostile_enough_for_holy_war_trigger = { RITE = prev.rite }
 						}
 					}
 					count >= 1

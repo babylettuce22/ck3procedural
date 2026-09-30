@@ -8,7 +8,8 @@ namespace Ck3MapGen.Emit;
 ///
 /// The mod replaces vanilla's titles and history but not its cultures and faiths: those stay in
 /// the database because thousands of vanilla lines name them. So an effect that writes
-/// <c>culture:mongol</c> or <c>faith:vajrayana</c> as a literal still works on a generated map,
+/// <c>culture:mongol</c> or <c>faith:vajrayana_faith</c> (plain <c>vajrayana</c> before 1.20 made
+/// it a rite) as a literal still works on a generated map,
 /// and reported from play (2026-09-27) three do it without asking anything about the map:
 ///
 /// <list type="bullet">

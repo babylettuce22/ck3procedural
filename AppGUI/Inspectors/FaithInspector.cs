@@ -228,8 +228,9 @@ public sealed class FaithInspector : InspectorForm
             set => edits.EditFaith(faith, f => f.Icon = value.Trim());
         }
 
-        // CK3's doctrine_core_tenets group is number_of_picks = 3 and Faiths.CreateFaith draws
-        // exactly that many, so three fixed slots cover every faith the generator makes — one
+        // A CK3 faith holds three core tenets (the doctrine_core_tenets group's number_of_picks up
+        // to 1.19, the main rite's tenets since 1.20) and Faiths.CreateFaith draws exactly that
+        // many, so three fixed slots cover every faith the generator makes — one
         // dropdown each, the way a culture's ethos and martial custom pillars are edited. The
         // picker dialog these replaced could add a fourth tenet the game would then ignore.
         private const string TenetHelp =

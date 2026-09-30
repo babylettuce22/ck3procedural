@@ -262,6 +262,15 @@ public sealed partial class PrehistoryMap
     /// </summary>
     private const int MaxMatchesPerParent = 3;
 
+    /// <summary>
+    /// How often a ruler with no house of their own or a friendly race to marry into takes a consort
+    /// of another, not hostile, race rather than one from a local noble house of their own people.
+    /// </summary>
+    private const double MixedRaceMatchChance = 0.15;
+
+    /// <summary>A house of the ruler's own race against one of a friendly race, when both are on offer.</summary>
+    private const int SameRaceMatchWeight = 4;
+
     /// <summary>The oldest a mother is at a child's birth, as the dynasty trees and the kin keep it.</summary>
     private const int MaxMotherAge = 45;
 
@@ -290,7 +299,8 @@ public sealed partial class PrehistoryMap
         Rng rng,
         IReadOnlyDictionary<Title, AppliedHistory.Lineage>? lineage = null,
         SimDiplomacy? diplomacy = null,
-        IReadOnlyDictionary<Title, PastRuler>? seatParents = null)
+        IReadOnlyDictionary<Title, PastRuler>? seatParents = null,
+        Func<Culture, RaceArchetype>? raceOf = null)
     {
         var map = new PrehistoryMap();
         if (counties.Count == 0) return map;
@@ -315,7 +325,7 @@ public sealed partial class PrehistoryMap
         var topLiegeNeighbors = BuildTopLiegeNeighbors(rulerNeighbors, realms);
 
         // 4. Inter-Dynastic & Intra-Realm Marriages & Children (Vassal + Liege Network)
-        BuildMarriagesAndChildren(map, rulerCounties, rulerNeighbors, realms, cultures, faiths, cfg);
+        BuildMarriagesAndChildren(map, rulerCounties, rulerNeighbors, realms, cultures, faiths, cfg, governments, raceOf);
 
         // 5. Border Friction, Nuanced House Relations, Truces, Claims, and Alliances
         BuildInterDynasticRelations(map, topLiegeNeighbors, realms, faiths, cfg);
@@ -862,6 +872,18 @@ public sealed partial class PrehistoryMap
         }
     }
 
+    /// <param name="governments">
+    /// Read for the theocrats alone: one whose faith forbids its clergy to marry stays single and
+    /// childless, and every theocrat is of the sex his clergy is. See
+    /// <see cref="HistoryWriter.IsCelibateTheocrat"/> and <see cref="HistoryWriter.AsClergy"/>.
+    /// </param>
+    /// <param name="raceOf">
+    /// A culture's race, on a world with fantasy races; null otherwise. A consort's house must be of
+    /// a race the ruler's would marry (<see cref="RacePairs"/>): a hostile race never, a friendly one
+    /// at a quarter of the weight of the ruler's own, and any other race only now and then, when no
+    /// house of the ruler's own or a friendly race is on offer. Without it every house is one race,
+    /// every list and every draw is what it always was, and a human world is unchanged.
+    /// </param>
     private static void BuildMarriagesAndChildren(
         PrehistoryMap map,
         List<Title> rulerCounties,
@@ -869,7 +891,9 @@ public sealed partial class PrehistoryMap
         RealmMap realms,
         CultureMap cultures,
         FaithMap faiths,
-        MapConfig cfg)
+        MapConfig cfg,
+        GovernmentMap governments,
+        Func<Culture, RaceArchetype>? raceOf = null)
     {
         // Group vassals by their top liege
         var vassalsByLiege = new Dictionary<Title, List<Title>>();
@@ -906,13 +930,35 @@ public sealed partial class PrehistoryMap
             => !map.DeceasedParents.TryGetValue(origin, out var parent)
                || matchesOf.GetValueOrDefault(parent.Id) < MaxMatchesPerParent && CouldHaveMarriageableChild(parent, cfg);
 
+        RacePairTier TierOf(Title ruler, Title origin) => raceOf is null
+            ? RacePairTier.Same
+            : RacePairs.Tier(raceOf(cultures.For(ruler)), raceOf(cultures.For(origin)));
+        bool Weds(Title ruler, Title origin) => TierOf(ruler, origin) <= RacePairTier.Friendly;
+
+        // One draw either way. A list of the ruler's own race alone is drawn exactly as it always was.
+        Title Pick(Title ruler, List<Title> pool, Rng rng)
+        {
+            if (pool.All(o => TierOf(ruler, o) == RacePairTier.Same)) return pool[rng.Int(0, pool.Count - 1)];
+            int i = rng.WeightedIndex(pool, o => TierOf(ruler, o) == RacePairTier.Same ? SameRaceMatchWeight : 1);
+            return pool[Math.Max(0, i)];
+        }
+
         foreach (var ruler in sortedRulers)
         {
             if (marriedRulers.Contains(ruler)) continue;
 
             var rulerFaith = faiths.For(ruler);
             var rulerCulture = cultures.For(ruler);
-            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, rulerFaith, cfg);
+            string rulerGovernment = governments.For(ruler);
+
+            // A bishop of a faith whose clergy may not marry has no consort and no children. Every
+            // seat draws on a stream of its own, so no other ruler's draws move; what can move is
+            // who is left to marry them, because the sibling his match would have taken from a
+            // neighbouring house, and the cap on marriages into his liege's house, stay unspent.
+            // Only on a map with such a theocrat, which the generated cascade never makes.
+            if (HistoryWriter.IsCelibateTheocrat(rulerGovernment, rulerFaith)) continue;
+
+            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, rulerFaith, cfg, rulerGovernment);
             var mRng = Rng.For(cfg.Seed, 0x6E19, ruler.Index);
 
             if (!mRng.Chance(0.88)) continue;
@@ -932,33 +978,45 @@ public sealed partial class PrehistoryMap
             Title? spouseOriginCounty = null;
             var neighbors = rulerNeighbors.GetValueOrDefault(ruler, []);
 
+            // Houses of a race this ruler's would marry only now and then; hostile ones never.
+            var mixedOffers = new List<Title>();
+            List<Title> Offer(IEnumerable<Title> houses)
+            {
+                var weds = new List<Title>();
+                foreach (var h in houses)
+                {
+                    var tier = TierOf(ruler, h);
+                    if (tier <= RacePairTier.Friendly) weds.Add(h);
+                    else if (tier == RacePairTier.Mixed) mixedOffers.Add(h);
+                }
+                return weds;
+            }
+
             // === 1. TOP LIEGE MARRIAGE SELECTION ===
             if (isTopLiege)
             {
                 // A) Foreign Sovereign Neighbor (Inter-Realm Alliance)
-                var foreignEligible = neighbors
+                var foreignEligible = Offer(neighbors
                     .Where(n => TopLiegeCounty(n, realms) != topLiege &&
                                 faiths.For(n).Religion == rulerFaith.Religion &&
                                 map.CharacterHouseMap.GetValueOrDefault(n) != map.CharacterHouseMap.GetValueOrDefault(ruler) &&
-                                CanGive(n))
-                    .ToList();
+                                CanGive(n)));
 
                 // B) Powerful Internal Vassal House (Internal Realm Stability)
-                var internalVassals = vassalsByLiege.GetValueOrDefault(ruler, [])
-                    .Where(v => map.CharacterHouseMap.GetValueOrDefault(v) != map.CharacterHouseMap.GetValueOrDefault(ruler) && CanGive(v))
-                    .ToList();
+                var internalVassals = Offer(vassalsByLiege.GetValueOrDefault(ruler, [])
+                    .Where(v => map.CharacterHouseMap.GetValueOrDefault(v) != map.CharacterHouseMap.GetValueOrDefault(ruler) && CanGive(v)));
 
                 if (foreignEligible.Count > 0 && mRng.Chance(0.55))
                 {
-                    spouseOriginCounty = foreignEligible[mRng.Int(0, foreignEligible.Count - 1)];
+                    spouseOriginCounty = Pick(ruler, foreignEligible, mRng);
                 }
                 else if (internalVassals.Count > 0 && mRng.Chance(0.65))
                 {
-                    spouseOriginCounty = internalVassals[mRng.Int(0, internalVassals.Count - 1)];
+                    spouseOriginCounty = Pick(ruler, internalVassals, mRng);
                 }
                 else if (foreignEligible.Count > 0)
                 {
-                    spouseOriginCounty = foreignEligible[mRng.Int(0, foreignEligible.Count - 1)];
+                    spouseOriginCounty = Pick(ruler, foreignEligible, mRng);
                 }
             }
             // === 2. VASSAL MARRIAGE SELECTION ===
@@ -967,20 +1025,19 @@ public sealed partial class PrehistoryMap
                 // A) Liege's Royal House (Liege-Vassal Alliance)
                 bool canMarryLiege = map.CharacterHouseMap.GetValueOrDefault(topLiege) != map.CharacterHouseMap.GetValueOrDefault(ruler) &&
                                      liegeHouseMarriages.GetValueOrDefault(topLiege) < MaxLiegeHouseMarriages &&
-                                     CanGive(topLiege);
+                                     CanGive(topLiege) &&
+                                     Offer([topLiege]).Count > 0;
 
                 // B) Fellow Co-Vassals (Intra-Realm Alliance)
-                var coVassals = vassalsByLiege.GetValueOrDefault(topLiege, [])
-                    .Where(v => v != ruler && map.CharacterHouseMap.GetValueOrDefault(v) != map.CharacterHouseMap.GetValueOrDefault(ruler) && CanGive(v))
-                    .ToList();
+                var coVassals = Offer(vassalsByLiege.GetValueOrDefault(topLiege, [])
+                    .Where(v => v != ruler && map.CharacterHouseMap.GetValueOrDefault(v) != map.CharacterHouseMap.GetValueOrDefault(ruler) && CanGive(v)));
 
                 // C) External Border Neighbor
-                var foreignBorder = neighbors
+                var foreignBorder = Offer(neighbors
                     .Where(n => TopLiegeCounty(n, realms) != topLiege &&
                                 faiths.For(n).Religion == rulerFaith.Religion &&
                                 map.CharacterHouseMap.GetValueOrDefault(n) != map.CharacterHouseMap.GetValueOrDefault(ruler) &&
-                                CanGive(n))
-                    .ToList();
+                                CanGive(n)));
 
                 if (canMarryLiege && mRng.Chance(0.35))
                 {
@@ -988,11 +1045,11 @@ public sealed partial class PrehistoryMap
                 }
                 else if (coVassals.Count > 0 && mRng.Chance(0.50))
                 {
-                    spouseOriginCounty = coVassals[mRng.Int(0, coVassals.Count - 1)];
+                    spouseOriginCounty = Pick(ruler, coVassals, mRng);
                 }
                 else if (foreignBorder.Count > 0 && mRng.Chance(0.40))
                 {
-                    spouseOriginCounty = foreignBorder[mRng.Int(0, foreignBorder.Count - 1)];
+                    spouseOriginCounty = Pick(ruler, foreignBorder, mRng);
                 }
                 else if (canMarryLiege)
                 {
@@ -1000,12 +1057,22 @@ public sealed partial class PrehistoryMap
                 }
                 else if (coVassals.Count > 0)
                 {
-                    spouseOriginCounty = coVassals[mRng.Int(0, coVassals.Count - 1)];
+                    spouseOriginCounty = Pick(ruler, coVassals, mRng);
                 }
-
-                if (spouseOriginCounty == topLiege)
-                    liegeHouseMarriages[topLiege] = liegeHouseMarriages.GetValueOrDefault(topLiege) + 1;
             }
+
+            // Nothing of the ruler's own or a friendly race on offer: now and then a house of another
+            // race, otherwise a local noble house of their own people (below). On a stream of its own,
+            // so the draws above are untouched; never reached where every house is one race.
+            if (spouseOriginCounty == null && mixedOffers.Count > 0)
+            {
+                var xRng = Rng.For(cfg.Seed, 0x6E1A, ruler.Index);
+                if (xRng.Chance(MixedRaceMatchChance))
+                    spouseOriginCounty = mixedOffers[xRng.Int(0, mixedOffers.Count - 1)];
+            }
+
+            if (!isTopLiege && spouseOriginCounty == topLiege)
+                liegeHouseMarriages[topLiege] = liegeHouseMarriages.GetValueOrDefault(topLiege) + 1;
 
             // === 3. GENERATE SPOUSE CHARACTER ===
             string spouseDynasty;
@@ -1139,7 +1206,7 @@ public sealed partial class PrehistoryMap
         {
             var culture = cultures.For(ruler);
             var faith = faiths.For(ruler);
-            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, faith, cfg);
+            bool rulerFemale = HistoryWriter.RulerIsFemale(ruler, faith, cfg, governments.For(ruler));
             var cRng = Rng.For(cfg.Seed, 0x51E3, ruler.Index);
 
             int childCount = cRng.Int(1, 3);

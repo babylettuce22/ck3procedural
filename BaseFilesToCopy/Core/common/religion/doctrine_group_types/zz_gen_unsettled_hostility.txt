@@ -1,0 +1,11 @@
+﻿# The group the two hidden hostility doctrines in doctrine_types/zz_gen_unsettled_hostility.txt belong
+# to. CK3 1.20 made doctrine_group_type mandatory on every doctrine.
+#
+# Not creatable, like vanilla's own hidden classification groups (heresy_hostility,
+# christian_tradition_classification): nobody picks it on the faith screen, and it stays on a faith
+# through reformation or a new rite, because the wilderness must stay nobody's holy war whatever a
+# player does to their faith.
+
+gen_unsettled_hostility = {
+	category = not_creatable
+}

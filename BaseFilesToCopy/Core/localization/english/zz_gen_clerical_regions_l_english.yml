@@ -1,0 +1,5 @@
+﻿l_english:
+ # The hidden doctrine in common/religion/doctrine_types/zz_gen_clerical_regions.txt.
+ special_doctrine_gen_clerical_regions_name:0 "Ordered Hierarchy"
+ special_doctrine_gen_clerical_regions_desc:0 "The faith's clergy answer to archbishops, each holding a see over the lands around it."
+ gen_clerical_regions_name:0 "Ecclesiastical Hierarchy"

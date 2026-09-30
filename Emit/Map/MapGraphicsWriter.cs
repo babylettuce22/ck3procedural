@@ -386,7 +386,24 @@ public static class MapGraphicsWriter
 
         // The newline ends the name: "Effect surroundmap" alone is a prefix of all four effects, and
         // would land in whichever comes first if Paradox ever reordered them.
-        foreach (string effect in SurroundEffects3D)
+        //
+        // Only the effects the installed shader declares. 1.20 (Crozier) folded surroundmap_shadow into
+        // the cloud pass — the shadow is now composited on the cloud quad, found by casting the view
+        // ray down to FlatMapHeight — so its anchor is gone, and asking for it skipped the whole patch.
+        // With the shadow on the cloud quad the depth test is judged at the clouds' height (5 above the
+        // flat map) rather than the shadow's: terrain standing above the clouds is no longer painted
+        // over, but edge terrain between the shadow plane and the clouds can still take the shadow.
+        // The shader has no scene depth to test the shadow's own ground point against, so that is as
+        // far as a state change reaches.
+        var effects = SurroundEffects3D.Where(e => patch.Contains($"Effect {e}\n")).ToList();
+        if (effects.Count == 0)
+        {
+            Console.WriteLine("  surround depth test: SKIPPED gfx\\FX\\surroundmap.shader — none of its 3D effects "
+                              + "are declared any more. Vanilla has changed shape; not shipping a partial override.");
+            return;
+        }
+
+        foreach (string effect in effects)
             patch.InsertAfter($"Effect {effect}", $"\n\tDepthStencilState = \"{SurroundDepthState}\"",
                 $"Effect {effect}\n", "{");
 
@@ -429,36 +446,35 @@ public static class MapGraphicsWriter
 
         string radius = Math.Max(2.0, cfg.Scaled(EffectFadeRadius)).ToString("0.0##", System.Globalization.CultureInfo.InvariantCulture);
 
-        patch.ReplaceBlock("BilinearSampleProvinceEffectsMask",
-            "void BilinearSampleProvinceEffectsMask(",
+        // Vanilla's two samplers are kept, renamed, and run first; ours then overwrite only the four
+        // seasonal effects this softens. Two things follow from running vanilla first:
+        //
+        //  - Every field of EffectIntensities is set the way vanilla sets it, including any this
+        //    code has never heard of. 1.20 (Crozier) added _DivergentRites, and a replacement that
+        //    wrote the fields itself left it unset: HLSL refuses an inout struct left partly unset
+        //    ("output parameter not completely initialized", X3508), and the failed include took
+        //    every terrain, tree, building and decal shader down with it and crashed the GPU device.
+        //  - The divergent-rites hatching keeps vanilla's crisp lookup. It draws a threshold step and
+        //    a zigzag along the border on purpose; averaged over a disc it would bleed and fade.
+        //
+        // Our sums live in locals and are assigned whole, so nothing is ever half-written. On low-spec
+        // vanilla's own answer stands, as it always did (the old replacement returned zero there).
+        patch.ReplaceEvery("vanilla bilinear sampler", "void BilinearSampleProvinceEffectsMask(",
+            "void ProctoolVanillaBilinearSampleProvinceEffectsMask(");
+        patch.ReplaceEvery("vanilla point sampler", "void SampleProvinceEffectsMask(",
+            "void ProctoolVanillaSampleProvinceEffectsMask(");
+
+        patch.InsertAfterBlock("soft samplers after vanilla's",
             $$"""
-            // Procedural map: effects fade over a disc of province-map pixels, not one texel.
+
+
+            		// Procedural map: seasonal effects fade over a disc of province-map pixels, not one texel.
             		static const int PROCTOOL_EFFECT_TAPS = {{EffectTaps}};
             		static const float PROCTOOL_EFFECT_RADIUS = {{radius}}f;
 
-            		void ProctoolAddEffect( float4 Sample, float Weight, inout EffectIntensities Sum )
+            		void ProctoolSoftenSeasonalEffects( float2 MapCoords, inout EffectIntensities ConditionData )
             		{
-            			float Impact = RemapClamped( Sample.g, 0.0f, OpacityLowImpactValue, 0.0f, 0.5f );
-            			Impact += RemapClamped( Sample.g, OpacityLowImpactValue, OpacityHighImpactValue, 0.0f, 0.5f );
-            			Impact *= Weight;
-
-            			Sum._Drought += ( Sample.r == DROUGHT_INDEX ) * Impact;
-            			Sum._Flood += ( Sample.r == FLOOD_INDEX ) * Impact;
-            			Sum._Summer += ( Sample.r == SUMMER_INDEX ) * Impact;
-            			Sum._Snow += ( Sample.r == SNOW_INDEX ) * Impact;
-            		}
-
-            		void ProctoolSoftSampleProvinceEffectsMask( float2 MapCoords, inout EffectIntensities ConditionData )
-            		{
-            			ConditionData._Drought = 0.0f;
-            			ConditionData._Flood = 0.0f;
-            			ConditionData._Summer = 0.0f;
-            			ConditionData._Snow = 0.0f;
-
-            			#ifdef LOW_SPEC_SHADERS
-            				return;
-            			#endif
-
+            			#ifndef LOW_SPEC_SHADERS
             			// Fine noise turns the disc per pixel; coarse noise swells and shrinks it.
             			float2 NoiseUV = float2( MapCoords.x * 2.0f, MapCoords.y );
             			float Spin = PdxTex2D( ProvinceEffectsNoise, NoiseUV * 900.0f ).r * 6.2831853f;
@@ -466,6 +482,10 @@ public static class MapGraphicsWriter
 
             			float2 Centre = MapCoords * IndirectionMapSize;
             			float Weight = 1.0f / PROCTOOL_EFFECT_TAPS;
+            			float Drought = 0.0f;
+            			float Flood = 0.0f;
+            			float Summer = 0.0f;
+            			float Snow = 0.0f;
 
             			for ( int i = 0; i < PROCTOOL_EFFECT_TAPS; ++i )
             			{
@@ -473,25 +493,38 @@ public static class MapGraphicsWriter
             				float Angle = i * 2.3999632f + Spin;
             				float Distance = sqrt( ( i + 0.5f ) / PROCTOOL_EFFECT_TAPS ) * Reach;
             				float2 Texel = floor( Centre + float2( cos( Angle ), sin( Angle ) ) * Distance );
-            				float2 Pixel = ( Texel + 0.5f ) * InvIndirectionMapSize;
-            				ProctoolAddEffect( SampleProvinceEffects( Pixel ), Weight, ConditionData );
+            				float4 Sample = SampleProvinceEffects( ( Texel + 0.5f ) * InvIndirectionMapSize );
+
+            				float Impact = RemapClamped( Sample.g, 0.0f, OpacityLowImpactValue, 0.0f, 0.5f );
+            				Impact += RemapClamped( Sample.g, OpacityLowImpactValue, OpacityHighImpactValue, 0.0f, 0.5f );
+            				Impact *= Weight;
+
+            				Drought += ( Sample.r == DROUGHT_INDEX ) * Impact;
+            				Flood += ( Sample.r == FLOOD_INDEX ) * Impact;
+            				Summer += ( Sample.r == SUMMER_INDEX ) * Impact;
+            				Snow += ( Sample.r == SNOW_INDEX ) * Impact;
             			}
+
+            			ConditionData._Drought = Drought;
+            			ConditionData._Flood = Flood;
+            			ConditionData._Summer = Summer;
+            			ConditionData._Snow = Snow;
+            			#endif
             		}
 
             		void BilinearSampleProvinceEffectsMask( float2 MapCoords, inout EffectIntensities ConditionData )
             		{
-            			ProctoolSoftSampleProvinceEffectsMask( MapCoords, ConditionData );
+            			ProctoolVanillaBilinearSampleProvinceEffectsMask( MapCoords, ConditionData );
+            			ProctoolSoftenSeasonalEffects( MapCoords, ConditionData );
             		}
-            """);
 
-        patch.ReplaceBlock("SampleProvinceEffectsMask",
-            "void SampleProvinceEffectsMask(",
-            """
-            void SampleProvinceEffectsMask( float2 MapCoords, inout EffectIntensities ConditionData )
+            		void SampleProvinceEffectsMask( float2 MapCoords, inout EffectIntensities ConditionData )
             		{
-            			ProctoolSoftSampleProvinceEffectsMask( MapCoords, ConditionData );
+            			ProctoolVanillaSampleProvinceEffectsMask( MapCoords, ConditionData );
+            			ProctoolSoftenSeasonalEffects( MapCoords, ConditionData );
             		}
-            """);
+            """,
+            "void ProctoolVanillaSampleProvinceEffectsMask(");
 
         patch.Ship(modDir, bom: false);
     }
@@ -505,7 +538,8 @@ public static class MapGraphicsWriter
     private const int EffectTaps = 12;
 
     /// <summary>Every surround effect drawn in the 3D map — the clouds, their low-spec twin and the
-    /// shadow under them. Not surroundmap_flat; see <see cref="WriteSurroundShader"/>.</summary>
+    /// shadow under them (its own effect up to 1.19; part of the cloud pass since 1.20). Not
+    /// surroundmap_flat; see <see cref="WriteSurroundShader"/>.</summary>
     private static readonly string[] SurroundEffects3D = ["surroundmap", "surroundmapLowSpec", "surroundmap_shadow"];
 
     /// <summary>

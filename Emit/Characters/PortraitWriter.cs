@@ -191,7 +191,64 @@ public static class PortraitWriter
         // 3. Write for In-Game campaign load
         ParadoxText.WriteBom(Path.Combine(dnaDestDir, "00_generated_dna.txt"), dnaFileBuilder.ToString());
 
+        WriteMainMenuCharacters(modDir, bmDestDir, requests, written, men);
+
         Console.WriteLine($"  portraits: {requests.Count} culture-matched portraits written to bookmark_portraits and dna_data");
+    }
+
+    /// <summary>The bookmark-portrait keys the main menu's three fallback characters use; see <see cref="WriteMainMenuCharacters"/>.</summary>
+    private static readonly (string Define, string Key)[] MenuCharacters =
+    [
+        ("DEFAULT_MAIN_BOOKMARK_CHARACTER", "gen_menu_main"),
+        ("DEFAULT_HEIR_BOOKMARK_CHARACTER", "gen_menu_heir"),
+        ("DEFAULT_SECONDARY_BOOKMARK_CHARACTER", "gen_menu_secondary"),
+    ];
+
+    /// <summary>
+    /// The three characters CK3 1.20's main menu falls back to when the newest save has none it can
+    /// use (an observer save, or no saves at all). They are named in NMainMenu
+    /// (common/defines/graphic/00_graphics.txt) as vanilla bookmark portraits (bookmark_hastings_normandy
+    /// and two Rags to Riches characters), and our replace_path over common/bookmark_portraits
+    /// deletes them. Looking one up then returned the null portrait type group, and
+    /// savegameitem.cpp's "Loading Characters" crashed writing a lock inside that read-only null
+    /// object (ACCESS_VIOLATION at ntdll RtlAcquireSRWLockExclusive), right after "End loading of
+    /// history". It depended on the save folder, not on the mod, which is why it looked random.
+    ///
+    /// So every world writes three portraits under fixed keys, copied from its own bookmark cast
+    /// (a ruler, then a child for the heir, then a woman), and points the three defines at them.
+    /// A world with no cast borrows one vanilla template for all three.
+    /// </summary>
+    private static void WriteMainMenuCharacters(string modDir, string bmDestDir,
+        List<CharacterPortraitRequest> requests, Dictionary<string, string> written, TemplatePool men)
+    {
+        var cast = requests.Where(r => written.ContainsKey(r.Key)).ToList();
+        string? Pick(Func<CharacterPortraitRequest, bool> want)
+            => cast.FirstOrDefault(want)?.Key ?? cast.FirstOrDefault()?.Key;
+
+        string? main = Pick(r => !r.Child);
+        string? heir = Pick(r => r.Child && r.Key != main);
+        string? secondary = Pick(r => r.Female && !r.Child && r.Key != main);
+
+        string fallback = File.ReadAllText(men.AllTemplates[0].Path);
+        string[] sources = [main ?? "", heir ?? "", secondary ?? ""];
+
+        var defines = new StringBuilder();
+        defines.Append("# The main menu's fallback characters, pointed at portraits this world ships.\n");
+        defines.Append("# See Emit/Characters/PortraitWriter.WriteMainMenuCharacters.\n");
+        defines.Append("NMainMenu = {\n");
+
+        for (int i = 0; i < MenuCharacters.Length; i++)
+        {
+            var (define, key) = MenuCharacters[i];
+            string body = written.TryGetValue(sources[i], out var own) ? own : fallback;
+            ParadoxText.WriteBom(Path.Combine(bmDestDir, $"{key}.txt"), IdentityRegex.Replace(body, $"{key} = {{", 1));
+            defines.Append($"\t{define} = \"{key}\"\n");
+        }
+
+        defines.Append("}\n");
+        string definesDir = Path.Combine(modDir, "common", "defines", "graphic");
+        Directory.CreateDirectory(definesDir);
+        ParadoxText.WriteBom(Path.Combine(definesDir, "zz_gen_main_menu.txt"), defines.ToString());
     }
 
     /// <summary>

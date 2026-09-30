@@ -71,6 +71,13 @@ public sealed class VanillaPatch
     }
 
     /// <summary>
+    /// Whether the vanilla text, as patched so far, contains <paramref name="needle"/>. For a
+    /// replacement that has to match what the installed game declares — a struct field a patch
+    /// added, say — rather than what the game looked like when the replacement was written.
+    /// </summary>
+    public bool Contains(string needle) => text.Contains(needle, StringComparison.Ordinal);
+
+    /// <summary>
     /// Splices <paramref name="body"/> in immediately after the last of <paramref name="probes"/>,
     /// each found in turn from where the one before it ended.
     ///

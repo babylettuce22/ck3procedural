@@ -131,7 +131,7 @@ internal sealed class QuickPage : Panel
     };
     private readonly ToggleCard _wilderness = new() { Name = "quickWilderness", Text = "Wilderness", Description = "Unsettled lands to clear, claim and colonise." };
     private readonly ToggleCard _wars = new() { Name = "quickWars", Text = "Wars at the start", Description = "Rivals already at war on the first day." };
-    private readonly ToggleCard _nativeTitles = new() { Name = "quickNativeTitles", Text = "Native titles", Description = "Kings and dukes titled in their people's own language." };
+    private readonly ToggleCard _nativeTitles = new() { Name = "quickNativeTitles", Text = "Native titles", Description = "Kings and dukes titled in their people's own language, and sees and archbishops in their faith's holy tongue." };
     private readonly ToggleCard _nativeRealms = new() { Name = "quickNativeRealms", Text = "Native realm names", Description = "Kingdoms and duchies named in it too." };
     private readonly ToggleCard _detailedPaperMap = new() { Name = "quickDetailedPaperMap", Text = "Detailed paper map", Description = "Roads, mountains, waterlines and a compass rose inked on the zoomed-out map." };
 

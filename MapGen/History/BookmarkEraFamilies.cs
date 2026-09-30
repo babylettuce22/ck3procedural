@@ -394,6 +394,11 @@ public sealed partial class BookmarkEras
 
         void Marry(Ruler ruler, BookmarkEra era, Window window)
         {
+            // A bishop of a faith whose clergy may not marry stays single and childless, as on the
+            // start date (see HistoryWriter.IsCelibateTheocrat). Before the ruler's own draw; the
+            // single he would have wed stays free for someone else.
+            if (Emit.HistoryWriter.IsCelibateTheocrat(ruler.Government, ruler.Faith)) return;
+
             var rng = Rng.For(Seed, 0xEFAB, Rng.StableHash(ruler.Id));
             if (!rng.Chance(0.85)) return;
 

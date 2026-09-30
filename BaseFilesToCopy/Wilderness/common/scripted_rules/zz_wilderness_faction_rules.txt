@@ -9,6 +9,9 @@
 #
 # Everything below is vanilla's own definition verbatim, with ONE block added.
 #
+# Re-copied from 1.20.0.2 on 2026-09-30 (vanilla's incapable test became `is_incapable = no`); the
+# added block is unchanged.
+#
 # ---- Why this rule ----
 #
 # It is engine-called, root is the character trying to act, and `scope:target` is the character the
@@ -89,7 +92,7 @@ passes_faction_hard_block = {
 
 	custom_description = {
 		text = "FACTION_CANT_JOIN_CREATE_INCAPABLE"
-		NOT = { has_trait = incapable }
+		is_incapable = no
 	}
 
 	custom_description = {
