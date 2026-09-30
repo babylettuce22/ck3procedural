@@ -1,0 +1,83 @@
+﻿# The high elves' Great Work: what kind of work, for the story panel and the finished artifact's name.
+# The work's proper name is GenGwWorkWord, generated per culture (Emit/Culture/GreatWorkNameWriter.cs).
+
+# On the story (the panel): "a jewel of captured light" …
+GenGwKindStory = {
+	type = story
+
+	text = {
+		trigger = { var:gw_kind ?= flag:jewel }
+		localization_key = gen_gw_kind_jewel
+	}
+	text = {
+		trigger = { var:gw_kind ?= flag:chronicle }
+		localization_key = gen_gw_kind_chronicle
+	}
+	text = {
+		trigger = { var:gw_kind ?= flag:regalia }
+		localization_key = gen_gw_kind_regalia
+	}
+	text = {
+		trigger = { var:gw_kind ?= flag:harp }
+		localization_key = gen_gw_kind_harp
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_gw_kind_lamp
+	}
+}
+
+# The story panel's line: whether the one at the bench is the one who swore it.
+GenGwStoryLine = {
+	type = story
+
+	text = {
+		trigger = { var:gw_maker ?= story_owner }
+		localization_key = gen_gw_story_line_sworn
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_gw_story_line_carried
+	}
+}
+
+# The finished work's description: one maker's life, or begun by one and finished by another.
+# Resolved once, when the artifact is made (scope:gw_story, scope:owner, scope:gw_maker_origin saved).
+GenGwArtifactDesc = {
+	type = character
+
+	text = {
+		trigger = { scope:gw_story.var:gw_hands ?= 1 }
+		localization_key = gen_gw_artifact_desc_one
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_gw_artifact_desc_hands
+	}
+}
+
+# For the artifact, while scope:gw_story is saved (gen_gw_create_work_artifact_effect): "the Starlit Jewel" …
+GenGwKindEpithet = {
+	type = character
+
+	text = {
+		trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+		localization_key = gen_gw_epithet_jewel
+	}
+	text = {
+		trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+		localization_key = gen_gw_epithet_chronicle
+	}
+	text = {
+		trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+		localization_key = gen_gw_epithet_regalia
+	}
+	text = {
+		trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+		localization_key = gen_gw_epithet_harp
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_gw_epithet_lamp
+	}
+}

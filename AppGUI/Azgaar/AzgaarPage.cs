@@ -98,6 +98,7 @@ internal sealed class AzgaarPage : Panel
     private readonly ChoiceGroup<QuickDensity?> _density;
     private readonly ChoiceGroup<bool> _wilderness;
     private readonly ChoiceGroup<bool> _races;
+    private readonly ChoiceGroup<AzgaarTerrain> _terrain;
     private readonly ChoiceCard _advancementAzgaar;
     private readonly ChoiceCard _densityAzgaar;
     private readonly ChoiceCard _racesAzgaar;
@@ -142,6 +143,11 @@ internal sealed class AzgaarPage : Panel
         _races = new ChoiceGroup<bool>("Peoples", "How they look.", true)
             .Add(true, "Azgaar", "As the export tags them", "azgaarRacesAzgaar")
             .Add(false, "Humans only", "Every people is human", "azgaarRacesHuman");
+        // Not "Azgaar" first: its heightmap is drawn as flat terraces, so its own answer is the
+        // one to move away from. Weathered keeps everything it decided — coast, ranges, uplands.
+        _terrain = new ChoiceGroup<AzgaarTerrain>("Terrain", "How the land between its coasts and ranges is shaped.", AzgaarTerrain.Weathered)
+            .Add(AzgaarTerrain.Weathered, "Weathered", "Its coasts, ranges and uplands · hills and valleys like the map types", "azgaarTerrainWeathered")
+            .Add(AzgaarTerrain.AsDrawn, "As drawn", "The exported heightmap exactly · flat terraces and all", "azgaarTerrainDrawn");
         _advancementAzgaar = _advancement.Cards.First();
         _densityAzgaar = _density.Cards.First();
         _racesAzgaar = _races.Cards.First();
@@ -150,6 +156,7 @@ internal sealed class AzgaarPage : Panel
         _density.Changed += v => _choices.Density = v;
         _wilderness.Changed += v => _choices.Wilderness = v;
         _races.Changed += v => _choices.FantasyRaces = v;
+        _terrain.Changed += v => _choices.Terrain = v;
 
         BuildChrome();
         BuildFilesStep();
@@ -402,6 +409,7 @@ internal sealed class AzgaarPage : Panel
         _density.Value = _choices.Density;
         _wilderness.Value = _choices.Wilderness;
         _races.Value = _choices.FantasyRaces;
+        _terrain.Value = _choices.Terrain;
         SyncOverrides();
     }
 
@@ -832,6 +840,7 @@ internal sealed class AzgaarPage : Panel
         var density = Group(_density);
         var wilderness = Group(_wilderness);
         var races = Group(_races);
+        var terrain = Group(_terrain);
 
         _optionsPanel.Arrange = p =>
         {
@@ -864,6 +873,7 @@ internal sealed class AzgaarPage : Panel
 
             y += Place(advancement, x, w, y) + S(18);
             y += Place(density, x, w, y) + S(18);
+            y += Place(terrain, x, w, y) + S(18);
 
             // The two two-way choices share a row, each in half the column, their cards level
             // even when one hint has to wrap under its title and the other does not.
@@ -886,7 +896,8 @@ internal sealed class AzgaarPage : Panel
     private static readonly (string Key, int Step)[] SummaryRows =
     [
         ("World", FilesStep), ("Heightmap", FilesStep), ("Calendar", FilesStep),
-        ("Advancement", OptionsStep), ("Provinces", OptionsStep), ("Unclaimed land", OptionsStep), ("Peoples", OptionsStep),
+        ("Advancement", OptionsStep), ("Provinces", OptionsStep), ("Terrain", OptionsStep), ("Unclaimed land", OptionsStep),
+        ("Peoples", OptionsStep),
     ];
 
     private string[] SummaryValues()
@@ -899,6 +910,7 @@ internal sealed class AzgaarPage : Panel
             e?.CalendarLine ?? "No year in the export",
             AdvancementLine(),
             ProvincesLine(),
+            _choices.Terrain == AzgaarTerrain.Weathered ? "Weathered  ·  hills and valleys added" : "As drawn",
             _choices.Wilderness ? "Azgaar  ·  starts wild" : "Settled",
             !_choices.FantasyRaces ? "Humans only"
                 : HasRaceTags ? $"Azgaar  ·  {string.Join(", ", e!.Races).ToLowerInvariant()}" : "Azgaar  ·  all human",

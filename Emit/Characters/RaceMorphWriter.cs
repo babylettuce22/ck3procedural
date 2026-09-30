@@ -194,6 +194,7 @@ public static class RaceMorphWriter
         // ---- Group 3: horns ----------------------------------------------------------------
         bool horns = RaceHeadWriter.HornGeneShipped(modDir);
         if (horns) HornGroup(b);
+        int ornamentEntries = horns ? HornOrnamentGroup(b, cfg.Seed, ethnicities) : 0;
 
         // ---- Group 4: men's faces ----------------------------------------------------------
         int maleEntries = MaleFaceGroup(b, f);
@@ -206,7 +207,7 @@ public static class RaceMorphWriter
 
         ParadoxText.WriteBom(path, b.ToString());
         Console.WriteLine($"  race morphs written: {Races.Length + 3} shape (incl. half-elf, half-orc, mixed-human), " +
-                          $"{Races.Length + 1} skin{(horns ? $", {HornEntries} horn" : "")}, {maleEntries} per-sex face and 3 weight/muscle " +
+                          $"{Races.Length + 1} skin{(horns ? $", {HornEntries} horn, {ornamentEntries} horn-ornament" : "")}, {maleEntries} per-sex face and 3 weight/muscle " +
                           "enforcement entries to 99_gen_race_morphs.txt");
     }
 
@@ -492,6 +493,62 @@ public static class RaceMorphWriter
     /// One horn entry. <paramref name="style"/> is a style name, the none template, or null to leave
     /// the accessory as the DNA has it; <paramref name="mound"/> raises or flattens the skin mound.
     /// </summary>
+    /// <summary>
+    /// Horn ornaments (<see cref="Horns.Ornament"/>): each horned culture has one tradition — rings,
+    /// a band or caps, in gold, bronze or silver, picked from the seed and the culture key — worn by
+    /// its ranked men and women: landed at county tier or above, or the primary spouse of someone
+    /// who is. Adults only; never on filed horns (filing is hiding them). Hornborn of a horned
+    /// culture wear their culture's; horned folk of any other culture have no tradition to wear.
+    /// Which horn the ornament sits on is not decided here — the ornament accessory reads the horn's
+    /// style tag (see RaceHeadWriter.WriteHorns), since a style from DNA is invisible to these rules.
+    /// Returns the entry count.
+    /// </summary>
+    private static int HornOrnamentGroup(JominiBuilder b, int seed, EthnicityMap ethnicities)
+    {
+        var cultures = ethnicities.ByCultureKey
+            .Where(kv => kv.Value.Archetype == RaceArchetype.Hornkin)
+            .Select(kv => kv.Key).Order(StringComparer.Ordinal).ToList();
+
+        b.Blank();
+        using (b.Block("gen_race_horn_ornaments"))
+        {
+            b.Blank();
+            b.Field("usage", "game");
+            b.Field("selection_behavior", "max");
+            b.Field("priority", "92");
+            b.Blank();
+
+            foreach (string culture in cultures)
+            {
+                var rng = Core.Rng.For(seed, 0x40A7, Core.Rng.StableHash(culture));
+                string kind = Horns.OrnamentKinds[rng.Int(0, Horns.OrnamentKinds.Length - 1)];
+                string metal = Horns.Metals[rng.Int(0, Horns.Metals.Length - 1)].Name;
+
+                using (b.Block($"gen_race_horn_ornament_{culture}"))
+                {
+                    using (b.Block("dna_modifiers"))
+                    using (b.Block("accessory"))
+                    {
+                        b.Field("mode", "replace");
+                        b.Field("gene", Horns.OrnamentGene);
+                        b.Field("template", Horns.OrnamentTemplateOf(kind, metal));
+                        b.Field("value", "0.5");
+                    }
+
+                    Weight(b, $"culture = culture:{culture}", weight: 100,
+                        $"OR = {{ has_trait = {HornedTrait} has_trait = {HornbornTrait} }}",
+                        "age >= 16",
+                        $"NOT = {{ has_character_flag = {FiledFlag} }}",
+                        "OR = { highest_held_title_tier >= tier_county primary_spouse ?= { highest_held_title_tier >= tier_county } }");
+                }
+
+                b.Blank();
+            }
+        }
+
+        return cultures.Count;
+    }
+
     private static void HornEntry(JominiBuilder b, string name, string? style, bool mound, int weight, params string[] conditions)
     {
         using (b.Block(name))

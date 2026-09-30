@@ -1,0 +1,58 @@
+﻿# Gnome Tinkering: who may tinker, and whether a project can go on.
+#
+# The pieces:
+#   common/culture/traditions/00_gen_tinkers_bench_tradition.txt — the Tinker's Bench (parameter gen_tinkering)
+#   common/decisions/00_gen_tinker_decisions.txt       — Start a Contraption
+#   common/scripted_effects/00_gen_tinker_effects.txt  — the project loop: state, stages, the roll, the tally
+#   events/gen_tinker_test_events.txt                  — the workbench menu (0010s), the test and outcome (0300s)
+#   events/gen_tinker_workshop_events.txt              — design and setback stages (0100–0299)
+#   events/gen_tinker_commission_events.txt + common/character_interactions/00_gen_tinker_interactions.txt
+#                                                      — other rulers hiring a gnome (0400s)
+# The project's state lives in variables on the tinkerer (it spans months); the header of
+# 00_gen_tinker_effects.txt lists them.
+
+# A character whose culture keeps the Tinker's Bench.
+gen_tk_has_tinkering_trigger = {
+	culture ?= { has_cultural_parameter = gen_tinkering }
+}
+
+# May take the decision: the custom, land to build on, and the learning for it.
+gen_tk_can_start_project_trigger = {
+	gen_tk_has_tinkering_trigger = yes
+	is_adult = yes
+	is_landed = yes
+}
+
+# A project is on and its maker can still work at it. Every stage dispatcher checks this first.
+gen_tk_can_work_trigger = {
+	is_alive = yes
+	has_character_flag = gen_tk_working
+	is_imprisoned = no
+	NOT = { has_trait = incapable }
+}
+
+# Free to take someone else's commission: the custom, the skill, and an empty bench.
+gen_tk_can_take_commission_trigger = {
+	gen_tk_has_tinkering_trigger = yes
+	is_adult = yes
+	is_imprisoned = no
+	learning >= 12
+	NOT = { has_character_flag = gen_tk_working }
+	NOT = { has_character_flag = gen_tk_recently_commissioned }
+	NOT = { has_trait = incapable }
+}
+
+# This stage event belongs to the project now on the bench, not to one abandoned earlier whose delayed
+# event is only now arriving (see the serial in 00_gen_tinker_effects.txt). Every stage dispatcher asks
+# this first and does nothing at all when it fails.
+gen_tk_event_is_current_trigger = {
+	exists = scope:gen_tk_serial_token
+	exists = var:gen_tk_serial
+	var:gen_tk_serial = scope:gen_tk_serial_token
+}
+
+# Which project is on the bench.
+gen_tk_project_is_trigger = {
+	exists = var:gen_tk_project
+	var:gen_tk_project = $PROJECT$
+}

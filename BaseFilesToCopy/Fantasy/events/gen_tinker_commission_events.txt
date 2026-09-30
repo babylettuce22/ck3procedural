@@ -1,0 +1,783 @@
+﻿namespace = gen_tinker
+
+# Gnome Tinkering, commissions: the events between a patron and the gnome they hired. See
+# 00_gen_tinker_commission_triggers.txt for the commission pieces; main's project loop
+# (00_gen_tinker_effects.txt) runs the work itself and owns every stage's timing.
+#
+# This file owns 0400–0499:
+#   0401  "A Letter from Your Patron" — the tinkerer, after Hurry the Commission: work nights, refuse,
+#         or ask for more gold
+#   0402  "Faster Parts Cost Gold"    — the patron, if the tinkerer asked for more gold: pay or refuse
+#   0450  the delivery — the patron, fired by main (gen_tk_finish_project_effect) when a commissioned
+#         project finishes. scope:gen_tk_result and scope:gen_tk_tinkerer are saved by main.
+#
+# Nothing here is random: each option says what it does, and the other side hears of it by toast.
+
+
+# =====================================================================================
+#  0401: the hurry letter reaches the tinkerer
+# =====================================================================================
+
+gen_tinker.0401 = {
+	type = character_event
+	title = gen_tinker.0401.t
+	desc = gen_tinker.0401.desc
+	theme = learning
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:gen_tk_c_patron
+		animation = disapproval
+	}
+
+	# Still at the bench, and still on this patron's commission.
+	trigger = {
+		exists = scope:gen_tk_c_patron
+		gen_tk_can_work_trigger = yes
+		var:gen_tk_patron ?= scope:gen_tk_c_patron
+	}
+
+	# ROOT.Char renders blank in option tooltips and toasts; loc names this event's character by scope.
+	immediate = { save_scope_as = gen_tk_c_root }
+
+	# Work through the nights: sooner, but tired hands slip.
+	option = {
+		name = gen_tinker.0401.a
+		add_stress = minor_stress_gain
+		gen_tk_hurry_project_effect = yes
+		scope:gen_tk_c_patron = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = gen_tinker.0401.a.toast
+				left_icon = root
+				right_icon = scope:gen_tk_c_patron
+				custom_tooltip = gen_tinker.0401.a.toast.tt
+				add_opinion = {
+					target = root
+					modifier = pleased_opinion
+					opinion = 10
+				}
+			}
+		}
+		stress_impact = {
+			lazy = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 30
+			ai_value_modifier = { ai_energy = 0.5 }
+			modifier = {
+				add = 30
+				has_trait = diligent
+			}
+			modifier = {
+				factor = 0.2
+				has_trait = lazy
+			}
+		}
+	}
+
+	# Genius cannot be hurried: the work stays as it is, the patron is put out, and the gnome who told a
+	# lord to wait is talked about. (The prestige is what "ask for gold" can't give: without it, asking was
+	# never worse than refusing.)
+	option = {
+		name = gen_tinker.0401.b
+		add_prestige = minor_prestige_gain
+		scope:gen_tk_c_patron = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = gen_tinker.0401.b.toast
+				left_icon = root
+				right_icon = scope:gen_tk_c_patron
+				custom_tooltip = gen_tinker.0401.b.toast.tt
+				add_opinion = {
+					target = root
+					modifier = disappointed_opinion
+					opinion = -10
+				}
+			}
+		}
+		stress_impact = {
+			humble = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = {
+				add = 30
+				OR = {
+					has_trait = arrogant
+					has_trait = stubborn
+					has_trait = patient
+				}
+			}
+		}
+	}
+
+	# Faster parts cost gold: ask the patron to pay for better springs (0402).
+	option = {
+		name = gen_tinker.0401.c
+		save_scope_value_as = {
+			name = gen_tk_c_rush
+			value = gen_tk_commission_rush_value
+		}
+		custom_tooltip = gen_tinker.0401.c.tt
+		scope:gen_tk_c_patron = { trigger_event = gen_tinker.0402 }
+
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_greed = 0.5 }
+			modifier = {
+				add = 30
+				has_trait = greedy
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0402: the tinkerer asks the patron for more gold
+# =====================================================================================
+
+gen_tinker.0402 = {
+	type = character_event
+	title = gen_tinker.0402.t
+	desc = gen_tinker.0402.desc
+	theme = stewardship
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:gen_tk_c_maker
+		animation = beg
+	}
+
+	# ROOT.Char renders blank in option tooltips and toasts; loc names this event's character by scope.
+	immediate = { save_scope_as = gen_tk_c_root }
+
+	# Pay: the better springs go into the work, if the tinkerer is still on it.
+	option = {
+		name = gen_tinker.0402.a
+		trigger = { gold >= scope:gen_tk_c_rush }
+		show_as_unavailable = { always = yes }
+		pay_short_term_gold = {
+			target = scope:gen_tk_c_maker
+			gold = scope:gen_tk_c_rush
+		}
+		custom_tooltip = gen_tinker.0402.a.tt
+		scope:gen_tk_c_maker = {
+			if = {
+				limit = {
+					gen_tk_can_work_trigger = yes
+					var:gen_tk_patron ?= root
+				}
+				# Better parts, fitted in a hurry: sooner, and the good brass pays for itself in the work.
+				gen_tk_hurry_project_effect = yes
+				gen_tk_adjust_effect = {
+					QUALITY = 5
+					RISK = 0
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0402.a.toast
+					left_icon = root
+					right_icon = scope:gen_tk_c_maker
+					custom_tooltip = gen_tinker.0402.a.toast.tt
+				}
+			}
+			else = {
+				# The gold arrives after the bench has gone quiet. Kept, with thanks.
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = gen_tinker.0402.a.toast
+					left_icon = root
+					right_icon = scope:gen_tk_c_maker
+					custom_tooltip = gen_tinker.0402.a.late.tt
+				}
+			}
+		}
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 40
+			ai_value_modifier = { ai_greed = -0.5 }
+			modifier = {
+				add = 30
+				has_trait = impatient
+			}
+			modifier = {
+				add = 20
+				has_trait = generous
+			}
+			modifier = {
+				factor = 0.3
+				has_trait = greedy
+			}
+		}
+	}
+
+	# Refuse: the work goes on as it was.
+	option = {
+		name = gen_tinker.0402.b
+		scope:gen_tk_c_maker = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = gen_tinker.0402.b.toast
+				left_icon = root
+				right_icon = scope:gen_tk_c_maker
+				custom_tooltip = gen_tinker.0402.b.toast.tt
+			}
+		}
+
+		ai_chance = {
+			base = 40
+			ai_value_modifier = { ai_greed = 0.5 }
+			modifier = {
+				add = 30
+				has_trait = greedy
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0450: the delivery
+# =====================================================================================
+
+# Fired by main on the patron as the commissioned project finishes. The tinkerer's commission
+# bookkeeping is read once in the immediate and then cleared, so the options work however long a
+# player leaves the event open. The thing itself (or the blast) is main's (gen_tk_apply_outcome_effect);
+# this is only what the patron says about it.
+gen_tinker.0450 = {
+	type = character_event
+	title = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:masterwork }
+				desc = gen_tinker.0450.t.masterwork
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:works }
+				desc = gen_tinker.0450.t.works
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:dud }
+				desc = gen_tinker.0450.t.dud
+			}
+			desc = gen_tinker.0450.t.explodes
+		}
+	}
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_tk_c_project ?= flag:mill }
+				desc = gen_tinker.0450.desc.mill
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_c_project ?= flag:engine }
+				desc = gen_tinker.0450.desc.engine
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_c_project ?= flag:limb }
+				desc = gen_tinker.0450.desc.limb
+			}
+			desc = gen_tinker.0450.desc.curio
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:masterwork }
+				desc = gen_tinker.0450.desc.masterwork
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:works }
+				desc = gen_tinker.0450.desc.works
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:dud }
+				desc = gen_tinker.0450.desc.dud
+			}
+			desc = gen_tinker.0450.desc.explodes
+		}
+		# Built the maker's way, not the way you asked (hidden since the design stage).
+		triggered_desc = {
+			trigger = {
+				exists = scope:gen_tk_patron_fooled
+				scope:gen_tk_result ?= flag:masterwork
+			}
+			desc = gen_tinker.0450.desc.fooled_masterwork
+		}
+		triggered_desc = {
+			trigger = {
+				exists = scope:gen_tk_patron_fooled
+				NOT = { scope:gen_tk_result ?= flag:masterwork }
+			}
+			desc = gen_tinker.0450.desc.fooled
+		}
+		desc = gen_tinker.0450.desc.end
+	}
+	theme = learning
+	override_background = { reference = courtyard }
+
+	left_portrait = {
+		character = root
+		triggered_animation = {
+			trigger = { scope:gen_tk_result ?= flag:masterwork }
+			animation = ecstasy
+		}
+		triggered_animation = {
+			trigger = { scope:gen_tk_result ?= flag:works }
+			animation = happiness
+		}
+		triggered_animation = {
+			trigger = { scope:gen_tk_result ?= flag:dud }
+			animation = disapproval
+		}
+		animation = shock
+	}
+	right_portrait = {
+		character = scope:gen_tk_tinkerer
+		triggered_animation = {
+			trigger = {
+				OR = {
+					scope:gen_tk_result ?= flag:masterwork
+					scope:gen_tk_result ?= flag:works
+				}
+			}
+			animation = personality_rational
+		}
+		animation = shame
+	}
+
+	trigger = { exists = scope:gen_tk_tinkerer }
+
+	immediate = {
+		# ROOT.Char renders blank in option tooltips and toasts; loc names this event's character by scope.
+		save_scope_as = gen_tk_c_root
+		scope:gen_tk_tinkerer = {
+			save_scope_value_as = {
+				name = gen_tk_c_bonus
+				value = gen_tk_commission_bonus_value
+			}
+			save_scope_value_as = {
+				name = gen_tk_c_clawback
+				value = gen_tk_commission_clawback_value
+			}
+			if = {
+				limit = { exists = var:gen_tk_commission_project }
+				save_scope_value_as = {
+					name = gen_tk_c_project
+					value = var:gen_tk_commission_project
+				}
+			}
+			else_if = {
+				limit = { exists = var:gen_tk_project }
+				save_scope_value_as = {
+					name = gen_tk_c_project
+					value = var:gen_tk_project
+				}
+			}
+			gen_tk_commission_clear_effect = yes
+		}
+		if = {
+			limit = { has_character_flag = gen_tk_awaiting_commission }
+			remove_character_flag = gen_tk_awaiting_commission
+		}
+		# The reckoning for a hidden change of plan: forgiven for a masterwork, resented otherwise.
+		if = {
+			limit = {
+				exists = scope:gen_tk_patron_fooled
+				scope:gen_tk_tinkerer = { is_alive = yes }
+			}
+			if = {
+				limit = { scope:gen_tk_result ?= flag:masterwork }
+				add_opinion = {
+					target = scope:gen_tk_tinkerer
+					modifier = gen_tk_better_than_ordered_opinion
+				}
+			}
+			else = {
+				add_opinion = {
+					target = scope:gen_tk_tinkerer
+					modifier = gen_tk_not_what_i_ordered_opinion
+				}
+			}
+		}
+	}
+
+	# ---------------------------------------------------------------- It works (or better)
+
+	# A bonus: half the fee again.
+	option = {
+		name = gen_tinker.0450.good.a
+		trigger = {
+			OR = {
+				scope:gen_tk_result ?= flag:masterwork
+				scope:gen_tk_result ?= flag:works
+			}
+			scope:gen_tk_tinkerer = { is_alive = yes }
+			gold >= scope:gen_tk_c_bonus
+		}
+		show_as_unavailable = {
+			OR = {
+				scope:gen_tk_result ?= flag:masterwork
+				scope:gen_tk_result ?= flag:works
+			}
+		}
+		pay_short_term_gold = {
+			target = scope:gen_tk_tinkerer
+			gold = scope:gen_tk_c_bonus
+		}
+		scope:gen_tk_tinkerer = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = gen_tinker.0450.good.a.toast
+				left_icon = root
+				right_icon = scope:gen_tk_tinkerer
+				custom_tooltip = gen_tinker.0450.good.a.toast.tt
+				add_opinion = {
+					target = root
+					modifier = grateful_opinion
+					opinion = 20
+				}
+			}
+		}
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+			generous = minor_stress_impact_loss
+		}
+
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_greed = -0.5 }
+			modifier = {
+				add = 30
+				has_trait = generous
+			}
+			modifier = {
+				factor = 0.2
+				has_trait = greedy
+			}
+		}
+	}
+
+	# A masterwork earns a promise: the tinkerer may call in a favour.
+	option = {
+		name = gen_tinker.0450.good.b
+		trigger = {
+			scope:gen_tk_result ?= flag:masterwork
+			scope:gen_tk_tinkerer = {
+				is_alive = yes
+				can_add_hook = {
+					type = favor_hook
+					target = root
+				}
+			}
+		}
+		scope:gen_tk_tinkerer = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = gen_tinker.0450.good.b.toast
+				left_icon = root
+				right_icon = scope:gen_tk_tinkerer
+				custom_tooltip = gen_tinker.0450.good.b.toast.tt
+				add_hook = {
+					type = favor_hook
+					target = root
+				}
+				add_opinion = {
+					target = root
+					modifier = respect_opinion
+					opinion = 10
+				}
+			}
+		}
+
+		ai_chance = {
+			base = 15
+			ai_value_modifier = { ai_honor = 0.5 }
+			modifier = {
+				add = 20
+				has_trait = just
+			}
+			modifier = {
+				factor = 0.3
+				has_trait = paranoid
+			}
+		}
+	}
+
+	# It does what it was paid for, and that is that.
+	option = {
+		name = gen_tinker.0450.good.c
+		trigger = {
+			OR = {
+				scope:gen_tk_result ?= flag:masterwork
+				scope:gen_tk_result ?= flag:works
+			}
+		}
+		scope:gen_tk_tinkerer = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = gen_tinker.0450.good.c.toast
+				left_icon = root
+				right_icon = scope:gen_tk_tinkerer
+				custom_tooltip = gen_tinker.0450.good.c.toast.tt
+			}
+		}
+
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_greed = 0.5 }
+			modifier = {
+				add = 20
+				has_trait = greedy
+			}
+		}
+	}
+
+	# ---------------------------------------------------------------- A dud
+
+	# Half the fee back.
+	option = {
+		name = gen_tinker.0450.dud.a
+		trigger = {
+			scope:gen_tk_result ?= flag:dud
+			scope:gen_tk_tinkerer = { is_alive = yes }
+		}
+		scope:gen_tk_tinkerer = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = gen_tinker.0450.refund.toast
+				left_icon = root
+				right_icon = scope:gen_tk_tinkerer
+				custom_tooltip = gen_tinker.0450.refund.toast.tt
+				pay_short_term_gold = {
+					target = root
+					gold = scope:gen_tk_c_clawback
+				}
+				add_opinion = {
+					target = root
+					modifier = angry_opinion
+					opinion = -15
+				}
+			}
+		}
+
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_greed = 0.5
+				ai_vengefulness = 0.25
+			}
+			modifier = {
+				add = 25
+				has_trait = greedy
+			}
+		}
+	}
+
+	# These things happen.
+	option = {
+		name = gen_tinker.0450.dud.b
+		trigger = { scope:gen_tk_result ?= flag:dud }
+		scope:gen_tk_tinkerer = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = gen_tinker.0450.forgive.toast
+				left_icon = root
+				right_icon = scope:gen_tk_tinkerer
+				custom_tooltip = gen_tinker.0450.forgive.toast.tt
+				add_opinion = {
+					target = root
+					modifier = grateful_opinion
+					opinion = 10
+				}
+			}
+		}
+		stress_impact = {
+			wrathful = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 25
+			ai_value_modifier = { ai_compassion = 0.5 }
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = forgiving
+					has_trait = generous
+				}
+			}
+		}
+	}
+
+	# Put it in the garden and let the court laugh at it.
+	option = {
+		name = gen_tinker.0450.dud.c
+		trigger = {
+			scope:gen_tk_result ?= flag:dud
+			scope:gen_tk_tinkerer = { is_alive = yes }
+		}
+		# The joke is on the maker, not you: the court laughs with you.
+		add_prestige = minor_prestige_gain
+		scope:gen_tk_tinkerer = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = gen_tinker.0450.mock.toast
+				left_icon = root
+				right_icon = scope:gen_tk_tinkerer
+				custom_tooltip = gen_tinker.0450.mock.toast.tt
+				add_prestige = minor_prestige_loss
+				add_opinion = {
+					target = root
+					modifier = disrespect_opinion
+					opinion = -10
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 10
+			ai_value_modifier = { ai_compassion = -0.5 }
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = arrogant
+					has_trait = callous
+				}
+			}
+		}
+	}
+
+	# ---------------------------------------------------------------- It blew up
+
+	# Tell everyone whose fault it was.
+	option = {
+		name = gen_tinker.0450.boom.a
+		trigger = {
+			scope:gen_tk_result ?= flag:explodes
+			scope:gen_tk_tinkerer = { is_alive = yes }
+		}
+		# Blame placed, face saved: the explosion is the maker's shame, not yours.
+		add_prestige = minor_prestige_gain
+		scope:gen_tk_tinkerer = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = gen_tinker.0450.blame.toast
+				left_icon = root
+				right_icon = scope:gen_tk_tinkerer
+				custom_tooltip = gen_tinker.0450.blame.toast.tt
+				add_prestige = medium_prestige_loss
+				add_opinion = {
+					target = root
+					modifier = angry_opinion
+					opinion = -20
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_vengefulness = 0.5
+				ai_compassion = -0.25
+			}
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = wrathful
+					has_trait = vengeful
+				}
+			}
+		}
+	}
+
+	# Half the fee back.
+	option = {
+		name = gen_tinker.0450.boom.b
+		trigger = {
+			scope:gen_tk_result ?= flag:explodes
+			scope:gen_tk_tinkerer = { is_alive = yes }
+		}
+		scope:gen_tk_tinkerer = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = gen_tinker.0450.refund.toast
+				left_icon = root
+				right_icon = scope:gen_tk_tinkerer
+				custom_tooltip = gen_tinker.0450.refund.toast.tt
+				pay_short_term_gold = {
+					target = root
+					gold = scope:gen_tk_c_clawback
+				}
+				add_opinion = {
+					target = root
+					modifier = angry_opinion
+					opinion = -15
+				}
+			}
+		}
+
+		ai_chance = {
+			base = 25
+			ai_value_modifier = { ai_greed = 0.5 }
+			modifier = {
+				add = 25
+				has_trait = greedy
+			}
+		}
+	}
+
+	# Laugh it off.
+	option = {
+		name = gen_tinker.0450.boom.c
+		trigger = { scope:gen_tk_result ?= flag:explodes }
+		scope:gen_tk_tinkerer = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = gen_tinker.0450.forgive.toast
+				left_icon = root
+				right_icon = scope:gen_tk_tinkerer
+				custom_tooltip = gen_tinker.0450.laugh.toast.tt
+				add_opinion = {
+					target = root
+					modifier = grateful_opinion
+					opinion = 15
+				}
+			}
+		}
+		stress_impact = {
+			wrathful = minor_stress_impact_gain
+			vengeful = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_compassion = 0.5 }
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = forgiving
+					has_trait = compassionate
+				}
+			}
+		}
+	}
+}

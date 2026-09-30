@@ -1,0 +1,132 @@
+﻿namespace = gen_great_work
+
+# The Passing of the Work: a maker grown weary, the work unfinished, chooses whether to hand it on while
+# still living. Fired by the story (common/story_cycles/00_gen_great_work_story.txt) once per maker.
+# Handing on: gen_gw_hand_on_effect (the old maker becomes Elder of the Work). Refusing: the story keeps
+# them at it alone, and if they die first, the heirs' chain in gen_great_work_events.txt (0600s) decides.
+# See 00_gen_great_work_triggers.txt for the map of the system.
+
+gen_great_work.0520 = {
+	type = character_event
+	title = gen_great_work.0520.t
+	desc = {
+		desc = gen_great_work.0520.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:gw_pupil_ok }
+				desc = gen_great_work.0520.desc_pupil
+			}
+			desc = gen_great_work.0520.desc_no_pupil
+		}
+	}
+	theme = learning
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:gw_pupil_ok }
+		character = scope:gw_pupil_ok
+		animation = worry
+	}
+
+	trigger = { gen_gw_has_work_trigger = yes }
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+		# Who could carry it on: the pupil, the heir, or the likeliest other elf at court or in the family.
+		if = {
+			limit = {
+				exists = scope:gw_pupil
+				scope:gw_pupil = { gen_gw_can_take_up_trigger = yes }
+			}
+			scope:gw_pupil = { save_scope_as = gw_pupil_ok }
+		}
+		if = {
+			limit = {
+				exists = player_heir
+				player_heir = {
+					gen_gw_can_take_up_trigger = yes
+					NOT = { this ?= scope:gw_pupil_ok }
+				}
+			}
+			player_heir = { save_scope_as = gw_heir_ok }
+		}
+		ordered_courtier = {
+			limit = {
+				gen_gw_can_take_up_trigger = yes
+				NOT = { this ?= scope:gw_pupil_ok }
+				NOT = { this ?= scope:gw_heir_ok }
+			}
+			order_by = learning
+			save_scope_as = gw_other_ok
+		}
+	}
+
+	# To the pupil.
+	option = {
+		name = gen_great_work.0520.a
+		trigger = { exists = scope:gw_pupil_ok }
+		gen_gw_hand_on_effect = { TO = scope:gw_pupil_ok }
+		ai_chance = {
+			base = 60
+		}
+	}
+
+	# To the heir.
+	option = {
+		name = gen_great_work.0520.b
+		trigger = { exists = scope:gw_heir_ok }
+		gen_gw_hand_on_effect = { TO = scope:gw_heir_ok }
+		ai_chance = {
+			base = 35
+			modifier = {
+				add = 20
+				scope:gw_heir_ok = { is_child_of = root }
+			}
+		}
+	}
+
+	# To the most learned elf at court.
+	option = {
+		name = gen_great_work.0520.c
+		trigger = { exists = scope:gw_other_ok }
+		gen_gw_hand_on_effect = { TO = scope:gw_other_ok }
+		ai_chance = {
+			base = 15
+			modifier = {
+				add = 15
+				scope:gw_other_ok.learning >= 15
+			}
+		}
+	}
+
+	# Refuse: finish it alone, or die trying.
+	option = {
+		name = gen_great_work.0520.d
+		custom_tooltip = gen_great_work.0520.d.tt
+		stress_impact = {
+			humble = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 30
+				OR = {
+					has_trait = arrogant
+					has_trait = stubborn
+				}
+			}
+			modifier = {
+				add = 20
+				scope:gw_story.var:gw_progress >= 60
+			}
+			modifier = {
+				factor = 0.3
+				has_trait = humble
+			}
+		}
+	}
+}

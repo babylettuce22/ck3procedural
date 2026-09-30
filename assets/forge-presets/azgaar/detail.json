@@ -1,0 +1,103 @@
+{
+  "format": "ck3-heightmap-forge-preset",
+  "version": 2,
+  "saved": "2026-09-29 20:00:00",
+  "project": {
+    "baseWidth": 8192,
+    "baseHeight": 4096,
+    "masterSeed": 1337,
+    "seaLevel": 0.07450981,
+    "previewLongEdge": 1024
+  },
+  "stages": [
+    {
+      "type": "HillStage",
+      "name": "Rolling Hills",
+      "enabled": true,
+      "params": {
+        "seed": 8080,
+        "frequency": 13.446,
+        "octaves": 7,
+        "gain": 0.5,
+        "warp": 0.3,
+        "amplitude": 0.2,
+        "slopeLimit": 4,
+        "patchiness": 0.472,
+        "patchScale": 2.3576999,
+        "landOnly": true
+      }
+    },
+    {
+      "type": "RidgeStage",
+      "name": "Ridges & Mountains",
+      "enabled": true,
+      "params": {
+        "seed": -89098401,
+        "rangeFrequency": 6,
+        "coverage": 0.3,
+        "edgeSoftness": 0.35,
+        "rangeWarp": 0.666,
+        "ridgeFrequency": 18.38,
+        "octaves": 7,
+        "lacunarity": 2.07,
+        "gain": 0.5,
+        "ridgeWarp": 0.21,
+        "sharpness": 1.95,
+        "amplitude": 0.6,
+        "basinDepth": 0.096,
+        "followElevation": 0.75,
+        "followInland": 0.6,
+        "inlandScale": 0.01,
+        "ceiling": 1,
+        "softCeiling": 0.12,
+        "landOnly": true
+      }
+    },
+    {
+      "type": "RangePaintStage",
+      "name": "Mountain Range (painted)",
+      "enabled": true,
+      "params": {
+        "seed": 20773,
+        "amplitude": 0.72,
+        "profile": 1.25,
+        "summitVariation": 0.35,
+        "summitSpacing": 22,
+        "grain": 0.3,
+        "grainSpacing": 110,
+        "grainWander": 0.5,
+        "wanderScale": 7,
+        "detail": 0.5,
+        "detailFrequency": 42,
+        "octaves": 5,
+        "warp": 0.4,
+        "landOnly": true,
+        "ceiling": 0.95
+      }
+    },
+    {
+      "type": "HydraulicErosionStage",
+      "name": "Hydraulic Erosion (GPU)",
+      "enabled": true,
+      "params": {
+        "iterations": 350,
+        "reliefRatio": 0.094,
+        "timeStep": 0.04,
+        "rain": 0.02,
+        "evaporation": 0.02,
+        "diagonalFlow": true,
+        "capacity": 2.5,
+        "dissolve": 0.3,
+        "deposit": 0.3,
+        "minTilt": 0.01,
+        "channelThreshold": 0.05,
+        "talus": 0.35,
+        "thermalRate": 0.2,
+        "thermalEvery": 4,
+        "creep": 0.4,
+        "referenceHeight": 4096,
+        "protectCoast": true
+      }
+    }
+  ]
+}

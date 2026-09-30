@@ -418,26 +418,50 @@ public sealed class EthnicityMap
     public HumanLooks.Context? Looks { get; init; }
 
     /// <summary>
-    /// The colour and gene blocks one member of this culture is drawn from — one weighted pick of
-    /// its own per-culture variants laid over its base, or the base alone when it has none (every
-    /// fantasy people). For the bookmark DNA writer, which must paint a character the way the game
-    /// would have rolled them.
+    /// Every colour and gene block one member of this culture is drawn from, resolved the way the
+    /// engine resolves <c>template =</c>: one weighted pick of the culture's own variants, over the
+    /// vanilla ethnicity its chain bottoms out in. For the bookmark DNA writer, which must roll a
+    /// whole face the way the game would have rolled it.
+    ///
+    /// The vanilla layer is what makes it a whole face. Our ethnicities override ~30 genes and
+    /// inherit the other ~100 from vanilla, so without <paramref name="vanilla"/> the caller only
+    /// learns about the overrides.
+    ///
+    /// A human variant is templated straight on a vanilla key (see <see cref="HumanLooks"/>), so its
+    /// base's blocks are not in its chain; a fantasy variant is templated on its base and inherits
+    /// them. Only the culture's own race's variants are candidates: a host culture's list can also
+    /// name a minority race's variant, and its bookmark ruler is not of that race.
     /// </summary>
     public (Dictionary<string, List<ColorPaletteRange>> Colors, Dictionary<string, List<GeneMorphEntry>> Genes)
-        GenesFor(Culture culture, Rng rng)
+        GenesFor(Culture culture, Rng rng,
+            IReadOnlyDictionary<string, HumanLooks.VanillaEthnicity>? vanilla = null)
     {
         var def = For(culture);
-        var own = def.Variants.Where(v => v.Template is not null).ToDictionary(v => v.Key);
+        var own = def.Variants.ToDictionary(v => v.Key);
         var picks = VariantsFor(culture).Where(p => own.ContainsKey(p.Key)).ToList();
-        if (picks.Count == 0) return (def.ColorGenes, def.MorphGenes);
 
-        int i = rng.WeightedIndex(picks, p => p.Weight);
-        var variant = own[picks[i < 0 ? 0 : i].Key];
+        EthnicityVariant? variant = null;
+        if (picks.Count > 0)
+        {
+            int i = rng.WeightedIndex(picks, p => p.Weight);
+            variant = own[picks[i < 0 ? 0 : i].Key];
+        }
 
-        var colors = new Dictionary<string, List<ColorPaletteRange>>(def.ColorGenes);
-        foreach (var (k, v) in variant.ColorGenes) colors[k] = v;
-        var genes = new Dictionary<string, List<GeneMorphEntry>>(def.MorphGenes);
-        foreach (var (k, v) in variant.MorphGenes) genes[k] = v;
+        var colors = new Dictionary<string, List<ColorPaletteRange>>(StringComparer.Ordinal);
+        var genes = new Dictionary<string, List<GeneMorphEntry>>(StringComparer.Ordinal);
+
+        void Lay(Dictionary<string, List<ColorPaletteRange>> c, Dictionary<string, List<GeneMorphEntry>> g)
+        {
+            foreach (var (k, v) in c) colors[k] = v;
+            foreach (var (k, v) in g) genes[k] = v;
+        }
+
+        bool onVanilla = variant?.Template is { } t && t != def.Key;
+        string root = onVanilla ? variant!.Template! : def.BaseTemplate;
+        if (vanilla is not null && vanilla.TryGetValue(root, out var chain)) Lay(chain.Colors, chain.Genes);
+        if (!onVanilla) Lay(def.ColorGenes, def.MorphGenes);
+        if (variant is not null) Lay(variant.ColorGenes, variant.MorphGenes);
+
         return (colors, genes);
     }
 
@@ -939,20 +963,15 @@ public static class Ethnicities
         Say($"  ethnicities: {byCulture.Count} cultures across {deliveredRaces} distinct races -> {string.Join(", ", tallies)}");
 
         // Delivering fewer races than asked for used to be silent, which made a clipped quota
-        // look like bad luck in the seed. Say which constraint actually bound. A mix asks only for
-        // the races it kept: the ones it switched off were never wanted.
-        int wanted = Math.Max(1, cfg.GuaranteedRaceCount);
-        if (mix is not null) wanted = Math.Min(wanted, quotaPool.Count);
+        // look like bad luck in the seed. Say which constraint actually bound. Capped at the pool,
+        // as the quota itself is: asking for more races than exist is not a shortfall, and a mix
+        // asks only for the races it kept — the ones it switched off were never wanted.
+        int wanted = Math.Clamp(cfg.GuaranteedRaceCount, 1, Math.Max(1, quotaPool.Count));
         if (cfg.EnableFantasyEthnicities && cfg.RaceMode != FantasyRaceMode.HumanOnly
             && deliveredRaces < wanted)
         {
-            // Ordered by which constraint actually binds first. The pool cap leads because it is
-            // the only one the user cannot fix by changing culture density — telling someone who
-            // asked for ten races to make more heritages sends them after a limit that was never
-            // the problem.
-            string reason = wanted > quotaPool.Count
-                ? $"only {quotaPool.Count} races exist — that is the ceiling in every mode"
-                : !cfg.AllowMinorityRaces
+            // Ordered by which constraint actually binds first.
+            string reason = !cfg.AllowMinorityRaces
                 ? "the mode's human:fantasy ratio left no land for them and AllowMinorityRaces is off — turn it on to seat them as minorities, or accept fewer races"
                 : cfg.RaceTerrain == RaceTerrainRule.Require
                 ? "RaceTerrain is Require, so races with no suitable terrain anywhere on this map were left unplaced rather than misplaced — set it to Prefer to settle them anyway"
@@ -1941,6 +1960,16 @@ public static class Ethnicities
         HumanLook.MixedAsian =>
             [("asian", 10), ("asian_han_chinese", 20), ("asian_mongol", 10), ("asian_manchu_korean", 5),
              ("asian_japanese", 5), ("asian_tibetan", 5), ("asian_malay", 15), ("indian", 15), ("south_indian", 15)],
+
+        // Vanilla's own proportions for the region: Bedouin and Egyptian are all arab, Persian
+        // 44/28/28 arab/mediterranean/turkic_west, Kurdish and Khwarezmian arab over turkic_west,
+        // Sogdian with a turkic share.
+        HumanLook.MiddleEastern =>
+            [("arab", 55), ("turkic_west", 25), ("mediterranean", 10), ("turkic", 10)],
+
+        // Cumans, Pechenegs and Khazars are turkic_west; Karluks, Kirghiz and Uyghurs turkic;
+        // Mongols and Khitans asian_mongol.
+        HumanLook.Steppe => [("turkic_west", 35), ("turkic", 35), ("asian_mongol", 30)],
 
         _ => []
     };

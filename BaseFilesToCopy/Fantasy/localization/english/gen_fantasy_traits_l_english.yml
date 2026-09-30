@@ -1,40 +1,53 @@
 ﻿l_english:
  # RACE PHENOTYPE TRAITS (Generic Descriptions for Ruler Designer & Encyclopedia)
  trait_phenotype_human:0 "Human"
- trait_phenotype_human_desc:0 "Short-lived and endlessly adaptable, humans learn quickly, multiply faster than any of the elder peoples, and treat every corner of the world as somewhere to settle."
- trait_phenotype_human_character_desc:0 "Short-lived and endlessly adaptable, [ROOT.GetCharacter.GetFirstNameNoTooltip] carries the restless ambition of humankind."
+ trait_phenotype_human_desc:0 "Short-lived and endlessly adaptable, humans learn quickly, multiply faster than any of the elder peoples, and treat every corner of the world as somewhere to settle.\n\n$gen_race_ties_human$"
+ trait_phenotype_human_character_desc:0 "Short-lived and endlessly adaptable, [ROOT.GetCharacter.GetFirstNameNoTooltip] carries the restless ambition of humankind.\n\n$gen_race_ties_human$"
 
  trait_phenotype_gracile:0 "Gracile"
- trait_phenotype_gracile_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, individuals with this trait move with natural poise and effortless grace."
- trait_phenotype_gracile_character_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] moves with natural poise and effortless grace."
+ trait_phenotype_gracile_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, individuals with this trait move with natural poise and effortless grace.\n\n$gen_race_ties_gracile$"
+ trait_phenotype_gracile_character_desc:0 "Possessing an elongated, lithesome build and sharp bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] moves with natural poise and effortless grace.\n\n$gen_race_ties_gracile$"
 
  trait_phenotype_sylvan:0 "Sylvan"
- trait_phenotype_sylvan_desc:0 "Lean, sharp-featured and at home beneath the canopy, individuals with this trait carry a hunter's wiry strength and move through wild country without a sound."
- trait_phenotype_sylvan_character_desc:0 "Lean, sharp-featured and at home beneath the canopy, [ROOT.GetCharacter.GetFirstNameNoTooltip] carries a hunter's wiry strength and moves through wild country without a sound."
+ trait_phenotype_sylvan_desc:0 "Lean, sharp-featured and at home beneath the canopy, individuals with this trait carry a hunter's wiry strength and move through wild country without a sound.\n\n$gen_race_ties_sylvan$"
+ trait_phenotype_sylvan_character_desc:0 "Lean, sharp-featured and at home beneath the canopy, [ROOT.GetCharacter.GetFirstNameNoTooltip] carries a hunter's wiry strength and moves through wild country without a sound.\n\n$gen_race_ties_sylvan$"
 
  trait_phenotype_stocky:0 "Stocky"
- trait_phenotype_stocky_desc:0 "Built low to the ground with broad shoulders and dense bone structure, individuals with this trait possess immense physical stamina and stability."
- trait_phenotype_stocky_character_desc:0 "Built low to the ground with broad shoulders and dense bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] possesses immense physical stamina and stability."
+ trait_phenotype_stocky_desc:0 "Built low to the ground with broad shoulders and dense bone structure, individuals with this trait possess immense physical stamina and stability.\n\n$gen_race_ties_stocky$"
+ trait_phenotype_stocky_character_desc:0 "Built low to the ground with broad shoulders and dense bone structure, [ROOT.GetCharacter.GetFirstNameNoTooltip] possesses immense physical stamina and stability.\n\n$gen_race_ties_stocky$"
 
  trait_phenotype_rough_hewn:0 "Rough-Hewn"
- trait_phenotype_rough_hewn_desc:0 "Marked by a pronounced brow, heavy jaw, and thick skin, individuals with this trait are naturally intimidating and hardened against hardship."
- trait_phenotype_rough_hewn_character_desc:0 "Marked by a pronounced brow, heavy jaw, and thick skin, [ROOT.GetCharacter.GetFirstNameNoTooltip] is naturally intimidating and hardened against hardship."
+ trait_phenotype_rough_hewn_desc:0 "Marked by a pronounced brow, heavy jaw, and thick skin, individuals with this trait are naturally intimidating and hardened against hardship. Few of them live to grow old; the ones who do have usually earned it.\n\n$gen_race_ties_rough_hewn$"
+ trait_phenotype_rough_hewn_character_desc:0 "Marked by a pronounced brow, heavy jaw, and thick skin, [ROOT.GetCharacter.GetFirstNameNoTooltip] is naturally intimidating and hardened against hardship. Few orcs live to grow old; the ones who do have usually earned it.\n\n$gen_race_ties_rough_hewn$"
 
  trait_phenotype_towering:0 "Towering"
- trait_phenotype_towering_desc:0 "Standing heads above others with massive physical reach, individuals with this trait command an overwhelming presence on and off the battlefield."
- trait_phenotype_towering_character_desc:0 "Standing heads above others with massive physical reach, [ROOT.GetCharacter.GetFirstNameNoTooltip] commands an overwhelming presence on and off the battlefield."
+ trait_phenotype_towering_desc:0 "Standing heads above others with massive physical reach, individuals with this trait command an overwhelming presence on and off the battlefield.\n\n$gen_race_ties_towering$"
+ trait_phenotype_towering_character_desc:0 "Standing heads above others with massive physical reach, [ROOT.GetCharacter.GetFirstNameNoTooltip] commands an overwhelming presence on and off the battlefield.\n\n$gen_race_ties_towering$"
 
  trait_phenotype_diminutive:0 "Diminutive"
- trait_phenotype_diminutive_desc:0 "Small in stature and light of step, individuals with this trait slip through tight spaces and pass unnoticed in a crowd, and make up for their size with a quick mind."
- trait_phenotype_diminutive_character_desc:0 "Small in stature and light of step, [ROOT.GetCharacter.GetFirstNameNoTooltip] slips through tight spaces, passes unnoticed in a crowd, and makes up for [ROOT.GetCharacter.GetHerHis] size with a quick mind."
+ trait_phenotype_diminutive_desc:0 "Small in stature and light of step, individuals with this trait slip through tight spaces and pass unnoticed in a crowd, and make up for their size with a quick mind.\n\n$gen_race_ties_diminutive$"
+ trait_phenotype_diminutive_character_desc:0 "Small in stature and light of step, [ROOT.GetCharacter.GetFirstNameNoTooltip] slips through tight spaces, passes unnoticed in a crowd, and makes up for [ROOT.GetCharacter.GetHerHis] size with a quick mind.\n\n$gen_race_ties_diminutive$"
 
  trait_phenotype_dusk_adapted:0 "Umbral"
- trait_phenotype_dusk_adapted_desc:0 "Born to the twilight of the fens, where mist hangs over the reeds from dusk to dawn, individuals with this trait see clearly in half-light and keep their own counsel, and few secrets get past them."
- trait_phenotype_dusk_adapted_character_desc:0 "Born to the twilight of the fens, where mist hangs over the reeds from dusk to dawn, [ROOT.GetCharacter.GetFirstNameNoTooltip] sees clearly in half-light, keeps [ROOT.GetCharacter.GetHerHis] own counsel, and lets few secrets slip past."
+ trait_phenotype_dusk_adapted_desc:0 "Born to the twilight of the fens, where mist hangs over the reeds from dusk to dawn, individuals with this trait see clearly in half-light and keep their own counsel, and few secrets get past them.\n\n$gen_race_ties_dusk_adapted$"
+ trait_phenotype_dusk_adapted_character_desc:0 "Born to the twilight of the fens, where mist hangs over the reeds from dusk to dawn, [ROOT.GetCharacter.GetFirstNameNoTooltip] sees clearly in half-light, keeps [ROOT.GetCharacter.GetHerHis] own counsel, and lets few secrets slip past.\n\n$gen_race_ties_dusk_adapted$"
 
  trait_phenotype_horned:0 "Horned"
- trait_phenotype_horned_desc:0 "Born of the horned people, herders of the high pastures and the open steppe. Their horns grow from the brow in childhood and are as ordinary among their own kind as a beard is to others."
- trait_phenotype_horned_character_desc:0 "Born of the horned people, [ROOT.GetCharacter.GetFirstNameNoTooltip] carries the horns of [ROOT.GetCharacter.GetHerHis] kin and the hardiness of a life spent with the herds."
+ trait_phenotype_horned_desc:0 "Born of the horned people, herders of the high pastures and the open steppe. Their horns grow from the brow in childhood and are as ordinary among their own kind as a beard is to others.\n\n$gen_race_ties_horned$"
+ trait_phenotype_horned_character_desc:0 "Born of the horned people, [ROOT.GetCharacter.GetFirstNameNoTooltip] carries the horns of [ROOT.GetCharacter.GetHerHis] kin and the hardiness of a life spent with the herds.\n\n$gen_race_ties_horned$"
+
+ # RACE TIES: a readable copy of the `compatibility` blocks in common/traits/00_phenotype_traits.txt,
+ # appended to both descriptions of each race trait. Keep in step with that file by hand.
+ # Kin = @race_kin (+15), friendly = @race_warm (+5), wary = @race_cool (-5), hostile = @race_hostile (-15).
+ gen_race_ties_human:0 "#weak Friendly to $trait_phenotype_human$ and $trait_phenotype_diminutive$ folk. Wary of $trait_phenotype_rough_hewn$ and $trait_phenotype_dusk_adapted$ folk.#!"
+ gen_race_ties_gracile:0 "#weak Kin to other $trait_phenotype_gracile$ folk. Friendly to $trait_phenotype_sylvan$ folk. Wary of $trait_phenotype_stocky$ folk. Hostile to $trait_phenotype_rough_hewn$ and $trait_phenotype_dusk_adapted$ folk.#!"
+ gen_race_ties_sylvan:0 "#weak Kin to other $trait_phenotype_sylvan$ folk. Friendly to $trait_phenotype_gracile$ folk. Wary of $trait_phenotype_stocky$ and $trait_phenotype_dusk_adapted$ folk. Hostile to $trait_phenotype_rough_hewn$ folk.#!"
+ gen_race_ties_stocky:0 "#weak Kin to other $trait_phenotype_stocky$ folk. Friendly to $trait_phenotype_diminutive$ folk. Wary of $trait_phenotype_gracile$, $trait_phenotype_sylvan$ and $trait_phenotype_towering$ folk. Hostile to $trait_phenotype_rough_hewn$ folk.#!"
+ gen_race_ties_rough_hewn:0 "#weak Friendly to $trait_phenotype_rough_hewn$ and $trait_phenotype_towering$ folk. Wary of $trait_phenotype_human$ and $trait_phenotype_diminutive$ folk. Hostile to $trait_phenotype_gracile$, $trait_phenotype_sylvan$ and $trait_phenotype_stocky$ folk.#!"
+ gen_race_ties_towering:0 "#weak Friendly to $trait_phenotype_towering$ and $trait_phenotype_rough_hewn$ folk. Wary of $trait_phenotype_diminutive$ folk.#!"
+ gen_race_ties_diminutive:0 "#weak Kin to $trait_phenotype_stocky$ folk. Friendly to $trait_phenotype_diminutive$ and $trait_phenotype_human$ folk. Wary of $trait_phenotype_towering$ and $trait_phenotype_rough_hewn$ folk.#!"
+ gen_race_ties_dusk_adapted:0 "#weak Kin to other $trait_phenotype_dusk_adapted$ folk. Wary of $trait_phenotype_human$ and $trait_phenotype_sylvan$ folk. Hostile to $trait_phenotype_gracile$ folk.#!"
+ gen_race_ties_horned:0 "#weak Kin to other $trait_phenotype_horned$ folk. Wary of $trait_phenotype_human$, $trait_phenotype_gracile$, $trait_phenotype_stocky$ and $trait_phenotype_diminutive$ folk.#!"
 
  # HORNBORN
  trait_hornborn:0 "Hornborn"
@@ -54,4 +67,6 @@
 
  # Marriage stuff
  AI_DIFFERENT_RACE_MARRIAGE_PENALTY:0 "Different Heritage/Race: $VALUE|=+0$"
+ AI_FRIENDLY_RACE_MARRIAGE_PENALTY:0 "Different Race, Friendly Peoples: $VALUE|=+0$"
+ AI_HOSTILE_RACE_MARRIAGE_PENALTY:0 "Different Race, Old Enemies: $VALUE|=+0$"
  AI_HORNS_SHOWING_MARRIAGE_PENALTY:0 "Hornborn, Horns Showing: $VALUE|=+0$"

@@ -729,7 +729,7 @@ public static partial class ContentWriter
         var bookmarkResult = Core.Stage.Detail("  · bookmarks", () => BookmarkWriter.WriteAll(
             modDir, gameDir, cfg, provinces, order, empires,
             realms, development, cultures, governments, wilderness, prehistory,
-            rulers, azgaar, calendar));
+            rulers, azgaar, calendar, flatmap));
 
         // Kept for the editor: re-emitting a ruler means re-emitting the bookmark that
         // describes him, and the cast is the record of who that is.
@@ -779,7 +779,8 @@ public static partial class ContentWriter
 
         WarWriter.WriteAll(modDir, prehistory, cfg);
         Core.Stage.Detail("  · portraits", () => PortraitWriter.WriteAll(
-            modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities, cfg.Seed));
+            modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities,
+            RaceMorphWriter.RacesOn(cfg), cfg.Seed));
 
         return new HistoryLayer(prehistory, rulers, bookmarks, artifactCount, struggleCount);
     }

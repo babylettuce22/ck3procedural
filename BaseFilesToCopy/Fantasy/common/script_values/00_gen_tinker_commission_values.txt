@@ -1,0 +1,142 @@
+﻿# Gnome Tinkering, commissions: the price of hiring a gnome. See 00_gen_tinker_commission_triggers.txt
+# for the commission pieces.
+#
+# Price = materials + fee. Materials are the same cost the maker would pay at their own bench
+# (gen_tk_cost_<project>_value, 00_gen_tinker_cost_values.txt, read with the PAYER as root, so a king
+# pays a king's price); they are spent. The fee goes to the tinkerer: 30% of the materials plus 25,
+# more from a proven maker (40% for a Tinkerer, 50% for a Master Artificer).
+#
+# All read with the ACTOR (patron) as root, inside the commission interaction: scope:recipient is the
+# tinkerer, and the project is whichever send option is ticked (scope:gen_tk_opt_<project> = yes).
+
+gen_tk_commission_fee_factor_value = {
+	value = 0.3
+	if = {
+		limit = { scope:recipient ?= { has_character_modifier = gen_tk_master_artificer_modifier } }
+		add = 0.2
+	}
+	else_if = {
+		limit = { scope:recipient ?= { has_character_modifier = gen_tk_tinkerer_modifier } }
+		add = 0.1
+	}
+}
+
+# The full price of each project, for the option labels.
+gen_tk_commission_price_curio_value = {
+	value = gen_tk_cost_curio_value
+	multiply = gen_tk_commission_fee_factor_value
+	add = 25
+	add = gen_tk_cost_curio_value
+	round = yes
+}
+
+gen_tk_commission_price_mill_value = {
+	value = gen_tk_cost_mill_value
+	multiply = gen_tk_commission_fee_factor_value
+	add = 25
+	add = gen_tk_cost_mill_value
+	round = yes
+}
+
+gen_tk_commission_price_engine_value = {
+	value = gen_tk_cost_engine_value
+	multiply = gen_tk_commission_fee_factor_value
+	add = 25
+	add = gen_tk_cost_engine_value
+	round = yes
+}
+
+gen_tk_commission_price_limb_value = {
+	value = gen_tk_cost_limb_value
+	multiply = gen_tk_commission_fee_factor_value
+	add = 25
+	add = gen_tk_cost_limb_value
+	round = yes
+}
+
+# The materials of the ticked project (spent).
+gen_tk_commission_materials_value = {
+	value = 0
+	if = {
+		limit = { scope:gen_tk_opt_curio ?= yes }
+		add = gen_tk_cost_curio_value
+	}
+	else_if = {
+		limit = { scope:gen_tk_opt_mill ?= yes }
+		add = gen_tk_cost_mill_value
+	}
+	else_if = {
+		limit = { scope:gen_tk_opt_engine ?= yes }
+		add = gen_tk_cost_engine_value
+	}
+	else_if = {
+		limit = { scope:gen_tk_opt_limb ?= yes }
+		add = gen_tk_cost_limb_value
+	}
+	round = yes
+}
+
+# The fee of the ticked project (paid to the tinkerer).
+gen_tk_commission_fee_value = {
+	value = gen_tk_commission_materials_value
+	multiply = gen_tk_commission_fee_factor_value
+	add = 25
+	round = yes
+}
+
+# Everything the patron hands over.
+gen_tk_commission_price_value = {
+	value = gen_tk_commission_materials_value
+	add = gen_tk_commission_fee_value
+}
+
+# What the fee does for the tinkerer's willingness (ai_accept): +1 per 5 gold, at most +20.
+gen_tk_commission_fee_accept_value = {
+	value = gen_tk_commission_fee_value
+	divide = 5
+	max = 20
+	round = yes
+}
+
+# ---------------------------------------------------------------- Read on the TINKERER
+# From the bookkeeping the interaction leaves on them (gen_tk_commission_record_effect).
+
+# Half the price comes back when a commission is lost (the unused stock is sold, part of the fee returned).
+gen_tk_commission_refund_value = {
+	value = 0
+	if = {
+		limit = { exists = var:gen_tk_commission_price }
+		add = var:gen_tk_commission_price
+		multiply = 0.5
+	}
+	round = yes
+}
+
+# A patron's thanks at delivery: half the fee again.
+gen_tk_commission_bonus_value = {
+	value = 25
+	if = {
+		limit = { exists = var:gen_tk_commission_fee }
+		value = var:gen_tk_commission_fee
+		multiply = 0.5
+	}
+	min = 10
+	round = yes
+}
+
+# What an angry patron claws back for a dud or a blast: half the fee.
+gen_tk_commission_clawback_value = {
+	value = gen_tk_commission_bonus_value
+}
+
+# What a patron pays to hurry the work (gen_tinker.0402): a quarter of the fee, at least 15.
+gen_tk_commission_rush_value = {
+	value = 15
+	if = {
+		limit = { exists = var:gen_tk_commission_fee }
+		value = var:gen_tk_commission_fee
+		multiply = 0.25
+	}
+	min = 15
+	round = yes
+}

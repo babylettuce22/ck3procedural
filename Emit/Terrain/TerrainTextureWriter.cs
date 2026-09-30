@@ -38,9 +38,10 @@ public static class TerrainTextureWriter
     /// underneath stops deciding anything.
     ///
     /// Was 0 until 2026-09-29, which left the selectors as pure warped fBm: every palette bucket
-    /// edge became a clean contour line, drawn as winding bands. Turned on with
-    /// <see cref="MidDither"/> after rendering drylands against vanilla (ck3devtools/TerrainRender)
-    /// broke the bands into mottling; central and steppe renders came out unchanged.
+    /// edge became a clean contour line, drawn as winding bands. Turned on after rendering drylands
+    /// against vanilla (ck3devtools/TerrainRender) broke the bands into mottling; central and steppe
+    /// renders came out unchanged. It does cost set agreement between neighbours, which
+    /// <see cref="Reconcile"/> has to be strong enough to win back — see <see cref="ReconcileCentre"/>.
     /// </summary>
     private const double MaterialJitter = 0.15;
 
@@ -61,8 +62,13 @@ public static class TerrainTextureWriter
     /// decides the weight ordering that determines which material ends up dominant, and the
     /// dominant is currently sitting where it should. Calibrate against slot 1 at 23.1% and slot 2
     /// at 35.0% of adjacent land pairs, with slot 0 held near 11.3%.
+    ///
+    /// Off again (was 0.10 for part of 2026-09-29). White noise makes neighbouring texels pick
+    /// their sets independently, which is the one thing the shader cannot blend: it alone added a
+    /// quarter of a point of hard swaps. The smooth <see cref="MaterialJitter"/> gives the mottling
+    /// on its own; rendered side by side the drylands were indistinguishable without this.
     /// </summary>
-    private const double MidDither = 0.10;
+    private const double MidDither = 0.0;
 
     /// <summary>
     /// How far a pixel's weights may be scattered about themselves, as a fraction. Only the
@@ -125,6 +131,16 @@ public static class TerrainTextureWriter
     private const double ShoreBlendReach = 4.0;
 
     private static bool IsShore(byte label) => TerrainPalette.TerrainOf(label) is TerrainClass.Sea or TerrainClass.Beach;
+
+    /// <summary>
+    /// Width of the transition where forest meets open ground, in pixels of a reference-width map.
+    /// Vanilla's forest stands have crisp edges; at the biome band's 44 px the canopy washed over
+    /// neighbouring plains, and 65% of our plains lay within 22 px of a forest.
+    /// </summary>
+    private const double ForestBlendReach = 10.0;
+
+    private static bool IsForest(byte label) =>
+        TerrainPalette.TerrainOf(label) is TerrainClass.Forest or TerrainClass.Jungle or TerrainClass.Taiga;
 
     /// <summary>Orthogonal step cost in the chamfer distance transform; diagonal is 4.</summary>
     private const int ChamferOrthogonal = 3;
@@ -264,10 +280,19 @@ public static class TerrainTextureWriter
 
     /// <summary>
     /// Centre tap weight in <see cref="Reconcile"/>, relative to each of the eight neighbours.
-    /// High enough that a texel keeps its own character, low enough that the set it ends up with
-    /// is one its neighbours agree about.
+    ///
+    /// Was 4, which let a texel keep its own set. That held while the palette's input was smooth;
+    /// once the selector jitter and slope stone made neighbouring texels' raw sets disagree more,
+    /// the unmatched weight the shader drops (mean/p95 over land, seed 4242) climbed from 2.58/15
+    /// to 5.32/30 and the blocky stair-step borders came back in game (2026-09-29). An even vote
+    /// over two passes brings it to 3.41/21 and hard swaps from 1.15% to 0.37% of land pairs
+    /// (0.32% before the jitter), with the drylands mottling unchanged in the render.
     /// </summary>
-    private const float ReconcileCentre = 4.0f;
+    private const float ReconcileCentre = 1.0f;
+
+    /// <summary>How many times <see cref="Reconcile"/> runs; each pass spreads agreement one
+    /// texel further. About 0.17 s a pass at 4096x2048.</summary>
+    private const int ReconcilePasses = 2;
 
     /// <summary>
     /// Re-pick every texel's four materials from a vote over its 3x3 neighbourhood, so that
@@ -713,6 +738,67 @@ public static class TerrainTextureWriter
     /// rather than the landform. The result is divided by the span so both callers get the same
     /// units — elevation per pixel — and their percentile thresholds stay comparable.
     /// </summary>
+    /// <summary>
+    /// <see cref="Gradient"/> at a fractional heightmap position, interpolated between the four
+    /// surrounding pixels. At a whole-pixel position it is exactly <see cref="Gradient"/>, so a map
+    /// written at <see cref="DetailScale"/> 1 is unchanged; at 2 the rock and slope stone follow the
+    /// ground between heightmap pixels instead of stepping once per pixel.
+    /// </summary>
+    private static double GradientAt(float[] elevation, int width, int height, double x, double y, int span)
+    {
+        int x0 = Math.Clamp((int)Math.Floor(x), 0, width - 1), y0 = Math.Clamp((int)Math.Floor(y), 0, height - 1);
+        double fx = Math.Clamp(x - x0, 0, 1), fy = Math.Clamp(y - y0, 0, 1);
+        float g00 = Gradient(elevation, width, height, x0, y0, span);
+        if (fx == 0 && fy == 0) return g00;
+        int x1 = Math.Min(width - 1, x0 + 1), y1 = Math.Min(height - 1, y0 + 1);
+        double top = g00 + (Gradient(elevation, width, height, x1, y0, span) - g00) * fx;
+        double g01 = Gradient(elevation, width, height, x0, y1, span);
+        double bottom = g01 + (Gradient(elevation, width, height, x1, y1, span) - g01) * fx;
+        return top + (bottom - top) * fy;
+    }
+
+    /// <summary>Elevation at a fractional heightmap position, bilinear; exact at whole pixels.</summary>
+    private static double ElevationAt(float[] elevation, int width, int height, double x, double y)
+    {
+        int x0 = Math.Clamp((int)Math.Floor(x), 0, width - 1), y0 = Math.Clamp((int)Math.Floor(y), 0, height - 1);
+        double fx = Math.Clamp(x - x0, 0, 1), fy = Math.Clamp(y - y0, 0, 1);
+        float e00 = elevation[(long)y0 * width + x0];
+        if (fx == 0 && fy == 0) return e00;
+        int x1 = Math.Min(width - 1, x0 + 1), y1 = Math.Min(height - 1, y0 + 1);
+        double top = e00 + (elevation[(long)y0 * width + x1] - e00) * fx;
+        double e01 = elevation[(long)y1 * width + x0];
+        double bottom = e01 + (elevation[(long)y1 * width + x1] - e01) * fx;
+        return top + (bottom - top) * fy;
+    }
+
+    /// <summary>
+    /// A boundary distance at a fractional province position, bilinear. Only used above
+    /// <see cref="DetailScale"/> 1: there several output texels fall in one province pixel, and a
+    /// nearest read would give the blend band the province grid's steps back.
+    /// </summary>
+    private static float DistanceAt(ushort[] field, int width, int height, double x, double y)
+    {
+        int x0 = Math.Clamp((int)Math.Floor(x), 0, width - 1), y0 = Math.Clamp((int)Math.Floor(y), 0, height - 1);
+        int x1 = Math.Min(width - 1, x0 + 1), y1 = Math.Min(height - 1, y0 + 1);
+        float fx = (float)Math.Clamp(x - x0, 0, 1), fy = (float)Math.Clamp(y - y0, 0, 1);
+        float top = field[y0 * width + x0] + (field[y0 * width + x1] - field[y0 * width + x0]) * fx;
+        float bottom = field[y1 * width + x0] + (field[y1 * width + x1] - field[y1 * width + x0]) * fx;
+        return top + (bottom - top) * fy;
+    }
+
+    /// <summary>
+    /// Detail texels per province pixel. The detail maps are what CK3 draws the ground's materials
+    /// from, point-sampled, so every texel edge a material enters or leaves at is drawn as a step.
+    /// On a small map the zoom ladder is scaled in (closest 40 units against vanilla's 70) and a
+    /// texel of a 1:1 detail map shows ~1.75x the size of vanilla's — jungle-to-drylands edges, rock
+    /// patches and snow read as blocks up close (user, 2026-09-29). Doubling halves the texel.
+    /// Capped by width: a 9216 map doubled would be 18432, past D3D11's 16384 a side.
+    /// </summary>
+    public static int DetailScale(MapConfig cfg) => cfg.ProvinceWidth <= DetailDoubleMaxWidth ? 2 : 1;
+
+    /// <summary>Widest province map that still gets double-resolution detail maps.</summary>
+    private const int DetailDoubleMaxWidth = 4608;
+
     private static float Gradient(float[] elevation, int width, int height, int x, int y, int span = 1)
     {
         int xm = Math.Max(0, x - span), xp = Math.Min(width - 1, x + span);
@@ -864,7 +950,9 @@ public static class TerrainTextureWriter
         // heightmap, emitting these at heightmap resolution makes CreateTexture2D fail with
         // E_INVALIDARG, CK3 keeps the null pixel buffer, and the loading screen dies on an access
         // violation. Half of 18432 is 9216, which clears it; the full size never will.
-        int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
+        // Small maps get more than province size — see DetailScale.
+        int detailScale = DetailScale(cfg);
+        int width = cfg.ProvinceWidth * detailScale, height = cfg.ProvinceHeight * detailScale;
 
         // The lattice terrain[] and climate[] are indexed on.
         int pWidth = cfg.ProvinceWidth, pHeight = cfg.ProvinceHeight;
@@ -928,6 +1016,7 @@ public static class TerrainTextureWriter
         // seam, so the edge is crisp without being jagged.
         float fieldReach = (float)Math.Max(1.0, cfg.Scaled(FieldBlendReach));
         float shoreReach = (float)Math.Max(1.0, cfg.Scaled(ShoreBlendReach));
+        float forestReach = (float)Math.Max(1.0, cfg.Scaled(ForestBlendReach));
 
         // The scale the band's own edge wanders at, and the scale it is dithered at. Deliberately
         // far apart: the first decides where one biome fingers into the next, which happens over
@@ -1026,7 +1115,9 @@ public static class TerrainTextureWriter
                 for (int x = 0; x < width; x++)
                 {
                     double hx = x * toHeightX;
-                    double relief = (elevation[elevRow + Math.Clamp((int)hx, 0, hWidth - 1)] - sea)
+                    double relief = ((detailScale > 1
+                                        ? ElevationAt(elevation, hWidth, hHeight, hx, hy)
+                                        : elevation[elevRow + Math.Clamp((int)hx, 0, hWidth - 1)]) - sea)
                                     / (double)Math.Max(1, mountains - sea);
 
                     // Multi-scale domain warping
@@ -1041,9 +1132,11 @@ public static class TerrainTextureWriter
                     // srcY, not y: the image runs top-down and the map runs bottom-up, and these
                     // two fields are shared with the tree scatter, which works in map space. Sampling
                     // at the image row would mirror the canopy against the trees standing in it.
-                    double canopyDensity = CanopyField.At(canopyField, x, srcY);
-                    double zoneA = ZoneField.Primary(zoneField, x, srcY);
-                    double zoneB = ZoneField.Secondary(zoneField, x, srcY);
+                    // Both fields are province-sized; divided back down when the detail maps are larger.
+                    int fieldX = x / detailScale, fieldY = srcY / detailScale;
+                    double canopyDensity = CanopyField.At(canopyField, fieldX, fieldY);
+                    double zoneA = ZoneField.Primary(zoneField, fieldX, fieldY);
+                    double zoneB = ZoneField.Secondary(zoneField, fieldX, fieldY);
 
                     double nA = Math.Clamp(Field.Fbm(nAField, wx * fA, wy * fA, 3) * 0.5 + 0.5, 0, 1);
                     double nB = Math.Clamp(Field.Fbm(nBField, wx * fB + 31.7, wy * fB - 19.3, 3) * 0.5 + 0.5, 0, 1);
@@ -1097,23 +1190,35 @@ public static class TerrainTextureWriter
                     // the pixel actually is, and the warp only moves boundaries between land kinds.
                     int pHere = Math.Clamp((int)Math.Round(hy * scaleY), 0, pHeight - 1) * pWidth
                               + Math.Clamp((int)Math.Round(hx * scaleX), 0, pWidth - 1);
-                    if (IsShore(label[pSrc]) || IsShore(label[pHere])) pSrc = pHere;
+
+                    // Where pSrc sits in province space, unrounded, for the band distance.
+                    double srcPx = wx * scaleX, srcPy = wy * scaleY;
+                    if (IsShore(label[pSrc]) || IsShore(label[pHere]))
+                    {
+                        pSrc = pHere;
+                        srcPx = hx * scaleX;
+                        srcPy = hy * scaleY;
+                    }
 
                     // Sampled at the pixel's own coordinate, not the warped one: the warp decides
                     // which ground this pixel is standing on, but how broken that ground is has to
                     // be read where the pixel actually is or the rock lands beside the slope
                     // instead of on it — the same reason the cliff test below is unwarped.
                     double rugged = hasRelief
-                        ? Smooth(Math.Clamp((Gradient(elevation, hWidth, hHeight,
-                            Math.Clamp((int)hx, 0, hWidth - 1),
-                            Math.Clamp((int)hy, 0, hHeight - 1), ruggedSpan) - ruggedLo)
+                        ? Smooth(Math.Clamp(((detailScale > 1
+                            ? GradientAt(elevation, hWidth, hHeight, hx, hy, ruggedSpan)
+                            : Gradient(elevation, hWidth, hHeight,
+                                Math.Clamp((int)hx, 0, hWidth - 1),
+                                Math.Clamp((int)hy, 0, hHeight - 1), ruggedSpan)) - ruggedLo)
                             / ruggedRange, 0, 1))
                         : 0.0;
 
                     double slope = slopeLo < float.MaxValue
-                        ? Smooth(Math.Clamp((Gradient(elevation, hWidth, hHeight,
-                            Math.Clamp((int)hx, 0, hWidth - 1),
-                            Math.Clamp((int)hy, 0, hHeight - 1), slopeSpan) - slopeLo)
+                        ? Smooth(Math.Clamp(((detailScale > 1
+                            ? GradientAt(elevation, hWidth, hHeight, hx, hy, slopeSpan)
+                            : Gradient(elevation, hWidth, hHeight,
+                                Math.Clamp((int)hx, 0, hWidth - 1),
+                                Math.Clamp((int)hy, 0, hHeight - 1), slopeSpan)) - slopeLo)
                             / slopeRange, 0, 1))
                         : 0.0;
 
@@ -1157,12 +1262,17 @@ public static class TerrainTextureWriter
                     // as a dirt ribbon. Per neighbour, because a pixel near both a coast and a
                     // biome edge should still get the biome's full band.
                     bool shoreSelf = IsShore(self);
+                    bool forestSelf = IsForest(self);
                     float reach = fieldEdge ? fieldReach
-                        : shoreSelf || IsShore(boundaryOther[pSrc]) ? shoreReach : blendReach;
+                        : shoreSelf || IsShore(boundaryOther[pSrc]) ? shoreReach
+                        : forestSelf != IsForest(boundaryOther[pSrc]) ? forestReach : blendReach;
                     float reach2 = fieldEdge ? fieldReach
-                        : shoreSelf || IsShore(boundaryOther2[pSrc]) ? shoreReach : blendReach;
+                        : shoreSelf || IsShore(boundaryOther2[pSrc]) ? shoreReach
+                        : forestSelf != IsForest(boundaryOther2[pSrc]) ? forestReach : blendReach;
 
-                    float edge = boundaryDistance[pSrc] * (1f / ChamferOrthogonal);
+                    float edge = (detailScale > 1
+                        ? DistanceAt(boundaryDistance, pWidth, pHeight, srcPx, srcPy)
+                        : boundaryDistance[pSrc]) * (1f / ChamferOrthogonal);
                     if (edge < Math.Max(reach, reach2))
                     {
                         // Push the band in and out along its length so it is not a uniform ribbon.
@@ -1191,7 +1301,9 @@ public static class TerrainTextureWriter
                         // them independently would put a step back in: the two would cross at a
                         // different place than their true distances say, and the crossing is
                         // the whole thing being smoothed here.
-                        float edge2 = boundaryDistance2[pSrc] * (1f / ChamferOrthogonal)
+                        float edge2 = (detailScale > 1
+                            ? DistanceAt(boundaryDistance2, pWidth, pHeight, srcPx, srcPy)
+                            : boundaryDistance2[pSrc]) * (1f / ChamferOrthogonal)
                                     + displace * reach2;
 
                         if (edge < reach || edge2 < reach2)
@@ -1261,9 +1373,11 @@ public static class TerrainTextureWriter
                         byte coast = coastDistance[pSrc];
                         if (coast >= 1 && coast <= cliffReach)
                         {
-                            float g = Gradient(elevation, hWidth, hHeight,
-                                Math.Clamp((int)hx, 0, hWidth - 1),
-                                Math.Clamp((int)hy, 0, hHeight - 1));
+                            float g = detailScale > 1
+                                ? (float)GradientAt(elevation, hWidth, hHeight, hx, hy, 1)
+                                : Gradient(elevation, hWidth, hHeight,
+                                    Math.Clamp((int)hx, 0, hWidth - 1),
+                                    Math.Clamp((int)hy, 0, hHeight - 1));
 
                             if (g > cliffStart)
                             {
@@ -1330,7 +1444,8 @@ public static class TerrainTextureWriter
 
             Core.Stage.Detail("  · reconcile + scatter", () =>
             {
-                Reconcile(index, intensity, width, height);
+                for (int pass = 0; pass < ReconcilePasses; pass++)
+                    Reconcile(index, intensity, width, height);
                 ScatterWeights(index, intensity, width, height, 0.3);
             });
 
@@ -1353,21 +1468,24 @@ public static class TerrainTextureWriter
             : $"  terrain: coastal cliffs from gradient {cliffStart:F1} (full at {cliffFull:F1}), " +
               $"within {cliffReach} px of water");
 
-        // colormap.dds
+        // colormap.dds — always province-sized: CK3 samples it bilinearly, so it has no texel
+        // steps to hide, and GroundColor reads the province-sized terrain raster per pixel.
         {
-            var colormap = new byte[(long)width * height * 4];
-            var colormapLand = new bool[(long)width * height];
+            int cw = pWidth, ch = pHeight;
+            double cToHeightX = (double)hWidth / cw, cToHeightY = (double)hHeight / ch;
+            var colormap = new byte[(long)cw * ch * 4];
+            var colormapLand = new bool[(long)cw * ch];
 
-            Parallel.For(0, height, y =>
+            Parallel.For(0, ch, y =>
             {
-                long row = (long)y * width * 4;
+                long row = (long)y * cw * 4;
 
-                double hy = y * toHeightY;
+                double hy = y * cToHeightY;
                 long elevRow = (long)Math.Clamp((int)hy, 0, hHeight - 1) * hWidth;
 
-                for (int x = 0; x < width; x++)
+                for (int x = 0; x < cw; x++)
                 {
-                    double hx = x * toHeightX;
+                    double hx = x * cToHeightX;
 
                     // Sampled straight, not bilinearly. The bilinear this replaces could never do
                     // anything: gx worked out to hx * (pWidth / hWidth) with hx = x * (hWidth /
@@ -1387,17 +1505,18 @@ public static class TerrainTextureWriter
                     colormap[o + 2] = c.R;
                     colormap[o + 3] = 255;
 
-                    colormapLand[(long)y * width + x] = elev > sea;
+                    colormapLand[(long)y * cw + x] = elev > sea;
                 }
             });
 
             int softening = Math.Max(1, (int)Math.Round(cfg.Scaled(ColormapSoftening)));
             Core.Stage.Detail("  · colormap smooth",
-                () => SmoothColormap(colormap, colormapLand, width, height, softening));
-            ToVanillaEnvelope(colormap, colormapLand, width, height);
+                () => SmoothColormap(colormap, colormapLand, cw, ch, softening));
+            ToVanillaEnvelope(colormap, colormapLand, cw, ch);
 
             Core.Stage.Detail("  · colormap encode",
-                () => DdsWriter.WriteBgra(Path.Combine(dir, "colormap.dds"), width, height, colormap));
+                () => DdsWriter.WriteCompressed(Path.Combine(dir, "colormap.dds"), cw, ch, colormap,
+                    alpha: true, mips: true));
         }
 
         // No flat map here. This used to render a flat parchment — sea one shade, land another —
@@ -1407,7 +1526,7 @@ public static class TerrainTextureWriter
         // bookmark background, so the two writers racing over one path is a correctness hazard the
         // moment anything here stops being strictly sequential. FlatmapWriter owns the file.
 
-        Console.WriteLine($"  terrain: colormap {width}x{height}");
+        Console.WriteLine($"  terrain: colormap {pWidth}x{pHeight}");
     }
 
     private static double Selector(SimplexNoise field, double x, double y)

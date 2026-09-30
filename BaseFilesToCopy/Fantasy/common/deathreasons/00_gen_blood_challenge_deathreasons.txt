@@ -1,0 +1,22 @@
+﻿# Deaths in the aftermath of a Blood Challenge (events/gen_blood_challenge_aftermath_events.txt).
+#
+# Both are given with a killer by gen_bc_ab_kill_effect (00_gen_blood_challenge_aftermath_effects.txt),
+# so the chronicle reads "... by [killer]". A downed fighter whose extra wound kills them goes
+# through vanilla increase_wounds_effect instead, which uses vanilla death_duel.
+#
+# Shaped like vanilla death_duel (G/common/deathreasons/00_event_deaths.txt): public, murder icon,
+# the killer's equipped weapon shown.
+
+# Killed in the circle after refusing to stay down (a Blood Rage, a hidden knife, a howl, an insult).
+gen_bc_death_blood_challenge = {
+	public_knowledge = yes
+	icon = "death_murder.dds"
+	use_equipped_artifact_in_slot = weapon
+}
+
+# Beaten, then killed on the victor's verdict (gen_blood_challenge.0301, "Finish It").
+gen_bc_death_finished = {
+	public_knowledge = yes
+	icon = "death_murder.dds"
+	use_equipped_artifact_in_slot = weapon
+}

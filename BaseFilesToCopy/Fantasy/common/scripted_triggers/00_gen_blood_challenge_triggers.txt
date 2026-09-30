@@ -1,0 +1,117 @@
+﻿# The Blood Challenge: who may call whom into the circle, and what kind of fight it is.
+#
+# The pieces:
+#   common/culture/traditions/00_gen_blood_right_tradition.txt  — the Blood Right (parameter gen_blood_right)
+#   common/character_interactions/00_gen_blood_challenge_interactions.txt — the challenge itself
+#   common/scripted_effects/00_gen_blood_challenge_effects.txt  — starting the bout, the stakes, the tally
+#   events/gen_blood_challenge_events.txt        — the output, invalidation and resolution events
+#   events/gen_blood_challenge_scene_events.txt  — the pre-fight scene and its stances (0010–0099)
+#   events/gen_blood_challenge_aftermath_events.txt — the loser's last choice and the verdict (0200–0399)
+# The fight is vanilla's single combat (configure_start_single_combat_effect).
+
+# A character whose culture keeps the Blood Right.
+gen_bc_follows_blood_right_trigger = {
+	culture ?= { has_cultural_parameter = gen_blood_right }
+}
+
+# Both sides of scope:actor -> scope:recipient keep the custom, rule land, and are real rulers. The
+# wilderness and ruins dummies are tested by government FLAG, which is safe on a world that ships no
+# wilderness set (an unknown flag is simply never held).
+gen_bc_both_in_the_custom_trigger = {
+	scope:actor = {
+		gen_bc_follows_blood_right_trigger = yes
+		is_landed = yes
+	}
+	scope:recipient = {
+		gen_bc_follows_blood_right_trigger = yes
+		is_landed = yes
+		NOT = { government_has_flag = government_is_wilderness }
+	}
+}
+
+# Close enough to matter: the liege, a direct vassal, someone under the same top liege, the ruler of a
+# bordering realm, or a rival anywhere. Keeps an orc from calling out a stranger across the world.
+gen_bc_within_reach_trigger = {
+	OR = {
+		scope:actor.liege ?= scope:recipient
+		scope:recipient.liege ?= scope:actor
+		scope:actor.top_liege = scope:recipient.top_liege
+		scope:actor = { has_relation_rival = scope:recipient }
+		scope:actor.top_liege = {
+			any_neighboring_top_liege_realm_owner = { this = scope:recipient.top_liege }
+		}
+	}
+}
+
+# The three kinds (see the table in 00_gen_blood_challenge_effects.txt). Downward first: a direct
+# vassal. Upward: the liege, or anyone whose highest title outranks the actor's. Peer: the rest, but
+# never more than one tier below — a king calling out a foreign baron is not a challenge, it is a
+# beating.
+gen_bc_is_downward_trigger = {
+	scope:recipient.liege ?= scope:actor
+}
+
+gen_bc_is_upward_trigger = {
+	NOT = { gen_bc_is_downward_trigger = yes }
+	OR = {
+		scope:actor.liege ?= scope:recipient
+		scope:recipient.highest_held_title_tier > scope:actor.highest_held_title_tier
+	}
+}
+
+gen_bc_is_peer_trigger = {
+	NOT = { gen_bc_is_downward_trigger = yes }
+	NOT = { gen_bc_is_upward_trigger = yes }
+	scope:recipient.highest_held_title_tier >= {
+		value = scope:actor.highest_held_title_tier
+		subtract = 1
+	}
+}
+
+# Not already in a circle: set when a challenge is accepted, cleared when it resolves (and after 90
+# days in any case, so a chain the engine drops can never lock anyone out for good).
+gen_bc_free_to_fight_trigger = {
+	NOT = { has_character_flag = gen_bc_in_challenge }
+}
+
+# A title a win can earn CLAIMANT a claim on: at most one tier above the claimant's own highest,
+# above barony, not titular, and not already claimed. Evaluated in the scope of the TITLE (inside
+# ordered_held_title / any_held_title over the ruler who would lose it). Two users: a challenger
+# beating a greater ruler (CLAIMANT = scope:actor, titles of scope:recipient), and a vassal beating
+# the liege who called them out (CLAIMANT = scope:recipient, titles of scope:actor).
+gen_bc_claimable_title_trigger = {
+	tier >= tier_county
+	is_titular = no
+	tier <= {
+		value = $CLAIMANT$.highest_held_title_tier
+		add = 1
+	}
+	NOT = { $CLAIMANT$ = { has_claim_on = prev } }
+}
+
+# Whether this downward challenge puts one of the liege's titles at stake (see above).
+gen_bc_liege_title_at_stake_trigger = {
+	gen_bc_is_downward_trigger = yes
+	scope:actor = {
+		any_held_title = { gen_bc_claimable_title_trigger = { CLAIMANT = scope:recipient } }
+	}
+}
+
+# A vassal in good standing with the liege calling them out (scope:actor -> scope:recipient): not in
+# a faction, not someone the liege could lawfully jail, not a rival, and not hostile. Calling such a
+# vassal into the circle is a bully's act and costs the liege a little tyranny.
+gen_bc_vassal_in_good_standing_trigger = {
+	gen_bc_is_downward_trigger = yes
+	scope:recipient = {
+		NOT = { exists = joined_faction }
+		NOT = { has_relation_rival = scope:actor }
+		NOT = { has_relation_nemesis = scope:actor }
+		opinion = {
+			target = scope:actor
+			value >= 0
+		}
+	}
+	scope:actor = {
+		NOT = { has_imprisonment_reason = scope:recipient }
+	}
+}

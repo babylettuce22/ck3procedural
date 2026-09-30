@@ -1,0 +1,446 @@
+﻿# Gnome Tinkering: the test's bookkeeping and what each result does. See 00_gen_tinker_triggers.txt for
+# the map of the system.
+#
+# All of these run on the TINKERER (root of gen_tinker.0300–0399). What the bench makes goes to
+# scope:gen_tk_beneficiary (saved by gen_tk_final_roll_effect: the patron of a commission, else the maker).
+#
+# State the test adds to the tinkerer, on top of main's (00_gen_tinker_effects.txt), all cleared by
+# gen_tk_clear_test_state_effect before gen_tk_finish_project_effect:
+#   var:gen_tk_audience    flag:court (prestige at the test doubled) / flag:night (halved); unset = normal
+#   var:gen_tk_lever       flag:apprentice when the apprentice pulls the lever; unset = the maker does
+#   flag gen_tk_test_tweaked   the last-adjustment option has been taken (it can be taken once)
+#   flag gen_tk_test_crack     the cracked-part scene has added its risk (so a re-fire does not add it twice)
+#
+# Scopes the outcome event saves in its immediate (gen_tk_roll_outcome_details_effect), so the event text
+# can say what happened before the option applies it:
+#   scope:gen_tk_apprentice_char   the apprentice, if one is at the bench and alive
+#   scope:gen_tk_at_lever          who stood at the lever (explosions only)
+#   scope:gen_tk_burned            the blast left burns bad enough to disfigure (explosions only)
+#   scope:gen_tk_ruins             the blast wrecked the workshop (explosions only)
+#   scope:gen_tk_apprentice_hurt   the apprentice standing by was hurt, not just frightened (explosions only)
+
+# ================================================================= The test's own state
+
+# The apprentice, if they are still at the bench. Saved for portraits and outcomes.
+gen_tk_save_apprentice_effect = {
+	if = {
+		limit = {
+			exists = var:gen_tk_apprentice
+			var:gen_tk_apprentice = {
+				is_alive = yes
+				is_imprisoned = no
+				NOT = { has_trait = incapable }
+				is_courtier_of = root
+			}
+		}
+		var:gen_tk_apprentice = { save_scope_as = gen_tk_apprentice_char }
+	}
+	# One who has died, been jailed or left the court is no longer at the bench.
+	else_if = {
+		limit = { exists = var:gen_tk_apprentice }
+		remove_variable = gen_tk_apprentice
+	}
+}
+
+# Everything the test added to the tinkerer. Before gen_tk_finish_project_effect. Hidden: bookkeeping,
+# run from the outcome option, whose tooltip should show only what the player gets.
+gen_tk_clear_test_state_effect = {
+	hidden_effect = {
+		remove_variable = gen_tk_audience
+		remove_variable = gen_tk_lever
+		remove_character_flag = gen_tk_test_tweaked
+		remove_character_flag = gen_tk_test_crack
+	}
+}
+
+# ================================================================= The outcome's dice
+
+# The outcome event's immediate: roll the details of an explosion now, so the text can tell them.
+gen_tk_roll_outcome_details_effect = {
+	gen_tk_save_apprentice_effect = yes
+	if = {
+		limit = { scope:gen_tk_result ?= flag:explodes }
+		# Who took the blast.
+		if = {
+			limit = {
+				var:gen_tk_lever ?= flag:apprentice
+				exists = scope:gen_tk_apprentice_char
+			}
+			scope:gen_tk_apprentice_char = { save_scope_as = gen_tk_at_lever }
+		}
+		else = {
+			save_scope_as = gen_tk_at_lever
+		}
+		# One in five blasts leaves burns that never fade.
+		random_list = {
+			20 = {
+				trigger = {
+					scope:gen_tk_at_lever = { NOT = { has_trait = disfigured } }
+				}
+				save_scope_value_as = { name = gen_tk_burned value = yes }
+			}
+			80 = { }
+		}
+		# Half of them take the workshop with them (only a landed maker has a workshop to lose).
+		random_list = {
+			50 = {
+				trigger = { exists = capital_county }
+				save_scope_value_as = { name = gen_tk_ruins value = yes }
+			}
+			50 = { }
+		}
+		# An apprentice standing by is hurt half the time, and badly frightened the other half.
+		if = {
+			limit = {
+				exists = scope:gen_tk_apprentice_char
+				NOT = { scope:gen_tk_at_lever = scope:gen_tk_apprentice_char }
+			}
+			random_list = {
+				50 = { save_scope_value_as = { name = gen_tk_apprentice_hurt value = yes } }
+				50 = { }
+			}
+		}
+	}
+}
+
+# ================================================================= Applying the result
+
+# The outcome event's option. Prestige for the maker, the thing itself for the beneficiary.
+gen_tk_apply_outcome_effect = {
+	# Re-read who receives it: a player can leave the outcome open, and a patron who has died since
+	# the roll leaves the contraption with its maker.
+	gen_tk_save_beneficiary_effect = yes
+	add_prestige = gen_tk_outcome_prestige_value
+	if = {
+		limit = {
+			OR = {
+				scope:gen_tk_result ?= flag:masterwork
+				scope:gen_tk_result ?= flag:works
+			}
+		}
+		if = {
+			limit = { gen_tk_project_is_trigger = { PROJECT = flag:curio } }
+			gen_tk_deliver_curio_effect = yes
+		}
+		else_if = {
+			limit = { gen_tk_project_is_trigger = { PROJECT = flag:mill } }
+			gen_tk_deliver_mill_effect = yes
+		}
+		else_if = {
+			limit = { gen_tk_project_is_trigger = { PROJECT = flag:engine } }
+			gen_tk_deliver_engine_effect = yes
+		}
+		else_if = {
+			limit = { gen_tk_project_is_trigger = { PROJECT = flag:limb } }
+			gen_tk_deliver_limb_effect = yes
+		}
+		else_if = {
+			limit = { gen_tk_project_is_trigger = { PROJECT = flag:invention } }
+			gen_tk_deliver_invention_effect = yes
+		}
+		gen_tk_reward_apprentice_effect = yes
+	}
+	else_if = {
+		limit = { scope:gen_tk_result ?= flag:dud }
+		# Hauling the thing out of the yard.
+		custom_tooltip = gen_tk_dud_haul.tt
+		remove_short_term_gold = tiny_gold_value
+	}
+	else = {
+		gen_tk_explosion_effect = yes
+	}
+}
+
+# ---------------------------------------------------------------- Curio
+# A clockwork orrery for a ruler with a royal court (vanilla's armillary-sphere model, a court sculpture
+# piece; Fate of Iberia art), else a clockwork songbird trinket (vanilla's toy). Quality + wealth set the
+# rarity: masterwork 85 + 60 = 145 (famed), works 50 + 35 = 85 (masterwork).
+gen_tk_deliver_curio_effect = {
+	scope:gen_tk_beneficiary = {
+		# Vanilla's feature selection reads scope:owner and scope:wealth (see set_artifact_rarity_famed).
+		save_scope_as = owner
+		if = {
+			limit = { scope:gen_tk_result ?= flag:masterwork }
+			save_scope_value_as = { name = quality value = 85 }
+			save_scope_value_as = { name = wealth value = 60 }
+		}
+		else = {
+			save_scope_value_as = { name = quality value = 50 }
+			save_scope_value_as = { name = wealth value = 35 }
+		}
+		if = {
+			limit = {
+				has_dlc_feature = royal_court
+				has_royal_court = yes
+				has_fp2_dlc_trigger = yes
+			}
+			if = {
+				limit = { scope:gen_tk_result ?= flag:masterwork }
+				create_artifact = {
+					name = gen_tk_curio_orrery_masterwork_name
+					description = gen_tk_curio_orrery_desc
+					type = scientific_apparatus
+					visuals = fp2_armillary_sphere
+					creator = root
+					quality = scope:quality
+					wealth = scope:wealth
+					modifier = gen_tk_curio_orrery_masterwork_modifier
+					history = {
+						type = created
+						actor = root
+						recipient = scope:owner
+					}
+					save_scope_as = gen_tk_new_curio
+				}
+			}
+			else = {
+				create_artifact = {
+					name = gen_tk_curio_orrery_name
+					description = gen_tk_curio_orrery_desc
+					type = scientific_apparatus
+					visuals = fp2_armillary_sphere
+					creator = root
+					quality = scope:quality
+					wealth = scope:wealth
+					modifier = gen_tk_curio_orrery_modifier
+					history = {
+						type = created
+						actor = root
+						recipient = scope:owner
+					}
+					save_scope_as = gen_tk_new_curio
+				}
+			}
+		}
+		else = {
+			if = {
+				limit = { scope:gen_tk_result ?= flag:masterwork }
+				create_artifact = {
+					name = gen_tk_curio_songbird_masterwork_name
+					description = gen_tk_curio_songbird_desc
+					type = miscellaneous
+					visuals = pocket_toy
+					creator = root
+					quality = scope:quality
+					wealth = scope:wealth
+					modifier = gen_tk_curio_trinket_masterwork_modifier
+					history = {
+						type = created
+						actor = root
+						recipient = scope:owner
+					}
+					save_scope_as = gen_tk_new_curio
+				}
+			}
+			else = {
+				create_artifact = {
+					name = gen_tk_curio_songbird_name
+					description = gen_tk_curio_songbird_desc
+					type = miscellaneous
+					visuals = pocket_toy
+					creator = root
+					quality = scope:quality
+					wealth = scope:wealth
+					modifier = gen_tk_curio_trinket_modifier
+					history = {
+						type = created
+						actor = root
+						recipient = scope:owner
+					}
+					save_scope_as = gen_tk_new_curio
+				}
+			}
+		}
+	}
+}
+
+# ---------------------------------------------------------------- Waterworks
+# On the beneficiary's capital county, 20 years. A masterwork replaces a lesser one.
+gen_tk_deliver_mill_effect = {
+	if = {
+		limit = { exists = scope:gen_tk_beneficiary.capital_county }
+		scope:gen_tk_beneficiary.capital_county = {
+			if = {
+				limit = { has_county_modifier = gen_tk_waterworks_modifier }
+				remove_county_modifier = gen_tk_waterworks_modifier
+			}
+			if = {
+				limit = { has_county_modifier = gen_tk_waterworks_masterwork_modifier }
+				remove_county_modifier = gen_tk_waterworks_masterwork_modifier
+			}
+			if = {
+				limit = { scope:gen_tk_result ?= flag:masterwork }
+				add_county_modifier = {
+					modifier = gen_tk_waterworks_masterwork_modifier
+					years = 20
+				}
+			}
+			else = {
+				add_county_modifier = {
+					modifier = gen_tk_waterworks_modifier
+					years = 20
+				}
+			}
+		}
+	}
+	else = {
+		# No land to build on any more: the works are sold for their brass.
+		custom_tooltip = gen_tk_mill_no_land.tt
+		scope:gen_tk_beneficiary = { add_gold = tiny_gold_value }
+	}
+}
+
+# ---------------------------------------------------------------- War engine
+# On the beneficiary, 10 years.
+gen_tk_deliver_engine_effect = {
+	scope:gen_tk_beneficiary = {
+		if = {
+			limit = { has_character_modifier = gen_tk_war_engine_modifier }
+			remove_character_modifier = gen_tk_war_engine_modifier
+		}
+		if = {
+			limit = { has_character_modifier = gen_tk_war_engine_masterwork_modifier }
+			remove_character_modifier = gen_tk_war_engine_masterwork_modifier
+		}
+		if = {
+			limit = { scope:gen_tk_result ?= flag:masterwork }
+			add_character_modifier = {
+				modifier = gen_tk_war_engine_masterwork_modifier
+				years = 10
+			}
+		}
+		else = {
+			add_character_modifier = {
+				modifier = gen_tk_war_engine_modifier
+				years = 10
+			}
+		}
+	}
+}
+
+# ---------------------------------------------------------------- Clockwork limb
+# A hand for the maimed, else a leg for the one-legged; the trait stays. Permanent.
+gen_tk_deliver_limb_effect = {
+	scope:gen_tk_beneficiary = {
+		if = {
+			limit = {
+				has_trait = maimed
+				NOT = { has_character_modifier = gen_tk_clockwork_hand_modifier }
+				NOT = { has_character_modifier = gen_tk_clockwork_hand_masterwork_modifier }
+			}
+			if = {
+				limit = { scope:gen_tk_result ?= flag:masterwork }
+				add_character_modifier = gen_tk_clockwork_hand_masterwork_modifier
+			}
+			else = {
+				add_character_modifier = gen_tk_clockwork_hand_modifier
+			}
+		}
+		else_if = {
+			limit = {
+				has_trait = one_legged
+				NOT = { has_character_modifier = gen_tk_clockwork_leg_modifier }
+				NOT = { has_character_modifier = gen_tk_clockwork_leg_masterwork_modifier }
+			}
+			if = {
+				limit = { scope:gen_tk_result ?= flag:masterwork }
+				add_character_modifier = gen_tk_clockwork_leg_masterwork_modifier
+			}
+			else = {
+				add_character_modifier = gen_tk_clockwork_leg_modifier
+			}
+		}
+		else = {
+			# Nothing left to fit it to (a commission for someone already fitted): it goes on a shelf.
+			custom_tooltip = gen_tk_limb_no_fit.tt
+			add_prestige = miniscule_prestige_gain
+		}
+	}
+}
+
+# ---------------------------------------------------------------- Grand invention
+# Renown for the beneficiary, and a push to their people's current fascination.
+gen_tk_deliver_invention_effect = {
+	scope:gen_tk_beneficiary = {
+		add_prestige = gen_tk_invention_prestige_value
+		if = {
+			limit = {
+				culture ?= { culture_has_any_fascination = yes }
+			}
+			culture = {
+				add_fascination_progress = gen_tk_invention_fascination_value
+			}
+		}
+		else = {
+			# No fascination to feed: the scholars talk about it instead.
+			custom_tooltip = gen_tk_invention_no_fascination.tt
+			add_prestige = gen_tk_invention_prestige_value
+		}
+	}
+}
+
+# ---------------------------------------------------------------- The apprentice, on success
+gen_tk_reward_apprentice_effect = {
+	if = {
+		limit = { exists = scope:gen_tk_apprentice_char }
+		scope:gen_tk_apprentice_char = {
+			if = {
+				limit = { has_character_modifier = gen_tk_apprentice_learned_modifier }
+				remove_character_modifier = gen_tk_apprentice_learned_modifier
+			}
+			add_character_modifier = {
+				modifier = gen_tk_apprentice_learned_modifier
+				years = 10
+			}
+			if = {
+				limit = {
+					OR = {
+						scope:gen_tk_result ?= flag:masterwork
+						root.var:gen_tk_lever ?= flag:apprentice
+					}
+				}
+				add_learning_lifestyle_xp = medium_lifestyle_xp
+			}
+		}
+	}
+}
+
+# ---------------------------------------------------------------- Explosion
+# Uses the dice already rolled by gen_tk_roll_outcome_details_effect. Never fatal: a tinkerer at the
+# worst of wounds stays there.
+gen_tk_explosion_effect = {
+	scope:gen_tk_at_lever = {
+		increase_wounds_no_death_effect = { REASON = accident }
+		if = {
+			limit = { exists = scope:gen_tk_burned }
+			add_trait = disfigured
+		}
+	}
+	if = {
+		limit = {
+			exists = scope:gen_tk_apprentice_char
+			NOT = { scope:gen_tk_at_lever = scope:gen_tk_apprentice_char }
+		}
+		scope:gen_tk_apprentice_char = {
+			if = {
+				limit = { exists = scope:gen_tk_apprentice_hurt }
+				increase_wounds_no_death_effect = { REASON = accident }
+			}
+			else = {
+				add_stress = medium_stress_gain
+			}
+		}
+	}
+	if = {
+		limit = {
+			exists = scope:gen_tk_ruins
+			exists = capital_county
+		}
+		capital_county = {
+			add_county_modifier = {
+				modifier = gen_tk_workshop_ruins_modifier
+				years = 3
+			}
+		}
+	}
+}

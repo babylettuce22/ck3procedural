@@ -5,17 +5,8 @@
  # writes gen_race_skin into every persistent DNA record on every map, so the gene must always
  # be registered. (Trait localisation lives in Fantasy/localization/gen_fantasy_traits_l_english.yml.)
  gen_race_skin:0 "Racial Complexion"
- # The pointed-ear gene, in Core for the same reason (common/genes/gen_bs_elf_ears.txt).
- gen_bs_elf_ears:0 "Pointed Ears"
- # The orc tusk gene, likewise (common/genes/gen_bs_orc_tusks.txt).
- gen_bs_orc_tusks:0 "Tusks"
- # Horns: the accessory gene is generated with the horn models; the skin mound is static in Core.
- gen_horns:0 "Horns"
- gen_bs_horn_boss:0 "Horn Base"
- # The giantkin brow and jaw (common/genes/gen_bs_giant_face.txt).
- gen_bs_giant_face:0 "Giant's Brow"
- # The orc brow (common/genes/gen_bs_orc_brow.txt).
- gen_bs_orc_brow:0 "Orcish Brow"
+ # The head-feature genes (ears, tusks, horns, giant face, orc brow) are named in
+ # Fantasy/localization/english/gen_race_genes_l_english.yml: they ship only with races on.
 
  gen_early_realm_stability:0 "A Stable Realm"
  gen_early_realm_stability_desc:0 "This realm is in a period of internal alignment."

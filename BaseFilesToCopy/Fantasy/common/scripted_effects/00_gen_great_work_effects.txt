@@ -1,0 +1,485 @@
+﻿# The high elves' Great Work: the oath, the long years, the finished work, and what happens when the
+# maker dies first. See 00_gen_great_work_triggers.txt for the map of the system.
+#
+# The work's state lives on its STORY (story_gen_great_work), whose owner is the current maker:
+#   var:gw_kind          flag:jewel / chronicle / regalia / harp / lamp
+#   var:gw_progress      0–100; the work can be finished at 75 once the maker is World-Weary
+#   var:gw_quality       ~0–100; decides the finished artifact's rarity
+#   var:gw_maker         who swore it
+#   var:gw_pupil         a pupil, if one was taken (events/gen_great_work_events.txt)
+#   var:gw_milestone     0–3, the boons already given
+#   var:gw_hands         how many makers have held it
+#   var:gw_name_culture  whose tongue names it, and var:gw_name_index which name (GreatWorkNameWriter.cs)
+#   var:gw_in_succession yes while a dead maker's heirs decide (beats and completion wait)
+# The oath leaves the flag gen_gw_has_sworn on the maker for life: one Great Work per lifetime.
+
+# The oath. On the maker; KIND is one of the flags above. The decision has already paid for it.
+# The story's on_setup copies these from the maker (the vanilla commission_epic pattern).
+gen_gw_begin_effect = {
+	add_character_flag = gen_gw_has_sworn
+	set_variable = {
+		name = gw_setup_kind
+		value = $KIND$
+	}
+	create_story = story_gen_great_work
+	add_character_modifier = gen_gw_sworn_modifier
+	custom_tooltip = gen_gw_begin.tt
+}
+
+# The current maker's work, as scope:gw_story, with its original maker and pupil. On the owner;
+# call at the top of any event that touches the work.
+gen_gw_save_story_effect = {
+	random_owned_story = {
+		limit = { story_type = story_gen_great_work }
+		save_scope_as = gw_story
+		var:gw_maker ?= { save_scope_as = gw_maker_origin }
+		if = {
+			limit = {
+				exists = var:gw_pupil
+				var:gw_pupil = { is_alive = yes }
+			}
+			var:gw_pupil = { save_scope_as = gw_pupil }
+		}
+	}
+}
+
+# Another stretch of the long labour. On the owner. Grants a boon each time progress passes a
+# quarter (25 / 50 / 75), replacing the one before, with a toast that names it.
+gen_gw_progress_effect = {
+	gen_gw_save_story_effect = yes
+	save_temporary_scope_value_as = {
+		name = gw_dp
+		value = $PROGRESS$
+	}
+	# Say what the option does to the work, sized so options can be compared (the user's rule: tooltips
+	# explain the trade-off). Progress is how far the work goes toward being finished; quality is how
+	# fine the finished treasure will be. Tiered words, not numbers: a ScriptValue in an option's
+	# custom_tooltip can render blank (ck3-tooltip-traps).
+	save_temporary_scope_value_as = {
+		name = gw_dq
+		value = $QUALITY$
+	}
+	if = {
+		limit = { scope:gw_dp >= 12 }
+		custom_tooltip = gen_gw_progress_big.tt
+	}
+	else_if = {
+		limit = { scope:gw_dp >= 6 }
+		custom_tooltip = gen_gw_progress_up.tt
+	}
+	else_if = {
+		limit = { scope:gw_dp > 0 }
+		custom_tooltip = gen_gw_progress_small.tt
+	}
+	else_if = {
+		limit = { scope:gw_dp < 0 }
+		custom_tooltip = gen_gw_progress_down.tt
+	}
+	if = {
+		limit = { scope:gw_dq >= 10 }
+		custom_tooltip = gen_gw_quality_big.tt
+	}
+	else_if = {
+		limit = { scope:gw_dq > 0 }
+		custom_tooltip = gen_gw_quality_up.tt
+	}
+	else_if = {
+		limit = { scope:gw_dq <= -10 }
+		custom_tooltip = gen_gw_quality_big_down.tt
+	}
+	else_if = {
+		limit = { scope:gw_dq < 0 }
+		custom_tooltip = gen_gw_quality_down.tt
+	}
+	# Headway is the beat's own figure at the maker's pace (gen_gw_pace_value): a Great Work is about two
+	# lifetimes' labour for most, one for a rare prodigy. Setbacks land in full.
+	save_temporary_scope_value_as = {
+		name = gw_gain
+		value = {
+			value = $PROGRESS$
+			if = {
+				limit = { scope:gw_dp > 0 }
+				multiply = gen_gw_pace_value
+			}
+		}
+	}
+	scope:gw_story = {
+		change_variable = {
+			name = gw_progress
+			add = scope:gw_gain
+		}
+		change_variable = {
+			name = gw_quality
+			add = $QUALITY$
+		}
+		clamp_variable = {
+			name = gw_progress
+			min = 0
+			max = 100
+		}
+		clamp_variable = {
+			name = gw_quality
+			min = 0
+			max = 100
+		}
+	}
+	if = {
+		limit = {
+			scope:gw_story.var:gw_progress >= 75
+			scope:gw_story.var:gw_milestone < 3
+		}
+		gen_gw_milestone_effect = { TIER = 3 }
+	}
+	else_if = {
+		limit = {
+			scope:gw_story.var:gw_progress >= 50
+			scope:gw_story.var:gw_milestone < 2
+		}
+		gen_gw_milestone_effect = { TIER = 2 }
+	}
+	else_if = {
+		limit = {
+			scope:gw_story.var:gw_progress >= 25
+			scope:gw_story.var:gw_milestone < 1
+		}
+		gen_gw_milestone_effect = { TIER = 1 }
+	}
+}
+
+# The work grows: the kind's boon at TIER, replacing any earlier tier. On the owner.
+gen_gw_milestone_effect = {
+	save_scope_as = gw_boon_holder
+	scope:gw_story = {
+		set_variable = {
+			name = gw_milestone
+			value = $TIER$
+		}
+	}
+	# Hidden: fifteen unguarded removals would each draw a bare "You lose" line in the tooltip.
+	hidden_effect = { gen_gw_clear_boons_effect = yes }
+	send_interface_toast = {
+		type = event_toast_effect_good
+		title = gen_gw_milestone.t
+		left_icon = scope:gw_boon_holder
+		if = {
+			limit = { scope:gw_story.var:gw_kind = flag:jewel }
+			add_character_modifier = gen_gw_jewel_$TIER$_modifier
+		}
+		else_if = {
+			limit = { scope:gw_story.var:gw_kind = flag:chronicle }
+			add_character_modifier = gen_gw_chronicle_$TIER$_modifier
+		}
+		else_if = {
+			limit = { scope:gw_story.var:gw_kind = flag:regalia }
+			add_character_modifier = gen_gw_regalia_$TIER$_modifier
+		}
+		else_if = {
+			limit = { scope:gw_story.var:gw_kind = flag:harp }
+			add_character_modifier = gen_gw_harp_$TIER$_modifier
+		}
+		else = {
+			add_character_modifier = gen_gw_lamp_$TIER$_modifier
+		}
+	}
+}
+
+# Every tier boon off the character (before a higher one goes on). On the character.
+gen_gw_clear_boons_effect = {
+	remove_character_modifier = gen_gw_jewel_1_modifier
+	remove_character_modifier = gen_gw_jewel_2_modifier
+	remove_character_modifier = gen_gw_jewel_3_modifier
+	remove_character_modifier = gen_gw_chronicle_1_modifier
+	remove_character_modifier = gen_gw_chronicle_2_modifier
+	remove_character_modifier = gen_gw_chronicle_3_modifier
+	remove_character_modifier = gen_gw_regalia_1_modifier
+	remove_character_modifier = gen_gw_regalia_2_modifier
+	remove_character_modifier = gen_gw_regalia_3_modifier
+	remove_character_modifier = gen_gw_harp_1_modifier
+	remove_character_modifier = gen_gw_harp_2_modifier
+	remove_character_modifier = gen_gw_harp_3_modifier
+	remove_character_modifier = gen_gw_lamp_1_modifier
+	remove_character_modifier = gen_gw_lamp_2_modifier
+	remove_character_modifier = gen_gw_lamp_3_modifier
+}
+
+# A pupil at the maker's side. On the owner.
+gen_gw_set_pupil_effect = {
+	gen_gw_save_story_effect = yes
+	scope:gw_story = {
+		set_variable = {
+			name = gw_pupil
+			value = $PUPIL$
+		}
+	}
+}
+
+# The work is finished. On the owner (the maker). Makes the named artifact, ends the story.
+gen_gw_complete_effect = {
+	gen_gw_save_story_effect = yes
+	gen_gw_prepare_artifact_effect = { HOLDER = root }
+	gen_gw_create_work_artifact_effect = { UNFINISHED = no }
+	remove_character_modifier = gen_gw_sworn_modifier
+	scope:gw_story = { end_story = yes }
+}
+
+# Sealed away unfinished: a lesser named artifact for HOLDER, and the story ends. Scope:gw_story must
+# be saved (the succession events save it on their dispatcher).
+gen_gw_seal_unfinished_effect = {
+	# create_artifact gives to the character it runs on, so it runs on the holder.
+	$HOLDER$ = {
+		save_scope_value_as = { name = gw_unfinished_rarity value = yes }
+		gen_gw_prepare_artifact_effect = { HOLDER = this }
+		gen_gw_create_work_artifact_effect = { UNFINISHED = yes }
+	}
+	scope:gw_story = { end_story = yes }
+}
+
+# The work passes to TO after its maker's death (the succession chain, 0600s). Scope:gw_story must be
+# saved. The new maker pays for the materials; a pupil with no treasury does not.
+gen_gw_pass_work_effect = {
+	$TO$ = {
+		if = {
+			limit = { is_landed = yes }
+			remove_short_term_gold = gen_gw_takeup_cost_value
+		}
+	}
+	gen_gw_transfer_effect = { TO = $TO$ }
+}
+
+# A living maker, grown weary, hands the work on (0520). No cost: the materials are the maker's own.
+# The old maker lays down the oath and stays on as Elder of the Work, keeping the boons they earned.
+gen_gw_hand_on_effect = {
+	scope:gw_story.story_owner = {
+		remove_character_modifier = gen_gw_sworn_modifier
+		add_character_modifier = gen_gw_elder_modifier
+	}
+	gen_gw_transfer_effect = { TO = $TO$ }
+}
+
+# The hand-off itself, shared by both. The number of hands has no bearing on the work's quality (the
+# user's ruling); each maker earns the kind's boons over again as the work grows under their hand.
+gen_gw_transfer_effect = {
+	scope:gw_story = {
+		make_story_owner = $TO$
+		change_variable = {
+			name = gw_hands
+			add = 1
+		}
+		set_variable = {
+			name = gw_last_maker
+			value = $TO$
+		}
+		remove_variable = gw_in_succession
+		# The new maker will be offered the handover in their own old age.
+		remove_variable = gw_handover_offered
+		# A pupil who becomes the maker is no longer anyone's pupil.
+		if = {
+			limit = { var:gw_pupil ?= $TO$ }
+			remove_variable = gw_pupil
+		}
+		set_variable = {
+			name = gw_milestone
+			value = 0
+		}
+	}
+	$TO$ = {
+		add_character_flag = gen_gw_has_sworn
+		add_character_modifier = gen_gw_sworn_modifier
+		gen_gw_set_owner_name_vars_effect = yes
+		send_interface_toast = {
+			type = event_toast_effect_neutral
+			title = gen_gw_taken_up.t
+			left_icon = $TO$
+			custom_tooltip = gen_gw_taken_up.tt
+		}
+	}
+	# Catch up at once to what the work already is, so a late heir isn't boon-less for a decade.
+	$TO$ = { gen_gw_progress_effect = { PROGRESS = 0 QUALITY = 0 } }
+}
+
+# The work's name variables on its current maker, so GenGwWorkWord can name it in any tooltip (the
+# oath's on_setup and every hand-off). On the maker; scope:gw_story must be saved.
+gen_gw_set_owner_name_vars_effect = {
+	set_variable = {
+		name = gen_gw_name_culture
+		value = scope:gw_story.var:gw_name_culture
+	}
+	set_variable = {
+		name = gen_gw_name_index
+		value = scope:gw_story.var:gw_name_index
+	}
+}
+
+# Scopes the artifact needs: owner, the name variables on the owner (GenGwWorkWord reads the
+# character), and quality/wealth from the long years' quality (vanilla rarity bands, 01_exp1_…).
+gen_gw_prepare_artifact_effect = {
+	$HOLDER$ = {
+		save_scope_as = owner
+		gen_gw_set_owner_name_vars_effect = yes
+	}
+	scope:gw_story.var:gw_maker ?= { save_scope_as = gw_maker_origin }
+	# A finished work is famed at worst and illustrious for most (quality 45+); a sealed, unfinished
+	# one a step lower. The caller sets scope:gw_unfinished_rarity for the sealed form.
+	if = {
+		limit = { exists = scope:gw_unfinished_rarity }
+		if = {
+			limit = { scope:gw_story.var:gw_quality >= 60 }
+			set_artifact_rarity_famed = yes
+		}
+		else = {
+			set_artifact_rarity_masterwork = yes
+		}
+	}
+	else_if = {
+		limit = { scope:gw_story.var:gw_quality >= 45 }
+		set_artifact_rarity_illustrious = yes
+	}
+	else = {
+		set_artifact_rarity_famed = yes
+	}
+}
+
+# The artifact itself, for scope:owner. A court piece where the owner keeps a royal court, else
+# personal regalia. UNFINISHED = yes gives the sealed, lesser form. Kind visuals that belong to a DLC
+# fall back to base-game pieces without it.
+gen_gw_create_work_artifact_effect = {
+	if = {
+		limit = { scope:gw_story.var:gw_kind = flag:jewel }
+		gen_gw_kind_artifact_effect = { KIND = jewel DLC = tours_and_tournaments VISUALS = necklace_pedestal TYPE = pedestal UNFINISHED = $UNFINISHED$ }
+	}
+	else_if = {
+		limit = { scope:gw_story.var:gw_kind = flag:chronicle }
+		gen_gw_kind_artifact_effect = { KIND = chronicle DLC = legends_of_the_dead VISUALS = chronicle TYPE = chronicle UNFINISHED = $UNFINISHED$ }
+	}
+	else_if = {
+		limit = { scope:gw_story.var:gw_kind = flag:regalia }
+		gen_gw_kind_artifact_effect = { KIND = regalia DLC = royal_court VISUALS = regalia_court TYPE = pedestal UNFINISHED = $UNFINISHED$ }
+	}
+	else_if = {
+		limit = { scope:gw_story.var:gw_kind = flag:harp }
+		gen_gw_kind_artifact_effect = { KIND = harp DLC = royal_court VISUALS = pedestal_david_harp TYPE = pedestal UNFINISHED = $UNFINISHED$ }
+	}
+	else = {
+		gen_gw_kind_artifact_effect = { KIND = lamp DLC = roads_to_power VISUALS = tree_automa TYPE = pedestal UNFINISHED = $UNFINISHED$ }
+	}
+	scope:newly_created_artifact = {
+		set_variable = { name = gen_gw_great_work value = yes }
+	}
+	scope:owner = {
+		send_interface_toast = {
+			type = event_toast_effect_good
+			title = gen_gw_work_made.t
+			left_icon = scope:owner
+			custom_tooltip = gen_gw_work_made.tt
+		}
+	}
+}
+
+# One kind's artifact. A court piece (VISUALS/TYPE, which belong to the DLC named) where the owner keeps
+# a royal court; the base game's court regalia when that DLC's piece is missing; personal regalia
+# without a court. The kind's own modifier every time.
+gen_gw_kind_artifact_effect = {
+	if = {
+		limit = {
+			scope:owner = { has_royal_court = yes }
+			has_dlc_feature = $DLC$
+		}
+		gen_gw_court_artifact_effect = { VISUALS = $VISUALS$ TYPE = $TYPE$ KIND = $KIND$ UNFINISHED = $UNFINISHED$ }
+	}
+	else_if = {
+		limit = { scope:owner = { has_royal_court = yes } }
+		gen_gw_court_artifact_effect = { VISUALS = regalia_court TYPE = pedestal KIND = $KIND$ UNFINISHED = $UNFINISHED$ }
+	}
+	else = {
+		gen_gw_personal_artifact_effect = { KIND = $KIND$ UNFINISHED = $UNFINISHED$ }
+	}
+}
+
+gen_gw_court_artifact_effect = {
+	if = {
+		limit = { always = $UNFINISHED$ }
+		create_artifact = {
+			name = gen_gw_artifact_unfinished_name
+			description = gen_gw_artifact_unfinished_desc
+			type = $TYPE$
+			visuals = $VISUALS$
+			template = general_unique_template
+			wealth = scope:wealth
+			quality = scope:quality
+			history = {
+				type = created
+				actor = scope:owner
+				recipient = scope:owner
+			}
+			modifier = gen_gw_artifact_unfinished_modifier
+			creator = scope:gw_maker_origin
+			save_scope_as = newly_created_artifact
+			decaying = no
+		}
+	}
+	else = {
+		create_artifact = {
+			name = gen_gw_artifact_name
+			description = gen_gw_artifact_desc
+			type = $TYPE$
+			visuals = $VISUALS$
+			template = general_unique_template
+			wealth = scope:wealth
+			quality = scope:quality
+			history = {
+				type = created
+				actor = scope:owner
+				recipient = scope:owner
+			}
+			modifier = gen_gw_artifact_$KIND$_modifier
+			creator = scope:gw_maker_origin
+			save_scope_as = newly_created_artifact
+			decaying = no
+		}
+	}
+}
+
+# Without a royal court: the work finished as personal regalia, worn rather than displayed.
+gen_gw_personal_artifact_effect = {
+	if = {
+		limit = { always = $UNFINISHED$ }
+		create_artifact = {
+			name = gen_gw_artifact_unfinished_name
+			description = gen_gw_artifact_unfinished_desc
+			type = regalia
+			visuals = regalia
+			template = regalia_template
+			wealth = scope:wealth
+			quality = scope:quality
+			history = {
+				type = created
+				actor = scope:owner
+				recipient = scope:owner
+			}
+			modifier = gen_gw_artifact_unfinished_modifier
+			creator = scope:gw_maker_origin
+			save_scope_as = newly_created_artifact
+			decaying = no
+		}
+	}
+	else = {
+		create_artifact = {
+			name = gen_gw_artifact_name
+			description = gen_gw_artifact_desc
+			type = regalia
+			visuals = regalia
+			template = regalia_template
+			wealth = scope:wealth
+			quality = scope:quality
+			history = {
+				type = created
+				actor = scope:owner
+				recipient = scope:owner
+			}
+			modifier = gen_gw_artifact_$KIND$_modifier
+			creator = scope:gw_maker_origin
+			save_scope_as = newly_created_artifact
+			decaying = no
+		}
+	}
+}

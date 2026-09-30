@@ -31,7 +31,9 @@
  gen_race_debug.0001.desc.m_tusk_broken:0 " a tusk broken;"
  gen_race_debug.0001.desc.m_none:0 " none"
 
- gen_race_debug.0001.desc.vs_you_different:0 "\n#high Against you:#! a different race, so the AI's cross-race marriage reluctance applies."
+ gen_race_debug.0001.desc.vs_you_different:0 "\n#high Against you:#! a different race, so the AI's cross-race marriage reluctance applies (-75)."
+ gen_race_debug.0001.desc.vs_you_friendly:0 "\n#high Against you:#! a different but friendly people, so the milder marriage reluctance applies (-25)."
+ gen_race_debug.0001.desc.vs_you_hostile:0 "\n#high Against you:#! old enemies, so the harsh marriage reluctance applies (-150)."
  gen_race_debug.0001.desc.vs_you_same:0 "\n#high Against you:#! the same race, for marriage purposes."
 
  gen_race_debug.0001.a:0 "Run the race pulse on them now"

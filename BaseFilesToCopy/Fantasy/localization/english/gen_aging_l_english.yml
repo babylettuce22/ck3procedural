@@ -25,6 +25,14 @@
  gen_aging.0002.desc: "There is no pain. That is the first thing to know, and the last kindness of a long life: there is no pain.\n\nThe world has grown thin as worn linen, and the light behind it very bright. Names I have carried for centuries lie down gently, one by one, like tools at the end of a day's labor. Somewhere close by, someone is weeping; somewhere further, spring is arriving without my help, as it always did.\n\nIt is time to set the garment down."
  gen_aging.0002.a: "I am ready."
 
+ # ============ Not Yet (the one reprieve) ============
+ gen_aging.0003.t: "Not Yet"
+ gen_aging.0003.desc: "Your breath has grown shallow and the light seems very far away. Your household has started speaking quietly around you, the way people speak in a sickroom.\n\n"
+ gen_aging.0003.desc.ambitious: "But there are plans of yours still unfinished, and you are not willing to leave them to someone else. You get up."
+ gen_aging.0003.desc.stubborn: "But you have never once done a thing because it was expected of you, and you will not start now. You get up."
+ gen_aging.0003.a: "Not yet."
+ gen_aging.0003.a.tt: "[GetTrait('world_weary').GetName( GetNullCharacter )] falls back to its second level: about #P ten more years#!.\nThis can only happen once."
+
  # ============ A Late Child ============
  gen_aging.0010.t: "A Late Child"
  gen_aging.0010.desc.elf: "Human women stop bearing children in their forties. Elven women do not, though a late child is rare among elves, and they say one only comes when both parents truly want it.\n\n"

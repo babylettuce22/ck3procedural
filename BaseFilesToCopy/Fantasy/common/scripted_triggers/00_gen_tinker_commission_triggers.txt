@@ -1,0 +1,64 @@
+﻿# Gnome Tinkering, commissions: who may hire a gnome tinkerer, and for what.
+#
+# The commission pieces (AGENT F):
+#   common/character_interactions/00_gen_tinker_interactions.txt  — Commission a Contraption, Hurry the Commission
+#   common/script_values/00_gen_tinker_commission_values.txt      — the price: materials + the tinkerer's fee
+#   common/scripted_effects/00_gen_tinker_commission_effects.txt  — bookkeeping, refunds
+#   common/on_action/00_gen_tinker_commission_on_actions.txt      — the tinkerer dies or is jailed mid-commission
+#   events/gen_tinker_commission_events.txt                       — the hurry letter (0400s), the delivery (0450)
+# The project loop itself is main's (00_gen_tinker_effects.txt); 00_gen_tinker_triggers.txt maps the system.
+
+# Within reach of a commission, in interaction scopes: the actor's own courtier or guest, their liege or
+# vassal, or a ruler of the same realm or a neighbouring one. Same reach as the Blood Challenge
+# (gen_bc_within_reach_trigger) plus the actor's own court, which is where most gnomes will be found.
+gen_tk_commission_within_reach_trigger = {
+	OR = {
+		scope:recipient = { is_courtier_of = scope:actor }
+		scope:recipient = { is_foreign_court_or_pool_guest_of = scope:actor }
+		scope:actor.liege ?= scope:recipient
+		scope:recipient.liege ?= scope:actor
+		AND = {
+			scope:recipient = { is_ruler = yes }
+			scope:actor.top_liege = scope:recipient.top_liege
+		}
+		AND = {
+			scope:recipient = { is_ruler = yes }
+			scope:actor.top_liege = {
+				any_neighboring_top_liege_realm_owner = { this = scope:recipient.top_liege }
+			}
+		}
+	}
+}
+
+# A limb is only worth building for someone missing one and not yet fitted. Same test as the
+# workbench's limb option (gen_tinker.0010.d). On the would-be wearer.
+gen_tk_commission_needs_limb_trigger = {
+	OR = {
+		AND = {
+			has_trait = maimed
+			NOT = { has_character_modifier = gen_tk_clockwork_hand_modifier }
+			NOT = { has_character_modifier = gen_tk_clockwork_hand_masterwork_modifier }
+		}
+		AND = {
+			has_trait = one_legged
+			NOT = { has_character_modifier = gen_tk_clockwork_leg_modifier }
+			NOT = { has_character_modifier = gen_tk_clockwork_leg_masterwork_modifier }
+		}
+	}
+}
+
+# This character is waiting on a contraption they paid for. One commission at a time per patron.
+# The flag has its own expiry (900 days; a commission runs 8–18 months), so a commission that ends by a
+# road this file never sees still frees the patron in time.
+gen_tk_awaiting_commission_trigger = {
+	has_character_flag = gen_tk_awaiting_commission
+}
+
+# The recipient is working on the actor's commission right now (for Hurry the Commission).
+gen_tk_is_working_for_actor_trigger = {
+	scope:recipient = {
+		has_character_flag = gen_tk_working
+		exists = var:gen_tk_patron
+		var:gen_tk_patron = scope:actor
+	}
+}

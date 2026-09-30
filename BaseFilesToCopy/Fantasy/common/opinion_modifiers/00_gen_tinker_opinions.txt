@@ -1,0 +1,24 @@
+﻿# Gnome Tinkering's own opinions. See 00_gen_tinker_triggers.txt for the map of the system.
+
+# A patron who pushed the maker to finish sooner (the hurry letter, or a demand for speed at the
+# design stage — gen_tk_hurry_project_effect). Nobody likes being hurried.
+gen_tk_hurried_me_opinion = {
+	opinion = -10
+	decaying = yes
+	years = 5
+}
+
+# The patron's view of a maker who agreed to their demand and quietly built it their own way
+# (workshop 0105), learned on delivery (0450) unless the envoy's inspection (0218) exposed it first.
+gen_tk_not_what_i_ordered_opinion = {
+	opinion = -20
+	decaying = yes
+	years = 10
+}
+
+# ...unless it turned out a masterwork.
+gen_tk_better_than_ordered_opinion = {
+	opinion = 10
+	decaying = yes
+	years = 10
+}

@@ -119,6 +119,10 @@ internal sealed class QuickPage : Panel
     private readonly ChoiceGroup<GenderPreference> _rulers;
     // Beside the Fantasy heading while the world has races: opens the race mix (RaceMixDialog).
     private readonly TextLink _mixLink = new() { Name = "quickRaceMix", LinkFont = Small, Glyph = "", AccessibleName = "Race mix" };
+    // Beside the Cultures & faiths heading while the peoples are invented: opens the inspiration
+    // (InspirationDialog), the corner of the real world they are modelled on.
+    private readonly TextLink _inspirationLink = new() { Name = "quickInspiration", LinkFont = Small, Glyph = "", AccessibleName = "Inspiration" };
+    private const string InventedSubtitle = "New cultures, faiths, languages and names";
     private static readonly Dictionary<QuickFantasy, string> FantasySubtitles = new()
     {
         [QuickFantasy.None] = "Humans only, as in vanilla",
@@ -171,7 +175,7 @@ internal sealed class QuickPage : Panel
             .Add(QuickDensity.More, "Many, smaller", "Vanilla-sized counties · slower", "quickDensityMore");
 
         _peopleGroup = new ChoiceGroup<QuickPeople>("Cultures & faiths", "Who lives here.", QuickPeople.Invented)
-            .Add(QuickPeople.Invented, "Invented", "New cultures, faiths, languages and names", "quickPeopleInvented")
+            .Add(QuickPeople.Invented, "Invented", InventedSubtitle, "quickPeopleInvented")
             .Add(QuickPeople.RealCk3, "Real CK3", "Vanilla's cultures and faiths laid onto this map", "quickPeopleReal");
         _fantasy = new ChoiceGroup<QuickFantasy>("Fantasy", "Whether other races share the world with humans.", QuickFantasy.None)
             .Add(QuickFantasy.None, "None", FantasySubtitles[QuickFantasy.None], "quickFantasyNone")
@@ -194,6 +198,7 @@ internal sealed class QuickPage : Panel
         {
             _choices.People = v;
             ShowNativeToggles();
+            ShowInspiration();
             ShowFantasy();
         };
         _fantasy.Changed += v =>
@@ -209,6 +214,7 @@ internal sealed class QuickPage : Panel
             ShowFantasy();
         };
         _mixLink.Click += (_, _) => EditRaceMix();
+        _inspirationLink.Click += (_, _) => EditInspiration();
         _politics.Changed += v => _choices.Politics = v;
         _rulers.Changed += v => _choices.Rulers = v;
         _wilderness.Toggled += on => _choices.Wilderness = on;
@@ -222,7 +228,11 @@ internal sealed class QuickPage : Panel
             [_size, _era, _climate, _density], toggles: null);
         BuildGroupsStep(_peoplePanel, "People and politics", "Who lives here, who rules, and what else the world holds.",
             [_peopleGroup, _fantasy, _politics, _rulers], toggles: [_wilderness, _wars, _nativeTitles, _nativeRealms],
-            headingLinks: new() { [_fantasy] = (_mixLink, () => MixLinkShown) });
+            headingLinks: new()
+            {
+                [_peopleGroup] = (_inspirationLink, () => InspirationLinkShown),
+                [_fantasy] = (_mixLink, () => MixLinkShown),
+            });
         BuildReviewStep();
         WireRunScreen();
 
@@ -481,6 +491,14 @@ internal sealed class QuickPage : Panel
         // should it throw away a race mix set by hand.
         _choices.Fantasy = kept.Fantasy;
         _choices.Mix = kept.Mix;
+        // And the inspiration. The climate drawn for the surprise is then one its wardrobe covers,
+        // so a Norse world is not surprised into the tropics.
+        _choices.Inspiration = kept.Inspiration;
+        if (_choices.InspirationInWorld is { } inspiration && inspiration.Unsuits(_choices.Climate))
+        {
+            var suited = inspiration.SuitedClimates;
+            _choices.Climate = suited[Random.Shared.Next(suited.Length)];
+        }
         _previousSeeds.Push(kept.Seed);
         SyncControls();
         RenderPreview();
@@ -520,6 +538,46 @@ internal sealed class QuickPage : Panel
         _peoplePanel.PerformLayout();
     }
 
+    /// <summary>
+    /// The inspiration goes with invented peoples: real CK3 ones already look, dress and speak as
+    /// vanilla has them. The link names the inspiration once one is set, and the Invented card says
+    /// so too, the way the race mix shows on the Fantasy card.
+    /// </summary>
+    private void ShowInspiration()
+    {
+        var inspiration = _choices.Inspiration;
+        _inspirationLink.Text = inspiration is null ? "Inspiration…"
+            : inspiration.MatchingPreset is { } preset ? $"Inspired by {preset.Name}…"
+            : "Custom inspiration…";
+        _inspirationLink.Visible = InspirationLinkShown;
+        _peopleGroup.SetSubtitle(QuickPeople.Invented, inspiration is null ? InventedSubtitle
+            : inspiration.MatchingPreset is { } p ? $"New peoples inspired by {p.Name}"
+            : $"New peoples  ·  {inspiration.Describe()}");
+        _peoplePanel.PerformLayout();
+    }
+
+    /// <summary>Whether the inspiration link is on the step: only for invented peoples.</summary>
+    private bool InspirationLinkShown => _choices.People == QuickPeople.Invented;
+
+    /// <summary>
+    /// Opens the inspiration over the page. Anywhere is dropped rather than kept, so the world is
+    /// exactly the one Quick makes without it. The dialog may also bring back the climate its note
+    /// offered, which the World step then shows.
+    /// </summary>
+    private void EditInspiration()
+    {
+        if (!InspirationLinkShown) return;
+
+        using var dialog = new InspirationDialog(_choices.Inspiration ?? new QuickInspiration(), _choices.Climate,
+            races: _choices.FantasyInWorld != QuickFantasy.None);
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+        _choices.Inspiration = dialog.Inspiration.IsDefault ? null : dialog.Inspiration;
+        _choices.Climate = dialog.Climate;
+        _climate.Value = dialog.Climate;
+        ShowInspiration();
+    }
+
     /// <summary>Whether the race mix link is on the step: only for a world with races.</summary>
     private bool MixLinkShown => _fantasy.Shown && _choices.FantasyInWorld != QuickFantasy.None;
 
@@ -549,6 +607,7 @@ internal sealed class QuickPage : Panel
         _climate.Value = _choices.Climate;
         _density.Value = _choices.Density;
         _peopleGroup.Value = _choices.People;
+        ShowInspiration();
         _fantasy.Value = _choices.Fantasy;
         ShowFantasy();
         _politics.Value = _choices.Politics;
@@ -946,7 +1005,9 @@ internal sealed class QuickPage : Panel
             $"{EraNames[_choices.Era]}  ·  {_choices.StartYear}",
             ClimateNames[_choices.Climate],
             DensityNames[_choices.Density],
-            PeopleNames[_choices.People],
+            _choices.InspirationInWorld is { } inspiration
+                ? $"Invented  ·  {(inspiration.MatchingPreset is null ? inspiration.Describe() : $"inspired by {inspiration.Describe()}")}"
+                : PeopleNames[_choices.People],
             _choices.MixInWorld is { } mix
                 ? $"{(_choices.FantasyInWorld == QuickFantasy.Low ? "Low" : "High")} fantasy, custom mix  ·  {mix.Describe(_choices.FantasyInWorld)}"
                 : FantasyNames[_choices.FantasyInWorld],

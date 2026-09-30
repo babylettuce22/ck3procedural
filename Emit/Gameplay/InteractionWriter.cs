@@ -6,6 +6,8 @@ public static class InteractionWriter
 {
     private const string RaceMarriageAcceptanceModifier = """
 		# [Generated Phenotype Marriage Reluctance]
+		# Three tiers, read off the race compatibility matrix: friendly peoples -25, most -75, old
+		# enemies -150 (a strong hook is +200, so a hostile match still happens under pressure).
 		modifier = {
 			desc = AI_DIFFERENT_RACE_MARRIAGE_PENALTY
 			trigger = {
@@ -13,9 +15,35 @@ public static class InteractionWriter
 				exists = scope:secondary_recipient
 				scope:secondary_actor = {
 					gen_is_different_race_than = { TARGET = scope:secondary_recipient }
+					NOT = { gen_is_friendly_race_pair_trigger = { TARGET = scope:secondary_recipient } }
+					NOT = { gen_is_hostile_race_pair_trigger = { TARGET = scope:secondary_recipient } }
 				}
 			}
 			add = -75
+		}
+		modifier = {
+			desc = AI_FRIENDLY_RACE_MARRIAGE_PENALTY
+			trigger = {
+				exists = scope:secondary_actor
+				exists = scope:secondary_recipient
+				scope:secondary_actor = {
+					gen_is_different_race_than = { TARGET = scope:secondary_recipient }
+					gen_is_friendly_race_pair_trigger = { TARGET = scope:secondary_recipient }
+				}
+			}
+			add = -25
+		}
+		modifier = {
+			desc = AI_HOSTILE_RACE_MARRIAGE_PENALTY
+			trigger = {
+				exists = scope:secondary_actor
+				exists = scope:secondary_recipient
+				scope:secondary_actor = {
+					gen_is_different_race_than = { TARGET = scope:secondary_recipient }
+					gen_is_hostile_race_pair_trigger = { TARGET = scope:secondary_recipient }
+				}
+			}
+			add = -150
 		}
 
 		# [Generated Hornborn Marriage Reluctance]
@@ -40,7 +68,7 @@ public static class InteractionWriter
 """;
 
     /// <summary>
-    /// Adds the cross-race reluctance modifier to the <c>ai_accept</c> of both marriage
+    /// Adds the cross-race reluctance modifiers (three tiers by race pair) to the <c>ai_accept</c> of both marriage
     /// interactions, and the Hornborn one: a match where one side shows Hornborn horns and the other
     /// has none is harder to make, which is the main reason to file them down (see the header of
     /// <c>BaseFilesToCopy/Fantasy/common/traits/00_hornborn_trait.txt</c>). Hornborn with Hornborn,

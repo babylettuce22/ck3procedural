@@ -41,7 +41,7 @@ public static class BookmarkWriter
         RealmMap realms, Dictionary<Title, int> development,
         CultureMap cultures, GovernmentMap governments,
         WildernessMap wilderness, PrehistoryMap prehistory, RulerMap rulers,
-        AzgaarImport? azgaar = null, WorldCalendar? calendar = null)
+        AzgaarImport? azgaar = null, WorldCalendar? calendar = null, Flatmap? flatmap = null)
     {
         // Only realm seats have a character: a liege's demesne counties and every vassal-held
         // county under one man share his seat's ruler, and the character file writes nobody for
@@ -106,7 +106,7 @@ public static class BookmarkWriter
         WriteBookmarkLocalisation(modDir, cfg, cast, azgaar, calendar,
             TabSubtitle(cfg, seatCounties, governments),
             BookmarkTitle(cast.Slots, realms, azgaar), eras);
-        WriteBookmarkGraphics(modDir, gameDir, eras);
+        WriteBookmarkGraphics(modDir, gameDir, eras, flatmap);
         WriteRealmHighlights(modDir, cfg, provinces, order, cast.Slots, realms, empires);
         foreach (var era in eras?.Eras ?? [])
             if (era.Cast is not null)
@@ -657,7 +657,12 @@ public static class BookmarkWriter
                + $"and {houses} in {startYear}.";
     }
 
-    private static void WriteBookmarkGraphics(string modDir, string gameDir, BookmarkEras? eras)
+    /// <summary>Widest the bookmark background is kept. The frontend stretches it over the screen,
+    /// so past a 4K display's width the extra texels are averaged away on every frame.</summary>
+    private const int BackgroundMaxWidth = 4096;
+
+    private static void WriteBookmarkGraphics(string modDir, string gameDir, BookmarkEras? eras,
+        Flatmap? flatmap)
     {
         string bookmarksDir = Path.Combine(modDir, "gfx", "interface", "bookmarks");
         string startButtonsDir = Path.Combine(bookmarksDir, "start_buttons");
@@ -671,7 +676,19 @@ public static class BookmarkWriter
         string flatmapSource = Path.Combine(modDir, "gfx", "map", "terrain", "flat_maps", "flatmap.dds");
         string flatmapTgpSource = Path.Combine(modDir, "gfx", "map", "terrain", "flat_maps", "flatmap_tgp.dds");
 
-        if (File.Exists(flatmapSource))
+        if (flatmap is not null)
+        {
+            // From the parchment still in memory rather than flatmap.dds, so the downscale starts
+            // from lossless pixels and the background is compressed once, not twice.
+            var (w, h, bgra) = (flatmap.Width, flatmap.Height, flatmap.Bgra);
+            while (w > BackgroundMaxWidth && w % 2 == 0 && h % 2 == 0)
+            {
+                bgra = DdsWriter.HalveBgra(w, h, bgra);
+                (w, h) = (w / 2, h / 2);
+            }
+            DdsWriter.WriteCompressed(targetBmBg, w, h, bgra, alpha: false);
+        }
+        else if (File.Exists(flatmapSource))
         {
             File.Copy(flatmapSource, targetBmBg, overwrite: true);
         }
@@ -816,7 +833,7 @@ public static class BookmarkWriter
             }
 
             string targetFile = Path.Combine(bookmarksDir, $"{bookmarkKey}_{b.Key}.dds");
-            DdsWriter.WriteBgra(targetFile, canvasW, canvasH, bgra);
+            DdsWriter.WriteCompressed(targetFile, canvasW, canvasH, bgra, alpha: true);
         }
     }
 

@@ -1,0 +1,54 @@
+﻿# The Blood Challenge's standing modifiers. See 00_gen_blood_challenge_triggers.txt for the system.
+
+# Turned down a Blood Challenge. Among a people who keep the Blood Right, refusing is losing without
+# the wounds: kin think less of you, the fear you held thins out and your name stops growing. Heavy
+# on purpose — the AI accepts unless it is badly outmatched, because this costs more than most falls.
+gen_bc_refused_the_blood_modifier = {
+	icon = prestige_negative
+	monthly_prestige_gain_mult = -0.25
+	same_culture_opinion = -10
+	dread_baseline_add = -10
+}
+
+# Backed by the presiding liege (0401) for the fight ahead. Cleared when the fight ends.
+gen_bc_liege_favour_modifier = {
+	icon = prowess_positive
+	prowess = 1
+}
+
+# The win tiers. The strong live long: each tier carries a little health and years of life, which
+# buys back the orcs' short span (phenotype_rough_hewn, life_expectancy -10) and then some. A 12-win
+# Unbroken ends about ten years ahead of a human — far short of an elf's +50. Health stays small
+# (vanilla treats +0.5 as large); life_expectancy is what moves the natural-death curve.
+
+# Three wins in the circle.
+gen_bc_blood_proven_modifier = {
+	icon = prestige_positive
+	monthly_prestige = 0.5
+	same_culture_opinion = 5
+	dread_baseline_add = 5
+	health = 0.1
+	life_expectancy = 5
+}
+
+# Seven wins in the circle. Replaces Blood-Proven.
+gen_bc_circle_master_modifier = {
+	icon = prestige_positive
+	monthly_prestige = 1
+	same_culture_opinion = 10
+	dread_baseline_add = 10
+	prowess = 1
+	health = 0.2
+	life_expectancy = 10
+}
+
+# Twelve wins in the circle. Replaces Master of the Circle.
+gen_bc_unbroken_modifier = {
+	icon = prestige_positive
+	monthly_prestige = 1.5
+	same_culture_opinion = 15
+	dread_baseline_add = 15
+	prowess = 1
+	health = 0.3
+	life_expectancy = 20
+}

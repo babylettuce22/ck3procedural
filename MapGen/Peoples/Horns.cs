@@ -33,7 +33,7 @@ namespace Ck3MapGen.MapGen;
 /// every frown). File space is y up, the face toward −z, +x the head's left.
 /// Proved in game with the standalone horn_probe mod, 2026-09-28.
 /// </summary>
-internal static class Horns
+internal static partial class Horns
 {
     /// <summary>The accessory gene (generated with the models) and its templates, gen_horns_{style}.</summary>
     public const string Gene = "gen_horns";

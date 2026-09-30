@@ -507,24 +507,74 @@ public static class MapGraphicsWriter
     /// shadow under them. Not surroundmap_flat; see <see cref="WriteSurroundShader"/>.</summary>
     private static readonly string[] SurroundEffects3D = ["surroundmap", "surroundmapLowSpec", "surroundmap_shadow"];
 
+    /// <summary>
+    /// Vanilla's foam_map.dds against distance from the coast, in world units: (distance, value)
+    /// pairs read off its channels by the mean of each distance band. G scales the breaking waves
+    /// (<c>CalcApproachingWaves</c> in jomini_water_default.fxh) — a little over half strength at
+    /// the waterline, full in open sea. R is the drifting sea foam (<c>CalcFoamFactor</c>, where a
+    /// higher value lowers the threshold the noise has to clear): heaviest along the shore.
+    /// </summary>
+    private static readonly (double D, double V)[] WaveStrengthByShoreDistance =
+        [(0.9, 126), (3.6, 140), (8, 168), (16, 204), (33, 239), (66, 252), (100, 255)];
+    private static readonly (double D, double V)[] SeaFoamByShoreDistance =
+        [(1.8, 73), (7, 65), (19, 48), (48, 23), (100, 15)];
+
+    /// <summary>
+    /// World units from land within which flowmap alpha lets breaking waves draw. The alpha is an
+    /// on/off gate, not a strength: any texel above zero gets full waves, and water depth does the
+    /// rest (waves fade out by 3 units deep). Vanilla paints it on land only and lets the bilinear
+    /// fetch carry it about one texel (4 units) out. Our coast is steeper than vanilla's shelf and
+    /// reaches 3 units deep about 8 units out (measured on height.png, 2026-09-29), so the gate
+    /// reaches that far rather than cutting the band short.
+    /// </summary>
+    private const double ShoreWaveReach = 8;
+
+    /// <summary>
+    /// The water plane's three generated maps in gfx/map/water: watercolour (flat land/sea colours),
+    /// foam_map and flowmap. Before 2026-09-29 foam_map was all zero and flowmap was not shipped, which drew
+    /// no breaking waves and no sea foam at all — G = 0 multiplies the waves away, R = 0 lifts the
+    /// foam threshold past anything the noise reaches — and left vanilla's flowmap, whose wave gate
+    /// is Europe's coastline, under our map.
+    /// </summary>
     private static void WriteWaterMaps(string modDir, MapConfig cfg, ProvinceMap provinces, int[] order, int landCount)
     {
         int w = cfg.ProvinceWidth / 2, h = cfg.ProvinceHeight / 2;
+        double unitsPerCell = provinces.Width / (double)w;
 
         var foam = new byte[(long)w * h * 4];
         var water = new byte[(long)w * h * 4];
 
+        // Land and major-river water at foam-map resolution, and each cell's distance to land.
+        // Rivers are water provinces but have no surf; their waves are switched off below.
+        var land = new bool[w * h];
+        var river = new bool[w * h];
         Parallel.For(0, h, y =>
         {
             for (int x = 0; x < w; x++)
             {
                 int px = Math.Min(x * 2, provinces.Width - 1);
                 int py = Math.Min(y * 2, provinces.Height - 1);
-                bool isLand = order[provinces.Label[py * provinces.Width + px]] <= landCount;
+                int label = provinces.Label[py * provinces.Width + px];
+                land[y * w + x] = order[label] <= landCount;
+                river[y * w + x] = !land[y * w + x] && provinces.Seeds[label].IsMajorRiver;
+            }
+        });
+        var toLand = ChamferToLand(land, w, h, unitsPerCell);
+
+        Parallel.For(0, h, y =>
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                bool isLand = land[i];
 
                 long o = ((long)y * w + x) * 4;
 
-                foam[o] = foam[o + 1] = foam[o + 2] = 0;
+                // BGRA: R sea foam, G wave strength, B unused by the water shader.
+                double d = toLand[i];
+                foam[o] = 0;
+                foam[o + 1] = river[i] ? (byte)0 : (byte)Math.Round(Interpolate(WaveStrengthByShoreDistance, d));
+                foam[o + 2] = river[i] ? (byte)0 : (byte)Math.Round(Interpolate(SeaFoamByShoreDistance, d));
                 foam[o + 3] = 255;
 
                 water[o] = isLand ? (byte)90 : (byte)96;
@@ -536,7 +586,106 @@ public static class MapGraphicsWriter
 
         string waterDir = Path.Combine(modDir, "gfx", "map", "water");
         Directory.CreateDirectory(waterDir);
-        DdsWriter.WriteBgra(Path.Combine(waterDir, "foam_map.dds"), w, h, foam);
-        DdsWriter.WriteBgra(Path.Combine(waterDir, "watercolor_rgb_waterspec_a.dds"), w, h, water);
+        // Vanilla's formats: foam DXT5, watercolour BC7 (DXT5 here, which holds its flat colours
+        // exactly), both with mips.
+        DdsWriter.WriteCompressed(Path.Combine(waterDir, "foam_map.dds"), w, h, foam, alpha: true, mips: true);
+        DdsWriter.WriteCompressed(Path.Combine(waterDir, "watercolor_rgb_waterspec_a.dds"), w, h, water,
+            alpha: true, mips: true);
+
+        WriteFlowMap(waterDir, w, h, toLand, river);
+    }
+
+    /// <summary>
+    /// gfx/map/water/flowmap.dds, a quarter of the province raster as vanilla's is (2048 for 8192),
+    /// read by jomini_water.fxh's <c>CalcFlow</c> and jomini_water_default.fxh:
+    /// <list type="bullet">
+    /// <item><b>RG</b> the current's direction, normalised in the shader, which turns the flow
+    /// normal map. Vanilla's are a smooth field with no single heading; here a coarse noise angle.</item>
+    /// <item><b>B</b> the current's strength and its foam mask; vanilla's sea sits at 238–255.</item>
+    /// <item><b>A</b> the breaking-wave gate; see <see cref="ShoreWaveReach"/>.</item>
+    /// </list>
+    /// </summary>
+    private static void WriteFlowMap(string waterDir, int foamW, int foamH, float[] toLand, bool[] river)
+    {
+        int w = foamW / 2 / 4 * 4, h = foamH / 2 / 4 * 4;
+        var angle = TileableNoise(w, h, 8, 4, 3, 0.5, 0xF10A1u);
+        var flow = new byte[w * h * 4];
+        Parallel.For(0, h, y =>
+        {
+            for (int x = 0; x < w; x++)
+            {
+                // Nearest to land and any river among the four foam cells under this texel.
+                double d = double.MaxValue;
+                bool anyRiver = false;
+                for (int sy = 0; sy < 2; sy++)
+                    for (int sx = 0; sx < 2; sx++)
+                    {
+                        int fi = Math.Min(foamH - 1, y * 2 + sy) * foamW + Math.Min(foamW - 1, x * 2 + sx);
+                        d = Math.Min(d, toLand[fi]);
+                        anyRiver |= river[fi];
+                    }
+
+                int i = y * w + x, o = i * 4;
+                double a = angle[i] * Math.PI * 2;
+                flow[o] = 250;
+                flow[o + 1] = (byte)Math.Round(128 + 64 * Math.Sin(a));
+                flow[o + 2] = (byte)Math.Round(128 + 64 * Math.Cos(a));
+                flow[o + 3] = d <= ShoreWaveReach && !anyRiver ? (byte)255 : (byte)0;
+            }
+        });
+        DdsWriter.WriteCompressed(Path.Combine(waterDir, "flowmap.dds"), w, h, flow, alpha: true, mips: true);
+    }
+
+    /// <summary>Each cell's distance to the nearest land cell in world units, by a 3-4 chamfer;
+    /// land is 0, and a map with no land is <see cref="float.MaxValue"/> everywhere.</summary>
+    private static float[] ChamferToLand(bool[] land, int w, int h, double unitsPerCell)
+    {
+        const int Inf = int.MaxValue / 4;
+        var d = new int[w * h];
+        for (int i = 0; i < d.Length; i++) d[i] = land[i] ? 0 : Inf;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x, v = d[i];
+                if (v == 0) continue;
+                if (x > 0) v = Math.Min(v, d[i - 1] + 3);
+                if (y > 0)
+                {
+                    v = Math.Min(v, d[i - w] + 3);
+                    if (x > 0) v = Math.Min(v, d[i - w - 1] + 4);
+                    if (x < w - 1) v = Math.Min(v, d[i - w + 1] + 4);
+                }
+                d[i] = v;
+            }
+        for (int y = h - 1; y >= 0; y--)
+            for (int x = w - 1; x >= 0; x--)
+            {
+                int i = y * w + x, v = d[i];
+                if (v == 0) continue;
+                if (x < w - 1) v = Math.Min(v, d[i + 1] + 3);
+                if (y < h - 1)
+                {
+                    v = Math.Min(v, d[i + w] + 3);
+                    if (x < w - 1) v = Math.Min(v, d[i + w + 1] + 4);
+                    if (x > 0) v = Math.Min(v, d[i + w - 1] + 4);
+                }
+                d[i] = v;
+            }
+
+        var units = new float[w * h];
+        for (int i = 0; i < d.Length; i++)
+            units[i] = d[i] >= Inf ? float.MaxValue : (float)(d[i] / 3.0 * unitsPerCell);
+        return units;
+    }
+
+    /// <summary>Piecewise-linear through <paramref name="points"/>, held flat beyond either end.</summary>
+    private static double Interpolate((double D, double V)[] points, double d)
+    {
+        if (d <= points[0].D) return points[0].V;
+        for (int k = 1; k < points.Length; k++)
+            if (d <= points[k].D)
+                return points[k - 1].V + (d - points[k - 1].D) / (points[k].D - points[k - 1].D)
+                       * (points[k].V - points[k - 1].V);
+        return points[^1].V;
     }
 }

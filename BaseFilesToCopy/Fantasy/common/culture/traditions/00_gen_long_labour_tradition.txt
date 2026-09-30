@@ -1,0 +1,68 @@
+﻿# The Long Labour: among this people a king may give a whole long life to a single work, finished only
+# as the maker begins to let the world go. Its parameter, gen_great_work, is what the Swear a Great
+# Work decision reads (00_gen_great_work_triggers.txt has the map of the whole system).
+#
+# Every high-elf culture starts with it — Cultures.RaceCustoms in the generator guarantees it on top of
+# the race's scholarly tradition. It asks patience of a people; short-lived cultures rarely take it up.
+tradition_gen_long_labour = {
+	category = societal
+
+	layers = {
+		0 = learning
+		1 = mena
+		4 = artisan.dds
+	}
+
+	parameters = {
+		gen_great_work = yes
+	}
+
+	character_modifier = {
+		monthly_learning_lifestyle_xp_gain_mult = 0.05
+		stress_loss_mult = 0.05
+	}
+
+	cost = {
+		prestige = {
+			add = {
+				value = tradition_base_cost
+				desc = BASE
+				format = "BASE_VALUE_FORMAT"
+			}
+			if = {
+				limit = {
+					NOR = {
+						culture_pillar:ethos_courtly = { is_in_list = traits }
+						culture_pillar:ethos_communal = { is_in_list = traits }
+						culture_pillar:ethos_egalitarian = { is_in_list = traits }
+					}
+				}
+				add = {
+					value = tradition_incompatible_ethos_penalty
+					desc = not_communal_egalitarian_or_courtly_desc
+				}
+			}
+			if = {
+				limit = {
+					culture_tradition_reduction_trigger = { TRADITION = tradition_gen_long_labour }
+				}
+				multiply = {
+					value = 0.5
+					desc = inspired_by_culture_desc
+				}
+			}
+			multiply = tradition_replacement_cost_if_relevant
+		}
+	}
+
+	# An elvish custom: a culture head who is not a high elf almost never reaches for it.
+	ai_will_do = {
+		value = 5
+		if = {
+			limit = {
+				scope:character ?= { has_trait = phenotype_gracile }
+			}
+			value = 150
+		}
+	}
+}

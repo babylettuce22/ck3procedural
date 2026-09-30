@@ -1,0 +1,99 @@
+﻿# Gnome Tinkering: what a working contraption leaves behind (and what an exploding one does).
+# Applied by 00_gen_tinker_outcome_effects.txt from the outcome event gen_tinker.0350. Each project has a
+# "works" and a stronger "masterwork" version. See 00_gen_tinker_triggers.txt for the map of the system.
+
+# ---------------------------------------------------------------- Curio (artifact modifiers)
+# The trinket (a clockwork songbird), for anyone.
+gen_tk_curio_trinket_modifier = {
+	learning = 1
+	monthly_prestige = 0.1
+}
+gen_tk_curio_trinket_masterwork_modifier = {
+	learning = 2
+	monthly_prestige = 0.25
+}
+
+# The court piece (a clockwork orrery), for a ruler with a royal court.
+gen_tk_curio_orrery_modifier = {
+	court_grandeur_baseline_add = 2
+	learning = 1
+}
+gen_tk_curio_orrery_masterwork_modifier = {
+	court_grandeur_baseline_add = 4
+	learning = 2
+	monthly_prestige = 0.2
+}
+
+# ---------------------------------------------------------------- Waterworks (county, 20 years)
+gen_tk_waterworks_modifier = {
+	icon = county_modifier_development_positive
+	development_growth_factor = 0.15
+	tax_mult = 0.05
+}
+gen_tk_waterworks_masterwork_modifier = {
+	icon = county_modifier_development_positive
+	development_growth_factor = 0.3
+	tax_mult = 0.1
+	county_opinion_add = 5
+}
+
+# ---------------------------------------------------------------- War engine (character, 10 years)
+gen_tk_war_engine_modifier = {
+	icon = martial_positive
+	army_siege_value_mult = 0.2
+	siege_phase_time = -0.1
+}
+gen_tk_war_engine_masterwork_modifier = {
+	icon = martial_positive
+	army_siege_value_mult = 0.35
+	siege_phase_time = -0.15
+	army_damage_mult = 0.05
+}
+
+# ---------------------------------------------------------------- Clockwork limb (character, permanent)
+# The injury trait stays; these give back part of what it takes.
+# maimed:     every skill -2, prowess -4, attraction -10. Works gives back half, masterwork about 3/4.
+gen_tk_clockwork_hand_modifier = {
+	icon = prowess_positive
+	diplomacy = 1
+	martial = 1
+	stewardship = 1
+	intrigue = 1
+	learning = 1
+	prowess = 2
+	attraction_opinion = 5
+}
+gen_tk_clockwork_hand_masterwork_modifier = {
+	icon = prowess_positive
+	diplomacy = 1
+	martial = 2
+	stewardship = 2
+	intrigue = 1
+	learning = 2
+	prowess = 3
+	attraction_opinion = 8
+}
+# one_legged: prowess -4, attraction -10.
+gen_tk_clockwork_leg_modifier = {
+	icon = prowess_positive
+	prowess = 2
+	attraction_opinion = 5
+}
+gen_tk_clockwork_leg_masterwork_modifier = {
+	icon = prowess_positive
+	prowess = 3
+	attraction_opinion = 8
+}
+
+# ---------------------------------------------------------------- The apprentice (character, 10 years)
+gen_tk_apprentice_learned_modifier = {
+	icon = learning_positive
+	learning = 1
+}
+
+# ---------------------------------------------------------------- An explosion (county, 3 years)
+gen_tk_workshop_ruins_modifier = {
+	icon = county_modifier_development_negative
+	development_growth_factor = -0.15
+	county_opinion_add = -5
+}

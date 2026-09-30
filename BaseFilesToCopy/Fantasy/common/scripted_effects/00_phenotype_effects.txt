@@ -43,7 +43,16 @@
 
 gen_assign_phenotype_effect = {
 	if = {
-		limit = { NOT = { gen_has_phenotype_trigger = yes } }
+		limit = {
+			NOT = { gen_has_phenotype_trigger = yes }
+			# Not the wilderness or ruins dummy. It is a placeholder, not a person, but it has a
+			# culture (Unsettled) and so an ethnicity, and once the ethnicity probe started working
+			# a map whose Unsettled culture drew a wood-elf ethnicity made both dummies sylvan — and
+			# so mortal to the world_weary clock. Tested by government FLAG, not the `wilderness`
+			# trait, because this set also ships on worlds without the Wilderness set (an unknown
+			# flag is simply never held).
+			NOT = { government_has_flag = government_is_wilderness }
+		}
 
 		# Saved rather than leaning on `root`, because this is called from several on_actions and
 		# root is not the same character in all of them — in on_baron_found_or_created_for_title it

@@ -1,0 +1,32 @@
+﻿# Gnome Tinkering: the name of whatever is on the bench, for the workshop events' text
+# ([ROOT.Char.Custom('GenTkProject')], "the [...]"). Keys in gen_tinker_workshop_l_english.yml.
+# Reads var:gen_tk_project on the tinkerer (00_gen_tinker_effects.txt).
+
+GenTkProject = {
+	type = character
+
+	text = {
+		trigger = { var:gen_tk_project ?= flag:curio }
+		localization_key = gen_tk_ws_noun_curio
+	}
+	text = {
+		trigger = { var:gen_tk_project ?= flag:mill }
+		localization_key = gen_tk_ws_noun_mill
+	}
+	text = {
+		trigger = { var:gen_tk_project ?= flag:engine }
+		localization_key = gen_tk_ws_noun_engine
+	}
+	text = {
+		trigger = { var:gen_tk_project ?= flag:limb }
+		localization_key = gen_tk_ws_noun_limb
+	}
+	text = {
+		trigger = { var:gen_tk_project ?= flag:invention }
+		localization_key = gen_tk_ws_noun_invention
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_tk_ws_noun_other
+	}
+}

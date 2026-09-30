@@ -1,0 +1,1358 @@
+﻿namespace = gen_blood_challenge
+
+# Blood Challenge, part 2 of 4: the pre-fight scene (gen_blood_challenge.0010–0099).
+#
+#   interaction accepted (main: common/character_interactions/00_gen_blood_challenge_interactions.txt)
+#     → 0010 here, a hidden dispatcher on scope:gen_bc_viewer
+#       → one of six scenes, 0011–0016; every option picks a stance, then gen_bc_start_combat_effect
+#         → vanilla single combat → 0100 (main) → aftermath 0200/0300 (events/gen_blood_challenge_aftermath_events.txt)
+#           → 0500 (main), which calls gen_bc_clear_stance_effect on both fighters
+#
+# Scenes:
+#   0011 The High Seat       upward only: the fight happens in the higher ruler's hall
+#   0012 The Clan Circle     peer only: called out at the fire of a clan gathering
+#   0013 An Example          downward only: a chief makes an example of a vassal
+#   0014 Spit in the Dust    any kind: the opponent insults the viewer before the circle
+#   0015 The Omens           any kind: a shaman draws the circle and offers war-paint and omens
+#   0016 Your Blood Watches  any kind, needs a child or heir aged 8+: family watches the fight
+#
+# The viewer may be the challenger or the defender, so every scene has two openings (first_valid on
+# root = scope:gen_bc_challenger) and a shared stakes paragraph keyed on scope:gen_bc_kind.
+#
+# Stances (common/scripted_effects/00_gen_blood_challenge_scene_effects.txt) set one of three flags
+# the aftermath reads: gen_bc_stance_fury / _cunning / _ancestors. "Just fight" sets none.
+# Every option calls gen_bc_start_combat_effect = yes exactly once, as its last line.
+#
+# Scene events have no trigger block on purpose: a scene that fails to fire would leave the
+# accepted challenge hanging. Each scene has a plain option with a flat positive ai_chance, so an
+# AI viewer always has something to pick.
+
+
+# =====================================================================================
+#  0010 Dispatcher
+# =====================================================================================
+
+# Hidden. Picks a scene. The three kind-specific scenes cover every kind, so at least one
+# weighted entry is always valid. A 5-year "seen" flag set by each scene cuts its weight, so
+# repeat challengers see different scenes.
+gen_blood_challenge.0010 = {
+	type = character_event
+	hidden = yes
+
+	immediate = {
+		gen_bc_scene_setup_effect = yes
+		random_list = {
+			100 = {
+				trigger = { scope:gen_bc_kind = flag:upward }
+				modifier = {
+					has_character_flag = gen_bc_seen_scene_0011
+					factor = 0.3
+				}
+				trigger_event = gen_blood_challenge.0011
+			}
+			100 = {
+				trigger = { scope:gen_bc_kind = flag:peer }
+				modifier = {
+					has_character_flag = gen_bc_seen_scene_0012
+					factor = 0.3
+				}
+				trigger_event = gen_blood_challenge.0012
+			}
+			100 = {
+				trigger = { scope:gen_bc_kind = flag:downward }
+				modifier = {
+					has_character_flag = gen_bc_seen_scene_0013
+					factor = 0.3
+				}
+				trigger_event = gen_blood_challenge.0013
+			}
+			60 = {
+				# More likely when the opponent is the kind to mouth off.
+				modifier = {
+					scope:gen_bc_scene_opponent = {
+						OR = {
+							has_trait = arrogant
+							has_trait = wrathful
+							has_trait = callous
+						}
+					}
+					add = 30
+				}
+				modifier = {
+					has_character_flag = gen_bc_seen_scene_0014
+					factor = 0.3
+				}
+				trigger_event = gen_blood_challenge.0014
+			}
+			60 = {
+				modifier = {
+					has_trait = zealous
+					add = 20
+				}
+				modifier = {
+					has_character_flag = gen_bc_seen_scene_0015
+					factor = 0.3
+				}
+				trigger_event = gen_blood_challenge.0015
+			}
+			50 = {
+				# Same watcher test as 0016's immediate block.
+				trigger = {
+					OR = {
+						primary_heir ?= {
+							age >= 8
+							is_imprisoned = no
+							NOT = { this = scope:gen_bc_challenger }
+							NOT = { this = scope:gen_bc_defender }
+						}
+						any_child = {
+							age >= 8
+							is_imprisoned = no
+							NOT = { this = scope:gen_bc_challenger }
+							NOT = { this = scope:gen_bc_defender }
+						}
+					}
+				}
+				modifier = {
+					has_character_flag = gen_bc_seen_scene_0016
+					factor = 0.3
+				}
+				trigger_event = gen_blood_challenge.0016
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0011 The High Seat (upward)
+# =====================================================================================
+
+gen_blood_challenge.0011 = {
+	type = character_event
+	title = gen_blood_challenge.0011.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { root = scope:gen_bc_challenger }
+				desc = gen_blood_challenge.0011.desc_challenger
+			}
+			desc = gen_blood_challenge.0011.desc_defender
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+					exists = scope:gen_bc_title
+				}
+				desc = gen_bc_scene_stakes_up_challenger_title
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_up_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:upward }
+				desc = gen_bc_scene_stakes_up_defender
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:downward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_down_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:downward }
+				desc = gen_bc_scene_stakes_down_defender
+			}
+			desc = gen_bc_scene_stakes_peer
+		}
+	}
+	theme = martial
+	override_background = { reference = throne_room_tribal }
+
+	left_portrait = {
+		character = root
+		triggered_animation = {
+			trigger = { root = scope:gen_bc_defender }
+			animation = anger
+		}
+		animation = personality_bold
+	}
+	right_portrait = {
+		character = scope:gen_bc_scene_opponent
+		triggered_animation = {
+			trigger = { scope:gen_bc_scene_opponent = scope:gen_bc_defender }
+			animation = rage
+		}
+		triggered_animation = {
+			trigger = { always = yes }
+			scripted_animation = duel_wield_weapon
+		}
+	}
+
+	immediate = {
+		gen_bc_scene_setup_effect = yes
+		add_character_flag = { flag = gen_bc_seen_scene_0011 years = 5 }
+		play_music_cue = mx_cue_combat_2
+	}
+
+	# Fury
+	option = {
+		name = gen_blood_challenge.0011.a
+		trigger = {
+			NOT = { has_trait = berserker }
+			NOT = { has_trait = wrathful }
+		}
+		gen_bc_apply_fury_stance_effect = yes
+		stress_impact = {
+			calm = minor_stress_impact_gain
+			craven = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_boldness = 0.5
+				ai_rationality = -0.25
+			}
+			modifier = {
+				has_trait = impatient
+				add = 15
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Fury, berserker/wrathful
+	option = {
+		name = gen_blood_challenge.0011.a_blood
+		trigger = {
+			OR = {
+				has_trait = berserker
+				has_trait = wrathful
+			}
+		}
+		gen_bc_apply_blood_fury_stance_effect = yes
+		ai_chance = {
+			base = 40
+			ai_value_modifier = { ai_boldness = 0.5 }
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Cunning
+	option = {
+		name = gen_blood_challenge.0011.b
+		gen_bc_apply_cunning_stance_effect = yes
+		stress_impact = {
+			wrathful = minor_stress_impact_gain
+			impatient = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.5
+				ai_boldness = -0.25
+			}
+			modifier = {
+				has_trait = deceitful
+				add = 15
+			}
+			modifier = {
+				has_trait = patient
+				add = 10
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Ancestors
+	option = {
+		name = gen_blood_challenge.0011.c
+		gen_bc_apply_ancestors_stance_effect = yes
+		stress_impact = {
+			cynical = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_honor = 0.25 }
+			modifier = {
+				has_trait = zealous
+				add = 20
+			}
+			modifier = {
+				has_trait = cynical
+				factor = 0
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Craven
+	option = {
+		name = gen_bc_scene_craven_option
+		trigger = { has_trait = craven }
+		gen_bc_apply_wary_stance_effect = yes
+		add_prestige = minor_prestige_loss
+		ai_chance = { base = 40 }
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Plain
+	option = {
+		name = gen_blood_challenge.0011.d
+		gen_bc_apply_no_stance_effect = yes
+		ai_chance = {
+			base = 20
+			modifier = {
+				has_trait = humble
+				add = 10
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0012 The Clan Circle (peer)
+# =====================================================================================
+
+gen_blood_challenge.0012 = {
+	type = character_event
+	title = gen_blood_challenge.0012.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { root = scope:gen_bc_challenger }
+				desc = gen_blood_challenge.0012.desc_challenger
+			}
+			desc = gen_blood_challenge.0012.desc_defender
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+					exists = scope:gen_bc_title
+				}
+				desc = gen_bc_scene_stakes_up_challenger_title
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_up_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:upward }
+				desc = gen_bc_scene_stakes_up_defender
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:downward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_down_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:downward }
+				desc = gen_bc_scene_stakes_down_defender
+			}
+			desc = gen_bc_scene_stakes_peer
+		}
+	}
+	theme = martial
+	override_background = { reference = bp1_bonfire }
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		character = scope:gen_bc_scene_opponent
+		animation = menacing
+	}
+
+	immediate = {
+		gen_bc_scene_setup_effect = yes
+		add_character_flag = { flag = gen_bc_seen_scene_0012 years = 5 }
+		play_music_cue = mx_cue_combat_2
+	}
+
+	# Fury
+	option = {
+		name = gen_blood_challenge.0012.a
+		trigger = {
+			NOT = { has_trait = berserker }
+			NOT = { has_trait = wrathful }
+		}
+		gen_bc_apply_fury_stance_effect = yes
+		stress_impact = {
+			calm = minor_stress_impact_gain
+			craven = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_boldness = 0.5
+				ai_rationality = -0.25
+			}
+			modifier = {
+				has_trait = impatient
+				add = 15
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Fury, berserker/wrathful
+	option = {
+		name = gen_blood_challenge.0012.a_blood
+		trigger = {
+			OR = {
+				has_trait = berserker
+				has_trait = wrathful
+			}
+		}
+		gen_bc_apply_blood_fury_stance_effect = yes
+		ai_chance = {
+			base = 40
+			ai_value_modifier = { ai_boldness = 0.5 }
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Cunning
+	option = {
+		name = gen_blood_challenge.0012.b
+		gen_bc_apply_cunning_stance_effect = yes
+		stress_impact = {
+			wrathful = minor_stress_impact_gain
+			impatient = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.5
+				ai_boldness = -0.25
+			}
+			modifier = {
+				has_trait = deceitful
+				add = 15
+			}
+			modifier = {
+				has_trait = patient
+				add = 10
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Ancestors
+	option = {
+		name = gen_blood_challenge.0012.c
+		gen_bc_apply_ancestors_stance_effect = yes
+		stress_impact = {
+			cynical = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_honor = 0.25 }
+			modifier = {
+				has_trait = zealous
+				add = 20
+			}
+			modifier = {
+				has_trait = cynical
+				factor = 0
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Craven
+	option = {
+		name = gen_bc_scene_craven_option
+		trigger = { has_trait = craven }
+		gen_bc_apply_wary_stance_effect = yes
+		add_prestige = minor_prestige_loss
+		ai_chance = { base = 40 }
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Plain
+	option = {
+		name = gen_blood_challenge.0012.d
+		gen_bc_apply_no_stance_effect = yes
+		ai_chance = {
+			base = 20
+			modifier = {
+				has_trait = humble
+				add = 10
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0013 An Example (downward)
+# =====================================================================================
+
+gen_blood_challenge.0013 = {
+	type = character_event
+	title = gen_blood_challenge.0013.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { root = scope:gen_bc_challenger }
+				desc = gen_blood_challenge.0013.desc_challenger
+			}
+			desc = gen_blood_challenge.0013.desc_defender
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+					exists = scope:gen_bc_title
+				}
+				desc = gen_bc_scene_stakes_up_challenger_title
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_up_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:upward }
+				desc = gen_bc_scene_stakes_up_defender
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:downward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_down_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:downward }
+				desc = gen_bc_scene_stakes_down_defender
+			}
+			desc = gen_bc_scene_stakes_peer
+		}
+	}
+	theme = martial
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		triggered_animation = {
+			trigger = { root = scope:gen_bc_challenger }
+			animation = dismissal
+		}
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:gen_bc_scene_opponent
+		triggered_animation = {
+			trigger = { scope:gen_bc_scene_opponent = scope:gen_bc_challenger }
+			animation = threatening
+		}
+		animation = anger
+	}
+
+	immediate = {
+		gen_bc_scene_setup_effect = yes
+		add_character_flag = { flag = gen_bc_seen_scene_0013 years = 5 }
+		play_music_cue = mx_cue_combat_2
+	}
+
+	# Fury
+	option = {
+		name = gen_blood_challenge.0013.a
+		trigger = {
+			NOT = { has_trait = berserker }
+			NOT = { has_trait = wrathful }
+		}
+		gen_bc_apply_fury_stance_effect = yes
+		stress_impact = {
+			calm = minor_stress_impact_gain
+			craven = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_boldness = 0.5
+				ai_rationality = -0.25
+			}
+			modifier = {
+				has_trait = impatient
+				add = 15
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Fury, berserker/wrathful
+	option = {
+		name = gen_blood_challenge.0013.a_blood
+		trigger = {
+			OR = {
+				has_trait = berserker
+				has_trait = wrathful
+			}
+		}
+		gen_bc_apply_blood_fury_stance_effect = yes
+		ai_chance = {
+			base = 40
+			ai_value_modifier = { ai_boldness = 0.5 }
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Cunning
+	option = {
+		name = gen_blood_challenge.0013.b
+		gen_bc_apply_cunning_stance_effect = yes
+		stress_impact = {
+			wrathful = minor_stress_impact_gain
+			impatient = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.5
+				ai_boldness = -0.25
+			}
+			modifier = {
+				has_trait = deceitful
+				add = 15
+			}
+			modifier = {
+				has_trait = patient
+				add = 10
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Ancestors (the vassal swears they are no one's lesson; the chief calls the ancestors to witness)
+	option = {
+		name = gen_blood_challenge.0013.c
+		gen_bc_apply_ancestors_stance_effect = yes
+		stress_impact = {
+			cynical = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_honor = 0.25 }
+			modifier = {
+				has_trait = zealous
+				add = 20
+			}
+			modifier = {
+				has_trait = cynical
+				factor = 0
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Craven
+	option = {
+		name = gen_bc_scene_craven_option
+		trigger = { has_trait = craven }
+		gen_bc_apply_wary_stance_effect = yes
+		add_prestige = minor_prestige_loss
+		ai_chance = { base = 40 }
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Plain
+	option = {
+		name = gen_blood_challenge.0013.d
+		gen_bc_apply_no_stance_effect = yes
+		ai_chance = {
+			base = 20
+			modifier = {
+				has_trait = humble
+				add = 10
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0014 Spit in the Dust (any kind): the opponent insults the viewer
+# =====================================================================================
+
+gen_blood_challenge.0014 = {
+	type = character_event
+	title = gen_blood_challenge.0014.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { root = scope:gen_bc_challenger }
+				desc = gen_blood_challenge.0014.desc_challenger
+			}
+			desc = gen_blood_challenge.0014.desc_defender
+		}
+		# What the opponent shouts, picked from what is true about the viewer.
+		first_valid = {
+			triggered_desc = {
+				trigger = { age >= 50 }
+				desc = gen_blood_challenge.0014.desc_insult_old
+			}
+			triggered_desc = {
+				trigger = { prowess < scope:gen_bc_scene_opponent.prowess }
+				desc = gen_blood_challenge.0014.desc_insult_weak
+			}
+			triggered_desc = {
+				trigger = { has_trait = craven }
+				desc = gen_blood_challenge.0014.desc_insult_craven
+			}
+			desc = gen_blood_challenge.0014.desc_insult_generic
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+					exists = scope:gen_bc_title
+				}
+				desc = gen_bc_scene_stakes_up_challenger_title
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_up_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:upward }
+				desc = gen_bc_scene_stakes_up_defender
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:downward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_down_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:downward }
+				desc = gen_bc_scene_stakes_down_defender
+			}
+			desc = gen_bc_scene_stakes_peer
+		}
+	}
+	theme = martial
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		triggered_animation = {
+			trigger = { has_trait = craven }
+			animation = fear
+		}
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:gen_bc_scene_opponent
+		animation = schadenfreude
+	}
+
+	immediate = {
+		gen_bc_scene_setup_effect = yes
+		add_character_flag = { flag = gen_bc_seen_scene_0014 years = 5 }
+		play_music_cue = mx_cue_combat_2
+	}
+
+	# Spit back: fury (the stronger one for berserkers/wrathful) and prestige now, but the
+	# opponent fights in a fury too.
+	option = {
+		name = gen_blood_challenge.0014.a
+		gen_bc_apply_best_fury_stance_effect = yes
+		add_prestige = minor_prestige_gain
+		scope:gen_bc_scene_opponent = {
+			add_character_flag = { flag = gen_bc_stance_fury days = 180 }
+		}
+		custom_tooltip = gen_bc_scene_opponent_fury_tt
+		stress_impact = {
+			calm = minor_stress_impact_gain
+			craven = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			ai_value_modifier = {
+				ai_boldness = 0.5
+				ai_vengefulness = 0.25
+			}
+			modifier = {
+				OR = {
+					has_trait = wrathful
+					has_trait = berserker
+					has_trait = arrogant
+				}
+				add = 25
+			}
+			modifier = {
+				has_trait = craven
+				factor = 0.2
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Cunning: say nothing and watch
+	option = {
+		name = gen_blood_challenge.0014.b
+		gen_bc_apply_cunning_stance_effect = yes
+		stress_impact = {
+			wrathful = minor_stress_impact_gain
+			impatient = minor_stress_impact_gain
+			arrogant = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.5
+				ai_boldness = -0.25
+			}
+			modifier = {
+				has_trait = deceitful
+				add = 15
+			}
+			modifier = {
+				has_trait = patient
+				add = 10
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Ancestors
+	option = {
+		name = gen_blood_challenge.0014.c
+		gen_bc_apply_ancestors_stance_effect = yes
+		stress_impact = {
+			cynical = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_honor = 0.25 }
+			modifier = {
+				has_trait = zealous
+				add = 20
+			}
+			modifier = {
+				has_trait = cynical
+				factor = 0
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Craven
+	option = {
+		name = gen_bc_scene_craven_option
+		trigger = { has_trait = craven }
+		gen_bc_apply_wary_stance_effect = yes
+		add_prestige = minor_prestige_loss
+		ai_chance = { base = 40 }
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Plain
+	option = {
+		name = gen_blood_challenge.0014.d
+		gen_bc_apply_no_stance_effect = yes
+		ai_chance = {
+			base = 20
+			modifier = {
+				has_trait = calm
+				add = 10
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0015 The Omens (any kind): a shaman draws the circle
+# =====================================================================================
+
+gen_blood_challenge.0015 = {
+	type = character_event
+	title = gen_blood_challenge.0015.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { root = scope:gen_bc_challenger }
+				desc = gen_blood_challenge.0015.desc_challenger
+			}
+			desc = gen_blood_challenge.0015.desc_defender
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:gen_bc_scene_shaman }
+				desc = gen_blood_challenge.0015.desc_shaman_named
+			}
+			desc = gen_blood_challenge.0015.desc_shaman_elder
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+					exists = scope:gen_bc_title
+				}
+				desc = gen_bc_scene_stakes_up_challenger_title
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_up_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:upward }
+				desc = gen_bc_scene_stakes_up_defender
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:downward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_down_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:downward }
+				desc = gen_bc_scene_stakes_down_defender
+			}
+			desc = gen_bc_scene_stakes_peer
+		}
+	}
+	theme = martial
+	override_background = { reference = fp1_runestone_circle }
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		character = scope:gen_bc_scene_opponent
+		scripted_animation = duel_wield_weapon
+	}
+	lower_left_portrait = {
+		trigger = { exists = scope:gen_bc_scene_shaman }
+		character = scope:gen_bc_scene_shaman
+		animation = prayer
+	}
+
+	immediate = {
+		gen_bc_scene_setup_effect = yes
+		add_character_flag = { flag = gen_bc_seen_scene_0015 years = 5 }
+		play_music_cue = mx_cue_combat_2
+		# The viewer's own court chaplain plays the shaman when there is one who is not fighting.
+		if = {
+			limit = {
+				exists = cp:councillor_court_chaplain
+				cp:councillor_court_chaplain = {
+					NOT = { this = scope:gen_bc_challenger }
+					NOT = { this = scope:gen_bc_defender }
+				}
+			}
+			cp:councillor_court_chaplain = { save_scope_as = gen_bc_scene_shaman }
+		}
+	}
+
+	# War-paint: +1 prowess for silver, and the ancestors' mark.
+	option = {
+		name = gen_blood_challenge.0015.a
+		trigger = { gold >= minor_gold_value }
+		gen_bc_apply_ancestors_flag_effect = yes
+		remove_short_term_gold = minor_gold_value
+		add_character_modifier = { modifier = gen_bc_war_paint_modifier days = 30 }
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_honor = 0.25
+				ai_greed = -0.25
+			}
+			modifier = {
+				has_trait = zealous
+				add = 15
+			}
+			modifier = {
+				has_trait = greedy
+				factor = 0.3
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Omens: ancestors flag, then a visible roll: good omens give +1 prowess, bad ones stress.
+	option = {
+		name = gen_blood_challenge.0015.b
+		gen_bc_apply_ancestors_flag_effect = yes
+		random_list = {
+			60 = {
+				show_chance = yes
+				desc = gen_blood_challenge.0015.b.good
+				modifier = {
+					has_trait = zealous
+					add = 15
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_blood_challenge.0015.b.good
+					left_icon = root
+					add_character_modifier = { modifier = gen_bc_good_omen_modifier days = 30 }
+				}
+			}
+			40 = {
+				show_chance = yes
+				desc = gen_blood_challenge.0015.b.bad
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0015.b.bad
+					left_icon = root
+					add_stress = minor_stress_gain
+				}
+			}
+		}
+		stress_impact = {
+			cynical = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_honor = 0.25 }
+			modifier = {
+				has_trait = zealous
+				add = 20
+			}
+			modifier = {
+				has_trait = cynical
+				factor = 0
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Fury
+	option = {
+		name = gen_blood_challenge.0015.c
+		trigger = {
+			NOT = { has_trait = berserker }
+			NOT = { has_trait = wrathful }
+		}
+		gen_bc_apply_fury_stance_effect = yes
+		stress_impact = {
+			calm = minor_stress_impact_gain
+			craven = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_boldness = 0.5
+				ai_rationality = -0.25
+			}
+			modifier = {
+				has_trait = impatient
+				add = 15
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Fury, berserker/wrathful
+	option = {
+		name = gen_blood_challenge.0015.c_blood
+		trigger = {
+			OR = {
+				has_trait = berserker
+				has_trait = wrathful
+			}
+		}
+		gen_bc_apply_blood_fury_stance_effect = yes
+		ai_chance = {
+			base = 40
+			ai_value_modifier = { ai_boldness = 0.5 }
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Craven
+	option = {
+		name = gen_bc_scene_craven_option
+		trigger = { has_trait = craven }
+		gen_bc_apply_wary_stance_effect = yes
+		add_prestige = minor_prestige_loss
+		ai_chance = { base = 40 }
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Plain: wave the shaman off
+	option = {
+		name = gen_blood_challenge.0015.d
+		gen_bc_apply_no_stance_effect = yes
+		ai_chance = {
+			base = 20
+			modifier = {
+				has_trait = cynical
+				add = 15
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0016 Your Blood Watches (any kind): the viewer's heir or child is in the crowd
+# =====================================================================================
+
+gen_blood_challenge.0016 = {
+	type = character_event
+	title = gen_blood_challenge.0016.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { root = scope:gen_bc_challenger }
+				desc = gen_blood_challenge.0016.desc_challenger
+			}
+			desc = gen_blood_challenge.0016.desc_defender
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:gen_bc_scene_watcher
+					exists = root.primary_heir
+					scope:gen_bc_scene_watcher = root.primary_heir
+				}
+				desc = gen_blood_challenge.0016.desc_heir
+			}
+			triggered_desc = {
+				trigger = { exists = scope:gen_bc_scene_watcher }
+				desc = gen_blood_challenge.0016.desc_child
+			}
+			# The watcher vanished between dispatch and firing (died the same day). Still reads.
+			desc = gen_blood_challenge.0016.desc_crowd
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+					exists = scope:gen_bc_title
+				}
+				desc = gen_bc_scene_stakes_up_challenger_title
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_up_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:upward }
+				desc = gen_bc_scene_stakes_up_defender
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:downward
+					root = scope:gen_bc_challenger
+				}
+				desc = gen_bc_scene_stakes_down_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:downward }
+				desc = gen_bc_scene_stakes_down_defender
+			}
+			desc = gen_bc_scene_stakes_peer
+		}
+	}
+	theme = martial
+	override_background = { reference = bp1_bonfire }
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		character = scope:gen_bc_scene_opponent
+		scripted_animation = duel_wield_weapon
+	}
+	lower_left_portrait = {
+		trigger = { exists = scope:gen_bc_scene_watcher }
+		character = scope:gen_bc_scene_watcher
+		animation = worry
+	}
+
+	immediate = {
+		gen_bc_scene_setup_effect = yes
+		add_character_flag = { flag = gen_bc_seen_scene_0016 years = 5 }
+		play_music_cue = mx_cue_combat_2
+		# Same test as the dispatcher's 0016 entry. The heir first, else any child.
+		if = {
+			limit = {
+				primary_heir ?= {
+					age >= 8
+					is_imprisoned = no
+					NOT = { this = scope:gen_bc_challenger }
+					NOT = { this = scope:gen_bc_defender }
+				}
+			}
+			primary_heir = { save_scope_as = gen_bc_scene_watcher }
+		}
+		else = {
+			random_child = {
+				limit = {
+					age >= 8
+					is_imprisoned = no
+					NOT = { this = scope:gen_bc_challenger }
+					NOT = { this = scope:gen_bc_defender }
+				}
+				save_scope_as = gen_bc_scene_watcher
+			}
+		}
+	}
+
+	# Fight for them: ancestors flag, and the watcher's respect.
+	option = {
+		name = gen_blood_challenge.0016.a
+		trigger = { exists = scope:gen_bc_scene_watcher }
+		highlight_portrait = scope:gen_bc_scene_watcher
+		gen_bc_apply_ancestors_flag_effect = yes
+		scope:gen_bc_scene_watcher = {
+			add_opinion = {
+				target = root
+				modifier = respect_opinion
+				opinion = 10
+			}
+		}
+		ai_chance = {
+			base = 30
+			ai_value_modifier = {
+				ai_honor = 0.25
+				ai_compassion = 0.25
+			}
+			modifier = {
+				has_trait = callous
+				factor = 0.3
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Fury
+	option = {
+		name = gen_blood_challenge.0016.b
+		trigger = {
+			NOT = { has_trait = berserker }
+			NOT = { has_trait = wrathful }
+		}
+		gen_bc_apply_fury_stance_effect = yes
+		stress_impact = {
+			calm = minor_stress_impact_gain
+			craven = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_boldness = 0.5
+				ai_rationality = -0.25
+			}
+			modifier = {
+				has_trait = impatient
+				add = 15
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Fury, berserker/wrathful
+	option = {
+		name = gen_blood_challenge.0016.b_blood
+		trigger = {
+			OR = {
+				has_trait = berserker
+				has_trait = wrathful
+			}
+		}
+		gen_bc_apply_blood_fury_stance_effect = yes
+		ai_chance = {
+			base = 40
+			ai_value_modifier = { ai_boldness = 0.5 }
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Cunning
+	option = {
+		name = gen_blood_challenge.0016.c
+		gen_bc_apply_cunning_stance_effect = yes
+		stress_impact = {
+			wrathful = minor_stress_impact_gain
+			impatient = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.5
+				ai_boldness = -0.25
+			}
+			modifier = {
+				has_trait = deceitful
+				add = 15
+			}
+			modifier = {
+				has_trait = patient
+				add = 10
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Craven
+	option = {
+		name = gen_bc_scene_craven_option
+		trigger = { has_trait = craven }
+		gen_bc_apply_wary_stance_effect = yes
+		add_prestige = minor_prestige_loss
+		ai_chance = { base = 40 }
+		gen_bc_start_combat_effect = yes
+	}
+
+	# Plain
+	option = {
+		name = gen_blood_challenge.0016.d
+		gen_bc_apply_no_stance_effect = yes
+		ai_chance = {
+			base = 20
+			modifier = {
+				has_trait = humble
+				add = 10
+			}
+		}
+		gen_bc_start_combat_effect = yes
+	}
+}

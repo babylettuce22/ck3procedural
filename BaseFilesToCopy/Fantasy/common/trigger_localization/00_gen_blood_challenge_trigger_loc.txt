@@ -1,0 +1,23 @@
+﻿# Failure texts for the Blood Challenge's custom_description checks
+# (00_gen_blood_challenge_interactions.txt). Loc in gen_blood_challenge_l_english.yml.
+
+gen_bc_not_own_spouse = {
+	global = gen_bc_not_own_spouse
+	global_not = gen_bc_not_own_spouse
+	first = gen_bc_not_own_spouse
+	first_not = gen_bc_not_own_spouse
+}
+
+gen_bc_actor_already_fighting = {
+	global = gen_bc_actor_already_fighting
+	global_not = gen_bc_actor_already_fighting
+	first = gen_bc_actor_already_fighting
+	first_not = gen_bc_actor_already_fighting
+}
+
+gen_bc_recipient_already_fighting = {
+	global = gen_bc_recipient_already_fighting
+	global_not = gen_bc_recipient_already_fighting
+	first = gen_bc_recipient_already_fighting
+	first_not = gen_bc_recipient_already_fighting
+}

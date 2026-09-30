@@ -1,0 +1,29 @@
+﻿# Replaces All Under Heaven's list of Chinese dynasty names for a celestial realm.
+#
+# ---- What vanilla does ----
+#
+# When a new dynasty takes h_china (the Mandate claimed, a usurper, a shard of the old hegemony
+# gone independent at kingdom tier), title_on_actions fires tgp_dynastic_cycle.9000 -> .9001, "The
+# Foundation of a State", which renames the ruler's primary title. .9001 fills its name widget from
+# this effect: ~270 historical names (Song, Tang, Ba, Cao...), each weighted 0 unless the ruler's
+# capital sits in that name's tgp_*_region or their culture descends from a named Chinese one.
+#
+# ---- Why they leaked onto generated maps ----
+#
+# CompatibilityWriter.WriteGeographicalRegions gives every non-graphical vanilla region a
+# one-county placeholder, tgp_chinesenaming_regions.txt included. So each of those ~90 names
+# landed on a real county, and any celestial ruler whose capital happened to be one got "Cao" or
+# "Bi" as the name of their state, and then a new one at every change of dynasty.
+#
+# ---- The fix ----
+#
+# Offer no names. .9001 already handles an empty list: it saves the ruler's capital duchy and
+# kingdom, the AI takes the duchy name (vanilla sets flag:capital_duchy_name when its pick comes
+# up empty), and the player's widget defaults to those two with free text still open. That is the
+# historical rule the list itself encodes, a state named for its founder's home ground, and on a
+# generated map those names come from the world's own languages.
+#
+# Flat directory, so this file sorts after vanilla's 10_dlc_tgp_dynastic_cycle_scripted_effects.txt
+# and its definition wins.
+tgp_assign_china_realm_name_options_effect = {
+}

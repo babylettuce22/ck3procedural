@@ -1,0 +1,66 @@
+﻿# Swear a Great Work: a high-elf king gives the rest of a long life to one work. The decision pays the
+# oath and opens the scene where the work is chosen (gen_great_work.0010); the rest is the story cycle
+# in common/story_cycles/00_gen_great_work_story.txt. Once per lifetime.
+
+gen_gw_swear_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
+	}
+
+	desc = gen_gw_swear_decision_desc
+	selection_tooltip = gen_gw_swear_decision_tooltip
+	confirm_text = gen_gw_swear_decision_confirm
+
+	is_shown = {
+		gen_gw_can_swear_trigger = yes
+	}
+
+	is_valid = {
+		is_imprisoned = no
+		NOT = { has_trait = incapable }
+		is_at_war = no
+	}
+
+	cost = {
+		gold = gen_gw_oath_gold_value
+		prestige = massive_prestige_value
+	}
+
+	effect = {
+		custom_tooltip = gen_gw_swear_decision_effect.tt
+		trigger_event = gen_great_work.0010
+	}
+
+	# Rare by design: a secure, wealthy, learned king with years ahead.
+	ai_check_interval = 60
+	ai_potential = {
+		age < 70
+		OR = {
+			learning >= 14
+			diplomacy >= 14
+			stewardship >= 14
+		}
+	}
+	ai_will_do = {
+		base = 5
+		modifier = {
+			add = 10
+			OR = {
+				has_trait = diligent
+				has_trait = patient
+				has_trait = ambitious
+			}
+		}
+		modifier = {
+			factor = 0
+			OR = {
+				has_trait = lazy
+				has_trait = impatient
+			}
+		}
+		modifier = {
+			factor = 0
+			gold < gen_gw_oath_gold_value
+		}
+	}
+}

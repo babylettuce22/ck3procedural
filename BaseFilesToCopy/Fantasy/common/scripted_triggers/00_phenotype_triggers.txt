@@ -215,8 +215,8 @@ gen_is_different_race_than = {
 		# Both are fantasy races, but different traits
 		# The two elves are kin for this question: high and wood elves are separate races (each is
 		# drawn with its own body) but they married freely while they shared one trait, and the only
-		# consumer of this trigger is the AI's marriage reluctance. Their opinion of each other still
-		# follows the opposites web.
+		# consumer of this trigger is the AI's marriage reluctance. How they regard each other
+		# otherwise follows the compatibility matrix (warm, not kin).
 		AND = {
 			OR = {
 				has_trait = phenotype_gracile
@@ -250,6 +250,84 @@ gen_is_different_race_than = {
 		AND = {
 			has_trait = phenotype_horned
 			scope:gen_target_char = { NOT = { has_trait = phenotype_horned } }
+		}
+	}
+}
+
+# The two tiers of the AI's cross-race marriage reluctance (Emit/Gameplay/InteractionWriter.cs), read
+# off the `compatibility` matrix in common/traits/00_phenotype_traits.txt: a pair is FRIENDLY when
+# either side lists the other as kin or warm, HOSTILE when either side lists the other as hostile.
+# Everything else that is a different race keeps the plain penalty. Keep in step with that matrix by
+# hand, as the race-ties loc is. Both are symmetric, so the argument order never matters; both assume
+# the caller has already asked gen_is_different_race_than (a same-race pair is neither here).
+#
+# The two elves are not listed: gen_is_different_race_than already treats them as one people for
+# marriage. Human means "no fantasy trait", as it does there.
+# Usage:
+#   scope:a = { gen_is_friendly_race_pair_trigger = { TARGET = scope:b } }
+gen_is_friendly_race_pair_trigger = {
+	$TARGET$ = { save_temporary_scope_as = gen_target_char }
+	OR = {
+		# Human and gnome
+		AND = {
+			NOT = { gen_has_fantasy_phenotype_trigger = yes }
+			scope:gen_target_char = { has_trait = phenotype_diminutive }
+		}
+		AND = {
+			has_trait = phenotype_diminutive
+			scope:gen_target_char = { NOT = { gen_has_fantasy_phenotype_trigger = yes } }
+		}
+		# Dwarf and gnome
+		AND = {
+			has_trait = phenotype_stocky
+			scope:gen_target_char = { has_trait = phenotype_diminutive }
+		}
+		AND = {
+			has_trait = phenotype_diminutive
+			scope:gen_target_char = { has_trait = phenotype_stocky }
+		}
+		# Orc and giant
+		AND = {
+			has_trait = phenotype_rough_hewn
+			scope:gen_target_char = { has_trait = phenotype_towering }
+		}
+		AND = {
+			has_trait = phenotype_towering
+			scope:gen_target_char = { has_trait = phenotype_rough_hewn }
+		}
+	}
+}
+
+gen_is_hostile_race_pair_trigger = {
+	$TARGET$ = { save_temporary_scope_as = gen_target_char }
+	OR = {
+		# Orcs against both elves and the dwarves
+		AND = {
+			has_trait = phenotype_rough_hewn
+			scope:gen_target_char = {
+				OR = {
+					has_trait = phenotype_gracile
+					has_trait = phenotype_sylvan
+					has_trait = phenotype_stocky
+				}
+			}
+		}
+		AND = {
+			OR = {
+				has_trait = phenotype_gracile
+				has_trait = phenotype_sylvan
+				has_trait = phenotype_stocky
+			}
+			scope:gen_target_char = { has_trait = phenotype_rough_hewn }
+		}
+		# High elves and deepkin
+		AND = {
+			has_trait = phenotype_gracile
+			scope:gen_target_char = { has_trait = phenotype_dusk_adapted }
+		}
+		AND = {
+			has_trait = phenotype_dusk_adapted
+			scope:gen_target_char = { has_trait = phenotype_gracile }
 		}
 	}
 }

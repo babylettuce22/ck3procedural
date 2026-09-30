@@ -1,0 +1,63 @@
+﻿# The Blood Challenge's opinions. See 00_gen_blood_challenge_triggers.txt for the system.
+
+# Came for my seat in the circle, win or lose. Vanilla's tried_to_usurped_title is -30 for 12 years
+# for a failed tribal usurpation; a challenge is the same intent, fought fair, so a little lighter.
+gen_bc_challenged_my_seat_opinion = {
+	opinion = -20
+	years = 10
+}
+
+# A vassal beaten in the circle by the liege who called them out. Most resent being the example.
+gen_bc_made_an_example_of_me_opinion = {
+	opinion = -15
+	decaying = yes
+	years = 10
+}
+
+# ...but the brave and the just call it a fair fight fairly lost.
+gen_bc_bested_me_fairly_opinion = {
+	opinion = 10
+	decaying = yes
+	years = 10
+}
+
+# The presiding liege's ruling on two vassals' fight (0401).
+gen_bc_backed_me_opinion = {
+	opinion = 15
+	decaying = yes
+	years = 10
+}
+
+gen_bc_backed_my_foe_opinion = {
+	opinion = -15
+	decaying = yes
+	years = 10
+}
+
+gen_bc_forbade_my_fight_opinion = {
+	opinion = -10
+	decaying = yes
+	years = 5
+}
+
+# Rivals who fought it out (0510): ended it with respect...
+gen_bc_settled_in_blood_opinion = {
+	opinion = 15
+	decaying = yes
+	years = 10
+}
+
+# ...or the winner rubbed the loser's face in it.
+gen_bc_ground_me_down_opinion = {
+	opinion = -25
+	decaying = yes
+	years = 15
+}
+
+# The liege's other vassals of the winner's people, when a vassal beats the chief who called them out.
+# The liege's own feeling is gen_bc_challenged_my_seat_opinion.
+gen_bc_humbled_our_liege_opinion = {
+	opinion = 15
+	decaying = yes
+	years = 10
+}

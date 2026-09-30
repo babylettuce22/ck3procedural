@@ -1,0 +1,854 @@
+﻿# Orcish wording for vanilla's single-combat moves, during a Blood Challenge only.
+#
+# Vanilla's round event (events/single_combat_events.txt, single_combat.0001) names each move with a
+# fixed loc key. localization/replace/english/zz_gen_bc_single_combat_l_english.yml points those 69
+# keys (move names and their tooltips) at the entries below; a fighter carrying gen_bc_in_challenge
+# (set for the whole Blood Challenge chain) reads gen_bc_sc_orc.*, everyone else reads
+# gen_bc_sc_vanilla.* — vanilla's own text, copied verbatim (gen_bc_single_combat_l_english.yml).
+# Mechanics are untouched: only the words change.
+#
+# UPKEEP: the vanilla copies go stale if a CK3 patch rewrites one of these lines. After an update, diff
+# the copies against game/localization/english/single_combat_events_l_english.yml.
+
+gen_bc_sc_wait_and_hope = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.wait_and_hope
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.wait_and_hope
+	}
+}
+
+gen_bc_sc_unsure_attack = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.unsure_attack
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.unsure_attack
+	}
+}
+
+gen_bc_sc_unsure_attack_non_fatal = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.unsure_attack_non_fatal
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.unsure_attack_non_fatal
+	}
+}
+
+gen_bc_sc_hail_mary = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.hail_mary
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.hail_mary
+	}
+}
+
+gen_bc_sc_pocket_sand = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.pocket_sand
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.pocket_sand
+	}
+}
+
+gen_bc_sc_nut_em = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.nut_em
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.nut_em
+	}
+}
+
+gen_bc_sc_guard = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.guard
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.guard
+	}
+}
+
+gen_bc_sc_probing_attack = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.probing_attack
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.probing_attack
+	}
+}
+
+gen_bc_sc_onslaught = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.onslaught
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.onslaught
+	}
+}
+
+gen_bc_sc_surprise_attack = {
+	type = character
+	text = {
+		trigger = {
+			has_character_flag = gen_bc_in_challenge
+			gen_has_tusks_trigger = yes
+		}
+		localization_key = gen_bc_sc_orc.surprise_attack
+	}
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.surprise_attack_notusk
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.surprise_attack
+	}
+}
+
+gen_bc_sc_taunt = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.taunt
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.taunt
+	}
+}
+
+gen_bc_sc_put_the_boot_in = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.put_the_boot_in
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.put_the_boot_in
+	}
+}
+
+gen_bc_sc_strict_guard = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.strict_guard
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.strict_guard
+	}
+}
+
+gen_bc_sc_confident_attack = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.confident_attack
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.confident_attack
+	}
+}
+
+gen_bc_sc_expert_onslaught = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.expert_onslaught
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.expert_onslaught
+	}
+}
+
+gen_bc_sc_attempt_disarm = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.attempt_disarm
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.attempt_disarm
+	}
+}
+
+gen_bc_sc_lightning_assault = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.lightning_assault
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.lightning_assault
+	}
+}
+
+gen_bc_sc_tire_opponent = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tire_opponent
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tire_opponent
+	}
+}
+
+gen_bc_sc_reason_you_suck_speech = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.reason_you_suck_speech
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.reason_you_suck_speech
+	}
+}
+
+gen_bc_sc_technique_from_legend = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.technique_from_legend
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.technique_from_legend
+	}
+}
+
+gen_bc_sc_like_a_viper = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.like_a_viper
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.like_a_viper
+	}
+}
+
+gen_bc_sc_martial_voice = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.martial_voice
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.martial_voice
+	}
+}
+
+gen_bc_sc_mocking_boast = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.mocking_boast
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.mocking_boast
+	}
+}
+
+gen_bc_sc_desert_warrior = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.desert_warrior
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.desert_warrior
+	}
+}
+
+gen_bc_sc_jungle_stalker = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.jungle_stalker
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.jungle_stalker
+	}
+}
+
+gen_bc_sc_open_terrain_expert = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.open_terrain_expert
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.open_terrain_expert
+	}
+}
+
+gen_bc_sc_rough_terrain_expert = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.rough_terrain_expert
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.rough_terrain_expert
+	}
+}
+
+gen_bc_sc_forest_fighter = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.forest_fighter
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.forest_fighter
+	}
+}
+
+gen_bc_sc_raaargh = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.raaargh
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.raaargh
+	}
+}
+
+gen_bc_sc_hard_grit = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.hard_grit
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.hard_grit
+	}
+}
+
+gen_bc_sc_butchery = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.butchery
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.butchery
+	}
+}
+
+gen_bc_sc_blade_dance = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.blade_dance
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.blade_dance
+	}
+}
+
+gen_bc_sc_blade_dance_unlanded = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.blade_dance_unlanded
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.blade_dance_unlanded
+	}
+}
+
+gen_bc_sc_wrath_of_highgod = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.wrath_of_highgod
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.wrath_of_highgod
+	}
+}
+
+gen_bc_sc_hurt_me_better = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.hurt_me_better
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.hurt_me_better
+	}
+}
+
+gen_bc_sc_special_fallback = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.special_fallback
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.special_fallback
+	}
+}
+
+gen_bc_sc_something_to_hide = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.something_to_hide
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.something_to_hide
+	}
+}
+
+gen_bc_sc_tt_wait_and_hope = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_wait_and_hope
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_wait_and_hope
+	}
+}
+
+gen_bc_sc_tt_unsure_attack = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_unsure_attack
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_unsure_attack
+	}
+}
+
+gen_bc_sc_tt_enthusiastic_onslaught = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_enthusiastic_onslaught
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_enthusiastic_onslaught
+	}
+}
+
+gen_bc_sc_tt_hail_mary = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_hail_mary
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_hail_mary
+	}
+}
+
+gen_bc_sc_tt_pocket_sand = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_pocket_sand
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_pocket_sand
+	}
+}
+
+gen_bc_sc_tt_nut_em = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_nut_em
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_nut_em
+	}
+}
+
+gen_bc_sc_tt_guard = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_guard
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_guard
+	}
+}
+
+gen_bc_sc_tt_probing_attack = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_probing_attack
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_probing_attack
+	}
+}
+
+gen_bc_sc_tt_onslaught = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_onslaught
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_onslaught
+	}
+}
+
+gen_bc_sc_tt_surprise_attack = {
+	type = character
+	text = {
+		trigger = {
+			has_character_flag = gen_bc_in_challenge
+			gen_has_tusks_trigger = yes
+		}
+		localization_key = gen_bc_sc_orc.tt_surprise_attack
+	}
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_surprise_attack_notusk
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_surprise_attack
+	}
+}
+
+gen_bc_sc_tt_taunt = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_taunt
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_taunt
+	}
+}
+
+gen_bc_sc_tt_put_the_boot_in = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_put_the_boot_in
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_put_the_boot_in
+	}
+}
+
+gen_bc_sc_tt_strict_guard = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_strict_guard
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_strict_guard
+	}
+}
+
+gen_bc_sc_tt_confident_attack = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_confident_attack
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_confident_attack
+	}
+}
+
+gen_bc_sc_tt_expert_onslaught = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_expert_onslaught
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_expert_onslaught
+	}
+}
+
+gen_bc_sc_tt_attempt_disarm = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_attempt_disarm
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_attempt_disarm
+	}
+}
+
+gen_bc_sc_tt_lightning_assault = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_lightning_assault
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_lightning_assault
+	}
+}
+
+gen_bc_sc_tt_tire_opponent = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_tire_opponent
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_tire_opponent
+	}
+}
+
+gen_bc_sc_tt_reason_you_suck_speech = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_reason_you_suck_speech
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_reason_you_suck_speech
+	}
+}
+
+gen_bc_sc_tt_technique_from_legend = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_technique_from_legend
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_technique_from_legend
+	}
+}
+
+gen_bc_sc_tt_like_a_viper = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_like_a_viper
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_like_a_viper
+	}
+}
+
+gen_bc_sc_tt_martial_voice = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_martial_voice
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_martial_voice
+	}
+}
+
+gen_bc_sc_tt_mocking_boast = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_mocking_boast
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_mocking_boast
+	}
+}
+
+gen_bc_sc_tt_terrain_expert = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_terrain_expert
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_terrain_expert
+	}
+}
+
+gen_bc_sc_tt_raaargh = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_raaargh
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_raaargh
+	}
+}
+
+gen_bc_sc_tt_hard_grit = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_hard_grit
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_hard_grit
+	}
+}
+
+gen_bc_sc_tt_butchery = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_butchery
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_butchery
+	}
+}
+
+gen_bc_sc_tt_blade_dance = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_blade_dance
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_blade_dance
+	}
+}
+
+gen_bc_sc_tt_wrath_of_highgod = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_wrath_of_highgod
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_wrath_of_highgod
+	}
+}
+
+gen_bc_sc_tt_hurt_me_better = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_hurt_me_better
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_hurt_me_better
+	}
+}
+
+gen_bc_sc_tt_special_fallback = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_special_fallback
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_special_fallback
+	}
+}
+
+gen_bc_sc_tt_something_to_hide = {
+	type = character
+	text = {
+		trigger = { has_character_flag = gen_bc_in_challenge }
+		localization_key = gen_bc_sc_orc.tt_something_to_hide
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_bc_sc_vanilla.tt_something_to_hide
+	}
+}
+

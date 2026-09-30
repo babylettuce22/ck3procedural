@@ -74,12 +74,15 @@ The static half of the fantasy race system:
   - the race trait icons, and the dwarf-beard and elf-clean-shaven portrait modifiers
 
 Gated so a realistic map ships none of it: no race chips in the ruler designer, no fading events,
-no phenotype pulses. A few fantasy-adjacent things deliberately stay in Core because they are
-written into every mod regardless of mode:
-  - common/genes/gen_race_skin.txt, gen_bs_elf_ears.txt, gen_bs_orc_tusks.txt,
-    gen_bs_horn_boss.txt, gen_bs_giant_face.txt and gen_bs_orc_brow.txt —Emit/PortraitWriter.cs writes these genes into every persistent DNA
-    record on every map, so the declarations must always exist (they are inert without the traits).
-  - their loc lines in localization/english/gen_req_localization_l_english.yml.
+no phenotype pulses. One fantasy-adjacent thing deliberately stays in Core because it is written
+into every mod regardless of mode:
+  - common/genes/gen_race_skin.txt — Emit/PortraitWriter.cs writes it into every persistent DNA
+    record on every map, so the declaration must always exist (it is inert without the traits).
+  - its loc line in localization/english/gen_req_localization_l_english.yml.
+The head-feature genes (gen_bs_elf_ears, gen_bs_orc_tusks, gen_bs_horn_boss, gen_bs_giant_face,
+gen_bs_orc_brow) are in this set, not Core: their attributes are declared only by the head assets
+Emit/Characters/RaceHeadWriter.cs patches with races on, so on a human-only map they named
+attributes no model defines. PortraitWriter pads DNA with them under the same gate.
 
 What the generator emits alongside it, and which these files therefore assume exists:
   - phenotype traits stamped onto history characters by Emit/HistoryWriter.cs (humans get

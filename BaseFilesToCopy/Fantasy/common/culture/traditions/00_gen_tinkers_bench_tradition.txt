@@ -1,0 +1,67 @@
+﻿# The Tinker's Bench: this people builds things that tick, whirr and occasionally explode. Its
+# parameter, gen_tinkering, is what the Start a Contraption decision and the commission interaction
+# read (00_gen_tinker_triggers.txt has the map of the whole system).
+#
+# Every gnomish culture starts with it — Cultures.RaceCustoms in the generator guarantees it on top of
+# the race's craft tradition. Other learned peoples may adopt it in play.
+tradition_gen_tinkers_bench = {
+	category = societal
+
+	layers = {
+		0 = learning
+		1 = mena
+		4 = tools.dds
+	}
+
+	parameters = {
+		gen_tinkering = yes
+	}
+
+	character_modifier = {
+		monthly_learning_lifestyle_xp_gain_mult = 0.1
+	}
+
+	cost = {
+		prestige = {
+			add = {
+				value = tradition_base_cost
+				desc = BASE
+				format = "BASE_VALUE_FORMAT"
+			}
+			if = {
+				limit = {
+					NOR = {
+						culture_pillar:ethos_courtly = { is_in_list = traits }
+						culture_pillar:ethos_communal = { is_in_list = traits }
+						culture_pillar:ethos_egalitarian = { is_in_list = traits }
+					}
+				}
+				add = {
+					value = tradition_incompatible_ethos_penalty
+					desc = not_communal_egalitarian_or_courtly_desc
+				}
+			}
+			if = {
+				limit = {
+					culture_tradition_reduction_trigger = { TRADITION = tradition_gen_tinkers_bench }
+				}
+				multiply = {
+					value = 0.5
+					desc = inspired_by_culture_desc
+				}
+			}
+			multiply = tradition_replacement_cost_if_relevant
+		}
+	}
+
+	# Mostly a gnomish custom: a culture head who is not a gnome rarely reaches for it.
+	ai_will_do = {
+		value = 10
+		if = {
+			limit = {
+				scope:character ?= { has_trait = phenotype_diminutive }
+			}
+			value = 150
+		}
+	}
+}

@@ -1,0 +1,17 @@
+﻿# Gnome Tinkering's standing modifiers, from the tally in gen_tk_tally_success_effect. Each also
+# raises where a project's quality starts (gen_tk_base_quality_value: +10 / +20).
+
+# Three working contraptions.
+gen_tk_tinkerer_modifier = {
+	icon = learning_positive
+	learning = 1
+	monthly_prestige = 0.25
+}
+
+# Seven working contraptions. Replaces Tinkerer, and opens the Grand Invention to any learning.
+gen_tk_master_artificer_modifier = {
+	icon = learning_positive
+	learning = 2
+	monthly_prestige = 0.5
+	stewardship = 1
+}

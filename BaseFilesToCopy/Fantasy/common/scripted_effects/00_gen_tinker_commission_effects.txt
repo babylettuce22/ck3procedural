@@ -1,0 +1,99 @@
+﻿# Gnome Tinkering, commissions: the bookkeeping. See 00_gen_tinker_commission_triggers.txt for the
+# commission pieces.
+#
+# Main's project loop keeps its state on the tinkerer (var:gen_tk_patron and the rest, cleared by
+# gen_tk_clear_project_effect). A commission adds its own, cleared only here:
+#   var:gen_tk_commission_price     what the patron paid in all (materials + fee); the refund reads it
+#   var:gen_tk_commission_fee       the part that went to the tinkerer
+#   var:gen_tk_commission_project   flag:curio / mill / engine / limb, for the delivery text
+#   var:gen_tk_commission_hurried   the patron has already sent one hurry letter this commission
+# And on the patron: flag gen_tk_awaiting_commission (one commission at a time; expires after 900 days).
+#
+# Refunds happen at most once: gen_tk_commission_lost_effect only pays while var:gen_tk_commission_price
+# exists, and removes it as it pays.
+
+# On the TINKERER, in the commission's on_accept (scope:actor = patron). Paid amounts are saved before
+# the gold moves, while the ticked option still decides them.
+gen_tk_commission_record_effect = {
+	gen_tk_commission_clear_effect = yes
+	set_variable = {
+		name = gen_tk_commission_price
+		value = scope:actor.gen_tk_commission_price_value
+	}
+	set_variable = {
+		name = gen_tk_commission_fee
+		value = scope:actor.gen_tk_commission_fee_value
+	}
+	if = {
+		limit = { scope:gen_tk_opt_curio ?= yes }
+		set_variable = {
+			name = gen_tk_commission_project
+			value = flag:curio
+		}
+	}
+	else_if = {
+		limit = { scope:gen_tk_opt_mill ?= yes }
+		set_variable = {
+			name = gen_tk_commission_project
+			value = flag:mill
+		}
+	}
+	else_if = {
+		limit = { scope:gen_tk_opt_engine ?= yes }
+		set_variable = {
+			name = gen_tk_commission_project
+			value = flag:engine
+		}
+	}
+	else = {
+		set_variable = {
+			name = gen_tk_commission_project
+			value = flag:limb
+		}
+	}
+}
+
+# On the TINKERER. Everything a commission left, gone (main's own variables are main's to clear).
+gen_tk_commission_clear_effect = {
+	remove_variable = gen_tk_commission_price
+	remove_variable = gen_tk_commission_fee
+	remove_variable = gen_tk_commission_project
+	remove_variable = gen_tk_commission_hurried
+}
+
+# On the TINKERER, from the on_actions: the maker died (REASON = death) or was thrown in a cell
+# (REASON = prison) with a commission on the bench. The patron hears of it and gets half the price back.
+# A jailed maker also stops working for the patron there and then: if they are freed before main's next
+# stage check notices the cell, the project carries on as their own, so a refunded patron is never
+# also handed the contraption.
+gen_tk_commission_lost_effect = {
+	if = {
+		limit = {
+			exists = var:gen_tk_patron
+			exists = var:gen_tk_commission_price
+			var:gen_tk_patron = { is_alive = yes }
+		}
+		save_scope_as = gen_tk_c_lost_maker
+		var:gen_tk_patron = { save_scope_as = gen_tk_c_lost_patron }
+		save_scope_value_as = {
+			name = gen_tk_c_refund
+			value = gen_tk_commission_refund_value
+		}
+		scope:gen_tk_c_lost_patron = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = gen_tk_commission_lost.t
+				left_icon = scope:gen_tk_c_lost_maker
+				right_icon = scope:gen_tk_c_lost_patron
+				custom_tooltip = gen_tk_commission_lost_$REASON$.tt
+				add_gold = scope:gen_tk_c_refund
+			}
+			if = {
+				limit = { has_character_flag = gen_tk_awaiting_commission }
+				remove_character_flag = gen_tk_awaiting_commission
+			}
+		}
+		gen_tk_commission_clear_effect = yes
+		remove_variable = gen_tk_patron
+	}
+}

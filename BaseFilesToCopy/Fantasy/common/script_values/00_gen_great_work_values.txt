@@ -1,0 +1,63 @@
+﻿# The high elves' Great Work: what the oath costs. With the maker (or the heir taking it up) as root.
+# See 00_gen_great_work_triggers.txt for the map of the system.
+
+# The oath: a great sum and a year and a half of the realm's income. A king's work, priced to stay rare.
+gen_gw_oath_gold_value = {
+	value = monthly_character_income
+	multiply = 18
+	add = 500
+	round = yes
+	min = 500
+}
+
+# How fast this maker's hands move the work (root: the maker). A beat's headway is multiplied by it.
+# Tuned so an ordinary learned elf (learning ~15, some 12 beats over a working life) gets the work about
+# halfway (~45 of the 75 it needs), and only a prodigy — high learning plus a scholar's habits or a
+# genius — finishes alone. Slower once World-Weary: the last years are for handing it on.
+gen_gw_pace_value = {
+	value = 0.35
+	add = {
+		value = learning
+		subtract = 10
+		multiply = 0.01
+	}
+	if = {
+		limit = { has_trait = scholar }
+		add = 0.1
+	}
+	if = {
+		limit = { has_trait = diligent }
+		add = 0.05
+	}
+	if = {
+		limit = { has_trait = intellect_good_3 }
+		add = 0.15
+	}
+	else_if = {
+		limit = { has_trait = intellect_good_2 }
+		add = 0.1
+	}
+	else_if = {
+		limit = { has_trait = intellect_good_1 }
+		add = 0.05
+	}
+	if = {
+		limit = { has_trait = lazy }
+		add = -0.1
+	}
+	if = {
+		limit = { has_trait = world_weary }
+		multiply = 0.5
+	}
+	min = 0.15
+	max = 0.9
+}
+
+# Taking up a dead maker's work: the materials go on costing, but the design is already paid for.
+gen_gw_takeup_cost_value = {
+	value = monthly_character_income
+	multiply = 6
+	add = 150
+	round = yes
+	min = 150
+}

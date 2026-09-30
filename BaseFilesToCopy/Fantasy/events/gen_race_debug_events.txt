@@ -167,13 +167,38 @@ gen_race_debug.0001 = {
 			desc = gen_race_debug.0001.desc.m_none
 		}
 
-		# Against you, for marriage: the one consumer of gen_is_different_race_than.
+		# Against you, for marriage: the one consumer of gen_is_different_race_than, in the same three
+		# tiers as the AI's marriage reluctance (InteractionWriter).
 		triggered_desc = {
 			trigger = {
 				NOT = { scope:gen_rdbg_target = root }
-				scope:gen_rdbg_target = { gen_is_different_race_than = { TARGET = root } }
+				scope:gen_rdbg_target = {
+					gen_is_different_race_than = { TARGET = root }
+					NOT = { gen_is_friendly_race_pair_trigger = { TARGET = root } }
+					NOT = { gen_is_hostile_race_pair_trigger = { TARGET = root } }
+				}
 			}
 			desc = gen_race_debug.0001.desc.vs_you_different
+		}
+		triggered_desc = {
+			trigger = {
+				NOT = { scope:gen_rdbg_target = root }
+				scope:gen_rdbg_target = {
+					gen_is_different_race_than = { TARGET = root }
+					gen_is_friendly_race_pair_trigger = { TARGET = root }
+				}
+			}
+			desc = gen_race_debug.0001.desc.vs_you_friendly
+		}
+		triggered_desc = {
+			trigger = {
+				NOT = { scope:gen_rdbg_target = root }
+				scope:gen_rdbg_target = {
+					gen_is_different_race_than = { TARGET = root }
+					gen_is_hostile_race_pair_trigger = { TARGET = root }
+				}
+			}
+			desc = gen_race_debug.0001.desc.vs_you_hostile
 		}
 		triggered_desc = {
 			trigger = {

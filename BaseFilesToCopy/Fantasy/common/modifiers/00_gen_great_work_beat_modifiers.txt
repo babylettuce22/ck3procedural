@@ -1,0 +1,80 @@
+﻿# The high elves' Great Work: the small, passing marks the long years leave on the maker (and a pupil).
+# Applied by the beats in events/gen_great_work_events.txt (0101–0109), each for a few years. The work's
+# own boons (the milestones) are main's, in 00_gen_great_work_modifiers.txt.
+
+# 0101: the one true material, bought or brought up from the deep places. People talk about it.
+gen_gw_beat_true_material_modifier = {
+	icon = prestige_positive
+	monthly_prestige = 0.3
+}
+
+# 0102: the vision caught before it faded — sharp, and wearing.
+gen_gw_beat_caught_vision_modifier = {
+	icon = learning_positive
+	learning = 2
+	stress_gain_mult = 0.1
+}
+
+# 0103: pressing on, doubts and all.
+gen_gw_beat_long_doubt_modifier = {
+	icon = learning_negative
+	learning = -1
+	monthly_prestige_gain_mult = -0.1
+}
+
+# 0103: the doubt faced and set down.
+gen_gw_beat_doubt_answered_modifier = {
+	icon = stress_positive
+	stress_loss_mult = 0.2
+	learning = 1
+}
+
+# 0105: a rival's work to outdo.
+gen_gw_beat_spurred_by_rival_modifier = {
+	icon = learning_positive
+	learning = 1
+	monthly_prestige = 0.2
+}
+
+# 0106: the unfinished work shown to the great, and talked about.
+gen_gw_beat_shown_to_the_great_modifier = {
+	icon = prestige_positive
+	monthly_prestige = 0.5
+}
+
+# 0107: the work before the family.
+gen_gw_beat_shut_in_workshop_modifier = {
+	icon = learning_positive
+	learning = 2
+	diplomacy = -2
+	close_relative_opinion = -10
+}
+
+# 0107: a season given back to the family.
+gen_gw_beat_back_at_hearth_modifier = {
+	icon = family_positive
+	diplomacy = 1
+	stress_loss_mult = 0.25
+	fertility = 0.1
+}
+
+# 0108: the master, with a pupil at the bench.
+gen_gw_beat_master_modifier = {
+	icon = learning_positive
+	learning = 1
+	monthly_learning_lifestyle_xp_gain_mult = 0.1
+}
+
+# 0108: the pupil, taught by a maker of the Long Labour.
+gen_gw_beat_pupil_modifier = {
+	icon = learning_positive
+	learning = 2
+	monthly_learning_lifestyle_xp_gain_mult = 0.15
+}
+
+# 0109: burned hands, pulling the work from the fire.
+gen_gw_beat_burned_hands_modifier = {
+	icon = prowess_negative
+	prowess = -2
+	stress_gain_mult = 0.1
+}

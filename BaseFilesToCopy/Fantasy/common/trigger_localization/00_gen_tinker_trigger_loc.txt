@@ -1,0 +1,16 @@
+﻿# Failure texts for Gnome Tinkering's custom_description checks (00_gen_tinker_decisions.txt).
+# Loc in gen_tinker_l_english.yml.
+
+gen_tk_bench_busy = {
+	global = gen_tk_bench_busy
+	global_not = gen_tk_bench_busy
+	first = gen_tk_bench_busy
+	first_not = gen_tk_bench_busy
+}
+
+gen_tk_bench_resting = {
+	global = gen_tk_bench_resting
+	global_not = gen_tk_bench_resting
+	first = gen_tk_bench_resting
+	first_not = gen_tk_bench_resting
+}

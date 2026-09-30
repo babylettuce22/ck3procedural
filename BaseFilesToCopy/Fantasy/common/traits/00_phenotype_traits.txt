@@ -13,6 +13,10 @@
 # penalty (race mostly IS culture here). It is DIRECTIONAL: each block is how the holder regards a
 # character carrying the listed trait, so the table below may be asymmetric on purpose.
 #
+# Two hand-kept copies read this matrix, so change them with it: the race-ties lines in
+# localization/english/gen_fantasy_traits_l_english.yml, and the friendly/hostile marriage pairs
+# (gen_is_friendly_race_pair_trigger / gen_is_hostile_race_pair_trigger in 00_phenotype_triggers.txt).
+#
 # Keep to these steps. Vanilla's own are 5/15/30, and 00_ai_values.txt says only ~8% of characters
 # sum past +-26–31 from their whole personality — a race entry at 30 would drown the personality.
 @race_kin = 15
@@ -290,6 +294,9 @@ phenotype_rough_hewn = {
     }
 
     health = -0.1
+    # Orcs burn out young. The Blood Challenge's win tiers buy the years back and more for those who
+    # keep winning (gen_bc_*_modifier in 00_gen_blood_challenge_modifiers.txt): the strong live long.
+    life_expectancy = -10
     martial = 1
     prowess = 3
     dread_baseline_add = 15

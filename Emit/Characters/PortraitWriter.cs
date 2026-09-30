@@ -62,7 +62,7 @@ public static class PortraitWriter
         new(@"(?<ind>^[ \t]*)(?<key>[a-z_0-9]+)=\{[^{}]*\}", RegexOptions.Multiline);
 
     public static void WriteAll(string modDir, string gameDir,
-        List<CharacterPortraitRequest> requests, EthnicityMap ethnicities, int seed = 0)
+        List<CharacterPortraitRequest> requests, EthnicityMap ethnicities, bool racesOn, int seed = 0)
     {
         string sourceDir = Path.Combine(gameDir, "common", "bookmark_portraits");
         string bmDestDir = Path.Combine(modDir, "common", "bookmark_portraits");
@@ -103,6 +103,10 @@ public static class PortraitWriter
             .Concat(girls.AllTemplates)
             .ToList();
 
+        // Vanilla's ethnicities with their template chains resolved: what ours inherit every gene
+        // they do not override from. See ApplyEthnicity.
+        var vanilla = HumanLooks.Read(gameDir, null).Ethnicities;
+
         var rng = new Rng(seed ^ 0x5087);
         var dnaFileBuilder = new StringBuilder();
         dnaFileBuilder.Append("# Generated DNA mappings for in-game characters\n\n");
@@ -133,16 +137,22 @@ public static class PortraitWriter
                 // special gene at all, so dropping the line is the normal shape rather than a hack.
                 body = Regex.Replace(body, @"[ \t]*special_[a-z_]+=\{[^{}]*\}\r?\n?", "");
 
+                // Likewise his drinking: three records carry the drunkard's flushed skin, which the
+                // trait modifier paints on in the campaign anyway for anyone who has earned it. The
+                // other 329 omit the line, so dropping it is again the normal shape.
+                body = Regex.Replace(body, @"[ \t]*gene_drunkard=\{[^{}]*\}\r?\n?", "");
+
                 // Where the sex's own pool had nobody dressed for this culture, borrow the outfit
                 // from the pool that does. Men are the donor set: 238 records over 33 regions.
                 body = Wardrobe(body, face, req, men, rng);
                 body = Grooming(body, req, men, rng);
                 body = Regalia(body, req, allTemplates, rng);
 
-                // Repaint the borrowed DNA in the character's own ethnicity before anything is
+                // Roll a whole new face from the character's own ethnicity before anything is
                 // written, so the bookmark screen and the in-game portrait agree and both match the
-                // realm.
-                body = ApplyEthnicity(body, ethnicities.GenesFor(req.Culture, rng), rng, hornGene);
+                // realm. The borrowed record keeps only its outfit.
+                body = ApplyEthnicity(body, ethnicities.GenesFor(req.Culture, rng, vanilla), rng, hornGene, racesOn);
+                body = Balding(body);
 
                 // After the ethnicity, not before: the ethnicity is what a character of this culture
                 // looks like, and albinism is what overrides it. Painting it first would have the
@@ -185,24 +195,27 @@ public static class PortraitWriter
     }
 
     /// <summary>
-    /// Rewrites a borrowed vanilla DNA template's genes in terms of the character's own generated
-    /// ethnicity.
+    /// Rolls a borrowed vanilla DNA record's whole face afresh from the character's own generated
+    /// ethnicity, leaving only the outfit (clothes, legwear, headgear, hair and beard styles) and the
+    /// engine's fixed technical genes as the record had them.
     ///
     /// Without this a bookmark character wore whichever vanilla ruler's DNA the culture's clothing
-    /// most resembled — skin, hair, eyes, bone structure and all. DNA overrides ethnicity outright,
-    /// so the drow leading a drow realm came out an ordinary brown-skinned human on the bookmark
-    /// screen and stayed one in the campaign. These are the handful of characters a player looks at
-    /// hardest, which is why it read as "some drow are still human coloured".
+    /// most resembled. DNA overrides ethnicity outright, so the drow leading a drow realm came out an
+    /// ordinary brown-skinned human. Repainting only the genes our ethnicity overrides fixed the
+    /// colouring but not the face: those are ~30 genes, and the other ~85 stayed the vanilla
+    /// ruler's. Vanilla ships a single high-nobility man in African dress (Muhammad, the Africa
+    /// challenge character), so every African-dressed duke or better wore his face — hooded eyes,
+    /// heavy parted lips, bloodshot eyes — 7 of 35 bookmark faces on one seed, elves included.
+    /// <paramref name="eth"/> is therefore the full resolved chain (<see cref="EthnicityMap.GenesFor"/>),
+    /// vanilla's inherited blocks included, which covers every face gene a record carries.
     ///
-    /// Only genes the ethnicity actually defines are touched, and only lines the template already
-    /// carries are rewritten, so nothing invalid can be introduced. A human is painted from one of
-    /// its culture's variants (<see cref="EthnicityMap.GenesFor"/>) — the culture's skin window,
-    /// vanilla's hair and eyes for that template, and the culture's gene leans — so a bookmark ruler
-    /// has the complexion of the people it rules rather than of whichever vanilla ruler lent the DNA.
+    /// Only lines the record already carries are rewritten, plus our own genes, so nothing invalid
+    /// can be introduced. Dominant and recessive are rolled separately, as for any character the
+    /// game generates, so the bookmark ruler's children are not copies of one half of him.
     /// </summary>
     private static string ApplyEthnicity(string body,
         (Dictionary<string, List<ColorPaletteRange>> ColorGenes, Dictionary<string, List<GeneMorphEntry>> MorphGenes) eth,
-        Rng rng, bool hornGene)
+        Rng rng, bool hornGene, bool racesOn)
     {
         var genes = GenesRegex.Match(body);
         if (!genes.Success) return body;
@@ -219,36 +232,26 @@ public static class PortraitWriter
             if (ind.Length > 0) indent = ind;
 
             if (eth.ColorGenes.TryGetValue(key, out var palettes) && palettes.Count > 0)
-            {
-                var p = PickWeighted(palettes, e => e.Weight, rng);
-                int x = Byte255(rng.Float(p.X1, p.X2));
-                int y = Byte255(rng.Float(p.Y1, p.Y2));
-                return $"{ind}{key}={{ {x} {y} {x} {y} }}";
-            }
+                return $"{ind}{key}={{ {Colour(palettes, rng)} {Colour(palettes, rng)} }}";
 
             if (eth.MorphGenes.TryGetValue(key, out var entries) && entries.Count > 0)
-            {
-                var e = PickWeighted(entries, x => x.Weight, rng);
-                int v = Byte255(rng.Float(e.Min, e.Max));
-                return $"{ind}{key}={{ \"{e.SubGeneName}\" {v} \"{e.SubGeneName}\" {v} }}";
-            }
+                return $"{ind}{key}={{ {Morph(entries, rng)} {Morph(entries, rng)} }}";
 
             return m.Value;
         });
 
-        // Genes the ethnicity defines that the borrowed template has never heard of have to be
-        // appended rather than substituted. `gen_race_skin` is the case that matters: it is our own
-        // gene, so no vanilla DNA record mentions it, and without this a bookmark drow would keep a
-        // human hue no matter how the ethnicity was written.
+        // Our own genes the borrowed record has never heard of have to be appended rather than
+        // substituted. `gen_race_skin` is the case that matters: no vanilla DNA record mentions it,
+        // and without this a bookmark drow would keep a human hue no matter how the ethnicity was
+        // written. Vanilla's genes are left to the record, which already names every one registered.
         var added = new StringBuilder();
         foreach (var (key, entries) in eth.MorphGenes)
         {
             if (seen.Contains(key) || entries.Count == 0) continue;
+            if (!key.StartsWith("gen_", StringComparison.Ordinal)) continue;
             if (key == Horns.Gene && !hornGene) continue;          // unregistered this run
             seen.Add(key);
-            var e = PickWeighted(entries, x => x.Weight, rng);
-            int v = Byte255(rng.Float(e.Min, e.Max));
-            added.Append($"\n{indent}{key}={{ \"{e.SubGeneName}\" {v} \"{e.SubGeneName}\" {v} }}");
+            added.Append($"\n{indent}{key}={{ {Morph(entries, rng)} {Morph(entries, rng)} }}");
         }
 
         // A persistent DNA record must mention EVERY registered gene — the engine logs "Persistent
@@ -258,36 +261,71 @@ public static class PortraitWriter
         if (!seen.Contains("gen_race_skin"))
             added.Append($"\n{indent}gen_race_skin={{ \"gen_skin_human\" 0 \"gen_skin_human\" 0 }}");
 
-        // The pointed-ear gene, likewise ours and likewise registered on every map. Only the elves'
-        // ethnicities (high, wood, dusk) name it; everyone else gets the empty template.
-        if (!seen.Contains(RaceHeadWriter.Gene))
-            added.Append($"\n{indent}{RaceHeadWriter.Gene}={{ \"{RaceHeadWriter.NoneTemplate}\" 0 \"{RaceHeadWriter.NoneTemplate}\" 0 }}");
-
-        // And the tusk gene, which only orc ethnicities name.
-        if (!seen.Contains(OrcTusks.Gene))
-            added.Append($"\n{indent}{OrcTusks.Gene}={{ \"{OrcTusks.NoneTemplate}\" 0 \"{OrcTusks.NoneTemplate}\" 0 }}");
-
-        // The giantkin face, which only giantkin ethnicities name.
-        if (!seen.Contains(GiantFace.Gene))
-            added.Append($"\n{indent}{GiantFace.Gene}={{ \"{GiantFace.NoneTemplate}\" 0 \"{GiantFace.NoneTemplate}\" 0 }}");
-
-        // The orc brow, which only orc ethnicities name.
-        if (!seen.Contains(OrcBrow.Gene))
-            added.Append($"\n{indent}{OrcBrow.Gene}={{ \"{OrcBrow.NoneTemplate}\" 0 \"{OrcBrow.NoneTemplate}\" 0 }}");
-
-        // The horns' skin mound (static in Core, always registered)...
-        if (!seen.Contains(Horns.BossGene))
-            added.Append($"\n{indent}{Horns.BossGene}={{ \"{Horns.BossNoneTemplate}\" 0 \"{Horns.BossNoneTemplate}\" 0 }}");
+        // The head-feature genes are registered only with races on: they ship in the Fantasy set,
+        // beside the head assets that declare their attributes. Each race's ethnicity names its
+        // own; everyone else gets the empty template.
+        if (racesOn)
+        {
+            foreach (var (gene, none) in (ReadOnlySpan<(string, string)>)
+                [
+                    (RaceHeadWriter.Gene, RaceHeadWriter.NoneTemplate),   // pointed ears: the elves
+                    (OrcTusks.Gene, OrcTusks.NoneTemplate),               // orcs
+                    (GiantFace.Gene, GiantFace.NoneTemplate),             // giantkin
+                    (OrcBrow.Gene, OrcBrow.NoneTemplate),                 // orcs
+                    (Horns.BossGene, Horns.BossNoneTemplate),             // the horns' skin mound
+                ])
+            {
+                if (!seen.Contains(gene))
+                    added.Append($"\n{indent}{gene}={{ \"{none}\" 0 \"{none}\" 0 }}");
+            }
+        }
 
         // ...and the horn accessory gene, registered only when this run shipped the horn models.
         if (hornGene && !seen.Contains(Horns.Gene))
             added.Append($"\n{indent}{Horns.Gene}={{ \"{Horns.NoneTemplate}\" 0 \"{Horns.NoneTemplate}\" 0 }}");
+
+        // The horn ornament gene ships in the same generated file, so it is registered exactly then.
+        if (hornGene && !seen.Contains(Horns.OrnamentGene))
+            added.Append($"\n{indent}{Horns.OrnamentGene}={{ \"{Horns.OrnamentNoneTemplate}\" 0 \"{Horns.OrnamentNoneTemplate}\" 0 }}");
 
         return string.Concat(
             body.AsSpan(0, content.Index),
             rewritten,
             added.ToString(),
             body.AsSpan(content.Index + content.Length));
+    }
+
+    /// <summary>
+    /// Clears a receding hairline the new face no longer has. <c>gene_balding_hair_effect</c> is a
+    /// special gene — the dump's snapshot of what the donor's own baldness gene and age drew — so a
+    /// rolled <c>no_baldness</c> under the donor's <c>baldness_stage_1</c> would thin the hair on the
+    /// bookmark screen alone. <c>shaved_baldness</c> belongs to the hairstyle, which is kept, so it stays.
+    /// </summary>
+    private static string Balding(string body)
+    {
+        var baldness = Regex.Match(body, @"\bgene_baldness=\{\s*""([a-z_]+)""");
+        if (!baldness.Success || baldness.Groups[1].Value != "no_baldness") return body;
+
+        var effect = Regex.Match(body, @"\bgene_balding_hair_effect=\{\s*""([a-z_0-9]+)""");
+        if (!effect.Success || !effect.Groups[1].Value.StartsWith("baldness_stage", StringComparison.Ordinal))
+            return body;
+
+        return ReplaceGene(body, "gene_balding_hair_effect",
+            @"gene_balding_hair_effect={ ""no_baldness"" 255 ""no_baldness"" 0 }");
+    }
+
+    /// <summary>One colour allele, <c>x y</c>, drawn from an ethnicity's weighted palette rectangles.</summary>
+    private static string Colour(List<ColorPaletteRange> palettes, Rng rng)
+    {
+        var p = PickWeighted(palettes, e => e.Weight, rng);
+        return $"{Byte255(rng.Float(p.X1, p.X2))} {Byte255(rng.Float(p.Y1, p.Y2))}";
+    }
+
+    /// <summary>One morph allele, <c>"template" value</c>, drawn from an ethnicity's weighted entries.</summary>
+    private static string Morph(List<GeneMorphEntry> entries, Rng rng)
+    {
+        var e = PickWeighted(entries, x => x.Weight, rng);
+        return $"\"{e.SubGeneName}\" {Byte255(rng.Float(e.Min, e.Max))}";
     }
 
     /// <summary>A DNA gene value, which the format stores as a byte rather than a 0..1 float.</summary>

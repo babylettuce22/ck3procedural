@@ -242,6 +242,32 @@ public static class TerrainPalette
 
     private static readonly byte[] DrylandGround = [DrylandsGrassy, Drylands01, DrylandsCracked];
 
+    /// <summary>
+    /// The accent lists with every forest texture taken out, for Plains. Vanilla's plains are open
+    /// ground — plains_* and lowland variants — with forest as separate islands, not mixed through.
+    /// </summary>
+    private static readonly byte[][] PlainsAccents =
+    [
+        [Plains01, PlainsRough, PlainsDry],                             // Tropical
+        [Plains01, PlainsNoisy, PlainsRough,
+         CentralLowlands02, CentralLowlands03],                         // Central
+        [SteppeGrass, SteppeBushes, SteppeRocks],                       // Steppe
+        [DesertWavy, DesertWavyLarger, DesertFlat, DesertRocky,
+         Desert01, Desert02],                                           // Desert
+        [Drylands01, DrylandsGrassy, DrylandsCracked, MediDryMud],      // Drylands
+        [NorthernPlains, PlainsRough, Plains01],                        // Northern
+        [MediGrass, MediLumpyGrass, MediNoisyGrass, PlainsDry],         // Mediterranean
+    ];
+
+    private static byte PlainsAccent(Climate climate, double n)
+    {
+        var set = PlainsAccents[(int)climate];
+        return set[(int)(Math.Clamp(n, 0, 0.999999) * set.Length)];
+    }
+
+    private static double PlainsAccentConfidence(Climate climate, double n)
+        => BucketConfidence(n, PlainsAccents[(int)climate].Length);
+
     private static byte Accent(Climate climate, double n)
     {
         var set = Accents[(int)climate];
@@ -865,11 +891,16 @@ public static class TerrainPalette
                     double tail = (30 + nC * 20) * CutConfidence(nC, 0.35);
                     if (hilly) tail *= hillTex;
 
+                    // Open ground only. The shared accent lists hold forest textures for the
+                    // cases that want them (Tropical's are all forest), and drawn here they made
+                    // plains 17% forest floor against vanilla's 1% — plains read as thin woodland.
+                    // plains_* is 19% of vanilla's plains and was 6% of ours, so the accent is
+                    // weighted up to carry it.
                     return Mix(
                         lowA, (byte)((80 + nA * 40) * confA),
                         lowB, (byte)((70 + (1.0 - nA) * 40) * confB),
-                        Accent(climate, nB), (byte)((50 + nB * 30) * AccentConfidence(climate, nB)),
-                        hilly ? family.Hills : Accent(climate, 1.0 - nC), (byte)tail
+                        PlainsAccent(climate, nB), (byte)((70 + nB * 40) * PlainsAccentConfidence(climate, nB)),
+                        hilly ? family.Hills : PlainsAccent(climate, 1.0 - nC), (byte)tail
                     );
                 }
 

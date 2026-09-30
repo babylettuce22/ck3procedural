@@ -1,0 +1,265 @@
+﻿# A high elf's Great Work, as a story cycle on its maker: the lifelong clock the oath starts.
+# Beats every few years (gen_great_work.0100), the finishing once the maker grows World-Weary
+# (gen_great_work.0510), and the succession when the maker dies first (gen_great_work.0600).
+# See 00_gen_great_work_triggers.txt for the map, 00_gen_great_work_effects.txt for the state.
+
+story_gen_great_work = {
+	visible = yes
+
+	icon = {
+		reference = "gfx/interface/icons/artifact/artifact_chronicle.dds"
+	}
+	background = {
+		reference = "gfx/interface/illustrations/event_scenes/study.dds"
+	}
+
+	visualization = {
+		custom_string_key = "GEN_GW_STORY_STRING"
+		character = {
+			variable_name = "gw_maker"
+			label = "GEN_GW_STORY_MAKER"
+		}
+		character = {
+			variable_name = "gw_pupil"
+			label = "GEN_GW_STORY_PUPIL"
+		}
+		basic_counter = {
+			variable_name = "gw_progress"
+			min = 0
+			max = 100
+			label = "GEN_GW_STORY_PROGRESS"
+		}
+		modifiers = { gen_gw_sworn_modifier }
+	}
+
+	# The oath has just been sworn (gen_gw_begin_effect left the kind on the maker).
+	on_setup = {
+		set_variable = {
+			name = gw_kind
+			value = story_owner.var:gw_setup_kind
+		}
+		story_owner = { remove_variable = gw_setup_kind }
+		set_variable = {
+			name = gw_maker
+			value = story_owner
+		}
+		set_variable = {
+			name = gw_progress
+			value = 0
+		}
+		# A learned maker starts ahead: twice their learning, so ~30 to ~50 for a scholarly king.
+		set_variable = {
+			name = gw_quality
+			value = story_owner.learning
+		}
+		change_variable = {
+			name = gw_quality
+			multiply = 2
+		}
+		clamp_variable = {
+			name = gw_quality
+			min = 0
+			max = 60
+		}
+		set_variable = {
+			name = gw_milestone
+			value = 0
+		}
+		set_variable = {
+			name = gw_hands
+			value = 1
+		}
+		# Named in the maker's own tongue (Emit/Culture/GreatWorkNameWriter.cs; 12 per culture).
+		set_variable = {
+			name = gw_name_culture
+			value = story_owner.culture
+		}
+		set_variable = {
+			name = gw_name_index
+			value = { integer_range = { min = 1 max = 12 } }
+		}
+		set_variable = {
+			name = gw_last_maker
+			value = story_owner
+		}
+		# The name on the maker too, so GenGwWorkWord can name the work in any tooltip.
+		story_owner = {
+			set_variable = {
+				name = gen_gw_name_culture
+				value = root.var:gw_name_culture
+			}
+			set_variable = {
+				name = gen_gw_name_index
+				value = root.var:gw_name_index
+			}
+		}
+	}
+
+	on_end = {
+	}
+
+	# The maker died with the work unfinished. It passes, for now, to their heir (or their pupil) to
+	# hold while the chain in gen_great_work.0600 decides who carries it on — or seals it away.
+	on_owner_death = {
+		save_scope_as = gw_story
+		# The maker who died: the owner, unless the owner was only holding it for the heirs (then the
+		# maker whose death started that is still the one mourned).
+		if = {
+			limit = {
+				exists = var:gw_in_succession
+				exists = var:gw_last_maker
+			}
+			var:gw_last_maker = { save_scope_as = gw_dead_maker }
+		}
+		else = {
+			story_owner = { save_scope_as = gw_dead_maker }
+		}
+		if = {
+			limit = {
+				exists = var:gw_pupil
+				var:gw_pupil = { is_alive = yes }
+			}
+			var:gw_pupil = { save_scope_as = gw_pupil }
+		}
+		# Who holds it while the heirs decide: the heir, unless already bound to a work of their own
+		# (one Great Work to a hand), then the pupil.
+		if = {
+			limit = {
+				exists = story_owner.player_heir
+				story_owner.player_heir = { NOT = { gen_gw_has_work_trigger = yes } }
+			}
+			story_owner.player_heir = { save_scope_as = gw_heir }
+		}
+		else_if = {
+			limit = {
+				exists = scope:gw_pupil
+				scope:gw_pupil = { NOT = { gen_gw_has_work_trigger = yes } }
+			}
+			scope:gw_pupil = { save_scope_as = gw_heir }
+		}
+		if = {
+			limit = { exists = scope:gw_heir }
+			set_variable = {
+				name = gw_in_succession
+				value = yes
+			}
+			make_story_owner = scope:gw_heir
+			# A day later, as vanilla does for events to an heir: the player has become the heir by then
+			# and chooses, instead of their character's AI choosing in the same tick as the death.
+			scope:gw_heir = {
+				trigger_event = {
+					id = gen_great_work.0600
+					days = 1
+				}
+			}
+		}
+		# No free hand to hold it, but an heir busy with their own work: they inherit it sealed.
+		else_if = {
+			limit = { exists = story_owner.player_heir }
+			story_owner.player_heir = { gen_gw_seal_unfinished_effect = { HOLDER = this } }
+		}
+		# An heirless maker (a pupil who carried the work, say): it goes to their liege's court, or
+		# their family, rather than vanish.
+		else_if = {
+			limit = { exists = story_owner.liege }
+			story_owner.liege = { gen_gw_seal_unfinished_effect = { HOLDER = this } }
+		}
+		else_if = {
+			limit = {
+				story_owner = {
+					any_close_family_member = { is_alive = yes }
+				}
+			}
+			story_owner = {
+				random_close_family_member = {
+					limit = { is_alive = yes }
+					save_scope_as = gw_kin_holder
+				}
+			}
+			scope:gw_kin_holder = { gen_gw_seal_unfinished_effect = { HOLDER = this } }
+		}
+		# Nobody left at all: the work is lost with its maker.
+		else = {
+			end_story = yes
+		}
+	}
+
+	# The long years: a beat every four to seven.
+	effect_group = {
+		years = { 4 7 }
+		trigger = {
+			NOT = { exists = var:gw_in_succession }
+			NOT = { exists = var:gw_finishing }
+			story_owner = { is_alive = yes }
+		}
+		triggered_effect = {
+			trigger = { always = yes }
+			effect = {
+				story_owner = { trigger_event = gen_great_work.0100 }
+			}
+		}
+	}
+
+	# The maker's working life is ending and the work is not done: offer to hand it on while living
+	# (gen_great_work.0520). Once per maker; transfer clears the mark for the next hand.
+	effect_group = {
+		years = 1
+		trigger = {
+			NOT = { exists = var:gw_in_succession }
+			NOT = { exists = var:gw_handover_offered }
+			var:gw_progress < 75
+			story_owner = { gen_gw_maker_near_end_trigger = yes }
+		}
+		triggered_effect = {
+			trigger = { always = yes }
+			effect = {
+				set_variable = {
+					name = gw_handover_offered
+					value = yes
+				}
+				story_owner = { trigger_event = gen_great_work.0520 }
+			}
+		}
+	}
+
+	# The maker would not hand it on: the last years hurry, at a weary maker's pace.
+	effect_group = {
+		years = { 1 2 }
+		trigger = {
+			NOT = { exists = var:gw_in_succession }
+			exists = var:gw_handover_offered
+			var:gw_progress < 75
+			story_owner = { gen_gw_maker_near_end_trigger = yes }
+		}
+		triggered_effect = {
+			trigger = { always = yes }
+			effect = {
+				story_owner = { trigger_event = gen_great_work.0100 }
+			}
+		}
+	}
+
+	# The work is finished as the maker lets the world go.
+	effect_group = {
+		years = 1
+		trigger = {
+			NOT = { exists = var:gw_in_succession }
+			NOT = { exists = var:gw_finishing }
+			var:gw_progress >= 75
+			story_owner = { gen_gw_maker_near_end_trigger = yes }
+		}
+		triggered_effect = {
+			trigger = { always = yes }
+			effect = {
+				# Held for a year in case the scene is lost (the maker dies the same day); the death
+				# chain takes over then.
+				set_variable = {
+					name = gw_finishing
+					value = yes
+					years = 1
+				}
+				story_owner = { trigger_event = gen_great_work.0510 }
+			}
+		}
+	}
+}

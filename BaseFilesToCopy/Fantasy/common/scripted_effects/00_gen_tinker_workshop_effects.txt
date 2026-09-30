@@ -1,0 +1,339 @@
+﻿# Gnome Tinkering: the workshop's cast and running thread, for the design (0100s) and setback (0200s)
+# stages in events/gen_tinker_workshop_events.txt. See 00_gen_tinker_triggers.txt for the map of the system.
+#
+# All run on the TINKERER.
+#
+# ---- Saved scopes -------------------------------------------------------------------------------
+# The dispatchers pick the people a scene may need once, up front, so a scene is only drawn when its
+# people exist. Design scopes are prefixed gen_tk_d_, setback scopes gen_tk_s_: saved scopes ride along
+# on delayed events, so a design-stage scope would still be set months later in the setback stage,
+# possibly on someone now dead. Neither stage reads the other's. Never reuse main's names
+# (gen_tk_apprentice_char, gen_tk_beneficiary, gen_tk_tinkerer): a stale one of ours would outlive the
+# character and fool main's `exists =` checks at the test.
+#
+# ---- The running thread (cleared by gen_tk_clear_workshop_flags_effect) ---------------------------
+# Character flags on the tinkerer, set by design options, read by the setback dispatcher (0200):
+#   gen_tk_wf_careful          careful blueprint (0101)            -> workshop fire (0211) half as likely
+#   gen_tk_wf_ambitious        "add another wheel" (0101)          -> the project's own accident (0201-0205) likelier
+#   gen_tk_wf_dwarf_design     the dwarvish plan (0101)            -> the dwarf-made part (0210) likelier
+#   gen_tk_wf_cheap_parts      scrap from the midden, or the steward finding nothing (0102) ->fire (0211) and the limb pinching (0204) likelier
+#   gen_tk_wf_fine_brass       the best brass (0102)               -> the money running out (0216) likelier
+#   gen_tk_wf_bench_open       children/court invited in (0103, 0107) -> the child in the workshop (0217) likelier
+#   gen_tk_wf_rival_stirred    answered the rival (0104)           -> stolen notes (0205) and sabotage (0212) likelier
+#   gen_tk_wf_patron_promised  promised the patron (0105)          -> the patron's inspection (0218) likelier
+#   gen_tk_wf_patron_fooled    "agree, then do it my way" (0105)   -> the inspection goes worse if it comes
+# Variable on the tinkerer:
+#   var:gen_tk_wf_grudge       a courtier who was snubbed (0103, 0107, 0215) -> sabotage (0212) likelier, and
+#                              they are the culprit
+#
+# ---- Not cleared ---------------------------------------------------------------------------------
+#   gen_tk_seen_NNNN           timed (4 years) flags, one per scene, set when a scene is shown. The
+#                              dispatchers draw a recently seen scene at a quarter of its weight, so the next
+#                              project after this one (3-year cooldown) tells a different story. They expire
+#                              on their own; clearing them at the end of a project would defeat them.
+
+
+# ================================================================= Cleanup (main calls this)
+
+# Everything the workshop stages leave on the tinkerer. Called by gen_tk_clear_project_effect (finish
+# and abandon).
+gen_tk_clear_workshop_flags_effect = {
+	remove_character_flag = gen_tk_wf_careful
+	remove_character_flag = gen_tk_wf_ambitious
+	remove_character_flag = gen_tk_wf_dwarf_design
+	remove_character_flag = gen_tk_wf_cheap_parts
+	remove_character_flag = gen_tk_wf_fine_brass
+	remove_character_flag = gen_tk_wf_bench_open
+	remove_character_flag = gen_tk_wf_rival_stirred
+	remove_character_flag = gen_tk_wf_patron_promised
+	remove_character_flag = gen_tk_wf_patron_fooled
+	remove_variable = gen_tk_wf_grudge
+}
+
+
+# ================================================================= The design stage's cast
+
+gen_tk_ws_save_design_cast_effect = {
+	save_scope_as = gen_tk_maker
+
+	# The patron of a commission. A maker building for themself has none.
+	if = {
+		limit = {
+			exists = var:gen_tk_patron
+			var:gen_tk_patron = {
+				is_alive = yes
+				NOT = { this = root }
+			}
+		}
+		var:gen_tk_patron = { save_scope_as = gen_tk_d_patron }
+	}
+
+	# Someone already at the bench.
+	if = {
+		limit = {
+			exists = var:gen_tk_apprentice
+			var:gen_tk_apprentice = { is_alive = yes }
+		}
+		var:gen_tk_apprentice = { save_scope_as = gen_tk_d_appr }
+	}
+
+	# The spouse, if they live at court and are free to complain.
+	if = {
+		limit = {
+			exists = primary_spouse
+			primary_spouse = {
+				is_alive = yes
+				is_imprisoned = no
+				is_courtier_of = root
+			}
+		}
+		primary_spouse = { save_scope_as = gen_tk_d_spouse }
+	}
+
+	# The steward, who keeps the accounts. Not the spouse (they already have a scene).
+	if = {
+		limit = {
+			exists = cp:councillor_steward
+			cp:councillor_steward = {
+				is_alive = yes
+				is_imprisoned = no
+				NOT = { this = root }
+				NOT = { is_spouse_of = root }
+			}
+		}
+		cp:councillor_steward = { save_scope_as = gen_tk_d_steward }
+	}
+
+	# Apprentice candidates, only while the bench has room.
+	if = {
+		limit = { NOT = { exists = scope:gen_tk_d_appr } }
+		# A child of the house, or a ward, old enough to hold a screwdriver the right way round.
+		random_child = {
+			limit = {
+				is_alive = yes
+				is_courtier_of = root
+				age >= 8
+				age <= 20
+				is_imprisoned = no
+				NOT = { has_trait = incapable }
+			}
+			weight = {
+				base = 1
+				modifier = {
+					add = 2
+					has_trait = curious
+				}
+			}
+			save_scope_as = gen_tk_d_young
+		}
+		if = {
+			limit = { NOT = { exists = scope:gen_tk_d_young } }
+			random_relation = {
+				type = ward
+				limit = {
+					is_alive = yes
+					is_courtier_of = root
+					age >= 8
+					is_imprisoned = no
+					NOT = { has_trait = incapable }
+				}
+				save_scope_as = gen_tk_d_young
+			}
+		}
+		# A clever grown courtier. Not the spouse, not a child of the house, not the young candidate.
+		random_courtier = {
+			limit = {
+				is_adult = yes
+				learning >= 8
+				is_imprisoned = no
+				NOT = { has_trait = incapable }
+				NOT = { is_spouse_of = root }
+				NOT = { is_child_of = root }
+				NOT = { scope:gen_tk_d_young ?= this }
+			}
+			weight = {
+				base = 1
+				modifier = { add = learning }
+			}
+			save_scope_as = gen_tk_d_clever
+		}
+	}
+
+	# A rival, if the maker has one.
+	random_relation = {
+		type = rival
+		limit = { is_alive = yes }
+		weight = {
+			base = 1
+			modifier = {
+				add = 5
+				gen_tk_has_tinkering_trigger = yes
+			}
+		}
+		save_scope_as = gen_tk_d_rival
+	}
+}
+
+
+# ================================================================= The setback stage's cast
+
+gen_tk_ws_save_setback_cast_effect = {
+	save_scope_as = gen_tk_maker
+
+	if = {
+		limit = {
+			exists = var:gen_tk_patron
+			var:gen_tk_patron = {
+				is_alive = yes
+				NOT = { this = root }
+			}
+		}
+		var:gen_tk_patron = { save_scope_as = gen_tk_s_patron }
+	}
+
+	if = {
+		limit = {
+			exists = var:gen_tk_apprentice
+			var:gen_tk_apprentice = {
+				is_alive = yes
+				is_imprisoned = no
+				NOT = { has_trait = incapable }
+			}
+		}
+		var:gen_tk_apprentice = { save_scope_as = gen_tk_s_appr }
+	}
+
+	if = {
+		limit = {
+			exists = primary_spouse
+			primary_spouse = {
+				is_alive = yes
+				is_imprisoned = no
+				is_courtier_of = root
+			}
+		}
+		primary_spouse = { save_scope_as = gen_tk_s_spouse }
+	}
+
+	random_relation = {
+		type = rival
+		limit = { is_alive = yes }
+		save_scope_as = gen_tk_s_rival
+	}
+
+	# Who wears the clockwork limb: the patron of a commission, else the maker.
+	if = {
+		limit = { exists = scope:gen_tk_s_patron }
+		scope:gen_tk_s_patron = { save_scope_as = gen_tk_s_wearer }
+	}
+	else = {
+		save_scope_as = gen_tk_s_wearer
+	}
+
+	# The saboteur: whoever was snubbed during the design, else a courtier with a reason to resent the bench.
+	if = {
+		limit = {
+			exists = var:gen_tk_wf_grudge
+			var:gen_tk_wf_grudge = {
+				is_alive = yes
+				is_courtier_of = root
+				is_imprisoned = no
+				NOT = { is_spouse_of = root }
+			}
+		}
+		var:gen_tk_wf_grudge = { save_scope_as = gen_tk_s_culprit }
+	}
+	else = {
+		random_courtier = {
+			limit = {
+				is_adult = yes
+				is_imprisoned = no
+				NOT = { has_trait = incapable }
+				NOT = { is_spouse_of = root }
+				NOT = { is_child_of = root }
+				NOT = { scope:gen_tk_s_appr ?= this }
+				opinion = {
+					target = root
+					value < 10
+				}
+			}
+			weight = {
+				base = 1
+				modifier = {
+					add = 2
+					has_trait = deceitful
+				}
+				modifier = {
+					add = 2
+					has_trait = ambitious
+				}
+				modifier = {
+					add = 2
+					opinion = {
+						target = root
+						value < -20
+					}
+				}
+			}
+			save_scope_as = gen_tk_s_culprit
+		}
+	}
+
+	# A small child of the court who might wander in. Children of the house first.
+	random_courtier = {
+		limit = {
+			age >= 4
+			age <= 11
+			is_imprisoned = no
+			NOT = { has_trait = incapable }
+			NOT = { scope:gen_tk_s_appr ?= this }
+		}
+		weight = {
+			base = 1
+			modifier = {
+				add = 4
+				is_child_of = root
+			}
+		}
+		save_scope_as = gen_tk_s_kid
+	}
+}
+
+
+# ================================================================= Small helpers
+
+# $WHO$ takes the empty stool at the bench. On the tinkerer.
+gen_tk_ws_take_apprentice_effect = {
+	set_variable = {
+		name = gen_tk_apprentice
+		value = $WHO$
+	}
+	custom_tooltip = gen_tk_ws_apprentice_joins.tt
+	$WHO$ = {
+		add_opinion = {
+			target = root
+			modifier = grateful_opinion
+			opinion = 15
+		}
+	}
+}
+
+# $WHO$ was passed over or brushed off, and will remember it during the build. On the tinkerer.
+# Only a courtier can get at the bench, so only a courtier holds a grudge here.
+gen_tk_ws_set_grudge_effect = {
+	if = {
+		limit = {
+			$WHO$ = {
+				is_courtier_of = root
+				NOT = { is_spouse_of = root }
+			}
+		}
+		set_variable = {
+			name = gen_tk_wf_grudge
+			value = $WHO$
+		}
+		# Named in the tooltip: in 0103 the grudge falls on the courtier the option does NOT name.
+		$WHO$ = { save_scope_as = gen_tk_ws_grudger }
+		custom_tooltip = gen_tk_ws_grudge.tt
+	}
+}

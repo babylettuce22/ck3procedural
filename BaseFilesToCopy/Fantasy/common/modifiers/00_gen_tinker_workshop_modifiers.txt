@@ -1,0 +1,15 @@
+﻿# Gnome Tinkering: small, short-lived modifiers from the workshop's setbacks (events/gen_tinker_workshop_events.txt).
+# See 00_gen_tinker_triggers.txt for the map of the system.
+
+# County: the waterworks' sluice opened by itself and the lower town is wading (0202). 2 years.
+gen_tk_flooded_quarter_modifier = {
+	icon = county_modifier_development_negative
+	development_growth_factor = -0.15
+	county_opinion_add = -5
+}
+
+# Character: slept beside a curio that will not stop chiming (0203). 1 year.
+gen_tk_chiming_nights_modifier = {
+	icon = stress_negative
+	stress_gain_mult = 0.15
+}

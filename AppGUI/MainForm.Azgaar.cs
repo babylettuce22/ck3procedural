@@ -78,7 +78,8 @@ public sealed partial class MainForm
         _options.ModName = modName;
 
         _azgaarPage.ShowRunning();
-        Console.WriteLine($"Azgaar world: {Path.GetFileName(choices.HeightmapPath)} + {Path.GetFileName(choices.ExportPath)}");
+        Console.WriteLine($"Azgaar world: {Path.GetFileName(choices.HeightmapPath)} + {Path.GetFileName(choices.ExportPath)}"
+                          + $", terrain {choices.Terrain}");
 
         var (completed, took) = await RunFromLauncherAsync(_azgaarPage.Run, modDir);
 
@@ -114,6 +115,6 @@ public sealed partial class MainForm
         _options.AppliedHistory = null;
         _history.ShowApplied(null);
 
-        AdoptHeightmapFile(choices.HeightmapPath, fit, unverified: false);
+        AdoptHeightmapFile(choices.HeightmapPath, fit, unverified: false, choices.Source(_options.Config.Seed, fit));
     }
 }

@@ -1,0 +1,25 @@
+﻿# Character modifiers from the victor's verdict (gen_blood_challenge.0301 in
+# events/gen_blood_challenge_aftermath_events.txt). The win tally modifiers (Blood-Proven, Master of
+# the Circle) are MAIN's, in 00_gen_blood_challenge_modifiers.txt.
+
+# The loser whose tusk was broken off as a trophy. The snapped tusk itself is drawn from the
+# gen_tusk_broken_* flag (00_tusk_effects.txt) and never grows back; the shame fades after 20 years.
+gen_bc_broken_tusk_modifier = {
+	icon = prestige_negative
+	monthly_prestige_gain_mult = -0.15
+	same_culture_opinion = -5
+}
+
+# The victor who carries that tusk.
+gen_bc_tusk_trophy_modifier = {
+	icon = dread_positive
+	dread_baseline_add = 10
+	monthly_prestige = 0.5
+}
+
+# The loser made to crawl out of the circle (the verdict for a foe with no tusk left to take).
+gen_bc_crawled_from_circle_modifier = {
+	icon = social_negative
+	monthly_prestige_gain_mult = -0.1
+	same_culture_opinion = -5
+}

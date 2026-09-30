@@ -140,7 +140,12 @@ public static class GroundPreview
                 First(Path.Combine(TerrainDir, materials[m].Properties)), size);
         });
 
-        bool waterKnown = cells == (long)W * H;
+        // The sea mask is map-sized; the detail maps can be a whole multiple of it on small maps
+        // (TerrainTextureWriter.DetailScale), so find that multiple rather than demand 1:1.
+        long texels = (long)W * H;
+        int cellScale = cells > 0 && texels % cells == 0 ? (int)Math.Round(Math.Sqrt(texels / (double)cells)) : 0;
+        bool waterKnown = cellScale > 0 && (long)cellScale * cellScale * cells == texels;
+        int cellWidth = waterKnown ? W / cellScale : 1;
 
         var rgb = new byte[ow * oh * 3];
 
@@ -165,7 +170,9 @@ public static class GroundPreview
                 float ax = (float)Math.Clamp(u - bx, 0, 1), ay = (float)Math.Clamp(v - by, 0, 1);
 
                 int centre = by * W + bx;
-                float depth = waterKnown ? seaDepth((long)(oy * step) * W + ox * step) : -1;
+                float depth = waterKnown
+                    ? seaDepth((long)(oy * step / cellScale) * cellWidth + ox * step / cellScale)
+                    : -1;
                 if (depth >= 0)
                 {
                     int at = (oy * ow + ox) * 3;

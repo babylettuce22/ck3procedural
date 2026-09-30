@@ -1,0 +1,3439 @@
+﻿namespace = gen_tinker
+
+# Gnome Tinkering: the two middle stages of every project, the design and the setback.
+# See 00_gen_tinker_triggers.txt for the map of the system.
+#
+# gen_tk_begin_project_effect (main) schedules 0100; gen_tk_next_stage_effect (main) takes 0100's scene to
+# 0200 and 0200's scene to the test (0300, AGENT E). Every option of every scene here ends in exactly one
+# gen_tk_next_stage_effect, except 0212's "find out who", whose success hands off to 0213 instead (which
+# then ends in it).
+#
+#   0100        hidden: design dispatcher. Checks the maker can work (else abandons), saves the cast, draws one of:
+#   0101          The Blueprint          careful / bigger / the dwarvish plan / simple / (scholar) do the sums
+#   0102          Brass and Bolts        scrap / good brass / melt the silver / (steward) find it in the accounts
+#   0103          An Apprentice          (a child or ward, and/or a clever courtier, and no apprentice yet)
+#   0104          A Letter from a Rival  (the maker has a rival)
+#   0105          The Patron's Letter    (a commission) bigger / faster / cheaper, rolled from the patron's traits
+#   0106          An Idea in the Night   a gamble on a dream, shown honestly
+#   0107          The Noise              (a spouse at court or a steward) complaint about the hammering
+#   0200        hidden: setback dispatcher, same pattern. One of:
+#   0201–0205     the project's own accident: the war engine's shed, the waterworks' flood, the curio's
+#                 chiming, the limb's pinch, the invention's missing notes
+#   0210          The Dwarf-Made Part
+#   0211          Fire in the Workshop
+#   0212          Tampered With          (a resentful courtier) -> 0213 Caught, if the maker finds them out
+#   0215          The Apprentice         (an apprentice) a mistake or a breakthrough, rolled from their learning
+#   0216          The Money Runs Out
+#   0217          A Visitor in the Workshop (a small child at court)
+#   0218          The Inspection         (a commission) the patron's envoy comes to look
+#
+# Weights: each scene is drawn by project, by the maker's traits, by who is at court, by the running
+# thread (flags set by design options, read by the setback dispatcher) and at a quarter of its weight if it
+# was seen in the last four years (gen_tk_seen_NNNN). The thread, the cast and the cleanup are documented in
+# common/scripted_effects/00_gen_tinker_workshop_effects.txt. Quality/risk move only through main's
+# gen_tk_adjust_effect.
+#
+# House rules: every roll ends in a toast or a follow-up event that says what happened; flags the tooltip
+# cannot draw get a custom_tooltip; every option has an ai_chance.
+
+
+# =====================================================================================
+#  0100: design dispatcher
+# =====================================================================================
+
+gen_tinker.0100 = {
+	type = character_event
+	hidden = yes
+
+	# Ignore a stage event left over from an abandoned project (main's serial check).
+	trigger = { gen_tk_event_is_current_trigger = yes }
+
+	immediate = {
+		if = {
+			limit = {
+				gen_tk_can_work_trigger = yes
+				var:gen_tk_stage ?= 1
+			}
+			gen_tk_ws_save_design_cast_effect = yes
+			random_list = {
+				# The Blueprint: always possible. Grand projects need the most planning.
+				10 = {
+					modifier = {
+						add = 8
+						OR = {
+							gen_tk_project_is_trigger = { PROJECT = flag:engine }
+							gen_tk_project_is_trigger = { PROJECT = flag:invention }
+						}
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0101
+					}
+					trigger_event = gen_tinker.0101
+				}
+				# Brass and Bolts: always possible. Fine work needs fine metal.
+				10 = {
+					modifier = {
+						add = 8
+						OR = {
+							gen_tk_project_is_trigger = { PROJECT = flag:curio }
+							gen_tk_project_is_trigger = { PROJECT = flag:limb }
+						}
+					}
+					modifier = {
+						add = 4
+						exists = scope:gen_tk_d_steward
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0102
+					}
+					trigger_event = gen_tinker.0102
+				}
+				# An Apprentice: someone to ask, and the stool is empty.
+				12 = {
+					trigger = {
+						NOT = { exists = scope:gen_tk_d_appr }
+						OR = {
+							exists = scope:gen_tk_d_young
+							exists = scope:gen_tk_d_clever
+						}
+					}
+					modifier = {
+						add = 6
+						exists = scope:gen_tk_d_young
+					}
+					modifier = {
+						add = 4
+						has_trait = gregarious
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0103
+					}
+					trigger_event = gen_tinker.0103
+				}
+				# A Letter from a Rival.
+				8 = {
+					trigger = { exists = scope:gen_tk_d_rival }
+					modifier = {
+						add = 8
+						scope:gen_tk_d_rival = { gen_tk_has_tinkering_trigger = yes }
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0104
+					}
+					trigger_event = gen_tinker.0104
+				}
+				# The Patron's Letter: a commission nearly always hears from its patron.
+				25 = {
+					trigger = { exists = scope:gen_tk_d_patron }
+					modifier = {
+						factor = 0.5
+						has_character_flag = gen_tk_seen_0105
+					}
+					trigger_event = gen_tinker.0105
+				}
+				# An Idea in the Night: the curious and the learned dream of work.
+				8 = {
+					modifier = {
+						add = 6
+						OR = {
+							has_trait = curious
+							has_trait = scholar
+							has_trait = eccentric
+						}
+					}
+					modifier = {
+						add = 6
+						gen_tk_project_is_trigger = { PROJECT = flag:invention }
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0106
+					}
+					trigger_event = gen_tinker.0106
+				}
+				# The Noise: someone to complain. Engines and waterworks are the loudest.
+				8 = {
+					trigger = {
+						OR = {
+							exists = scope:gen_tk_d_spouse
+							exists = scope:gen_tk_d_steward
+						}
+					}
+					modifier = {
+						add = 8
+						OR = {
+							gen_tk_project_is_trigger = { PROJECT = flag:engine }
+							gen_tk_project_is_trigger = { PROJECT = flag:mill }
+						}
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0107
+					}
+					trigger_event = gen_tinker.0107
+				}
+			}
+		}
+		# The maker can no longer work at it (jailed, incapable). A stage mismatch is a stale event from an
+		# earlier project and does nothing.
+		else_if = {
+			limit = {
+				has_character_flag = gen_tk_working
+				NOT = { gen_tk_can_work_trigger = yes }
+			}
+			gen_tk_abandon_project_effect = yes
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0101: The Blueprint
+# =====================================================================================
+
+gen_tinker.0101 = {
+	type = character_event
+	title = gen_tinker.0101.t
+	desc = {
+		desc = gen_tinker.0101.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:curio } }
+				desc = gen_tinker.0101.desc.curio
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:mill } }
+				desc = gen_tinker.0101.desc.mill
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:engine } }
+				desc = gen_tinker.0101.desc.engine
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:limb } }
+				desc = gen_tinker.0101.desc.limb
+			}
+			desc = gen_tinker.0101.desc.invention
+		}
+		desc = gen_tinker.0101.desc.end
+	}
+	theme = learning
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_d_appr }
+		character = scope:gen_tk_d_appr
+		animation = interested
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0101
+			years = 4
+		}
+	}
+
+	# Careful.
+	option = {
+		name = gen_tinker.0101.a
+		gen_tk_adjust_effect = { QUALITY = 5 RISK = -10 }
+		add_character_flag = gen_tk_wf_careful
+		custom_tooltip = gen_tk_ws_wf_careful.tt
+		stress_impact = {
+			impatient = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_rationality = 0.25
+				ai_boldness = -0.25
+			}
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = patient
+					has_trait = diligent
+				}
+			}
+			modifier = {
+				factor = 0.5
+				has_trait = impatient
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Bigger.
+	option = {
+		name = gen_tinker.0101.b
+		gen_tk_adjust_effect = { QUALITY = 15 RISK = 10 }
+		add_character_flag = gen_tk_wf_ambitious
+		custom_tooltip = gen_tk_ws_wf_ambitious.tt
+		stress_impact = {
+			craven = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_boldness = 0.5
+			}
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = ambitious
+					has_trait = arrogant
+				}
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# The dwarvish plan.
+	option = {
+		name = gen_tinker.0101.c
+		gen_tk_adjust_effect = { QUALITY = 10 RISK = 0 }
+		add_character_flag = gen_tk_wf_dwarf_design
+		custom_tooltip = gen_tk_ws_wf_dwarf_design.tt
+		stress_impact = {
+			arrogant = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.25
+			}
+			modifier = {
+				factor = 0.5
+				has_trait = arrogant
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Simple: the safest plan on the table, paid for in quality (careful is safer than bigger, but not this safe).
+	option = {
+		name = gen_tinker.0101.d
+		gen_tk_adjust_effect = { QUALITY = -5 RISK = -20 }
+		stress_impact = {
+			ambitious = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_boldness = -0.5
+			}
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = content
+					has_trait = lazy
+					has_trait = craven
+				}
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Do the sums properly: only a scholar or a genius can.
+	option = {
+		name = gen_tinker.0101.e
+		trigger = {
+			OR = {
+				has_trait = scholar
+				has_trait = intellect_good
+			}
+		}
+		gen_tk_adjust_effect = { QUALITY = 15 RISK = -5 }
+		add_stress = minor_stress_gain
+		ai_chance = {
+			base = 40
+			modifier = {
+				factor = 0.5
+				has_trait = lazy
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0102: Brass and Bolts
+# =====================================================================================
+
+gen_tinker.0102 = {
+	type = character_event
+	title = gen_tinker.0102.t
+	desc = {
+		desc = gen_tinker.0102.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:gen_tk_d_steward }
+				desc = gen_tinker.0102.desc.steward
+			}
+			desc = gen_tinker.0102.desc.alone
+		}
+	}
+	theme = stewardship
+	override_background = { reference = market }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_d_steward }
+		character = scope:gen_tk_d_steward
+		animation = steward
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0102
+			years = 4
+		}
+	}
+
+	# Scrap.
+	option = {
+		name = gen_tinker.0102.a
+		gen_tk_adjust_effect = { QUALITY = -5 RISK = 5 }
+		add_character_flag = gen_tk_wf_cheap_parts
+		custom_tooltip = gen_tk_ws_wf_cheap_parts.tt
+		stress_impact = {
+			greedy = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_greed = 0.5
+			}
+			modifier = {
+				add = 20
+				gold < minor_gold_value
+			}
+			min = 1	# the fallback: always some chance
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Good brass.
+	option = {
+		name = gen_tinker.0102.b
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = minor_gold_value
+		gen_tk_adjust_effect = { QUALITY = 10 RISK = -5 }
+		add_character_flag = gen_tk_wf_fine_brass
+		custom_tooltip = gen_tk_ws_wf_fine_brass.tt
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_greed = -0.5
+			}
+			modifier = {
+				add = 10
+				has_trait = generous
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Melt the silver.
+	option = {
+		name = gen_tinker.0102.c
+		add_prestige = minor_prestige_loss
+		gen_tk_adjust_effect = { QUALITY = 10 RISK = 0 }
+		if = {
+			limit = { exists = scope:gen_tk_d_spouse }
+			scope:gen_tk_d_spouse = {
+				add_opinion = {
+					target = root
+					modifier = annoyed_opinion
+					opinion = -10
+				}
+			}
+		}
+		stress_impact = {
+			arrogant = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_boldness = 0.25
+				ai_compassion = -0.25
+			}
+			modifier = {
+				add = 10
+				has_trait = eccentric
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Let the steward find it. The better the steward, the likelier the money turns up.
+	option = {
+		name = gen_tinker.0102.d
+		trigger = { exists = scope:gen_tk_d_steward }
+		random_list = {
+			30 = {
+				desc = gen_tinker.0102.d.found
+				modifier = {
+					add = {
+						value = scope:gen_tk_d_steward.stewardship
+						multiply = 3
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0102.d.found.t
+					left_icon = root
+					right_icon = scope:gen_tk_d_steward
+					gen_tk_adjust_effect = { QUALITY = 10 RISK = 0 }
+				}
+			}
+			# Nothing found: it's the midden after all, and the steward resents the wasted month.
+			50 = {
+				desc = gen_tinker.0102.d.lost
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0102.d.lost.t
+					left_icon = root
+					right_icon = scope:gen_tk_d_steward
+					gen_tk_adjust_effect = { QUALITY = -5 RISK = 5 }
+					add_character_flag = gen_tk_wf_cheap_parts
+					custom_tooltip = gen_tk_ws_wf_cheap_parts.tt
+					scope:gen_tk_d_steward = {
+						add_opinion = {
+							target = root
+							modifier = annoyed_opinion
+							opinion = -10
+						}
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 15
+			modifier = {
+				add = 15
+				scope:gen_tk_d_steward = { stewardship >= 14 }
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0103: An Apprentice
+# =====================================================================================
+
+gen_tinker.0103 = {
+	type = character_event
+	title = gen_tinker.0103.t
+	desc = {
+		desc = gen_tinker.0103.desc
+		triggered_desc = {
+			trigger = { exists = scope:gen_tk_d_young }
+			desc = gen_tinker.0103.desc.young
+		}
+		triggered_desc = {
+			trigger = { exists = scope:gen_tk_d_clever }
+			desc = gen_tinker.0103.desc.clever
+		}
+	}
+	theme = learning
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = happy_teacher
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_d_young }
+		character = scope:gen_tk_d_young
+		animation = interested
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:gen_tk_d_clever }
+		character = scope:gen_tk_d_clever
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0103
+			years = 4
+		}
+	}
+
+	# The child or ward.
+	option = {
+		name = gen_tinker.0103.a
+		trigger = { exists = scope:gen_tk_d_young }
+		gen_tk_ws_take_apprentice_effect = { WHO = scope:gen_tk_d_young }
+		gen_tk_adjust_effect = { QUALITY = 0 RISK = 5 }
+		add_character_flag = gen_tk_wf_bench_open
+		custom_tooltip = gen_tk_ws_wf_bench_open.tt
+		if = {
+			limit = { exists = scope:gen_tk_d_clever }
+			gen_tk_ws_set_grudge_effect = { WHO = scope:gen_tk_d_clever }
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_compassion = 0.25
+			}
+			modifier = {
+				add = 15
+				scope:gen_tk_d_young = { is_child_of = root }
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# The clever courtier. A really clever one improves the work more.
+	option = {
+		name = gen_tinker.0103.b
+		trigger = { exists = scope:gen_tk_d_clever }
+		gen_tk_ws_take_apprentice_effect = { WHO = scope:gen_tk_d_clever }
+		if = {
+			limit = { scope:gen_tk_d_clever = { learning >= 14 } }
+			gen_tk_adjust_effect = { QUALITY = 10 RISK = 0 }
+		}
+		else = {
+			gen_tk_adjust_effect = { QUALITY = 5 RISK = 0 }
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.25
+			}
+			modifier = {
+				add = 10
+				scope:gen_tk_d_clever = { learning >= 14 }
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Alone: nobody else's sleeve to catch in the works.
+	option = {
+		name = gen_tinker.0103.c
+		gen_tk_adjust_effect = { QUALITY = 0 RISK = -5 }
+		if = {
+			limit = { exists = scope:gen_tk_d_clever }
+			gen_tk_ws_set_grudge_effect = { WHO = scope:gen_tk_d_clever }
+		}
+		stress_impact = {
+			gregarious = minor_stress_impact_gain
+			shy = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_sociability = -0.5
+			}
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = shy
+					has_trait = paranoid
+				}
+			}
+			min = 1	# the fallback: always some chance
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0104: A Letter from a Rival
+# =====================================================================================
+
+gen_tinker.0104 = {
+	type = character_event
+	title = gen_tinker.0104.t
+	desc = {
+		desc = gen_tinker.0104.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_tk_d_rival = { gen_tk_has_tinkering_trigger = yes } }
+				desc = gen_tinker.0104.desc.tinker
+			}
+			desc = gen_tinker.0104.desc.meddler
+		}
+	}
+	theme = rival_relation
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = reading
+	}
+	right_portrait = {
+		character = scope:gen_tk_d_rival
+		animation = schadenfreude
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0104
+			years = 4
+		}
+	}
+
+	# Boast.
+	option = {
+		name = gen_tinker.0104.a
+		add_prestige = minor_prestige_gain
+		gen_tk_adjust_effect = { QUALITY = 5 RISK = 10 }
+		add_character_flag = gen_tk_wf_rival_stirred
+		custom_tooltip = gen_tk_ws_wf_rival_stirred.tt
+		stress_impact = {
+			humble = minor_stress_impact_gain
+			arrogant = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_boldness = 0.5
+			}
+			modifier = {
+				add = 15
+				has_trait = arrogant
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Learn from the drawing.
+	option = {
+		name = gen_tinker.0104.b
+		gen_tk_adjust_effect = { QUALITY = 10 RISK = 0 }
+		stress_impact = {
+			arrogant = minor_stress_impact_gain
+			stubborn = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.5
+			}
+			modifier = {
+				add = 10
+				has_trait = humble
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Burn it: nothing learned, but it feels good.
+	option = {
+		name = gen_tinker.0104.c
+		add_stress = minor_stress_loss
+		stress_impact = {
+			wrathful = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 15
+			modifier = {
+				add = 10
+				OR = {
+					has_trait = wrathful
+					has_trait = calm
+				}
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Send back drawings that are slightly wrong. An intrigue contest against the rival.
+	option = {
+		name = gen_tinker.0104.d
+		duel = {
+			skill = intrigue
+			target = scope:gen_tk_d_rival
+			50 = {
+				desc = gen_tinker.0104.d.win
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0104.d.win.t
+					left_icon = root
+					right_icon = scope:gen_tk_d_rival
+					scope:gen_tk_d_rival = { add_stress = minor_stress_gain }
+				}
+				scope:gen_tk_d_rival = {
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = gen_tinker.0104.d.win.rival
+						left_icon = scope:gen_tk_maker
+						custom_tooltip = gen_tinker.0104.d.win.rival.tt
+					}
+				}
+			}
+			50 = {
+				desc = gen_tinker.0104.d.lose
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0104.d.lose.t
+					left_icon = root
+					right_icon = scope:gen_tk_d_rival
+					add_prestige = minor_prestige_loss
+				}
+				scope:gen_tk_d_rival = {
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = gen_tinker.0104.d.lose.rival
+						left_icon = scope:gen_tk_maker
+						custom_tooltip = gen_tinker.0104.d.lose.rival.tt
+					}
+				}
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			deceitful = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 5
+			ai_value_modifier = {
+				ai_honor = -0.5
+				ai_vengefulness = 0.25
+			}
+			modifier = {
+				add = 20
+				has_trait = deceitful
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0105: The Patron's Letter
+# =====================================================================================
+
+# The demand is rolled here from the patron's character: the ambitious want it bigger, the impatient
+# want it sooner, the greedy want it cheaper. The event text says which.
+gen_tinker.0105 = {
+	type = character_event
+	title = gen_tinker.0105.t
+	desc = {
+		desc = gen_tinker.0105.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_tk_d_demand = flag:bigger }
+				desc = gen_tinker.0105.desc.bigger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_d_demand = flag:faster }
+				desc = gen_tinker.0105.desc.faster
+			}
+			desc = gen_tinker.0105.desc.cheaper
+		}
+	}
+	theme = diplomacy
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = reading
+	}
+	right_portrait = {
+		character = scope:gen_tk_d_patron
+		animation = personality_greedy
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0105
+			years = 4
+		}
+		scope:gen_tk_d_patron = {
+			random_list = {
+				10 = {
+					modifier = {
+						add = 20
+						OR = {
+							has_trait = ambitious
+							has_trait = arrogant
+						}
+					}
+					save_scope_value_as = { name = gen_tk_d_demand value = flag:bigger }
+				}
+				10 = {
+					modifier = {
+						add = 20
+						has_trait = impatient
+					}
+					save_scope_value_as = { name = gen_tk_d_demand value = flag:faster }
+				}
+				10 = {
+					modifier = {
+						add = 20
+						has_trait = greedy
+					}
+					save_scope_value_as = { name = gen_tk_d_demand value = flag:cheaper }
+				}
+			}
+		}
+		# Nobody likes being hurried, whatever they answer (main's gen_tk_hurried_me_opinion).
+		if = {
+			limit = { scope:gen_tk_d_demand = flag:faster }
+			add_opinion = {
+				modifier = gen_tk_hurried_me_opinion
+				target = scope:gen_tk_d_patron
+			}
+		}
+	}
+
+	# Do as they ask.
+	option = {
+		name = gen_tinker.0105.a
+		if = {
+			limit = { scope:gen_tk_d_demand = flag:bigger }
+			gen_tk_adjust_effect = { QUALITY = 10 RISK = 10 }
+		}
+		else_if = {
+			limit = { scope:gen_tk_d_demand = flag:faster }
+			# Really sooner now: every later wait a quarter shorter (and risk +5), plus the cost of
+			# rushing the design itself.
+			gen_tk_hurry_project_effect = yes
+			gen_tk_adjust_effect = { QUALITY = -5 RISK = 5 }
+		}
+		else = {
+			gen_tk_adjust_effect = { QUALITY = -10 RISK = 5 }
+			pay_short_term_gold = {
+				target = scope:gen_tk_d_patron
+				gold = tiny_gold_value
+			}
+		}
+		scope:gen_tk_d_patron = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 15
+			}
+		}
+		add_character_flag = gen_tk_wf_patron_promised
+		custom_tooltip = gen_tk_ws_wf_patron_promised.tt
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_honor = 0.25
+				ai_boldness = -0.25
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Explain why not. A diplomacy contest against the patron.
+	option = {
+		name = gen_tinker.0105.b
+		duel = {
+			skill = diplomacy
+			target = scope:gen_tk_d_patron
+			50 = {
+				desc = gen_tinker.0105.b.win
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0105.b.win.t
+					left_icon = root
+					right_icon = scope:gen_tk_d_patron
+					scope:gen_tk_d_patron = {
+						add_opinion = {
+							target = root
+							modifier = pleased_opinion
+							opinion = 5
+						}
+					}
+				}
+			}
+			50 = {
+				desc = gen_tinker.0105.b.lose
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0105.b.lose.t
+					left_icon = root
+					right_icon = scope:gen_tk_d_patron
+					scope:gen_tk_d_patron = {
+						add_opinion = {
+							target = root
+							modifier = annoyed_opinion
+							opinion = -15
+						}
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_rationality = 0.25
+				ai_boldness = 0.25
+			}
+			modifier = {
+				add = 15
+				diplomacy >= 14
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Agree, then build it your own way.
+	option = {
+		name = gen_tinker.0105.c
+		gen_tk_adjust_effect = { QUALITY = 5 RISK = 0 }
+		scope:gen_tk_d_patron = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 10
+			}
+		}
+		add_character_flag = gen_tk_wf_patron_promised
+		add_character_flag = gen_tk_wf_patron_fooled
+		custom_tooltip = gen_tk_ws_wf_patron_fooled.tt
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			deceitful = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_honor = -0.5
+			}
+			modifier = {
+				add = 15
+				has_trait = deceitful
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0106: An Idea in the Night
+# =====================================================================================
+
+gen_tinker.0106 = {
+	type = character_event
+	title = gen_tinker.0106.t
+	desc = gen_tinker.0106.desc
+	theme = learning
+	override_background = { reference = bedchamber }
+
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0106
+			years = 4
+		}
+	}
+
+	# Up and at it. The learned are likelier to have dreamt something real.
+	option = {
+		name = gen_tinker.0106.a
+		random_list = {
+			50 = {
+				desc = gen_tinker.0106.a.good
+				modifier = {
+					add = {
+						value = learning
+						multiply = 2
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0106.a.good.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = 15 RISK = 0 }
+				}
+			}
+			50 = {
+				desc = gen_tinker.0106.a.bad
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0106.a.bad.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = -10 RISK = 5 }
+				}
+			}
+		}
+		stress_impact = {
+			lazy = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_boldness = 0.5
+			}
+			modifier = {
+				add = 10
+				learning >= 16
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# A small model first: a smaller swing, likelier to be good.
+	option = {
+		name = gen_tinker.0106.b
+		trigger = { gold >= tiny_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = tiny_gold_value
+		random_list = {
+			75 = {
+				desc = gen_tinker.0106.b.good
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0106.b.good.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = 10 RISK = 0 }
+				}
+			}
+			25 = {
+				desc = gen_tinker.0106.b.bad
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = gen_tinker.0106.b.bad.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = -5 RISK = 0 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Back to sleep.
+	option = {
+		name = gen_tinker.0106.c
+		stress_impact = {
+			curious = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = lazy
+					has_trait = content
+				}
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0107: The Noise
+# =====================================================================================
+
+gen_tinker.0107 = {
+	type = character_event
+	title = gen_tinker.0107.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:gen_tk_d_spouse }	# the spouse complains first (immediate)
+				desc = gen_tinker.0107.desc.spouse
+			}
+			desc = gen_tinker.0107.desc.steward
+		}
+		desc = gen_tinker.0107.desc.end
+	}
+	theme = stewardship
+	override_background = { reference = sitting_room }
+
+	left_portrait = {
+		character = root
+		animation = eyeroll
+	}
+	right_portrait = {
+		character = scope:gen_tk_d_complainer
+		animation = anger
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0107
+			years = 4
+		}
+		# The spouse complains first; the steward if there is no spouse at court.
+		if = {
+			limit = { exists = scope:gen_tk_d_spouse }
+			scope:gen_tk_d_spouse = { save_scope_as = gen_tk_d_complainer }
+		}
+		else = {
+			scope:gen_tk_d_steward = { save_scope_as = gen_tk_d_complainer }
+		}
+	}
+
+	# Daylight hours only.
+	option = {
+		name = gen_tinker.0107.a
+		gen_tk_adjust_effect = { QUALITY = -5 RISK = 0 }
+		scope:gen_tk_d_complainer = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 10
+			}
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_compassion = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# A shed by the river.
+	option = {
+		name = gen_tinker.0107.b
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = minor_gold_value
+		gen_tk_adjust_effect = { QUALITY = 0 RISK = -5 }
+		scope:gen_tk_d_complainer = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 5
+			}
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_greed = -0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Great work is loud.
+	option = {
+		name = gen_tinker.0107.c
+		gen_tk_adjust_effect = { QUALITY = 5 RISK = 0 }
+		scope:gen_tk_d_complainer = {
+			add_opinion = {
+				target = root
+				modifier = annoyed_opinion
+				opinion = -15
+			}
+		}
+		gen_tk_ws_set_grudge_effect = { WHO = scope:gen_tk_d_complainer }
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_compassion = -0.5
+			}
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = arrogant
+					has_trait = callous
+				}
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Bring them to see it. The better the maker talks, the likelier they are won over.
+	option = {
+		name = gen_tinker.0107.d
+		random_list = {
+			40 = {
+				desc = gen_tinker.0107.d.charmed
+				modifier = {
+					add = {
+						value = diplomacy
+						multiply = 2
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0107.d.charmed.t
+					left_icon = root
+					right_icon = scope:gen_tk_d_complainer
+					scope:gen_tk_d_complainer = {
+						add_opinion = {
+							target = root
+							modifier = pleased_opinion
+							opinion = 15
+						}
+					}
+					add_character_flag = gen_tk_wf_bench_open
+					custom_tooltip = gen_tk_ws_wf_bench_open.tt
+				}
+			}
+			40 = {
+				desc = gen_tinker.0107.d.appalled
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0107.d.appalled.t
+					left_icon = root
+					right_icon = scope:gen_tk_d_complainer
+					scope:gen_tk_d_complainer = {
+						add_opinion = {
+							target = root
+							modifier = annoyed_opinion
+							opinion = -10
+						}
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_sociability = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0200: setback dispatcher
+# =====================================================================================
+
+gen_tinker.0200 = {
+	type = character_event
+	hidden = yes
+
+	# Ignore a stage event left over from an abandoned project (main's serial check).
+	trigger = { gen_tk_event_is_current_trigger = yes }
+
+	immediate = {
+		if = {
+			limit = {
+				gen_tk_can_work_trigger = yes
+				var:gen_tk_stage ?= 2
+			}
+			gen_tk_ws_save_setback_cast_effect = yes
+			random_list = {
+				# ---- The project's own accident. Likelier if the design was made bigger.
+				25 = {
+					trigger = { gen_tk_project_is_trigger = { PROJECT = flag:engine } }
+					modifier = {
+						add = 15
+						has_character_flag = gen_tk_wf_ambitious
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0201
+					}
+					trigger_event = gen_tinker.0201
+				}
+				25 = {
+					trigger = {
+						gen_tk_project_is_trigger = { PROJECT = flag:mill }
+						exists = capital_county
+					}
+					modifier = {
+						add = 15
+						has_character_flag = gen_tk_wf_ambitious
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0202
+					}
+					trigger_event = gen_tinker.0202
+				}
+				25 = {
+					trigger = { gen_tk_project_is_trigger = { PROJECT = flag:curio } }
+					modifier = {
+						add = 15
+						has_character_flag = gen_tk_wf_ambitious
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0203
+					}
+					trigger_event = gen_tinker.0203
+				}
+				25 = {
+					trigger = { gen_tk_project_is_trigger = { PROJECT = flag:limb } }
+					modifier = {
+						add = 15
+						OR = {
+							has_character_flag = gen_tk_wf_ambitious
+							has_character_flag = gen_tk_wf_cheap_parts
+						}
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0204
+					}
+					trigger_event = gen_tinker.0204
+				}
+				25 = {
+					trigger = { gen_tk_project_is_trigger = { PROJECT = flag:invention } }
+					modifier = {
+						add = 15
+						OR = {
+							has_character_flag = gen_tk_wf_ambitious
+							has_character_flag = gen_tk_wf_rival_stirred
+						}
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0205
+					}
+					trigger_event = gen_tinker.0205
+				}
+				# ---- General setbacks.
+				# The Dwarf-Made Part: the dwarvish plan calls for it.
+				8 = {
+					modifier = {
+						add = 20
+						has_character_flag = gen_tk_wf_dwarf_design
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0210
+					}
+					trigger_event = gen_tinker.0210
+				}
+				# Fire: cheap parts burn; careful work doesn't.
+				8 = {
+					modifier = {
+						add = 12
+						has_character_flag = gen_tk_wf_cheap_parts
+					}
+					modifier = {
+						factor = 0.5
+						has_character_flag = gen_tk_wf_careful
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0211
+					}
+					trigger_event = gen_tinker.0211
+				}
+				# Sabotage: someone with a grudge, or a rival's gold.
+				6 = {
+					trigger = { exists = scope:gen_tk_s_culprit }
+					modifier = {
+						add = 15
+						exists = var:gen_tk_wf_grudge
+						scope:gen_tk_s_culprit = root.var:gen_tk_wf_grudge
+					}
+					modifier = {
+						add = 8
+						has_character_flag = gen_tk_wf_rival_stirred
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0212
+					}
+					trigger_event = gen_tinker.0212
+				}
+				# The Apprentice.
+				15 = {
+					trigger = { exists = scope:gen_tk_s_appr }
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0215
+					}
+					trigger_event = gen_tinker.0215
+				}
+				# The Money Runs Out: good brass empties the purse.
+				8 = {
+					modifier = {
+						add = 12
+						has_character_flag = gen_tk_wf_fine_brass
+					}
+					modifier = {
+						add = 6
+						gold < minor_gold_value
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0216
+					}
+					trigger_event = gen_tinker.0216
+				}
+				# A Visitor in the Workshop: the door was left open to children.
+				7 = {
+					trigger = { exists = scope:gen_tk_s_kid }
+					modifier = {
+						add = 12
+						has_character_flag = gen_tk_wf_bench_open
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0217
+					}
+					trigger_event = gen_tinker.0217
+				}
+				# The Inspection: a patron who was promised something comes to look.
+				10 = {
+					trigger = { exists = scope:gen_tk_s_patron }
+					modifier = {
+						add = 15
+						has_character_flag = gen_tk_wf_patron_promised
+					}
+					modifier = {
+						factor = 0.25
+						has_character_flag = gen_tk_seen_0218
+					}
+					trigger_event = gen_tinker.0218
+				}
+			}
+		}
+		else_if = {
+			limit = {
+				has_character_flag = gen_tk_working
+				NOT = { gen_tk_can_work_trigger = yes }
+			}
+			gen_tk_abandon_project_effect = yes
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0201: The Woodshed (war engine)
+# =====================================================================================
+
+gen_tinker.0201 = {
+	type = character_event
+	title = gen_tinker.0201.t
+	desc = gen_tinker.0201.desc
+	theme = martial
+	override_background = { reference = courtyard }
+
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_s_appr }
+		character = scope:gen_tk_s_appr
+		animation = worry
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0201
+			years = 4
+		}
+	}
+
+	# Pay, and test outside the walls.
+	option = {
+		name = gen_tinker.0201.a
+		remove_short_term_gold = tiny_gold_value
+		gen_tk_adjust_effect = { QUALITY = 0 RISK = -10 }
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_rationality = 0.25
+				ai_compassion = 0.25
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# More counterweight.
+	option = {
+		name = gen_tinker.0201.b
+		gen_tk_adjust_effect = { QUALITY = 10 RISK = 10 }
+		stress_impact = {
+			craven = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_boldness = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# It was aimed.
+	option = {
+		name = gen_tinker.0201.c
+		random_list = {
+			50 = {
+				desc = gen_tinker.0201.c.believed
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0201.c.believed.t
+					left_icon = root
+					add_prestige = minor_prestige_gain
+				}
+			}
+			50 = {
+				desc = gen_tinker.0201.c.laughed
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0201.c.laughed.t
+					left_icon = root
+					add_prestige = minor_prestige_loss
+				}
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = arrogant
+					has_trait = deceitful
+				}
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Send the apprentice to measure the throw.
+	option = {
+		name = gen_tinker.0201.d
+		trigger = { exists = scope:gen_tk_s_appr }
+		gen_tk_adjust_effect = { QUALITY = 5 RISK = 0 }
+		scope:gen_tk_s_appr = {
+			if = {
+				limit = { is_adult = yes }
+				add_learning_lifestyle_xp = minor_lifestyle_xp
+			}
+			else = {
+				add_opinion = {
+					target = root
+					modifier = pleased_opinion
+					opinion = 10
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0202: The Lower Town Floods (waterworks)
+# =====================================================================================
+
+gen_tinker.0202 = {
+	type = character_event
+	title = gen_tinker.0202.t
+	desc = gen_tinker.0202.desc
+	theme = stewardship
+	override_background = { reference = village }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0202
+			years = 4
+		}
+	}
+
+	# Pay the townsfolk: the one answer that spares the county the flood modifier.
+	option = {
+		name = gen_tinker.0202.a
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = minor_gold_value
+		custom_tooltip = gen_tinker.0202.a.tt
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_compassion = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Rebuild the sluice gate properly. The town stays wet for now.
+	option = {
+		name = gen_tinker.0202.b
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = minor_gold_value
+		gen_tk_adjust_effect = { QUALITY = 10 RISK = -5 }
+		capital_county = {
+			add_county_modifier = {
+				modifier = gen_tk_flooded_quarter_modifier
+				years = 2
+			}
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Call it irrigation.
+	option = {
+		name = gen_tinker.0202.c
+		capital_county = {
+			add_county_modifier = {
+				modifier = gen_tk_flooded_quarter_modifier
+				years = 2
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_greed = 0.5
+				ai_compassion = -0.25
+			}
+			min = 1	# the fallback: always some chance
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0203: It Will Not Stop Chiming (curio)
+# =====================================================================================
+
+gen_tinker.0203 = {
+	type = character_event
+	title = gen_tinker.0203.t
+	desc = {
+		desc = gen_tinker.0203.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:gen_tk_s_spouse }
+				desc = gen_tinker.0203.desc.spouse
+			}
+			desc = gen_tinker.0203.desc.court
+		}
+	}
+	theme = learning
+	override_background = { reference = bedchamber }
+
+	left_portrait = {
+		character = root
+		animation = stress
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_s_spouse }
+		character = scope:gen_tk_s_spouse
+		animation = eyeroll
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0203
+			years = 4
+		}
+	}
+
+	# Wool.
+	option = {
+		name = gen_tinker.0203.a
+		gen_tk_adjust_effect = { QUALITY = -5 RISK = 0 }
+		ai_chance = {
+			base = 15
+			modifier = {
+				add = 10
+				has_trait = lazy
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Take it apart.
+	option = {
+		name = gen_tinker.0203.b
+		gen_tk_adjust_effect = { QUALITY = 10 RISK = 0 }
+		add_stress = minor_stress_gain
+		stress_impact = {
+			diligent = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.25
+			}
+			modifier = {
+				add = 10
+				has_trait = diligent
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Sleep beside it and listen.
+	option = {
+		name = gen_tinker.0203.c
+		add_character_modifier = {
+			modifier = gen_tk_chiming_nights_modifier
+			years = 1
+		}
+		gen_tk_adjust_effect = { QUALITY = 5 RISK = -5 }
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_energy = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Give it to the spouse for now.
+	option = {
+		name = gen_tinker.0203.d
+		trigger = { exists = scope:gen_tk_s_spouse }
+		gen_tk_adjust_effect = { QUALITY = -5 RISK = 0 }
+		random_list = {
+			40 = {
+				desc = gen_tinker.0203.d.charmed
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0203.d.charmed.t
+					left_icon = root
+					right_icon = scope:gen_tk_s_spouse
+					scope:gen_tk_s_spouse = {
+						add_opinion = {
+							target = root
+							modifier = pleased_opinion
+							opinion = 15
+						}
+					}
+				}
+			}
+			60 = {
+				desc = gen_tinker.0203.d.furious
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0203.d.furious.t
+					left_icon = root
+					right_icon = scope:gen_tk_s_spouse
+					scope:gen_tk_s_spouse = {
+						add_opinion = {
+							target = root
+							modifier = annoyed_opinion
+							opinion = -10
+						}
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_sociability = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0204: It Pinches (clockwork limb)
+# =====================================================================================
+
+# The wearer is the patron of a commission, else the maker (scope:gen_tk_s_wearer).
+gen_tinker.0204 = {
+	type = character_event
+	title = gen_tinker.0204.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_tk_s_wearer = root }
+				desc = gen_tinker.0204.desc.self
+			}
+			desc = gen_tinker.0204.desc.patron
+		}
+		desc = gen_tinker.0204.desc.end
+	}
+	theme = physical_health
+	override_background = { reference = physicians_study }
+
+	left_portrait = {
+		character = root
+		triggered_animation = {
+			trigger = { scope:gen_tk_s_wearer = root }
+			animation = pain
+		}
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { NOT = { scope:gen_tk_s_wearer = root } }
+		character = scope:gen_tk_s_wearer
+		animation = pain
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:gen_tk_s_appr }
+		character = scope:gen_tk_s_appr
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0204
+			years = 4
+		}
+	}
+
+	# Pad the grip.
+	option = {
+		name = gen_tinker.0204.a
+		gen_tk_adjust_effect = { QUALITY = -5 RISK = -5 }
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_compassion = 0.25
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Rebuild the joint.
+	option = {
+		name = gen_tinker.0204.b
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = minor_gold_value
+		gen_tk_adjust_effect = { QUALITY = 10 RISK = 0 }
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# It will loosen with use: no time spent on it, so the work goes faster (hurried: risk +5, sooner), and the
+	# wearer puts up with the pinching.
+	option = {
+		name = gen_tinker.0204.c
+		gen_tk_hurry_project_effect = yes
+		scope:gen_tk_s_wearer = { add_stress = minor_stress_gain }
+		if = {
+			limit = { NOT = { scope:gen_tk_s_wearer = root } }
+			scope:gen_tk_s_wearer = {
+				add_opinion = {
+					target = root
+					modifier = annoyed_opinion
+					opinion = -5
+				}
+			}
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_compassion = -0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Try it on the apprentice first. It gets better either way; the roll is how much it bites them.
+	option = {
+		name = gen_tinker.0204.d
+		trigger = { exists = scope:gen_tk_s_appr }
+		gen_tk_adjust_effect = { QUALITY = 5 RISK = 0 }
+		random_list = {
+			50 = {
+				desc = gen_tinker.0204.d.pinched
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = gen_tinker.0204.d.pinched.t
+					left_icon = scope:gen_tk_s_appr
+					scope:gen_tk_s_appr = { add_stress = minor_stress_gain }
+				}
+			}
+			50 = {
+				desc = gen_tinker.0204.d.fine
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0204.d.fine.t
+					left_icon = scope:gen_tk_s_appr
+					custom_tooltip = gen_tinker.0204.d.fine.tt
+				}
+			}
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_compassion = -0.25
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0205: The Notes Are Gone (grand invention)
+# =====================================================================================
+
+gen_tinker.0205 = {
+	type = character_event
+	title = gen_tinker.0205.t
+	desc = {
+		desc = gen_tinker.0205.desc
+		triggered_desc = {
+			trigger = {
+				has_character_flag = gen_tk_wf_rival_stirred
+				exists = scope:gen_tk_s_rival	# the text names them
+			}
+			desc = gen_tinker.0205.desc.stirred
+		}
+	}
+	theme = learning
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_s_rival }
+		character = scope:gen_tk_s_rival
+		animation = scheme
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0205
+			years = 4
+		}
+	}
+
+	# Search everywhere.
+	option = {
+		name = gen_tinker.0205.a
+		add_stress = minor_stress_gain
+		random_list = {
+			50 = {
+				desc = gen_tinker.0205.a.found
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0205.a.found.t
+					left_icon = root
+					custom_tooltip = gen_tinker.0205.a.found.tt
+				}
+			}
+			50 = {
+				desc = gen_tinker.0205.a.lost
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0205.a.lost.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = -15 RISK = 0 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Write them again from memory. A learning test.
+	option = {
+		name = gen_tinker.0205.b
+		duel = {
+			skill = learning
+			value = 16
+			50 = {
+				desc = gen_tinker.0205.b.win
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0205.b.win.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = 5 RISK = 0 }
+				}
+			}
+			50 = {
+				desc = gen_tinker.0205.b.lose
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0205.b.lose.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = -10 RISK = 5 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 15
+			modifier = {
+				add = 20
+				learning >= 20
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Demand them back from the rival.
+	option = {
+		name = gen_tinker.0205.c
+		trigger = { exists = scope:gen_tk_s_rival }
+		random_list = {
+			35 = {
+				desc = gen_tinker.0205.c.returned
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0205.c.returned.t
+					left_icon = root
+					right_icon = scope:gen_tk_s_rival
+					gen_tk_adjust_effect = { QUALITY = 5 RISK = 0 }
+				}
+			}
+			65 = {
+				desc = gen_tinker.0205.c.denied
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0205.c.denied.t
+					left_icon = root
+					right_icon = scope:gen_tk_s_rival
+					gen_tk_adjust_effect = { QUALITY = -15 RISK = 0 }
+					add_opinion = {
+						target = scope:gen_tk_s_rival
+						modifier = suspicion_opinion
+						opinion = -20
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_vengefulness = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Offer a reward.
+	option = {
+		name = gen_tinker.0205.d
+		trigger = { gold >= tiny_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = tiny_gold_value
+		random_list = {
+			65 = {
+				desc = gen_tinker.0205.d.returned
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0205.d.returned.t
+					left_icon = root
+					custom_tooltip = gen_tinker.0205.d.returned.tt
+				}
+			}
+			35 = {
+				desc = gen_tinker.0205.d.nothing
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0205.d.nothing.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = -15 RISK = 0 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_greed = -0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0210: The Dwarf-Made Part
+# =====================================================================================
+
+gen_tinker.0210 = {
+	type = character_event
+	title = gen_tinker.0210.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_character_flag = gen_tk_wf_dwarf_design }
+				desc = gen_tinker.0210.desc.plan
+			}
+			desc = gen_tinker.0210.desc
+		}
+		desc = gen_tinker.0210.desc.end
+	}
+	theme = stewardship
+	override_background = { reference = armory }
+
+	left_portrait = {
+		character = root
+		animation = inspect_weapon
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0210
+			years = 4
+		}
+	}
+
+	# Buy it.
+	option = {
+		name = gen_tinker.0210.a
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = minor_gold_value
+		gen_tk_adjust_effect = { QUALITY = 10 RISK = 0 }
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_greed = -0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Cut it yourself. A learning test.
+	option = {
+		name = gen_tinker.0210.b
+		duel = {
+			skill = learning
+			value = 14
+			50 = {
+				desc = gen_tinker.0210.b.win
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0210.b.win.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = 5 RISK = 0 }
+				}
+			}
+			50 = {
+				desc = gen_tinker.0210.b.lose
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0210.b.lose.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = 0 RISK = 10 }
+					add_stress = minor_stress_gain
+				}
+			}
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_boldness = 0.25
+			}
+			modifier = {
+				add = 15
+				learning >= 16
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Nearly fits.
+	option = {
+		name = gen_tinker.0210.c
+		gen_tk_adjust_effect = { QUALITY = -10 RISK = 5 }
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_greed = 0.5
+			}
+			modifier = {
+				add = 20
+				gold < minor_gold_value
+			}
+			min = 1	# the fallback: always some chance
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0211: Fire in the Workshop
+# =====================================================================================
+
+gen_tinker.0211 = {
+	type = character_event
+	title = gen_tinker.0211.t
+	desc = {
+		desc = gen_tinker.0211.desc
+		triggered_desc = {
+			trigger = { has_character_flag = gen_tk_wf_cheap_parts }
+			desc = gen_tinker.0211.desc.cheap
+		}
+	}
+	theme = realm
+	override_background = { reference = burning_building }
+
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_s_appr }
+		character = scope:gen_tk_s_appr
+		animation = shock
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0211
+			years = 4
+		}
+	}
+
+	# Run in. The contraption is saved either way; the roll is whether you come out singed.
+	option = {
+		name = gen_tinker.0211.a
+		random_list = {
+			60 = {
+				desc = gen_tinker.0211.a.safe
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0211.a.safe.t
+					left_icon = root
+					custom_tooltip = gen_tinker.0211.a.saved.tt
+				}
+			}
+			40 = {
+				desc = gen_tinker.0211.a.burned
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0211.a.burned.t
+					left_icon = root
+					custom_tooltip = gen_tinker.0211.a.saved.tt
+					increase_wounds_no_death_effect = { REASON = burned }
+				}
+			}
+		}
+		stress_impact = {
+			craven = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_boldness = 0.75
+			}
+			modifier = {
+				factor = 0
+				has_trait_rank = {
+					trait = wounded
+					rank >= 2
+				}
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Bucket line.
+	option = {
+		name = gen_tinker.0211.b
+		gen_tk_adjust_effect = { QUALITY = -10 RISK = 0 }
+		add_prestige = miniscule_prestige_gain
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_sociability = 0.25
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Let it burn and start again, properly.
+	option = {
+		name = gen_tinker.0211.c
+		remove_short_term_gold = tiny_gold_value
+		gen_tk_adjust_effect = { QUALITY = -15 RISK = -10 }
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_rationality = 0.5
+				ai_boldness = -0.25
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0212: Tampered With   ->   0213: Caught
+# =====================================================================================
+
+# scope:gen_tk_s_culprit did it. The maker doesn't know that yet, so they are not shown.
+gen_tinker.0212 = {
+	type = character_event
+	title = gen_tinker.0212.t
+	desc = gen_tinker.0212.desc
+	theme = intrigue
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_s_appr }
+		character = scope:gen_tk_s_appr
+		animation = worry
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0212
+			years = 4
+		}
+		# How well the culprit hid it: their own intrigue.
+		save_scope_value_as = {
+			name = gen_tk_s_hide
+			value = scope:gen_tk_s_culprit.intrigue
+		}
+	}
+
+	# Find out who. An intrigue test against how well they covered their tracks.
+	option = {
+		name = gen_tinker.0212.a
+		duel = {
+			skill = intrigue
+			value = scope:gen_tk_s_hide
+			50 = {
+				desc = gen_tinker.0212.a.win
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 3.5
+					min = -49
+				}
+				custom_tooltip = gen_tinker.0212.a.win.tt
+				trigger_event = gen_tinker.0213
+			}
+			50 = {
+				desc = gen_tinker.0212.a.lose
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = -3.5
+					min = -49
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0212.a.lose.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = -5 RISK = 0 }
+				}
+				gen_tk_next_stage_effect = yes
+			}
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_vengefulness = 0.5
+			}
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = paranoid
+					intrigue >= 14
+				}
+			}
+		}
+	}
+
+	# Mend it and fit a lock.
+	option = {
+		name = gen_tinker.0212.b
+		remove_short_term_gold = tiny_gold_value
+		gen_tk_adjust_effect = { QUALITY = -5 RISK = -5 }
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.25
+			}
+			min = 1	# the fallback: always some chance
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Sleep in the workshop until it's done.
+	option = {
+		name = gen_tinker.0212.c
+		add_stress = medium_stress_gain
+		gen_tk_adjust_effect = { QUALITY = 0 RISK = -10 }
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_energy = 0.5
+			}
+			modifier = {
+				factor = 0.25
+				stress_level >= 2
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Mend it and say nothing.
+	option = {
+		name = gen_tinker.0212.d
+		gen_tk_adjust_effect = { QUALITY = -5 RISK = 5 }
+		stress_impact = {
+			paranoid = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 10
+				OR = {
+					has_trait = trusting
+					has_trait = content
+				}
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+gen_tinker.0213 = {
+	type = character_event
+	title = gen_tinker.0213.t
+	desc = {
+		desc = gen_tinker.0213.desc
+		triggered_desc = {
+			trigger = { exists = scope:gen_tk_s_was_grudge }
+			desc = gen_tinker.0213.desc.grudge
+		}
+	}
+	theme = intrigue
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:gen_tk_s_culprit
+		animation = shame
+	}
+
+	immediate = {
+		# Found out: whatever they held against the bench is settled here. Remember whether it was the
+		# grudge first; the text is read after this runs.
+		if = {
+			limit = {
+				exists = var:gen_tk_wf_grudge
+				var:gen_tk_wf_grudge = scope:gen_tk_s_culprit
+			}
+			save_scope_value_as = { name = gen_tk_s_was_grudge value = yes }
+		}
+		remove_variable = gen_tk_wf_grudge
+	}
+
+	# Out of my court.
+	option = {
+		name = gen_tinker.0213.a
+		trigger = { scope:gen_tk_s_culprit = { is_courtier_of = root } }
+		scope:gen_tk_s_culprit = {
+			add_opinion = {
+				target = root
+				modifier = kicked_me_from_court
+			}
+			select_and_move_to_pool_effect = yes
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_vengefulness = 0.5
+			}
+			modifier = {
+				add = 15
+				has_trait = wrathful
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# You owe me.
+	option = {
+		name = gen_tinker.0213.b
+		add_hook = {
+			type = favor_hook
+			target = scope:gen_tk_s_culprit
+		}
+		scope:gen_tk_s_culprit = {
+			add_opinion = {
+				target = root
+				modifier = annoyed_opinion
+				opinion = -10
+			}
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.25
+				ai_greed = 0.25
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Sweep the workshop until it's finished.
+	option = {
+		name = gen_tinker.0213.c
+		gen_tk_adjust_effect = { QUALITY = 5 RISK = 0 }
+		scope:gen_tk_s_culprit = {
+			add_opinion = {
+				target = root
+				modifier = humiliated_opinion
+				opinion = -20
+			}
+		}
+		ai_chance = {
+			base = 15
+			modifier = {
+				add = 10
+				has_trait = eccentric
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Forgive them.
+	option = {
+		name = gen_tinker.0213.d
+		scope:gen_tk_s_culprit = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 20
+			}
+		}
+		stress_impact = {
+			vengeful = minor_stress_impact_gain
+			forgiving = minor_stress_impact_loss
+			compassionate = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_compassion = 0.5
+				ai_vengefulness = -0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0215: The Apprentice
+# =====================================================================================
+
+# The apprentice has either fitted something backwards or solved something the maker couldn't. Rolled
+# here from their learning; the event text says which, and only that half's options show.
+gen_tinker.0215 = {
+	type = character_event
+	title = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_tk_s_appr_roll = flag:breakthrough }
+				desc = gen_tinker.0215.t.breakthrough
+			}
+			desc = gen_tinker.0215.t.mistake
+		}
+	}
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_tk_s_appr_roll = flag:breakthrough }
+				desc = gen_tinker.0215.desc.breakthrough
+			}
+			desc = gen_tinker.0215.desc.mistake
+		}
+	}
+	theme = learning
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		triggered_animation = {
+			trigger = { scope:gen_tk_s_appr_roll = flag:breakthrough }
+			animation = admiration
+		}
+		animation = stressed_teacher
+	}
+	right_portrait = {
+		character = scope:gen_tk_s_appr
+		triggered_animation = {
+			trigger = { scope:gen_tk_s_appr_roll = flag:breakthrough }
+			animation = happiness
+		}
+		animation = shame
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0215
+			years = 4
+		}
+		random_list = {
+			30 = {
+				modifier = {
+					add = {
+						value = scope:gen_tk_s_appr.learning
+						multiply = 3
+					}
+				}
+				save_scope_value_as = { name = gen_tk_s_appr_roll value = flag:breakthrough }
+			}
+			60 = {
+				save_scope_value_as = { name = gen_tk_s_appr_roll value = flag:mistake }
+			}
+		}
+	}
+
+	# ---- A mistake.
+
+	# Let them fix it.
+	option = {
+		name = gen_tinker.0215.a
+		trigger = { scope:gen_tk_s_appr_roll = flag:mistake }
+		random_list = {
+			40 = {
+				desc = gen_tinker.0215.a.fixed
+				modifier = {
+					add = {
+						value = scope:gen_tk_s_appr.learning
+						multiply = 3
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0215.a.fixed.t
+					left_icon = scope:gen_tk_s_appr
+					scope:gen_tk_s_appr = {
+						add_opinion = {
+							target = root
+							modifier = grateful_opinion
+							opinion = 10
+						}
+					}
+				}
+			}
+			50 = {
+				desc = gen_tinker.0215.a.worse
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0215.a.worse.t
+					left_icon = scope:gen_tk_s_appr
+					gen_tk_adjust_effect = { QUALITY = -10 RISK = 0 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_compassion = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Fix it yourself: the sure fix. The work is none the worse; it costs your nerves and their pride.
+	option = {
+		name = gen_tinker.0215.b
+		trigger = { scope:gen_tk_s_appr_roll = flag:mistake }
+		custom_tooltip = gen_tinker.0215.b.tt
+		add_stress = minor_stress_gain
+		scope:gen_tk_s_appr = {
+			add_opinion = {
+				target = root
+				modifier = disappointed_opinion
+				opinion = -5
+			}
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_rationality = 0.25
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Leave it; everyone does that once.
+	option = {
+		name = gen_tinker.0215.c
+		trigger = { scope:gen_tk_s_appr_roll = flag:mistake }
+		gen_tk_adjust_effect = { QUALITY = 0 RISK = 5 }
+		scope:gen_tk_s_appr = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 10
+			}
+		}
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = lazy
+					has_trait = compassionate
+				}
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# ---- A breakthrough.
+
+	# Use it and give them the credit.
+	option = {
+		name = gen_tinker.0215.d
+		trigger = { scope:gen_tk_s_appr_roll = flag:breakthrough }
+		gen_tk_adjust_effect = { QUALITY = 10 RISK = 0 }
+		scope:gen_tk_s_appr = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 15
+			}
+			if = {
+				limit = { is_adult = yes }
+				add_learning_lifestyle_xp = minor_lifestyle_xp
+			}
+		}
+		stress_impact = {
+			arrogant = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_honor = 0.25
+				ai_compassion = 0.25
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Use it and say nothing.
+	option = {
+		name = gen_tinker.0215.e
+		trigger = { scope:gen_tk_s_appr_roll = flag:breakthrough }
+		gen_tk_adjust_effect = { QUALITY = 10 RISK = 0 }
+		add_prestige = minor_prestige_gain
+		scope:gen_tk_s_appr = {
+			add_opinion = {
+				target = root
+				modifier = disappointed_opinion
+				opinion = -15
+			}
+		}
+		stress_impact = {
+			honest = minor_stress_impact_gain
+			just = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_honor = -0.5
+			}
+			modifier = {
+				add = 10
+				has_trait = arrogant
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Not like that. Like this.
+	option = {
+		name = gen_tinker.0215.f
+		trigger = { scope:gen_tk_s_appr_roll = flag:breakthrough }
+		gen_tk_adjust_effect = { QUALITY = 0 RISK = -10 }	# the proven way: safer, where theirs is better
+		scope:gen_tk_s_appr = {
+			add_opinion = {
+				target = root
+				modifier = disappointed_opinion
+				opinion = -5
+			}
+		}
+		stress_impact = {
+			arrogant = minor_stress_impact_loss
+			stubborn = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 5
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = arrogant
+					has_trait = stubborn
+				}
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0216: The Money Runs Out
+# =====================================================================================
+
+gen_tinker.0216 = {
+	type = character_event
+	title = gen_tinker.0216.t
+	desc = {
+		desc = gen_tinker.0216.desc
+		triggered_desc = {
+			trigger = { has_character_flag = gen_tk_wf_fine_brass }
+			desc = gen_tinker.0216.desc.brass
+		}
+	}
+	theme = stewardship
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_s_patron }
+		character = scope:gen_tk_s_patron
+		animation = thinking
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0216
+			years = 4
+		}
+	}
+
+	# Find the money.
+	option = {
+		name = gen_tinker.0216.a
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = minor_gold_value
+		custom_tooltip = gen_tinker.0216.a.tt
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_greed = -0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Cut corners.
+	option = {
+		name = gen_tinker.0216.b
+		gen_tk_adjust_effect = { QUALITY = -5 RISK = 10 }
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_greed = 0.25
+				ai_boldness = 0.25
+			}
+			min = 1	# the fallback: always some chance
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Sell the spare parts.
+	option = {
+		name = gen_tinker.0216.c
+		add_gold = tiny_gold_value
+		gen_tk_adjust_effect = { QUALITY = -10 RISK = 0 }
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_greed = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Ask the patron for more. Only an AI patron can be asked in passing; a pleased one is likelier to pay.
+	option = {
+		name = gen_tinker.0216.d
+		trigger = {
+			exists = scope:gen_tk_s_patron
+			scope:gen_tk_s_patron = { is_ai = yes }
+		}
+		random_list = {
+			40 = {
+				desc = gen_tinker.0216.d.paid
+				modifier = {
+					add = 30
+					scope:gen_tk_s_patron = {
+						opinion = {
+							target = root
+							value >= 20
+						}
+					}
+				}
+				modifier = {
+					add = 20
+					scope:gen_tk_s_patron = { has_trait = generous }
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0216.d.paid.t
+					left_icon = root
+					right_icon = scope:gen_tk_s_patron
+					scope:gen_tk_s_patron = {
+						pay_short_term_gold = {
+							target = root
+							gold = tiny_gold_value
+						}
+					}
+				}
+			}
+			50 = {
+				desc = gen_tinker.0216.d.refused
+				modifier = {
+					add = 20
+					scope:gen_tk_s_patron = { has_trait = greedy }
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0216.d.refused.t
+					left_icon = root
+					right_icon = scope:gen_tk_s_patron
+					scope:gen_tk_s_patron = {
+						add_opinion = {
+							target = root
+							modifier = annoyed_opinion
+							opinion = -10
+						}
+					}
+					gen_tk_adjust_effect = { QUALITY = 0 RISK = 5 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_boldness = 0.25
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0217: A Visitor in the Workshop
+# =====================================================================================
+
+gen_tinker.0217 = {
+	type = character_event
+	title = gen_tinker.0217.t
+	desc = gen_tinker.0217.desc
+	theme = family
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = disbelief
+	}
+	right_portrait = {
+		character = scope:gen_tk_s_kid
+		animation = happiness
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0217
+			years = 4
+		}
+	}
+
+	# Out.
+	option = {
+		name = gen_tinker.0217.a
+		custom_tooltip = gen_tinker.0217.a.tt
+		scope:gen_tk_s_kid = {
+			add_opinion = {
+				target = root
+				modifier = annoyed_opinion
+				opinion = -5
+			}
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_compassion = -0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Hold this for me.
+	option = {
+		name = gen_tinker.0217.b
+		scope:gen_tk_s_kid = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 10
+			}
+		}
+		random_list = {
+			50 = {
+				desc = gen_tinker.0217.b.spotted
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0217.b.spotted.t
+					left_icon = scope:gen_tk_s_kid
+					gen_tk_adjust_effect = { QUALITY = 5 RISK = -5 }
+				}
+			}
+			50 = {
+				desc = gen_tinker.0217.b.dropped
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0217.b.dropped.t
+					left_icon = scope:gen_tk_s_kid
+					gen_tk_adjust_effect = { QUALITY = -5 RISK = 0 }
+				}
+			}
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_compassion = 0.25
+				ai_sociability = 0.25
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Show them how it works.
+	option = {
+		name = gen_tinker.0217.c
+		gen_tk_adjust_effect = { QUALITY = -5 RISK = 0 }
+		add_stress = minor_stress_loss
+		scope:gen_tk_s_kid = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 15
+			}
+		}
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 15
+				scope:gen_tk_s_kid = { is_child_of = root }
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}
+
+
+# =====================================================================================
+#  0218: The Inspection
+# =====================================================================================
+
+# The patron's envoy comes to see the work. If the maker promised one thing and is building another
+# (gen_tk_wf_patron_fooled), the envoy notices, and showing off is riskier.
+gen_tinker.0218 = {
+	type = character_event
+	title = gen_tinker.0218.t
+	desc = {
+		desc = gen_tinker.0218.desc
+		triggered_desc = {
+			trigger = { has_character_flag = gen_tk_wf_patron_fooled }
+			desc = gen_tinker.0218.desc.fooled
+		}
+	}
+	theme = diplomacy
+	override_background = { reference = courtyard }
+
+	left_portrait = {
+		character = root
+		animation = obsequious_bow
+	}
+	right_portrait = {
+		character = scope:gen_tk_s_patron
+		animation = interested
+	}
+
+	immediate = {
+		add_character_flag = {
+			flag = gen_tk_seen_0218
+			years = 4
+		}
+	}
+
+	# Show everything. Honest: the patron learns the truth now (no reckoning at delivery), but the
+	# envoy pokes at everything and may knock something loose.
+	option = {
+		name = gen_tinker.0218.a
+		if = {
+			limit = { has_character_flag = gen_tk_wf_patron_fooled }
+			custom_tooltip = gen_tinker.0218.a.truth_tt
+			scope:gen_tk_s_patron = {
+				add_opinion = {
+					target = root
+					modifier = disappointed_opinion
+					opinion = -15
+				}
+			}
+			# The truth is out: nothing left to find at delivery.
+			hidden_effect = { remove_character_flag = gen_tk_wf_patron_fooled }
+		}
+		else = {
+			scope:gen_tk_s_patron = {
+				add_opinion = {
+					target = root
+					modifier = pleased_opinion
+					opinion = 10
+				}
+			}
+		}
+		random_list = {
+			30 = {
+				desc = gen_tinker.0218.a.poked
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0218.a.poked.t
+					left_icon = root
+					gen_tk_adjust_effect = { QUALITY = 0 RISK = 5 }
+				}
+			}
+			70 = {
+				desc = gen_tinker.0218.a.fine
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = gen_tinker.0218.a.fine.t
+					left_icon = root
+					custom_tooltip = gen_tinker.0218.a.fine.tt
+				}
+			}
+		}
+		stress_impact = {
+			deceitful = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_honor = 0.5
+			}
+			min = 1	# the fallback: always some chance
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Only the good parts.
+	option = {
+		name = gen_tinker.0218.b
+		if = {
+			limit = { has_character_flag = gen_tk_wf_patron_fooled }
+			custom_tooltip = gen_tinker.0218.secret_kept_tt
+		}
+		random_list = {
+			60 = {
+				desc = gen_tinker.0218.b.impressed
+				modifier = {
+					add = -20
+					has_character_flag = gen_tk_wf_patron_fooled
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_tinker.0218.b.impressed.t
+					left_icon = root
+					right_icon = scope:gen_tk_s_patron
+					add_prestige = minor_prestige_gain
+					scope:gen_tk_s_patron = {
+						add_opinion = {
+							target = root
+							modifier = pleased_opinion
+							opinion = 10
+						}
+					}
+				}
+				scope:gen_tk_s_patron = {
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = gen_tinker.0218.b.impressed.patron
+						left_icon = scope:gen_tk_maker
+						custom_tooltip = gen_tinker.0218.b.impressed.patron.tt
+					}
+				}
+			}
+			40 = {
+				desc = gen_tinker.0218.b.collapsed
+				modifier = {
+					add = 20
+					has_character_flag = gen_tk_wf_patron_fooled
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_tinker.0218.b.collapsed.t
+					left_icon = root
+					right_icon = scope:gen_tk_s_patron
+					gen_tk_adjust_effect = { QUALITY = -5 RISK = 0 }
+					scope:gen_tk_s_patron = {
+						add_opinion = {
+							target = root
+							modifier = disappointed_opinion
+							opinion = -10
+						}
+					}
+				}
+				scope:gen_tk_s_patron = {
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = gen_tinker.0218.b.collapsed.patron
+						left_icon = scope:gen_tk_maker
+						custom_tooltip = gen_tinker.0218.b.collapsed.patron.tt
+					}
+				}
+			}
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_boldness = 0.5
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+
+	# Keep the envoy busy in the best room.
+	option = {
+		name = gen_tinker.0218.c
+		trigger = { gold >= tiny_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = tiny_gold_value
+		# Safe for the build; hides a change of plan until delivery.
+		if = {
+			limit = { has_character_flag = gen_tk_wf_patron_fooled }
+			custom_tooltip = gen_tinker.0218.secret_kept_tt
+		}
+		else = {
+			custom_tooltip = gen_tinker.0218.c.safe_tt
+		}
+		scope:gen_tk_s_patron = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 5
+			}
+		}
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_greed = -0.25
+				ai_sociability = 0.25
+			}
+			modifier = {
+				add = 15
+				has_character_flag = gen_tk_wf_patron_fooled
+			}
+		}
+		gen_tk_next_stage_effect = yes
+	}
+}

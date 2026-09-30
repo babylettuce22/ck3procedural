@@ -1,0 +1,64 @@
+﻿# Start a Contraption: a gnome ruler of the Tinker's Bench goes to the workbench. The decision only
+# opens the menu (gen_tinker.0010, events/gen_tinker_test_events.txt), where the project is chosen and
+# paid for; the rest of the loop is in 00_gen_tinker_effects.txt.
+
+gen_tinker_start_project_decision = {
+	picture = {
+		reference = "gfx/interface/illustrations/decisions/decision_misc.dds"
+	}
+
+	desc = gen_tinker_start_project_decision_desc
+	selection_tooltip = gen_tinker_start_project_decision_tooltip
+	confirm_text = gen_tinker_start_project_decision_confirm
+
+	is_shown = {
+		gen_tk_can_start_project_trigger = yes
+	}
+
+	is_valid = {
+		learning >= 10
+		is_imprisoned = no
+		NOT = { has_trait = incapable }
+		custom_description = {
+			text = gen_tk_bench_busy
+			NOT = { has_character_flag = gen_tk_working }
+		}
+		custom_description = {
+			text = gen_tk_bench_resting
+			NOT = { has_character_flag = gen_tk_recently_tinkered }
+		}
+	}
+
+	effect = {
+		custom_tooltip = gen_tinker_start_project_decision_effect.tt
+		trigger_event = gen_tinker.0010
+	}
+
+	# A learned gnome with money to spare and nothing on fire tinkers; the lazy, the poor and the
+	# embattled do not. Which project is chosen by the workbench event's own weights.
+	ai_check_interval = 24
+	ai_potential = {
+		learning >= 12
+		is_at_war = no
+		NOT = { has_trait = lazy }
+	}
+	ai_will_do = {
+		base = 15
+		modifier = {
+			add = 20
+			learning >= 16
+		}
+		modifier = {
+			add = 15
+			OR = {
+				has_trait = diligent
+				has_trait = ambitious
+				has_trait = scholar
+			}
+		}
+		modifier = {
+			factor = 0
+			gold < medium_gold_value
+		}
+	}
+}

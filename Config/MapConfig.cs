@@ -3527,7 +3527,13 @@ public sealed class MapConfig : CustomTypeDescriptor
         MixedMediterranean,
 
         /// <summary>Asia broadly — East, South East and South together.</summary>
-        MixedAsian
+        MixedAsian,
+
+        /// <summary>Arabia, Egypt and Persia, with the Caucasus and Anatolia at its edge.</summary>
+        MiddleEastern,
+
+        /// <summary>The steppe from the Pontic grasslands to Mongolia: Turkic peoples west and east, and the Mongols.</summary>
+        Steppe
     }
 
     [Category("14 Fantasy/Ethnicities")]
@@ -3543,7 +3549,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     public bool TieRaceToHeritage { get; set; } = true;
 
     [Category("14 Fantasy/Ethnicities")]
-    [Description("How many distinct races the world must contain. Raises the heritage count if culture density would not otherwise produce enough regions to hold them, so a high value costs you smaller heritages. Capped at 8, the number of races that exist. Require terrain can hold the delivered count below this.")]
+    [Description("How many distinct races the world must contain. Raises the heritage count if culture density would not otherwise produce enough regions to hold them, so a high value costs you smaller heritages. 9 races exist (humans included), so no more than 9 can be delivered; a higher value still raises the heritage floor, and the default's one spare heritage is what lets humans spread over two climates without pushing a fantasy race out of a homeland. Require terrain can hold the delivered count below this.")]
     public int GuaranteedRaceCount { get; set; } = 10;
 
     /// <summary>

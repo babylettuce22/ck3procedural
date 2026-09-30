@@ -1,0 +1,28 @@
+﻿# "At the Workbench": shows on the character sheet which project is on the bench, for as long as it
+# runs (added by gen_tk_add_bench_modifier_effect at begin, removed with the rest of the project's
+# state). The work itself is a small comfort; nothing more.
+
+gen_tk_at_bench_curio_modifier = {
+	icon = learning_positive
+	stress_loss_mult = 0.1
+}
+
+gen_tk_at_bench_mill_modifier = {
+	icon = learning_positive
+	stress_loss_mult = 0.1
+}
+
+gen_tk_at_bench_engine_modifier = {
+	icon = learning_positive
+	stress_loss_mult = 0.1
+}
+
+gen_tk_at_bench_limb_modifier = {
+	icon = learning_positive
+	stress_loss_mult = 0.1
+}
+
+gen_tk_at_bench_invention_modifier = {
+	icon = learning_positive
+	stress_loss_mult = 0.1
+}

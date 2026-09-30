@@ -1,0 +1,179 @@
+﻿# Helpers for the aftermath of a Blood Challenge (events/gen_blood_challenge_aftermath_events.txt).
+#
+# The chain: MAIN's hidden 0100 names scope:gen_bc_victor / scope:gen_bc_loser, then sends 0200 (the
+# downed loser's choice) or 0300 (the victor's verdict). Every path out of the aftermath ends in either
+# 0300 or MAIN's gen_bc_finish_chain_effect (-> 0500), never both. gen_bc_ab_close_effect below is the
+# one place that decides which, for every roll that leaves someone hurt.
+#
+# Scopes the aftermath saves (prefix gen_bc_ab_):
+#   scope:gen_bc_ab_downed  the loser as 0200 found them (stays put when the fight is turned around)
+#   scope:gen_bc_ab_foe     the victor as 0200 found them
+#   scope:gen_bc_ab_fallen  the loser as 0300 found them (the one the verdict is about)
+#   scope:gen_bc_ab_judge   the victor as 0300 found them (names them in toasts sent to the fallen)
+#   scope:gen_bc_ab_pick_a / _b   the two drawn risk options (flags), stable while 0201 is open
+#   scope:gen_bc_ab_route   how the verdict was reached (flag:yielded/reversed/dirty/defiant), for 0301's text
+#   scope:gen_bc_ab_death   set (yes) the moment anything in the aftermath kills or will kill a fighter
+
+
+# The downed fighter (this) takes another wound for refusing to stay down. In an upward fight vanilla
+# "possible" rules apply: increase_wounds_effect kills a fighter already at wounded_3, so we note that
+# before it happens (is_alive is not something to lean on in the same effect run as the death). Peer
+# and downward fights never kill through a wound — their risky options carry their own, named, death
+# branch, so a "wounded again" result never turns out to have been a death.
+gen_bc_ab_wound_downed_effect = {
+	if = {
+		limit = { scope:gen_bc_kind = flag:upward }
+		if = {
+			limit = {
+				has_trait_rank = {
+					trait = wounded
+					rank = 3
+				}
+			}
+			save_scope_value_as = {
+				name = gen_bc_ab_death
+				value = yes
+			}
+		}
+		increase_wounds_effect = { REASON = duel }
+	}
+	else = {
+		increase_wounds_no_death_effect = { REASON = duel }
+	}
+}
+
+# The standing fighter (this) takes a wound when the fight is turned on them. An upward fight is for a
+# seat and runs at FATALITY possible, so there the wound can kill; peer and downward fights run at
+# FATALITY no, so the turned victor is hurt but never killed by it.
+gen_bc_ab_wound_turned_effect = {
+	if = {
+		limit = { scope:gen_bc_kind = flag:upward }
+		if = {
+			limit = {
+				has_trait_rank = {
+					trait = wounded
+					rank = 3
+				}
+			}
+			save_scope_value_as = {
+				name = gen_bc_ab_death
+				value = yes
+			}
+		}
+		increase_wounds_effect = { REASON = duel }
+	}
+	else = {
+		increase_wounds_no_death_effect = { REASON = duel }
+	}
+}
+
+# $KILLER$ kills $VICTIM$ in or after the fight, with death reason $REASON$.
+# Kinslaying follows vanilla work_out_wounds_or_death_effect (G/events/single_combat_events.txt):
+# a kill in the heat of the fight brands only the challenger (the one who started it), and never
+# where there is an execute reason. $DELIBERATE$ = yes (the victor's "Finish It") brands the killer
+# whoever issued the challenge: killing a beaten kinsman on purpose is kinslaying.
+# Cranial trophies are copied from the same vanilla effect.
+gen_bc_ab_kill_effect = {
+	$KILLER$ = {
+		if = {
+			limit = {
+				NOT = { has_execute_reason = $VICTIM$ }
+				OR = {
+					always = $DELIBERATE$
+					this = scope:gen_bc_challenger
+				}
+			}
+			add_kinslayer_trait_or_nothing_effect = { VICTIM = $VICTIM$ }
+		}
+	}
+	save_scope_value_as = {
+		name = gen_bc_ab_death
+		value = yes
+	}
+	$VICTIM$ = {
+		death = {
+			killer = $KILLER$
+			death_reason = $REASON$
+		}
+	}
+	if = {
+		limit = {
+			$KILLER$ = {
+				faith = { has_doctrine = tenet_cranial_trophies }
+			}
+		}
+		tgp_cranial_trophies_beheading_effect = {
+			KILLER = $KILLER$
+			DEAD = $VICTIM$
+		}
+	}
+}
+
+# The downed fighter turned the fight around: MAIN swaps scope:gen_bc_victor / scope:gen_bc_loser and
+# sets scope:gen_bc_reversed. Called once, only from a 0201 option, so it can never run twice.
+gen_bc_ab_turn_it_around_effect = {
+	hidden_effect = {
+		gen_bc_reverse_outcome_effect = yes
+		save_scope_value_as = {
+			name = gen_bc_ab_route
+			value = flag:reversed
+		}
+	}
+}
+
+# The end of every 0201 roll that leaves both fighters breathing: the (current) victor gives a verdict.
+# If the roll killed anyone, there is nothing to decide: hand straight to MAIN's resolution.
+gen_bc_ab_close_effect = {
+	if = {
+		limit = {
+			NOT = { exists = scope:gen_bc_ab_death }
+			exists = scope:gen_bc_victor
+			exists = scope:gen_bc_loser
+		}
+		scope:gen_bc_victor = { trigger_event = gen_blood_challenge.0300 }
+	}
+	else = {
+		gen_bc_finish_chain_effect = yes
+	}
+}
+
+# Same-culture onlookers turn against $ACTOR$ (opinion $OPINION$), with tooltip $TT$. The onlookers are
+# both combatants' courtiers and vassals who share $ACTOR$'s culture: the two clans round the circle.
+# The combatants themselves are left out; the event adds any opinion between them directly.
+gen_bc_ab_onlookers_frown_effect = {
+	custom_tooltip = $TT$
+	hidden_effect = {
+		scope:gen_bc_challenger = {
+			every_courtier = {
+				limit = { NOT = { is_in_list = gen_bc_ab_onlookers } }
+				add_to_temporary_list = gen_bc_ab_onlookers
+			}
+			every_vassal = {
+				limit = { NOT = { is_in_list = gen_bc_ab_onlookers } }
+				add_to_temporary_list = gen_bc_ab_onlookers
+			}
+		}
+		scope:gen_bc_defender = {
+			every_courtier = {
+				limit = { NOT = { is_in_list = gen_bc_ab_onlookers } }
+				add_to_temporary_list = gen_bc_ab_onlookers
+			}
+			every_vassal = {
+				limit = { NOT = { is_in_list = gen_bc_ab_onlookers } }
+				add_to_temporary_list = gen_bc_ab_onlookers
+			}
+		}
+		every_in_list = {
+			list = gen_bc_ab_onlookers
+			limit = {
+				culture = $ACTOR$.culture
+				NOT = { this = scope:gen_bc_challenger }
+				NOT = { this = scope:gen_bc_defender }
+			}
+			add_opinion = {
+				target = $ACTOR$
+				modifier = $OPINION$
+			}
+		}
+	}
+}

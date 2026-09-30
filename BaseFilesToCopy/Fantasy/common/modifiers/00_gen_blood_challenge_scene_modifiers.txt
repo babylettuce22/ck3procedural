@@ -1,0 +1,45 @@
+﻿# Blood Challenge, the pre-fight scene: short stance modifiers.
+#
+# Added by the stance effects in common/scripted_effects/00_gen_blood_challenge_scene_effects.txt for
+# 30 days, long enough to cover the bout. Removed early by gen_bc_clear_stance_effect when the chain
+# resolves. Single combat is decided mostly by prowess, so these stay small (+1 to +3) and every
+# prowess bonus carries a cost.
+
+# Worked into a fury before the circle.
+gen_bc_fury_modifier = {
+	icon = prowess_mixed
+	prowess = 2
+	diplomacy = -2
+}
+
+# Berserkers and the wrathful: the same, harder.
+gen_bc_blood_fury_modifier = {
+	icon = prowess_mixed
+	prowess = 3
+	diplomacy = -3
+}
+
+# Hung back and studied the opponent. The clan sees the hesitation.
+gen_bc_cunning_modifier = {
+	icon = prowess_mixed
+	prowess = 1
+	monthly_prestige = -1
+}
+
+# Called on the ancestors. No strength, but a steadier mind.
+gen_bc_ancestors_modifier = {
+	icon = stress_positive
+	stress_gain_mult = -0.25
+}
+
+# The shaman's war-paint, bought with silver (scene 0015).
+gen_bc_war_paint_modifier = {
+	icon = prowess_positive
+	prowess = 1
+}
+
+# The shaman read good omens (scene 0015).
+gen_bc_good_omen_modifier = {
+	icon = prowess_positive
+	prowess = 1
+}

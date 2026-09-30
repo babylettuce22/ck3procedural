@@ -79,28 +79,56 @@ public static class AzgaarHierarchy
         var countyClusters = new List<List<int>>();
         var countyState = new List<int>();
 
-        foreach (var (key, members) in groups.OrderBy(g => g.Key.State).ThenBy(g => g.Key.Province))
-        {
-            // A group at or under the county ceiling is one county outright. Splitting it would
-            // invent a border the export never drew.
-            if (members.Count <= Titles.MaxBaroniesPerCounty)
-            {
-                countyClusters.Add(members);
-                countyState.Add(key.State);
-                continue;
-            }
+        // A group is not one place. The ownerless key (0, 0) holds every barony Azgaar left unclaimed
+        // anywhere on the map, and a state's land outside its provinces is scattered the same way —
+        // so each group is cut into the pieces that actually touch, by land or across a strait narrow
+        // enough to bridge, before anything is clustered. Without this the absorb pass, finding an
+        // island with no neighbour inside its group, handed it to the nearest cluster however far
+        // off: Poily had one seven-barony county spread over an island, a stretch of coast 1,100 px
+        // south and a 36 px crumb in the north.
+        var linked = Titles.Union(adjacency, seaAdjacency);
+        var crumbs = new List<List<int>>();
+        int split = 0;
 
-            var inside = Restrict(adjacency, members);
-            foreach (var cluster in Titles.AbsorbUndersized(
-                         Titles.Cluster(members, inside, Titles.MinBaroniesPerCounty,
-                                        Titles.MaxBaroniesPerCounty, rng, position),
-                         inside, Titles.MinBaroniesPerCounty, Titles.MaxBaroniesPerCounty, position))
+        foreach (var (key, group) in groups.OrderBy(g => g.Key.State).ThenBy(g => g.Key.Province))
+        {
+            var pieces = Components(group, linked);
+            if (pieces.Count > 1) split++;
+
+            foreach (var members in pieces)
             {
-                if (cluster.Count == 0) continue;
-                countyClusters.Add(cluster);
-                countyState.Add(key.State);
+                // Ownerless scraps too small for a county of their own join the county they touch
+                // by land, once every county exists. De jure, empty ground belongs to its neighbour.
+                if (key.State == 0 && members.Count < Titles.MinBaroniesPerCounty
+                    && members.Any(m => adjacency.TryGetValue(m, out var n) && n.Count > 0))
+                {
+                    crumbs.Add(members);
+                    continue;
+                }
+
+                // A piece at or under the county ceiling is one county outright. Splitting it would
+                // invent a border the export never drew.
+                if (members.Count <= Titles.MaxBaroniesPerCounty)
+                {
+                    countyClusters.Add(members);
+                    countyState.Add(key.State);
+                    continue;
+                }
+
+                var inside = Restrict(linked, members);
+                foreach (var cluster in Titles.AbsorbUndersized(
+                             Titles.Cluster(members, inside, Titles.MinBaroniesPerCounty,
+                                            Titles.MaxBaroniesPerCounty, rng, position),
+                             inside, Titles.MinBaroniesPerCounty, Titles.MaxBaroniesPerCounty, position))
+                {
+                    if (cluster.Count == 0) continue;
+                    countyClusters.Add(cluster);
+                    countyState.Add(key.State);
+                }
             }
         }
+
+        int folded = FoldCrumbs(crumbs, countyClusters, countyState, adjacency);
 
         var counties = Titles.Wrap("c", countyClusters, c => c.Select(p => byProvince[p]));
         var countyPosition = Titles.Roll(countyClusters, position);
@@ -259,8 +287,96 @@ public static class AzgaarHierarchy
         Console.WriteLine($"    counties cut from {provinceCount} azgaar provinces " +
                           $"({counties.Count - provinceCount:+0;-0;0} against one-per-province)" +
                           (stateless > 0 ? $", {stateless} baronies on ownerless ground" : ""));
+        if (split > 0 || folded > 0)
+            Console.WriteLine($"    {split} groups cut into separate pieces, " +
+                              $"{folded} ownerless scraps folded into a neighbouring county");
 
         return current;
+    }
+
+    /// <summary>
+    /// The pieces of <paramref name="members"/> that touch one another under
+    /// <paramref name="links"/>, each in ascending order and the list ordered by first member.
+    /// </summary>
+    private static List<List<int>> Components(List<int> members,
+        IReadOnlyDictionary<int, HashSet<int>> links)
+    {
+        var allowed = new HashSet<int>(members);
+        var seen = new HashSet<int>();
+        var pieces = new List<List<int>>();
+
+        foreach (int start in members.OrderBy(m => m))
+        {
+            if (!seen.Add(start)) continue;
+
+            var piece = new List<int> { start };
+            var queue = new Queue<int>();
+            queue.Enqueue(start);
+
+            while (queue.Count > 0)
+            {
+                if (!links.TryGetValue(queue.Dequeue(), out var next)) continue;
+                foreach (int n in next.OrderBy(n => n))
+                {
+                    if (!allowed.Contains(n) || !seen.Add(n)) continue;
+                    piece.Add(n);
+                    queue.Enqueue(n);
+                }
+            }
+
+            piece.Sort();
+            pieces.Add(piece);
+        }
+
+        return pieces;
+    }
+
+    /// <summary>
+    /// Hands each ownerless scrap to the county it shares the most land borders with, preferring
+    /// one with room under the county ceiling. A scrap touching no county stands as its own.
+    /// Returns how many were folded.
+    /// </summary>
+    private static int FoldCrumbs(List<List<int>> crumbs, List<List<int>> countyClusters,
+        List<int> countyState, IReadOnlyDictionary<int, HashSet<int>> adjacency)
+    {
+        if (crumbs.Count == 0) return 0;
+
+        var owner = new Dictionary<int, int>();
+        for (int i = 0; i < countyClusters.Count; i++)
+            foreach (int member in countyClusters[i]) owner[member] = i;
+
+        int folded = 0;
+
+        foreach (var crumb in crumbs)
+        {
+            var borders = new Dictionary<int, int>();
+            foreach (int member in crumb)
+            {
+                if (!adjacency.TryGetValue(member, out var links)) continue;
+                foreach (int link in links)
+                    if (owner.TryGetValue(link, out int county))
+                        borders[county] = borders.GetValueOrDefault(county) + 1;
+            }
+
+            if (borders.Count == 0)
+            {
+                countyClusters.Add(crumb);
+                countyState.Add(0);
+                continue;
+            }
+
+            int home = borders.Keys
+                .OrderByDescending(c => countyClusters[c].Count + crumb.Count <= Titles.MaxBaroniesPerCounty)
+                .ThenByDescending(c => borders[c])
+                .ThenBy(c => c)
+                .First();
+
+            countyClusters[home].AddRange(crumb);
+            foreach (int member in crumb) owner[member] = home;
+            folded++;
+        }
+
+        return folded;
     }
 
     /// <summary>

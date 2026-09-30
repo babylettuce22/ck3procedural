@@ -1,0 +1,33 @@
+﻿# Gnome Tinkering, commissions: a tinkerer lost mid-commission. See 00_gen_tinker_commission_triggers.txt
+# for the commission pieces.
+#
+# Vanilla's on_death (death.txt: root is about to die, variables still readable) and on_imprison
+# (prison_on_actions.txt: root is being imprisoned, scope:imprisoner) are re-declared with nothing but
+# an `on_actions` list, so vanilla's own effects stay in place (same discipline as
+# 00_gen_aging_on_actions.txt). The effect is a no-op unless root is on someone's commission.
+#
+# Death: main's project events never fire for a dead maker, so this is the patron's only notice.
+# Prison: main's next stage check abandons the project (gen_tk_can_work_trigger); this pays the
+# refund and cuts the patron loose first, so main's abandon notice goes to nobody twice.
+
+on_death = {
+	on_actions = { gen_tk_commission_on_death }
+}
+
+on_imprison = {
+	on_actions = { gen_tk_commission_on_imprison }
+}
+
+gen_tk_commission_on_death = {
+	trigger = { exists = var:gen_tk_commission_price }
+	effect = {
+		gen_tk_commission_lost_effect = { REASON = death }
+	}
+}
+
+gen_tk_commission_on_imprison = {
+	trigger = { exists = var:gen_tk_commission_price }
+	effect = {
+		gen_tk_commission_lost_effect = { REASON = prison }
+	}
+}

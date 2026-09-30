@@ -207,13 +207,85 @@ public static class BonePieceStep
     private static string FlagOf(string set) => $"pmg_wear_piece_{set}";
 
     /// <summary>
-    /// Rarity the garnish is reserved for.
+    /// Rarity that wears the WHOLE set.
     ///
-    /// Illustrious alone on purpose. The point is to make the top of the ladder feel like a different
-    /// KIND of object rather than a brighter repaint, and a piece that turns up on common armour
-    /// spends that distinction for nothing.
+    /// The top of the ladder should still feel like a different kind of object, so only illustrious
+    /// armour gets every piece. The rungs below get a part of it — see <see cref="PartialRarities"/>.
     /// </summary>
     private const string Rarity = "illustrious";
+
+    /// <summary>
+    /// The rung below illustrious, and how many piece groups it wears.
+    ///
+    /// A famed harness plausibly came with its gorget but not its pauldrons, so famed takes the first
+    /// group off the armour type's list in <see cref="TypeOrder"/>. Only the top two rungs are
+    /// garnished at all (the user's call, 2026-09-29): masterwork and common armour get nothing, so a
+    /// piece still marks an object as notable rather than merely well made.
+    /// </summary>
+    private static readonly (string Rarity, int Groups)[] PartialRarities =
+    [
+        ("famed", 1),
+    ];
+
+    /// <summary>
+    /// Which slots are worn together. A pair never splits (one pauldron reads as a fault, not a
+    /// choice), and the veteran's baldric only makes sense with the sword it carries.
+    ///
+    /// A set with BOTH a chest and a back piece has the two halves of a cuirass there, and they go
+    /// together too: grouped by slot alone, the backplate fell in with the baldrics as "harness", so a
+    /// partial set of the wrong type showed a backplate with no breastplate - invisible from the front.
+    /// Judged from the set's own slots rather than its name, so a chest pendant (no back piece) and the
+    /// veteran's slung sword (no chest piece) keep their groups.
+    /// </summary>
+    private static string GroupOf(BoneSlot slot, IReadOnlySet<string> setSlots) => slot.Key switch
+    {
+        "chest" or "back" when setSlots.Contains("chest") && setSlots.Contains("back") => "cuirass",
+        "shoulder_l" or "shoulder_r" or "l" or "r" => "pauldrons",
+        "elbow_l" or "elbow_r" => "couters",
+        "forearm_l" or "forearm_r" => "vambraces",
+        "neck" => "gorget",
+        "chest" => "emblem",
+        "back" or "strap" => "harness",
+        _ => slot.Key,
+    };
+
+    /// <summary>
+    /// For each armour type, the order its partial pieces come in: famed armour wears the first group
+    /// its SET actually has (more rungs could take more, see <see cref="PartialRarities"/>).
+    ///
+    /// Keyed on the artifact's type rather than rolled because a portrait trigger can read the type
+    /// of ANY armour — vanilla's smithy, loot and event artifacts included — with no variable to
+    /// stamp at creation. The cost is that every famed plate harness of one culture looks alike,
+    /// which reads as a pattern of make rather than a bug. The orders lean on what the type is known
+    /// for: plate for its shoulders and joints, mail for a stiff collar over it, scale and lamellar
+    /// for arm defences, brigandine for a decorated front.
+    ///
+    /// A group missing from the list, or a set with none of the listed groups, simply isn't worn
+    /// below illustrious.
+    /// </summary>
+    private static readonly (string Type, string[] Order)[] TypeOrder =
+    [
+        ("armor_plate",      ["cuirass", "pauldrons", "couters", "gorget", "vambraces", "emblem", "harness"]),
+        ("armor_mail",       ["gorget", "harness", "vambraces", "cuirass", "pauldrons", "couters", "emblem"]),
+        ("armor_scale",      ["vambraces", "gorget", "cuirass", "emblem", "pauldrons", "couters", "harness"]),
+        ("armor_lamellar",   ["pauldrons", "vambraces", "emblem", "cuirass", "gorget", "harness", "couters"]),
+        ("armor_laminar",    ["couters", "cuirass", "pauldrons", "vambraces", "gorget", "harness", "emblem"]),
+        ("armor_brigandine", ["cuirass", "emblem", "gorget", "harness", "couters", "pauldrons", "vambraces"]),
+    ];
+
+    /// <summary>
+    /// The armour types on which a piece shows at a partial rarity, given the groups its set has.
+    /// </summary>
+    private static List<string> TypesWearing(BonePiece piece, int groups, IReadOnlySet<string> setGroups,
+        IReadOnlySet<string> setSlots)
+    {
+        string group = GroupOf(piece.Slot, setSlots);
+
+        return TypeOrder
+            .Where(t => t.Order.Where(setGroups.Contains).Take(groups).Contains(group))
+            .Select(t => t.Type)
+            .ToList();
+    }
 
     /// <summary>
     /// The artifact slot a piece garnishes.
@@ -310,7 +382,8 @@ public static class BonePieceStep
         Console.WriteLine($"  bone pieces: {baked.Count} piece(s), {sets.Count} set(s) "
             + $"({string.Join(", ", sets)}), slots "
             + string.Join("/", baked.Select(p => p.Slot.Key).Distinct().OrderBy(s => s, StringComparer.Ordinal))
-            + $", {textures} copied + {converted} repacked texture set(s), on {Rarity} artifacts");
+            + $", {textures} copied + {converted} repacked texture set(s), whole on {Rarity} armour, "
+            + string.Join(" / ", PartialRarities.Select(r => $"{r.Groups} group(s) on {r.Rarity}")));
 
         foreach (string set in sets)
             Console.WriteLine($"    {set}: {byCulture[set].Count} culture(s)");
@@ -1131,8 +1204,19 @@ public static class BonePieceStep
         string dir = Path.Combine(modDir, "gfx", "portraits", "portrait_modifiers");
         Directory.CreateDirectory(dir);
 
+        var setSlots = pieces.GroupBy(p => p.Set, StringComparer.Ordinal).ToDictionary(
+            g => g.Key,
+            g => (IReadOnlySet<string>)g.Select(p => p.Slot.Key).ToHashSet(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+
+        var setGroups = pieces.GroupBy(p => p.Set, StringComparer.Ordinal).ToDictionary(
+            g => g.Key,
+            g => (IReadOnlySet<string>)g.Select(p => GroupOf(p.Slot, setSlots[g.Key])).ToHashSet(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+
         var b = new JominiBuilder();
-        b.Comment("Bone-attached pieces on illustrious artifacts.\n\n"
+        b.Comment("Bone-attached pieces on armour artifacts: the whole set on illustrious, one group\n"
+            + "of it (chosen by armour type) on famed, nothing below.\n\n"
             + "Gated on the artifact's CREATOR culture, exactly as the armour itself is, so a piece\n"
             + "keeps its own look when it changes hands rather than being re-garnished by whoever\n"
             + "stole it.\n\n"
@@ -1219,7 +1303,7 @@ public static class BonePieceStep
                                     // seventh armour type is covered without an edit here. Vanilla
                                     // uses `artifact_slot_type` this way in 104 places.
                                     b.Field("artifact_slot_type", Slot);
-                                    b.Field("rarity", Rarity);
+                                    RarityGate(b, piece, setGroups[piece.Set], setSlots[piece.Set]);
 
                                     // Written by hand because `?=` is ONE token and Block would put
                                     // the builder's " = " separator inside it, giving `creator ? =`.
@@ -1255,6 +1339,37 @@ public static class BonePieceStep
         }
 
         ParadoxText.WriteBom(Path.Combine(dir, "zz_gen_pieces.txt"), b.ToString());
+    }
+
+    /// <summary>
+    /// The rarity half of the artifact gate: illustrious always, and each partial rarity only on the
+    /// armour types whose first groups include this piece's. A rung that no type reaches is left out
+    /// rather than written as an empty OR, which the engine reads as true.
+    /// </summary>
+    private static void RarityGate(JominiBuilder b, BonePiece piece, IReadOnlySet<string> setGroups,
+        IReadOnlySet<string> setSlots)
+    {
+        using (b.Block("OR"))
+        {
+            b.Field("rarity", Rarity);
+
+            foreach (var (rarity, groups) in PartialRarities)
+            {
+                var types = TypesWearing(piece, groups, setGroups, setSlots);
+                if (types.Count == 0) continue;
+
+                using (b.Block("AND"))
+                {
+                    b.Field("rarity", rarity);
+
+                    if (types.Count == TypeOrder.Length) continue;
+
+                    using (b.Block("OR"))
+                        foreach (string type in types)
+                            b.Field("artifact_type", type);
+                }
+            }
+        }
     }
 
     /// <summary>How far a heavier-body copy outweighs the piece it copies: 0 for the original.</summary>

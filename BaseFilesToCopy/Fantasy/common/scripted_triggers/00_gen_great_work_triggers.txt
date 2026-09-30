@@ -1,0 +1,64 @@
+﻿# The high elves' Great Work: who may swear one, and who may carry one on.
+#
+# The pieces:
+#   common/culture/traditions/00_gen_long_labour_tradition.txt — the Long Labour (parameter gen_great_work)
+#   common/decisions/00_gen_great_work_decisions.txt   — Swear a Great Work (pays the oath, opens 0010)
+#   common/story_cycles/00_gen_great_work_story.txt    — the work itself: beats, completion, the maker's death
+#   common/scripted_effects/00_gen_great_work_effects.txt — begin, progress, milestones, the artifact, succession
+#   events/gen_great_work_events.txt                   — the oath scene, the beats, the finishing, the succession
+#   Emit/Culture/GreatWorkNameWriter.cs (generator)    — each high-elf culture's names for the works
+# The work's state lives on the story (var:gw_*); see the header of 00_gen_great_work_effects.txt.
+
+# A character whose culture keeps the Long Labour.
+gen_gw_has_long_labour_trigger = {
+	culture ?= { has_cultural_parameter = gen_great_work }
+}
+
+# Holds an unfinished Great Work.
+gen_gw_has_work_trigger = {
+	any_owned_story = { type = story_gen_great_work }
+}
+
+# May swear a Great Work: the custom, the crown, a first oath, and years still ahead.
+gen_gw_can_swear_trigger = {
+	gen_gw_has_long_labour_trigger = yes
+	is_adult = yes
+	highest_held_title_tier >= tier_kingdom
+	NOT = { has_character_flag = gen_gw_has_sworn }
+	NOT = { gen_gw_has_work_trigger = yes }
+	NOT = { has_trait = world_weary }
+}
+
+# The maker's working life is ending: World-Weary (the elves' fading, gen_aging), or — where that arc
+# never comes (the elderly-health rule is off, or an immortal) — great age. On the maker. Completion and
+# the living handover both wait on it.
+gen_gw_maker_near_end_trigger = {
+	OR = {
+		has_trait = world_weary
+		AND = {
+			age >= 110
+			OR = {
+				has_game_rule = off_elderly_health
+				has_trait = immortal
+			}
+		}
+	}
+}
+
+# May carry on a Great Work whose maker has died. Broader than the oath on purpose: any grown elf
+# of sound mind and free, landed or not, who is not already bound to a work of their own.
+gen_gw_can_take_up_trigger = {
+	is_alive = yes
+	is_adult = yes
+	gen_is_elf_phenotype_trigger = yes
+	is_imprisoned = no
+	NOT = { has_trait = incapable }
+	# Bound to no OTHER work: whoever holds the dead maker's work while the heirs decide
+	# (scope:gw_story, the succession chain) may still take it up.
+	NOT = {
+		any_owned_story = {
+			type = story_gen_great_work
+			NOT = { this ?= scope:gw_story }
+		}
+	}
+}

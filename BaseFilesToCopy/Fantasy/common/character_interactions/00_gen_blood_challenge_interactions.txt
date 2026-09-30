@@ -1,0 +1,564 @@
+﻿# Blood Challenge: call another ruler of the Blood Right into the circle.
+#
+# Shape copied from vanilla's challenge_to_single_combat_interaction (00_perk_interactions.txt) and
+# tribal_challenge_ruler_decision (80_major_decisions.txt). What is fought for depends on who is
+# called (00_gen_blood_challenge_effects.txt has the table): a peer for renown, a liege or greater
+# ruler for a claim on their seat, a vassal to put them in their place.
+#
+# Refusing is allowed and costs dearly (gen_bc_refused_the_blood_modifier), so the AI only refuses
+# when it is badly outmatched. The AI issues challenges too, players included; a player it has just
+# challenged is left alone for five years.
+
+gen_blood_challenge_interaction = {
+	icon = icon_combat
+	interface_priority = 30
+	common_interaction = yes
+	category = interaction_category_hostile
+	ai_maybe = yes
+	ai_max_reply_days = 0
+	popup_on_receive = yes
+	pause_on_receive = yes
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { gen_bc_is_upward_trigger = yes }
+				desc = gen_blood_challenge_interaction_desc_upward
+			}
+			triggered_desc = {
+				trigger = { gen_bc_is_downward_trigger = yes }
+				desc = gen_blood_challenge_interaction_desc_downward
+			}
+			desc = gen_blood_challenge_interaction_desc_peer
+		}
+		# Calling out a vassal: what the liege risks, and what it says about them.
+		triggered_desc = {
+			trigger = { gen_bc_liege_title_at_stake_trigger = yes }
+			desc = gen_blood_challenge_interaction_desc_downward_claim
+		}
+		triggered_desc = {
+			trigger = { gen_bc_vassal_in_good_standing_trigger = yes }
+			desc = gen_blood_challenge_interaction_desc_downward_tyranny
+		}
+	}
+
+	greeting = negative
+	notification_text = gen_blood_challenge_interaction_notification
+
+	is_shown = {
+		scope:actor != scope:recipient
+		gen_bc_both_in_the_custom_trigger = yes
+		gen_bc_within_reach_trigger = yes
+		OR = {
+			gen_bc_is_upward_trigger = yes
+			gen_bc_is_downward_trigger = yes
+			gen_bc_is_peer_trigger = yes
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		# Both must be able to fight in person, and neither may be at war with or under truce with
+		# the other (vanilla's own check for the rival duel).
+		rival_single_combat_shown_and_not_invalid_trigger = yes
+		scope:recipient = { can_start_single_combat_trigger = yes }
+		scope:recipient = {
+			custom_description = {
+				text = fp1_tbc_recipient_banned_from_combat
+				can_start_single_combat_banned_checks_trigger = no
+			}
+		}
+		scope:recipient = { can_be_combatant_based_on_gender_trigger = { ARMY_OWNER = scope:actor } }
+		scope:actor = { can_be_combatant_based_on_gender_trigger = { ARMY_OWNER = scope:recipient } }
+		scope:actor = { is_imprisoned = no }
+		scope:recipient = { is_imprisoned = no }
+		scope:actor = {
+			custom_description = {
+				text = gen_bc_not_own_spouse
+				NOT = { is_spouse_of = scope:recipient }
+			}
+		}
+		scope:actor = {
+			custom_description = {
+				text = gen_bc_actor_already_fighting
+				gen_bc_free_to_fight_trigger = yes
+			}
+		}
+		scope:recipient = {
+			custom_description = {
+				text = gen_bc_recipient_already_fighting
+				gen_bc_free_to_fight_trigger = yes
+			}
+		}
+	}
+
+	can_send = {
+		scope:actor = {
+			custom_description = {
+				text = "character_interactions_hostile_actions_disabled_delay"
+				NOT = { has_character_flag = flag_hostile_actions_disabled_delay }
+			}
+		}
+	}
+
+	cost = {
+		prestige = gen_bc_challenge_cost_value
+	}
+	cooldown = { years = 3 }
+	cooldown_against_recipient = { years = 10 }
+
+	on_send = {
+		scope:actor = {
+			add_character_flag = {
+				flag = flag_hostile_actions_disabled_delay
+				days = 10
+			}
+			# Calling a loyal vassal into the circle is bullying, answered or not. A touch of tyranny —
+			# vanilla's forced duel costs 5; this is lighter, since the Blood Right allows it.
+			if = {
+				limit = { gen_bc_vassal_in_good_standing_trigger = yes }
+				add_tyranny = 3
+			}
+		}
+		# An AI's challenge spares that player any other AI challenge for a while.
+		if = {
+			limit = {
+				scope:actor = { is_ai = yes }
+				scope:recipient = { is_ai = no }
+			}
+			scope:recipient = {
+				add_character_flag = {
+					flag = gen_bc_recently_challenged_by_ai
+					years = 5
+				}
+			}
+		}
+	}
+
+	on_accept = {
+		gen_bc_save_scopes_effect = yes
+		scope:actor = {
+			custom_tooltip = gen_bc_enter_the_circle.tt
+			if = {
+				limit = { scope:gen_bc_kind = flag:upward }
+				custom_tooltip = gen_bc_upward_lethal.tt
+			}
+			else = {
+				custom_tooltip = gen_bc_not_lethal.tt
+			}
+			if = {
+				limit = { exists = scope:gen_bc_presider }
+				custom_tooltip = gen_bc_presider_rules.tt
+			}
+			show_as_tooltip = {
+				gen_bc_apply_stakes_effect = {
+					VICTOR = scope:gen_bc_challenger
+					LOSER = scope:gen_bc_defender
+				}
+			}
+		}
+		# In the circle: the busy flag (with its own expiry as a last resort), who with, and a watchdog
+		# that releases both if the engine drops the fight (0102).
+		scope:actor = {
+			add_character_flag = {
+				flag = gen_bc_in_challenge
+				days = 90
+			}
+			set_variable = {
+				name = gen_bc_opponent
+				value = scope:recipient
+			}
+			trigger_event = {
+				id = gen_blood_challenge.0102
+				days = 60
+			}
+		}
+		scope:recipient = {
+			add_character_flag = {
+				flag = gen_bc_in_challenge
+				days = 90
+			}
+			set_variable = {
+				name = gen_bc_opponent
+				value = scope:actor
+			}
+			trigger_event = {
+				id = gen_blood_challenge.0102
+				days = 60
+			}
+		}
+		# The fighter who does not see the scene still chooses how to fight, by temperament, so a
+		# player's stance never faces an opponent who simply stood there.
+		hidden_effect = {
+			if = {
+				limit = { scope:gen_bc_viewer = scope:gen_bc_challenger }
+				scope:gen_bc_defender = { save_scope_as = gen_bc_unseen }
+			}
+			else = {
+				scope:gen_bc_challenger = { save_scope_as = gen_bc_unseen }
+			}
+			scope:gen_bc_unseen = {
+				random_list = {
+					30 = {
+						modifier = {
+							add = 40
+							OR = {
+								has_trait = wrathful
+								has_trait = berserker
+								has_trait = impatient
+							}
+						}
+						modifier = {
+							factor = 0.3
+							has_trait = calm
+						}
+						gen_bc_apply_best_fury_stance_effect = yes
+					}
+					30 = {
+						modifier = {
+							add = 40
+							OR = {
+								has_trait = deceitful
+								has_trait = patient
+								has_trait = craven
+							}
+						}
+						gen_bc_apply_cunning_stance_effect = yes
+					}
+					30 = {
+						modifier = {
+							add = 40
+							OR = {
+								has_trait = zealous
+								has_trait = brave
+							}
+						}
+						modifier = {
+							factor = 0.3
+							has_trait = cynical
+						}
+						gen_bc_apply_ancestors_stance_effect = yes
+					}
+					20 = {
+						gen_bc_apply_no_stance_effect = yes
+					}
+				}
+			}
+		}
+		gen_bc_begin_effect = yes
+	}
+
+	on_decline = {
+		scope:recipient = {
+			add_prestige = medium_prestige_loss
+			add_character_modifier = {
+				modifier = gen_bc_refused_the_blood_modifier
+				years = 5
+			}
+		}
+		scope:actor = {
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = gen_bc_challenge_refused.t
+				left_icon = scope:actor
+				right_icon = scope:recipient
+				scope:recipient = {
+					show_as_tooltip = {
+						add_prestige = medium_prestige_loss
+						add_character_modifier = {
+							modifier = gen_bc_refused_the_blood_modifier
+							years = 5
+						}
+					}
+				}
+				show_as_tooltip = { add_prestige = minor_prestige_gain }
+			}
+			# The cost comes back, with a little on top: they would not face you. The cooldown stays
+			# (vanilla's rival duel lifts it on refusal, but a refusal here also costs the refuser five
+			# years of Refused the Blood — lifting it would let a strong fighter shame a whole region
+			# in a row).
+			hidden_effect = {
+				add_prestige_no_experience = gen_bc_challenge_cost_value
+				add_prestige_no_experience = minor_prestige_value
+			}
+			if = {
+				limit = { has_character_flag = flag_hostile_actions_disabled_delay }
+				remove_character_flag = flag_hostile_actions_disabled_delay
+			}
+		}
+	}
+
+	auto_accept = no
+
+	# Refusing is worse than most defeats, so the answer is nearly always yes. The shame (+60) starts
+	# to lose to the blade at four prowess behind and gives way at about eight (five or six for a
+	# craven, ten for the brave). A seat at stake tips it sooner: a claim on one of their titles
+	# costs 15 more, on their primary title 30 — roughly six prowess behind before a ruler refuses.
+	ai_accept = {
+		base = 0
+
+		modifier = {
+			desc = gen_bc_ai_refusal_shame
+			add = 60
+		}
+		modifier = {
+			desc = gen_bc_ai_seat_at_stake
+			gen_bc_is_upward_trigger = yes
+			scope:recipient = {
+				any_held_title = { gen_bc_claimable_title_trigger = { CLAIMANT = scope:actor } }
+			}
+			add = -15
+		}
+		modifier = {
+			desc = gen_bc_ai_seat_at_stake
+			gen_bc_is_upward_trigger = yes
+			scope:recipient.primary_title = { gen_bc_claimable_title_trigger = { CLAIMANT = scope:actor } }
+			add = -15
+		}
+		# A vassal called out by the liege is offered a shot at the liege's seat.
+		modifier = {
+			desc = gen_bc_ai_chance_at_the_seat
+			gen_bc_liege_title_at_stake_trigger = yes
+			add = 15
+		}
+		modifier = {
+			desc = CTSC_RELATIVE_PROWESS
+			scope:recipient.prowess > scope:actor.prowess
+			add = {
+				value = scope:recipient.prowess
+				subtract = scope:actor.prowess
+				multiply = 2
+			}
+		}
+		modifier = {
+			desc = CTSC_RELATIVE_PROWESS
+			scope:actor.prowess >= {
+				value = scope:recipient.prowess
+				add = 4
+			}
+			add = {
+				value = scope:actor.prowess
+				subtract = scope:recipient.prowess
+				subtract = 3
+				multiply = -12
+			}
+		}
+		# A wounded fighter has more to lose in a fight that can kill.
+		modifier = {
+			desc = gen_bc_ai_already_wounded
+			gen_bc_is_upward_trigger = yes
+			scope:recipient = {
+				OR = {
+					has_trait = wounded_2
+					has_trait = wounded_3
+				}
+			}
+			add = -40
+		}
+		modifier = {
+			trigger = { scope:recipient = { has_trait = craven } }
+			add = -30
+		}
+		modifier = {
+			trigger = { scope:recipient = { has_trait = brave } }
+			add = 20
+		}
+		modifier = {
+			trigger = {
+				scope:recipient = {
+					OR = {
+						has_trait = wrathful
+						has_trait = arrogant
+					}
+				}
+			}
+			add = 10
+		}
+		modifier = {
+			trigger = {
+				scope:recipient = {
+					OR = {
+						has_relation_rival = scope:actor
+						has_relation_nemesis = scope:actor
+					}
+				}
+			}
+			add = 20
+		}
+	}
+
+	# The actor-only half of is_shown/is_valid, checked once per actor rather than per recipient
+	# (vanilla's replacement for the deprecated ai_potential; it applies to players too).
+	is_available = {
+		is_adult = yes
+		is_landed = yes
+		is_imprisoned = no
+		gen_bc_follows_blood_right_trigger = yes
+	}
+
+	# AI
+
+	ai_target_quick_trigger = {
+		adult = yes
+	}
+	ai_targets = {
+		ai_recipients = scripted_relations
+	}
+	ai_targets = {
+		ai_recipients = liege
+		ai_recipients = vassals
+		ai_recipients = peer_vassals
+	}
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		chance = 0.5
+	}
+
+	ai_frequency_by_tier = {
+		barony = 0
+		county = 60
+		duchy = 48
+		kingdom = 48
+		empire = 60
+		hegemony = 60
+	}
+
+	# Prowess weighs on every challenge but decides none alone: each point of edge counts for it, each
+	# point behind counts heavier against it, and hatred, ambition or temper can carry a fighter into a
+	# circle they may well lose. Worked through with base -20: an equal fight needs a reason (a rival's
+	# +40 gives 20); a rival three behind still comes out just ahead (+2); a nemesis five behind, +10.
+	# Only a hopeless mismatch — eight or more behind — is off the table, and even that not for the
+	# truly reckless. Friends, kin and spouses are never called out.
+	ai_will_do = {
+		base = -20
+
+		# Cravens never go looking for a fight; weak arms rarely do.
+		modifier = {
+			add = -1000
+			scope:actor = { has_trait = craven }
+		}
+		modifier = {
+			add = -30
+			scope:actor = { prowess < 8 }
+		}
+
+		# The edge, both ways.
+		modifier = {
+			add = {
+				value = scope:actor.prowess
+				subtract = scope:recipient.prowess
+				multiply = 4
+			}
+			scope:actor.prowess > scope:recipient.prowess
+		}
+		modifier = {
+			add = {
+				value = scope:actor.prowess
+				subtract = scope:recipient.prowess
+				multiply = 6
+			}
+			scope:actor.prowess < scope:recipient.prowess
+		}
+		# A hopeless mismatch, unless reckless.
+		modifier = {
+			add = -1000
+			scope:actor.prowess <= {
+				value = scope:recipient.prowess
+				subtract = 8
+			}
+			NOT = {
+				scope:actor = {
+					ai_boldness >= high_positive_ai_value
+					ai_rationality <= low_negative_ai_value
+				}
+			}
+		}
+		# The bold discount the risk a little; the cautious inflate it.
+		ai_value_modifier = {
+			who = scope:actor
+			ai_boldness = 0.2
+		}
+		modifier = {
+			add = 25
+			gen_bc_is_upward_trigger = yes
+			exists = scope:recipient
+			scope:recipient = {
+				any_held_title = { gen_bc_claimable_title_trigger = { CLAIMANT = scope:actor } }
+			}
+			scope:actor = { has_trait = ambitious }
+		}
+		modifier = {
+			add = 15
+			gen_bc_is_upward_trigger = yes
+			scope:actor = { ai_greed > 0 }
+		}
+		# A liege thinks twice before calling out a loyal vassal (tyranny) or risking a claim on the
+		# seat; the cruel and the proud think less.
+		modifier = {
+			add = -15
+			gen_bc_vassal_in_good_standing_trigger = yes
+			scope:actor = {
+				NOR = {
+					has_trait = sadistic
+					has_trait = arrogant
+					has_trait = callous
+				}
+			}
+		}
+		modifier = {
+			add = -10
+			gen_bc_liege_title_at_stake_trigger = yes
+		}
+		modifier = {
+			add = 40
+			scope:actor = { has_relation_rival = scope:recipient }
+		}
+		modifier = {
+			add = 60
+			scope:actor = { has_relation_nemesis = scope:recipient }
+		}
+		modifier = {
+			add = 20
+			scope:actor = {
+				OR = {
+					has_trait = wrathful
+					has_trait = arrogant
+					has_trait = brave
+				}
+			}
+		}
+		modifier = {
+			add = -30
+			scope:actor = {
+				opinion = {
+					target = scope:recipient
+					value >= medium_positive_opinion
+				}
+			}
+		}
+		# Friends, lovers, close kin and spouses are off the table.
+		modifier = {
+			add = -1000
+			scope:actor = {
+				OR = {
+					has_relation_friend = scope:recipient
+					has_relation_lover = scope:recipient
+					is_close_or_extended_family_of = scope:recipient
+					is_spouse_of = scope:recipient
+				}
+			}
+		}
+		# A player the AI already called out gets five years' peace from every AI.
+		modifier = {
+			add = -1000
+			scope:recipient = {
+				is_ai = no
+				has_character_flag = gen_bc_recently_challenged_by_ai
+			}
+		}
+		# Don't pick fights mid-war.
+		modifier = {
+			add = -1000
+			scope:actor = { is_at_war = yes }
+		}
+	}
+}

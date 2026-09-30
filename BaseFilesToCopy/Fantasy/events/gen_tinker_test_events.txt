@@ -1,0 +1,1122 @@
+﻿namespace = gen_tinker
+
+# Gnome Tinkering: the workbench menu, the test, and the outcome. See 00_gen_tinker_triggers.txt for the
+# map of the system.
+#
+#   0010        The Workbench: pick a project and pay for it (fired by the Start a Contraption decision)
+#   0300        hidden: the test is due (fired by gen_tk_next_stage_effect); picks one of three scenes
+#   0310–0312   the test scenes. Every option that rolls ends in gen_tk_final_roll_effect, which
+#               hands the result to 0350. "One last adjustment" changes the numbers and re-opens the same
+#               scene, so the odds shown on the rolling options are always the real ones.
+#   0350        the outcome: project x result text, then gen_tk_apply_outcome_effect and
+#               gen_tk_finish_project_effect (once)
+#
+# All run on the tinkerer. Effects and dice: common/scripted_effects/00_gen_tinker_outcome_effects.txt.
+# Prices and prestige stakes: common/script_values/00_gen_tinker_cost_values.txt.
+
+
+# =====================================================================================
+#  0010 The Workbench
+# =====================================================================================
+
+gen_tinker.0010 = {
+	type = character_event
+	title = gen_tinker.0010.t
+	desc = gen_tinker.0010.desc
+	theme = learning
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	# A clockwork curio
+	option = {
+		name = gen_tinker.0010.a
+		# Every project option re-checks the bench: a commission may have started while this was open.
+		trigger = {
+			NOT = { has_character_flag = gen_tk_working }
+			gold >= gen_tk_cost_curio_value
+		}
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = gen_tk_cost_curio_value
+		custom_tooltip = gen_tinker.0010.a.tt
+		gen_tk_begin_project_effect = { PROJECT = flag:curio }
+
+		ai_chance = {
+			base = 10
+			ai_value_modifier = { ai_rationality = 0.25 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = scholar
+					has_trait = curious
+				}
+			}
+			modifier = {
+				add = 10
+				OR = {
+					has_trait = arrogant
+					has_trait = gregarious
+				}
+			}
+		}
+	}
+
+	# Waterworks
+	option = {
+		name = gen_tinker.0010.b
+		trigger = {
+			NOT = { has_character_flag = gen_tk_working }
+			is_landed = yes
+			exists = capital_county
+			gold >= gen_tk_cost_mill_value
+		}
+		show_as_unavailable = { is_landed = yes }
+		remove_short_term_gold = gen_tk_cost_mill_value
+		custom_tooltip = gen_tinker.0010.b.tt
+		gen_tk_begin_project_effect = { PROJECT = flag:mill }
+
+		ai_chance = {
+			base = 10
+			ai_value_modifier = { ai_greed = 0.5 }
+			modifier = {
+				add = 25
+				has_trait = greedy
+			}
+			modifier = {
+				add = 20
+				has_trait = diligent
+			}
+		}
+	}
+
+	# A war engine
+	option = {
+		name = gen_tinker.0010.c
+		trigger = {
+			NOT = { has_character_flag = gen_tk_working }
+			is_landed = yes
+			gold >= gen_tk_cost_engine_value
+		}
+		show_as_unavailable = { is_landed = yes }
+		remove_short_term_gold = gen_tk_cost_engine_value
+		custom_tooltip = gen_tinker.0010.c.tt
+		gen_tk_begin_project_effect = { PROJECT = flag:engine }
+
+		ai_chance = {
+			base = 5
+			ai_value_modifier = {
+				ai_boldness = 0.25
+				ai_vengefulness = 0.25
+			}
+			modifier = {
+				add = 20
+				has_trait = wrathful
+			}
+			modifier = {
+				add = 15
+				has_trait = ambitious
+			}
+			modifier = {
+				add = 25
+				is_at_war = yes
+			}
+		}
+	}
+
+	# A clockwork limb, for a maker missing one
+	option = {
+		name = gen_tinker.0010.d
+		trigger = {
+			NOT = { has_character_flag = gen_tk_working }
+			OR = {
+				AND = {
+					has_trait = maimed
+					NOT = { has_character_modifier = gen_tk_clockwork_hand_modifier }
+					NOT = { has_character_modifier = gen_tk_clockwork_hand_masterwork_modifier }
+				}
+				AND = {
+					has_trait = one_legged
+					NOT = { has_character_modifier = gen_tk_clockwork_leg_modifier }
+					NOT = { has_character_modifier = gen_tk_clockwork_leg_masterwork_modifier }
+				}
+			}
+			gold >= gen_tk_cost_limb_value
+		}
+		remove_short_term_gold = gen_tk_cost_limb_value
+		custom_tooltip = gen_tinker.0010.d.tt
+		gen_tk_begin_project_effect = { PROJECT = flag:limb }
+
+		ai_chance = {
+			base = 100
+		}
+	}
+
+	# A grand invention
+	option = {
+		name = gen_tinker.0010.e
+		trigger = {
+			NOT = { has_character_flag = gen_tk_working }
+			OR = {
+				learning >= 18
+				has_character_modifier = gen_tk_master_artificer_modifier
+			}
+			gold >= gen_tk_cost_invention_value
+		}
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = gen_tk_cost_invention_value
+		custom_tooltip = gen_tinker.0010.e.tt
+		gen_tk_begin_project_effect = { PROJECT = flag:invention }
+
+		ai_chance = {
+			base = 10
+			ai_value_modifier = { ai_rationality = 0.5 }
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = scholar
+					has_trait = curious
+				}
+			}
+			modifier = {
+				add = 10
+				has_trait = ambitious
+			}
+		}
+	}
+
+	# Not now
+	option = {
+		name = gen_tinker.0010.f
+		custom_tooltip = gen_tinker.0010.f.tt
+
+		ai_chance = {
+			base = 5
+			modifier = {
+				add = 20
+				has_trait = lazy
+			}
+			modifier = {
+				add = 15
+				has_trait = content
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0300 The test is due (hidden)
+# =====================================================================================
+
+gen_tinker.0300 = {
+	hidden = yes
+
+	# Ignore a test left over from an abandoned project (main's serial check).
+	trigger = { gen_tk_event_is_current_trigger = yes }
+
+	immediate = {
+		if = {
+			limit = {
+				gen_tk_can_work_trigger = yes
+				var:gen_tk_stage ?= 3
+			}
+			random_list = {
+				50 = { trigger_event = gen_tinker.0310 }
+				25 = { trigger_event = gen_tinker.0311 }
+				25 = {
+					modifier = {
+						add = 25
+						has_trait = gregarious
+					}
+					trigger_event = gen_tinker.0312
+				}
+			}
+		}
+		# A stale test from a project that already ended does nothing (as 0100/0200 do).
+		else_if = {
+			limit = {
+				has_character_flag = gen_tk_working
+				var:gen_tk_stage ?= 3
+			}
+			gen_tk_abandon_project_effect = yes
+		}
+	}
+}
+
+
+# =====================================================================================
+#  The test scenes. Shared text: gen_tinker.0300.project.* (what this project's test is) and the
+#  option keys gen_tinker.0300.*; each scene has its own opening and one option of its own.
+# =====================================================================================
+
+# Test Day: everything is ready.
+gen_tinker.0310 = {
+	type = character_event
+	title = gen_tinker.0310.t
+	desc = {
+		desc = gen_tinker.0310.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:curio } }
+				desc = gen_tinker.0300.project.curio
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:mill } }
+				desc = gen_tinker.0300.project.mill
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:engine } }
+				desc = gen_tinker.0300.project.engine
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:limb } }
+				desc = gen_tinker.0300.project.limb
+			}
+			desc = gen_tinker.0300.project.invention
+		}
+		triggered_desc = {
+			trigger = { var:gen_tk_patron ?= { is_alive = yes } }	# a dead patron expects nothing
+			desc = gen_tinker.0300.patron
+		}
+		triggered_desc = {
+			trigger = { has_character_flag = gen_tk_test_tweaked }
+			desc = gen_tinker.0300.tweaked
+		}
+	}
+	theme = learning
+	override_background = {
+		trigger = { gen_tk_project_is_trigger = { PROJECT = flag:curio } }
+		reference = throne_room
+	}
+	override_background = {
+		trigger = { gen_tk_project_is_trigger = { PROJECT = flag:mill } }
+		reference = farmland
+	}
+	override_background = {
+		trigger = { gen_tk_project_is_trigger = { PROJECT = flag:engine } }
+		reference = army_camp
+	}
+	override_background = {
+		trigger = { gen_tk_project_is_trigger = { PROJECT = flag:limb } }
+		reference = physicians_study
+	}
+	override_background = {
+		trigger = { gen_tk_project_is_trigger = { PROJECT = flag:invention } }
+		reference = study
+	}
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_apprentice_char }
+		character = scope:gen_tk_apprentice_char
+		animation = interested
+	}
+
+	# No event trigger: the "one last adjustment" options re-fire this scene, and a failed trigger would
+	# drop the event and leave the project on the bench forever. 0300 already checked the maker.
+
+	immediate = {
+		gen_tk_save_apprentice_effect = yes
+	}
+
+	# Pull the lever yourself
+	option = {
+		name = gen_tinker.0300.self
+		custom_tooltip = gen_tk_test_stakes_normal.tt
+		gen_tk_final_roll_effect = yes
+		ai_chance = {
+			base = 30
+			ai_value_modifier = { ai_boldness = 0.5 }
+		}
+	}
+
+	# Let the apprentice do it
+	option = {
+		name = gen_tinker.0300.apprentice
+		trigger = { exists = scope:gen_tk_apprentice_char }
+		set_variable = {
+			name = gen_tk_lever
+			value = flag:apprentice
+		}
+		custom_tooltip = gen_tk_test_apprentice_lever.tt
+		custom_tooltip = gen_tk_test_stakes_normal.tt
+		gen_tk_final_roll_effect = yes
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_boldness = -0.5
+				ai_compassion = -0.25
+			}
+			modifier = {
+				add = 20
+				has_trait = craven
+			}
+		}
+	}
+
+	# Invite the whole court
+	option = {
+		name = gen_tinker.0300.court
+		set_variable = {
+			name = gen_tk_audience
+			value = flag:court
+		}
+		custom_tooltip = gen_tk_test_stakes_court.tt
+		gen_tk_final_roll_effect = yes
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_boldness = 0.25
+				ai_sociability = 0.25
+			}
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = arrogant
+					has_trait = ambitious
+					has_trait = gregarious
+				}
+			}
+			modifier = {
+				add = 25
+				gen_tk_explodes_pct_value < 15	# the odds look good
+			}
+		}
+	}
+
+	# One last adjustment
+	option = {
+		name = gen_tinker.0300.tweak
+		trigger = { NOT = { has_character_flag = gen_tk_test_tweaked } }
+		gen_tk_adjust_effect = {
+			QUALITY = 10
+			RISK = 10
+		}
+		add_character_flag = gen_tk_test_tweaked
+		custom_tooltip = gen_tk_test_tweak.tt
+		trigger_event = gen_tinker.0310
+		ai_chance = {
+			base = 10
+			ai_value_modifier = { ai_energy = 0.25 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = diligent
+					has_trait = impatient
+				}
+			}
+			modifier = {
+				factor = 0.25
+				gen_tk_explodes_pct_value >= 25	# the odds look risky
+			}
+		}
+	}
+
+	# Test it quietly, at night
+	option = {
+		name = gen_tinker.0300.night
+		set_variable = {
+			name = gen_tk_audience
+			value = flag:night
+		}
+		custom_tooltip = gen_tk_test_stakes_night.tt
+		gen_tk_final_roll_effect = yes
+		ai_chance = {
+			base = 15
+			ai_value_modifier = { ai_boldness = -0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = shy
+					has_trait = craven
+					has_trait = humble
+				}
+			}
+			modifier = {
+				add = 20
+				gen_tk_explodes_pct_value >= 25	# the odds look risky
+			}
+		}
+	}
+}
+
+# A Cracked Part: something gave way in the night. The risk is already up; mending it is this scene's
+# adjustment.
+gen_tinker.0311 = {
+	type = character_event
+	title = gen_tinker.0311.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_character_flag = gen_tk_test_tweaked }
+				desc = gen_tinker.0311.desc.mended
+			}
+			desc = gen_tinker.0311.desc
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:curio } }
+				desc = gen_tinker.0300.project.curio
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:mill } }
+				desc = gen_tinker.0300.project.mill
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:engine } }
+				desc = gen_tinker.0300.project.engine
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:limb } }
+				desc = gen_tinker.0300.project.limb
+			}
+			desc = gen_tinker.0300.project.invention
+		}
+		triggered_desc = {
+			trigger = { var:gen_tk_patron ?= { is_alive = yes } }	# a dead patron expects nothing
+			desc = gen_tinker.0300.patron
+		}
+	}
+	theme = learning
+	override_background = {
+		trigger = { gen_tk_project_is_trigger = { PROJECT = flag:curio } }
+		reference = throne_room
+	}
+	override_background = {
+		trigger = { gen_tk_project_is_trigger = { PROJECT = flag:mill } }
+		reference = farmland
+	}
+	override_background = {
+		trigger = { gen_tk_project_is_trigger = { PROJECT = flag:engine } }
+		reference = army_camp
+	}
+	override_background = {
+		trigger = { gen_tk_project_is_trigger = { PROJECT = flag:limb } }
+		reference = physicians_study
+	}
+	override_background = {
+		trigger = { gen_tk_project_is_trigger = { PROJECT = flag:invention } }
+		reference = study
+	}
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_apprentice_char }
+		character = scope:gen_tk_apprentice_char
+		animation = shame
+	}
+
+	# No event trigger: the "one last adjustment" options re-fire this scene, and a failed trigger would
+	# drop the event and leave the project on the bench forever. 0300 already checked the maker.
+
+	immediate = {
+		gen_tk_save_apprentice_effect = yes
+		if = {
+			limit = { NOT = { has_character_flag = gen_tk_test_crack } }
+			add_character_flag = gen_tk_test_crack
+			gen_tk_adjust_effect = {
+				QUALITY = 0
+				RISK = 10
+			}
+		}
+	}
+
+	# Pull the lever yourself (crack and all)
+	option = {
+		name = gen_tinker.0300.self
+		custom_tooltip = gen_tk_test_stakes_normal.tt
+		gen_tk_final_roll_effect = yes
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_boldness = 0.5 }
+			modifier = {
+				add = 20
+				has_character_flag = gen_tk_test_tweaked
+			}
+		}
+	}
+
+	option = {
+		name = gen_tinker.0300.apprentice
+		trigger = { exists = scope:gen_tk_apprentice_char }
+		set_variable = {
+			name = gen_tk_lever
+			value = flag:apprentice
+		}
+		custom_tooltip = gen_tk_test_apprentice_lever.tt
+		custom_tooltip = gen_tk_test_stakes_normal.tt
+		gen_tk_final_roll_effect = yes
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_boldness = -0.5
+				ai_compassion = -0.25
+			}
+		}
+	}
+
+	option = {
+		name = gen_tinker.0300.court
+		set_variable = {
+			name = gen_tk_audience
+			value = flag:court
+		}
+		custom_tooltip = gen_tk_test_stakes_court.tt
+		gen_tk_final_roll_effect = yes
+		ai_chance = {
+			base = 5
+			ai_value_modifier = { ai_boldness = 0.25 }
+			modifier = {
+				add = 15
+				has_trait = arrogant
+			}
+			modifier = {
+				add = 20
+				gen_tk_explodes_pct_value < 15	# the odds look good
+			}
+		}
+	}
+
+	# Stop and mend it properly
+	option = {
+		name = gen_tinker.0311.fix
+		trigger = { NOT = { has_character_flag = gen_tk_test_tweaked } }
+		gen_tk_adjust_effect = {
+			QUALITY = 5
+			RISK = -10
+		}
+		add_character_flag = gen_tk_test_tweaked
+		custom_tooltip = gen_tk_test_tweak.tt
+		trigger_event = gen_tinker.0311
+		ai_chance = {
+			base = 40
+			ai_value_modifier = { ai_rationality = 0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = diligent
+					has_trait = patient
+				}
+			}
+			modifier = {
+				factor = 0.5
+				has_trait = impatient
+			}
+		}
+	}
+
+	option = {
+		name = gen_tinker.0300.night
+		set_variable = {
+			name = gen_tk_audience
+			value = flag:night
+		}
+		custom_tooltip = gen_tk_test_stakes_night.tt
+		gen_tk_final_roll_effect = yes
+		ai_chance = {
+			base = 15
+			ai_value_modifier = { ai_boldness = -0.5 }
+			modifier = {
+				add = 20
+				gen_tk_explodes_pct_value >= 25	# the odds look risky
+			}
+		}
+	}
+}
+
+# Word Has Got Out: the court has invited itself. Every test in front of them has the court's stakes;
+# sending them home costs a little face.
+gen_tinker.0312 = {
+	type = character_event
+	title = gen_tinker.0312.t
+	desc = {
+		desc = gen_tinker.0312.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:curio } }
+				desc = gen_tinker.0300.project.curio
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:mill } }
+				desc = gen_tinker.0300.project.mill
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:engine } }
+				desc = gen_tinker.0300.project.engine
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:limb } }
+				desc = gen_tinker.0300.project.limb
+			}
+			desc = gen_tinker.0300.project.invention
+		}
+		triggered_desc = {
+			trigger = { var:gen_tk_patron ?= { is_alive = yes } }	# a dead patron expects nothing
+			desc = gen_tinker.0300.patron
+		}
+		triggered_desc = {
+			trigger = { has_character_flag = gen_tk_test_tweaked }
+			desc = gen_tinker.0300.tweaked
+		}
+	}
+	theme = learning
+	override_background = { reference = courtyard }
+
+	left_portrait = {
+		character = root
+		animation = shock
+	}
+	right_portrait = {
+		trigger = { exists = scope:gen_tk_apprentice_char }
+		character = scope:gen_tk_apprentice_char
+		animation = happiness
+	}
+
+	# No event trigger: the "one last adjustment" options re-fire this scene, and a failed trigger would
+	# drop the event and leave the project on the bench forever. 0300 already checked the maker.
+
+	immediate = {
+		gen_tk_save_apprentice_effect = yes
+	}
+
+	# Very well: pull the lever in front of them yourself
+	option = {
+		name = gen_tinker.0312.self
+		set_variable = {
+			name = gen_tk_audience
+			value = flag:court
+		}
+		custom_tooltip = gen_tk_test_stakes_court.tt
+		gen_tk_final_roll_effect = yes
+		ai_chance = {
+			base = 30
+			ai_value_modifier = {
+				ai_boldness = 0.5
+				ai_sociability = 0.25
+			}
+			modifier = {
+				add = 20
+				gen_tk_explodes_pct_value < 15	# the odds look good
+			}
+		}
+	}
+
+	# Let the apprentice take the bow
+	option = {
+		name = gen_tinker.0312.apprentice
+		trigger = { exists = scope:gen_tk_apprentice_char }
+		set_variable = {
+			name = gen_tk_audience
+			value = flag:court
+		}
+		set_variable = {
+			name = gen_tk_lever
+			value = flag:apprentice
+		}
+		custom_tooltip = gen_tk_test_apprentice_lever.tt
+		custom_tooltip = gen_tk_test_stakes_court.tt
+		gen_tk_final_roll_effect = yes
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_boldness = -0.5
+				ai_compassion = -0.25
+			}
+		}
+	}
+
+	# One last adjustment (they can wait)
+	option = {
+		name = gen_tinker.0300.tweak
+		trigger = { NOT = { has_character_flag = gen_tk_test_tweaked } }
+		gen_tk_adjust_effect = {
+			QUALITY = 10
+			RISK = 10
+		}
+		add_character_flag = gen_tk_test_tweaked
+		custom_tooltip = gen_tk_test_tweak.tt
+		trigger_event = gen_tinker.0312
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 20
+				has_trait = diligent
+			}
+			modifier = {
+				factor = 0.25
+				gen_tk_explodes_pct_value >= 25	# the odds look risky
+			}
+		}
+	}
+
+	# Send them home; test it tonight
+	option = {
+		name = gen_tinker.0312.night
+		add_prestige = miniscule_prestige_loss
+		set_variable = {
+			name = gen_tk_audience
+			value = flag:night
+		}
+		custom_tooltip = gen_tk_test_stakes_night.tt
+		gen_tk_final_roll_effect = yes
+		ai_chance = {
+			base = 10
+			ai_value_modifier = { ai_boldness = -0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = shy
+					has_trait = craven
+				}
+			}
+			modifier = {
+				add = 25
+				gen_tk_explodes_pct_value >= 25	# the odds look risky
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0350 The outcome
+# =====================================================================================
+
+gen_tinker.0350 = {
+	type = character_event
+	title = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:masterwork }
+				desc = gen_tinker.0350.t.masterwork
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:works }
+				desc = gen_tinker.0350.t.works
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:dud }
+				desc = gen_tinker.0350.t.dud
+			}
+			desc = gen_tinker.0350.t.explodes
+		}
+	}
+	desc = {
+		# What happened: project x result.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:curio }
+					scope:gen_tk_result ?= flag:masterwork
+				}
+				desc = gen_tinker.0350.curio.masterwork
+			}
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:curio }
+					scope:gen_tk_result ?= flag:works
+				}
+				desc = gen_tinker.0350.curio.works
+			}
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:curio }
+					scope:gen_tk_result ?= flag:dud
+				}
+				desc = gen_tinker.0350.curio.dud
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:curio } }
+				desc = gen_tinker.0350.curio.explodes
+			}
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:mill }
+					scope:gen_tk_result ?= flag:masterwork
+				}
+				desc = gen_tinker.0350.mill.masterwork
+			}
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:mill }
+					scope:gen_tk_result ?= flag:works
+				}
+				desc = gen_tinker.0350.mill.works
+			}
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:mill }
+					scope:gen_tk_result ?= flag:dud
+				}
+				desc = gen_tinker.0350.mill.dud
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:mill } }
+				desc = gen_tinker.0350.mill.explodes
+			}
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:engine }
+					scope:gen_tk_result ?= flag:masterwork
+				}
+				desc = gen_tinker.0350.engine.masterwork
+			}
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:engine }
+					scope:gen_tk_result ?= flag:works
+				}
+				desc = gen_tinker.0350.engine.works
+			}
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:engine }
+					scope:gen_tk_result ?= flag:dud
+				}
+				desc = gen_tinker.0350.engine.dud
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:engine } }
+				desc = gen_tinker.0350.engine.explodes
+			}
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:limb }
+					scope:gen_tk_result ?= flag:masterwork
+				}
+				desc = gen_tinker.0350.limb.masterwork
+			}
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:limb }
+					scope:gen_tk_result ?= flag:works
+				}
+				desc = gen_tinker.0350.limb.works
+			}
+			triggered_desc = {
+				trigger = {
+					gen_tk_project_is_trigger = { PROJECT = flag:limb }
+					scope:gen_tk_result ?= flag:dud
+				}
+				desc = gen_tinker.0350.limb.dud
+			}
+			triggered_desc = {
+				trigger = { gen_tk_project_is_trigger = { PROJECT = flag:limb } }
+				desc = gen_tinker.0350.limb.explodes
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:masterwork }
+				desc = gen_tinker.0350.invention.masterwork
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:works }
+				desc = gen_tinker.0350.invention.works
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:dud }
+				desc = gen_tinker.0350.invention.dud
+			}
+			desc = gen_tinker.0350.invention.explodes
+		}
+		# Who got hurt, for an explosion.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:gen_tk_result ?= flag:explodes
+					NOT = { scope:gen_tk_at_lever = root }
+				}
+				desc = gen_tinker.0350.blast.apprentice
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_tk_result ?= flag:explodes
+					exists = scope:gen_tk_apprentice_char
+					exists = scope:gen_tk_apprentice_hurt
+				}
+				desc = gen_tinker.0350.blast.both
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_tk_result ?= flag:explodes
+					exists = scope:gen_tk_apprentice_char
+				}
+				desc = gen_tinker.0350.blast.frightened
+			}
+			triggered_desc = {
+				trigger = { scope:gen_tk_result ?= flag:explodes }
+				desc = gen_tinker.0350.blast.self
+			}
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:gen_tk_burned
+					scope:gen_tk_at_lever = root
+				}
+				desc = gen_tinker.0350.blast.burned_self
+			}
+			triggered_desc = {
+				trigger = { exists = scope:gen_tk_burned }
+				desc = gen_tinker.0350.blast.burned_apprentice
+			}
+		}
+		triggered_desc = {
+			trigger = { exists = scope:gen_tk_ruins }
+			desc = gen_tinker.0350.blast.ruins
+		}
+		# Who was watching.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					var:gen_tk_audience ?= flag:court
+					OR = {
+						scope:gen_tk_result ?= flag:masterwork
+						scope:gen_tk_result ?= flag:works
+					}
+				}
+				desc = gen_tinker.0350.court.good
+			}
+			triggered_desc = {
+				trigger = { var:gen_tk_audience ?= flag:court }
+				desc = gen_tinker.0350.court.bad
+			}
+			triggered_desc = {
+				trigger = { var:gen_tk_audience ?= flag:night }
+				desc = gen_tinker.0350.night
+			}
+		}
+		# A commission: what goes to the patron.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					NOT = { scope:gen_tk_beneficiary = root }
+					OR = {
+						scope:gen_tk_result ?= flag:masterwork
+						scope:gen_tk_result ?= flag:works
+					}
+				}
+				desc = gen_tinker.0350.patron.deliver
+			}
+			triggered_desc = {
+				trigger = { NOT = { scope:gen_tk_beneficiary = root } }
+				desc = gen_tinker.0350.patron.nothing
+			}
+			triggered_desc = {
+				trigger = {
+					exists = var:gen_tk_patron
+					OR = {
+						scope:gen_tk_result ?= flag:masterwork
+						scope:gen_tk_result ?= flag:works
+					}
+				}
+				desc = gen_tinker.0350.patron.dead
+			}
+		}
+	}
+	theme = learning
+	override_background = {
+		trigger = { scope:gen_tk_result ?= flag:explodes }
+		reference = burning_building
+	}
+	override_background = {
+		trigger = {
+			NOT = { scope:gen_tk_result ?= flag:explodes }
+			gen_tk_project_is_trigger = { PROJECT = flag:mill }
+		}
+		reference = farmland
+	}
+	override_background = {
+		trigger = {
+			NOT = { scope:gen_tk_result ?= flag:explodes }
+			gen_tk_project_is_trigger = { PROJECT = flag:engine }
+		}
+		reference = army_camp
+	}
+	override_background = {
+		trigger = {
+			NOT = { scope:gen_tk_result ?= flag:explodes }
+			NOT = { gen_tk_project_is_trigger = { PROJECT = flag:mill } }
+			NOT = { gen_tk_project_is_trigger = { PROJECT = flag:engine } }
+		}
+		reference = study
+	}
+
+	left_portrait = {
+		character = root
+		triggered_animation = {
+			trigger = { scope:gen_tk_result ?= flag:masterwork }
+			animation = ecstasy
+		}
+		triggered_animation = {
+			trigger = { scope:gen_tk_result ?= flag:works }
+			animation = happiness
+		}
+		triggered_animation = {
+			trigger = { scope:gen_tk_result ?= flag:dud }
+			animation = disappointed
+		}
+		triggered_animation = {
+			trigger = { scope:gen_tk_at_lever ?= root }
+			animation = pain
+		}
+		animation = shock
+	}
+	right_portrait = {
+		trigger = { NOT = { scope:gen_tk_beneficiary = root } }
+		character = scope:gen_tk_beneficiary
+		triggered_animation = {
+			trigger = {
+				OR = {
+					scope:gen_tk_result ?= flag:masterwork
+					scope:gen_tk_result ?= flag:works
+				}
+			}
+			animation = admiration
+		}
+		animation = disapproval
+	}
+	lower_left_portrait = {
+		trigger = { exists = scope:gen_tk_apprentice_char }
+		character = scope:gen_tk_apprentice_char
+	}
+
+	trigger = { exists = scope:gen_tk_result }
+
+	immediate = {
+		gen_tk_roll_outcome_details_effect = yes
+	}
+
+	option = {
+		name = {
+			trigger = { scope:gen_tk_result ?= flag:masterwork }
+			text = gen_tinker.0350.a.masterwork
+		}
+		name = {
+			trigger = { scope:gen_tk_result ?= flag:works }
+			text = gen_tinker.0350.a.works
+		}
+		name = {
+			trigger = { scope:gen_tk_result ?= flag:dud }
+			text = gen_tinker.0350.a.dud
+		}
+		name = {
+			trigger = { scope:gen_tk_result ?= flag:explodes }
+			text = gen_tinker.0350.a.explodes
+		}
+		gen_tk_apply_outcome_effect = yes
+		gen_tk_clear_test_state_effect = yes
+		gen_tk_finish_project_effect = yes
+		ai_chance = {
+			base = 100
+		}
+	}
+}

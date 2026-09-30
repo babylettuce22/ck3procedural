@@ -1,0 +1,2743 @@
+﻿namespace = gen_great_work
+
+# The high elves' Great Work: the scenes of a maker's long labour. See 00_gen_great_work_triggers.txt for
+# the map of the whole system; main owns the story, the oath decision and every effect called here.
+#
+# This file owns:
+#   0010       The Oath — the kind of work is chosen (the decision has already paid for it)
+#   0100       hidden beat dispatcher, fired by the story every few years on its owner
+#   0101–0109  the beats of a life: the true material, a vision, the long doubt, a jealous kinsman, a
+#              rival's work, a demand to see it, the work and the hearth, a pupil, fire or war
+#   0510       The Work Is Finished — the maker is World-Weary and the work is far enough on
+#   0600       hidden succession dispatcher, fired on the dead maker's heir
+#   0601–0604  the maker's last wish, the heir's choice, the pupil's plea, a rival claim
+#
+# Every succession path ends in exactly one gen_gw_pass_work_effect or gen_gw_seal_unfinished_effect,
+# and only characters passing gen_gw_can_take_up_trigger may be handed the work. The last option of each
+# succession event is always available, so no path can stall.
+#
+# Beat modifiers: common/modifiers/00_gen_great_work_beat_modifiers.txt.
+
+
+# =====================================================================================
+#  0010: The Oath
+# =====================================================================================
+
+gen_great_work.0010 = {
+	type = character_event
+	title = gen_great_work.0010.t
+	desc = gen_great_work.0010.desc
+	theme = learning
+	override_background = { reference = throne_room }
+
+	left_portrait = {
+		character = root
+		animation = personality_honorable
+	}
+
+	# A jewel of captured light.
+	option = {
+		name = gen_great_work.0010.a
+		gen_gw_begin_effect = { KIND = flag:jewel }
+
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 30
+				has_trait = arrogant
+			}
+			modifier = {
+				add = 15
+				has_trait = greedy
+			}
+			modifier = {
+				add = 10
+				prestige_level >= 3
+			}
+		}
+	}
+
+	# A chronicle of the age.
+	option = {
+		name = gen_great_work.0010.b
+		gen_gw_begin_effect = { KIND = flag:chronicle }
+
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 20
+				learning >= 12
+			}
+			modifier = {
+				add = 20
+				learning >= 18
+			}
+			modifier = {
+				add = 20
+				has_trait = scholar
+			}
+			modifier = {
+				add = 10
+				has_trait = diligent
+			}
+		}
+	}
+
+	# The regalia of the line.
+	option = {
+		name = gen_great_work.0010.c
+		gen_gw_begin_effect = { KIND = flag:regalia }
+
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 30
+				has_trait = ambitious
+			}
+			modifier = {
+				add = 10
+				highest_held_title_tier >= tier_empire
+			}
+			modifier = {
+				add = 10
+				any_child = { count >= 2 }
+			}
+		}
+	}
+
+	# A harp of the first songs.
+	option = {
+		name = gen_great_work.0010.d
+		gen_gw_begin_effect = { KIND = flag:harp }
+
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 20
+				diplomacy >= 12
+			}
+			modifier = {
+				add = 20
+				diplomacy >= 18
+			}
+			modifier = {
+				add = 15
+				has_trait = gregarious
+			}
+		}
+	}
+
+	# A living lamp-tree.
+	option = {
+		name = gen_great_work.0010.e
+		gen_gw_begin_effect = { KIND = flag:lamp }
+
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 20
+				stewardship >= 12
+			}
+			modifier = {
+				add = 20
+				stewardship >= 18
+			}
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = patient
+					has_trait = content
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0100: the beat dispatcher (hidden)
+# =====================================================================================
+
+# On the story's owner. Finds who is around to take part, then picks one beat, weighted by the kind of
+# work, how far on it is, and what has happened lately (each beat leaves gen_gw_seen_01xx for 20 years).
+gen_great_work.0100 = {
+	type = character_event
+	hidden = yes
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+		if = {
+			limit = {
+				exists = scope:gw_story
+				is_alive = yes
+			}
+
+			# ---------------------------------------------------------------- who is around
+			# A dwarf lord who might sell the true material.
+			random_ruler = {
+				limit = {
+					has_trait = phenotype_stocky
+					is_adult = yes
+					highest_held_title_tier >= tier_county
+					NOT = { this = root }
+				}
+				save_scope_as = gw_dwarf
+			}
+			# A kinsman with a grievance: the grasping sort first, anyone grown otherwise.
+			random_close_family_member = {
+				limit = {
+					is_alive = yes
+					is_adult = yes
+					is_imprisoned = no
+					NOT = { this = root }
+					OR = {
+						NOT = { exists = scope:gw_pupil }
+						NOT = { this = scope:gw_pupil }
+					}
+					OR = {
+						has_trait = ambitious
+						has_trait = greedy
+						has_trait = arrogant
+					}
+				}
+				alternative_limit = {
+					is_alive = yes
+					is_adult = yes
+					is_imprisoned = no
+					NOT = { this = root }
+					OR = {
+						NOT = { exists = scope:gw_pupil }
+						NOT = { this = scope:gw_pupil }
+					}
+				}
+				save_scope_as = gw_kin
+			}
+			# A rival: another elf's Great Work if there is one, else an elf of standing and learning.
+			random_ruler = {
+				limit = {
+					NOT = { this = root }
+					gen_gw_has_work_trigger = yes
+				}
+				alternative_limit = {
+					NOT = { this = root }
+					NOT = { is_close_family_of = root }
+					is_adult = yes
+					gen_is_elf_phenotype_trigger = yes
+					highest_held_title_tier >= tier_duchy
+					learning >= 12
+				}
+				save_scope_as = gw_rival
+			}
+			# Someone who wants to see it: the liege, else a suitor for the unmarried, else a neighbour.
+			if = {
+				limit = {
+					is_independent_ruler = no
+					exists = liege
+					liege = { NOT = { this = root } }
+				}
+				liege = { save_scope_as = gw_asker }
+				save_scope_value_as = {
+					name = gw_asker_kind
+					value = flag:liege
+				}
+			}
+			else_if = {
+				limit = {
+					is_adult = yes
+					NOT = { exists = primary_spouse }
+					any_neighboring_top_liege_realm_owner = {
+						is_adult = yes
+						NOT = { exists = primary_spouse }
+					}
+				}
+				random_neighboring_top_liege_realm_owner = {
+					limit = {
+						is_adult = yes
+						NOT = { exists = primary_spouse }
+					}
+					save_scope_as = gw_asker
+				}
+				save_scope_value_as = {
+					name = gw_asker_kind
+					value = flag:suitor
+				}
+			}
+			else_if = {
+				limit = {
+					any_neighboring_top_liege_realm_owner = { is_adult = yes }
+				}
+				random_neighboring_top_liege_realm_owner = {
+					limit = { is_adult = yes }
+					save_scope_as = gw_asker
+				}
+				save_scope_value_as = {
+					name = gw_asker_kind
+					value = flag:neighbour
+				}
+			}
+			# The family the work keeps the maker from.
+			if = {
+				limit = { primary_spouse ?= { is_alive = yes } }
+				primary_spouse = { save_scope_as = gw_hearth }
+				save_scope_value_as = {
+					name = gw_hearth_kind
+					value = flag:spouse
+				}
+			}
+			else_if = {
+				limit = {
+					any_child = {
+						is_alive = yes
+						is_courtier_of = root
+					}
+				}
+				random_child = {
+					limit = {
+						is_alive = yes
+						is_courtier_of = root
+					}
+					save_scope_as = gw_hearth
+				}
+				save_scope_value_as = {
+					name = gw_hearth_kind
+					value = flag:child
+				}
+			}
+			# A pupil, while there is none: the sharpest mind at court (elves first), and the maker's own child.
+			if = {
+				limit = { NOT = { exists = scope:gw_pupil } }
+				ordered_courtier = {
+					limit = {
+						age >= 12
+						learning >= 8
+						is_imprisoned = no
+						NOT = { has_trait = incapable }
+					}
+					order_by = {
+						value = learning
+						if = {
+							limit = { gen_is_elf_phenotype_trigger = yes }
+							add = 10
+						}
+					}
+					save_scope_as = gw_candidate
+				}
+				if = {
+					limit = { exists = scope:gw_candidate }
+					ordered_child = {
+						limit = {
+							is_alive = yes
+							age >= 12
+							learning >= 6
+							is_imprisoned = no
+							NOT = { has_trait = incapable }
+							NOT = { this = scope:gw_candidate }
+						}
+						order_by = learning
+						save_scope_as = gw_child_candidate
+					}
+				}
+			}
+
+			# ---------------------------------------------------------------- which beat
+			random_list = {
+				# The true material: mostly early.
+				10 = {
+					modifier = {
+						add = 20
+						scope:gw_story.var:gw_progress < 25
+					}
+					modifier = {
+						factor = 0.3
+						scope:gw_story.var:gw_progress >= 60
+					}
+					modifier = {
+						add = 5
+						OR = {
+							scope:gw_story.var:gw_kind = flag:jewel
+							scope:gw_story.var:gw_kind = flag:regalia
+							scope:gw_story.var:gw_kind = flag:lamp
+						}
+					}
+					modifier = {
+						add = 5
+						exists = scope:gw_dwarf
+					}
+					modifier = {
+						factor = 0.05
+						has_character_flag = gen_gw_seen_0101
+					}
+					trigger_event = gen_great_work.0101
+				}
+				# A flash of vision: any time.
+				15 = {
+					modifier = {
+						add = 5
+						OR = {
+							scope:gw_story.var:gw_kind = flag:harp
+							scope:gw_story.var:gw_kind = flag:chronicle
+						}
+					}
+					modifier = {
+						factor = 0.1
+						has_character_flag = gen_gw_seen_0102
+					}
+					trigger_event = gen_great_work.0102
+				}
+				# The long doubt: the middle years.
+				5 = {
+					modifier = {
+						add = 20
+						scope:gw_story.var:gw_progress >= 25
+						scope:gw_story.var:gw_progress < 60
+					}
+					modifier = {
+						add = 10
+						scope:gw_story.var:gw_progress >= 60
+					}
+					modifier = {
+						factor = 0.05
+						has_character_flag = gen_gw_seen_0103
+					}
+					trigger_event = gen_great_work.0103
+				}
+				# A jealous kinsman.
+				12 = {
+					trigger = { exists = scope:gw_kin }
+					modifier = {
+						add = 10
+						scope:gw_story.var:gw_kind = flag:regalia
+					}
+					modifier = {
+						factor = 0.05
+						has_character_flag = gen_gw_seen_0104
+					}
+					trigger_event = gen_great_work.0104
+				}
+				# A rival's work.
+				8 = {
+					trigger = { exists = scope:gw_rival }
+					modifier = {
+						add = 7
+						scope:gw_rival = { gen_gw_has_work_trigger = yes }
+					}
+					modifier = {
+						add = 5
+						scope:gw_story.var:gw_kind = flag:jewel
+					}
+					modifier = {
+						factor = 0.05
+						has_character_flag = gen_gw_seen_0105
+					}
+					trigger_event = gen_great_work.0105
+				}
+				# A demand to see it: more as the work becomes something worth seeing.
+				10 = {
+					trigger = { exists = scope:gw_asker }
+					modifier = {
+						add = 8
+						scope:gw_story.var:gw_progress >= 50
+					}
+					modifier = {
+						factor = 0.05
+						has_character_flag = gen_gw_seen_0106
+					}
+					trigger_event = gen_great_work.0106
+				}
+				# The work and the hearth: the middle years.
+				12 = {
+					trigger = { exists = scope:gw_hearth }
+					modifier = {
+						add = 8
+						scope:gw_story.var:gw_progress >= 25
+						scope:gw_story.var:gw_progress < 75
+					}
+					modifier = {
+						factor = 0.05
+						has_character_flag = gen_gw_seen_0107
+					}
+					trigger_event = gen_great_work.0107
+				}
+				# A pupil: more pressing as the years go on.
+				5 = {
+					trigger = {
+						NOT = { exists = scope:gw_pupil }
+						exists = scope:gw_candidate
+					}
+					modifier = {
+						add = 20
+						scope:gw_story.var:gw_progress >= 25
+					}
+					modifier = {
+						add = 20
+						scope:gw_story.var:gw_progress >= 60
+					}
+					modifier = {
+						add = 10
+						scope:gw_story.var:gw_kind = flag:chronicle
+					}
+					modifier = {
+						factor = 0.1
+						has_character_flag = gen_gw_seen_0108
+					}
+					trigger_event = gen_great_work.0108
+				}
+				# Fire or war at the workshop.
+				6 = {
+					modifier = {
+						add = 20
+						is_at_war = yes
+					}
+					modifier = {
+						factor = 0.05
+						has_character_flag = gen_gw_seen_0109
+					}
+					trigger_event = gen_great_work.0109
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0101: The True Material
+# =====================================================================================
+
+gen_great_work.0101 = {
+	type = character_event
+	title = gen_great_work.0101.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0101.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0101.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0101.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0101.desc.harp
+			}
+			desc = gen_great_work.0101.desc.lamp
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:gw_dwarf }
+				desc = gen_great_work.0101.desc.dwarf
+			}
+			desc = gen_great_work.0101.desc.alone
+		}
+	}
+	theme = learning
+	override_background = { reference = wilderness_mountains }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = { exists = scope:gw_dwarf }
+		character = scope:gw_dwarf
+		animation = personality_rational
+	}
+
+	trigger = { gen_gw_has_work_trigger = yes }
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+		add_character_flag = {
+			flag = gen_gw_seen_0101
+			years = 20
+		}
+	}
+
+	# Buy it from the dwarves.
+	option = {
+		name = gen_great_work.0101.a
+		trigger = {
+			exists = scope:gw_dwarf
+			scope:gw_dwarf = { is_alive = yes }
+			gold >= medium_gold_value
+		}
+		show_as_unavailable = { exists = scope:gw_dwarf }
+		pay_short_term_gold = {
+			target = scope:gw_dwarf
+			gold = medium_gold_value
+		}
+		scope:gw_dwarf = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 15
+			}
+		}
+		add_character_modifier = {
+			modifier = gen_gw_beat_true_material_modifier
+			years = 5
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 12
+			QUALITY = 10
+		}
+
+		ai_chance = {
+			base = 30
+			ai_value_modifier = { ai_greed = -0.5 }
+			modifier = {
+				factor = 0.3
+				has_trait = greedy
+			}
+			modifier = {
+				factor = 0
+				gold < medium_gold_value
+			}
+		}
+	}
+
+	# Go down into the deep places yourself.
+	option = {
+		name = gen_great_work.0101.b
+		random_list = {
+			60 = {
+				desc = gen_great_work.0101.b.found
+				modifier = {
+					add = 20
+					has_trait = brave
+				}
+				modifier = {
+					add = 10
+					prowess >= 12
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_great_work.0101.b.found.toast
+					left_icon = root
+					custom_tooltip = gen_great_work.0101.b.found.tt
+					add_prestige = minor_prestige_gain
+					add_character_modifier = {
+						modifier = gen_gw_beat_true_material_modifier
+						years = 5
+					}
+				}
+				gen_gw_progress_effect = {
+					PROGRESS = 12
+					QUALITY = 15
+				}
+			}
+			40 = {
+				desc = gen_great_work.0101.b.toll
+				modifier = {
+					add = 20
+					has_trait = craven
+				}
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_great_work.0101.b.toll.toast
+					left_icon = root
+					custom_tooltip = gen_great_work.0101.b.toll.tt
+					add_stress = medium_stress_gain
+				}
+				gen_gw_progress_effect = {
+					PROGRESS = 6
+					QUALITY = 5
+				}
+			}
+		}
+		stress_impact = {
+			craven = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_boldness = 0.5 }
+			modifier = {
+				add = 20
+				has_trait = brave
+			}
+			modifier = {
+				factor = 0.2
+				has_trait = craven
+			}
+		}
+	}
+
+	# Make do with the best there is.
+	option = {
+		name = gen_great_work.0101.c
+		gen_gw_progress_effect = {
+			PROGRESS = 10
+			QUALITY = -5
+		}
+		stress_impact = {
+			arrogant = minor_stress_impact_gain
+			diligent = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 20
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = lazy
+					has_trait = content
+					has_trait = greedy
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0102: A Flash of Vision
+# =====================================================================================
+
+gen_great_work.0102 = {
+	type = character_event
+	title = gen_great_work.0102.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0102.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0102.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0102.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0102.desc.harp
+			}
+			desc = gen_great_work.0102.desc.lamp
+		}
+		desc = gen_great_work.0102.desc.end
+	}
+	theme = learning
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = ecstasy
+	}
+
+	trigger = { gen_gw_has_work_trigger = yes }
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+		add_character_flag = {
+			flag = gen_gw_seen_0102
+			years = 20
+		}
+	}
+
+	# Work until it is caught.
+	option = {
+		name = gen_great_work.0102.a
+		add_stress = minor_stress_gain
+		add_character_modifier = {
+			modifier = gen_gw_beat_caught_vision_modifier
+			years = 3
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 15
+			QUALITY = 10
+		}
+
+		ai_chance = {
+			base = 30
+			ai_value_modifier = { ai_energy = 0.5 }
+			modifier = {
+				add = 30
+				has_trait = diligent
+			}
+			modifier = {
+				factor = 0.3
+				has_trait = lazy
+			}
+		}
+	}
+
+	# Write down what you can, and sleep.
+	option = {
+		name = gen_great_work.0102.b
+		add_stress = minor_stress_loss
+		gen_gw_progress_effect = {
+			PROGRESS = 8
+			QUALITY = 5
+		}
+
+		ai_chance = {
+			base = 25
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = lazy
+					has_trait = calm
+					has_trait = content
+				}
+			}
+		}
+	}
+
+	# Tell the court.
+	option = {
+		name = gen_great_work.0102.c
+		add_prestige = minor_prestige_gain
+		gen_gw_progress_effect = {
+			PROGRESS = 6
+			QUALITY = 0
+		}
+
+		ai_chance = {
+			base = 15
+			ai_value_modifier = { ai_sociability = 0.5 }
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = gregarious
+					has_trait = arrogant
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0103: The Long Doubt
+# =====================================================================================
+
+gen_great_work.0103 = {
+	type = character_event
+	title = gen_great_work.0103.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0103.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0103.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0103.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0103.desc.harp
+			}
+			desc = gen_great_work.0103.desc.lamp
+		}
+		desc = gen_great_work.0103.desc.end
+	}
+	theme = learning
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+
+	trigger = { gen_gw_has_work_trigger = yes }
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+		add_character_flag = {
+			flag = gen_gw_seen_0103
+			years = 20
+		}
+	}
+
+	# Break what is wrong and do it again.
+	option = {
+		name = gen_great_work.0103.a
+		add_stress = minor_stress_gain
+		add_character_modifier = {
+			modifier = gen_gw_beat_doubt_answered_modifier
+			years = 3
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 3
+			QUALITY = 15
+		}
+
+		ai_chance = {
+			base = 25
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = diligent
+					has_trait = ambitious
+					has_trait = arrogant
+				}
+			}
+			modifier = {
+				factor = 0.3
+				has_trait = lazy
+			}
+		}
+	}
+
+	# Set it aside for a season.
+	option = {
+		name = gen_great_work.0103.b
+		add_stress = medium_stress_loss
+		gen_gw_progress_effect = {
+			PROGRESS = 4
+			QUALITY = 0
+		}
+
+		ai_chance = {
+			base = 25
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = calm
+					has_trait = content
+				}
+			}
+			modifier = {
+				add = 20
+				stress_level >= 1
+			}
+		}
+	}
+
+	# Keep working, doubt and all.
+	option = {
+		name = gen_great_work.0103.c
+		add_character_modifier = {
+			modifier = gen_gw_beat_long_doubt_modifier
+			years = 3
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 10
+			QUALITY = -5
+		}
+
+		ai_chance = {
+			base = 25
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = stubborn
+					has_trait = patient
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0104: A Jealous Kinsman
+# =====================================================================================
+
+gen_great_work.0104 = {
+	type = character_event
+	title = gen_great_work.0104.t
+	desc = {
+		desc = gen_great_work.0104.desc.intro
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0104.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0104.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0104.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0104.desc.harp
+			}
+			desc = gen_great_work.0104.desc.lamp
+		}
+	}
+	theme = family
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = disapproval
+	}
+	right_portrait = {
+		character = scope:gw_kin
+		animation = anger
+	}
+
+	trigger = {
+		gen_gw_has_work_trigger = yes
+		exists = scope:gw_kin
+		scope:gw_kin = { is_alive = yes }
+	}
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+		add_character_flag = {
+			flag = gen_gw_seen_0104
+			years = 20
+		}
+	}
+
+	# Give them a part in the work.
+	option = {
+		name = gen_great_work.0104.a
+		scope:gw_kin = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 20
+			}
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 8
+			QUALITY = -5
+		}
+		stress_impact = {
+			arrogant = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 25
+			ai_value_modifier = { ai_compassion = 0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = compassionate
+					has_trait = gregarious
+					has_trait = humble
+				}
+			}
+		}
+	}
+
+	# The work is yours. They may leave.
+	option = {
+		name = gen_great_work.0104.b
+		scope:gw_kin = {
+			add_opinion = {
+				target = root
+				modifier = angry_opinion
+				opinion = -20
+			}
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 10
+			QUALITY = 0
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 20
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = arrogant
+					has_trait = stubborn
+					has_trait = callous
+				}
+			}
+		}
+	}
+
+	# Give them gold, and some peace.
+	option = {
+		name = gen_great_work.0104.c
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+		pay_short_term_gold = {
+			target = scope:gw_kin
+			gold = minor_gold_value
+		}
+		scope:gw_kin = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 15
+			}
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 8
+			QUALITY = 0
+		}
+		stress_impact = {
+			greedy = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_greed = -0.5 }
+			modifier = {
+				add = 25
+				has_trait = generous
+			}
+			modifier = {
+				factor = 0.2
+				has_trait = greedy
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0105: A Rival's Work
+# =====================================================================================
+
+gen_great_work.0105 = {
+	type = character_event
+	title = gen_great_work.0105.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_rival = { gen_gw_has_work_trigger = yes } }
+				desc = gen_great_work.0105.desc.sworn
+			}
+			desc = gen_great_work.0105.desc.boast
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0105.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0105.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0105.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0105.desc.harp
+			}
+			desc = gen_great_work.0105.desc.lamp
+		}
+	}
+	theme = learning
+	override_background = { reference = throne_room }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:gw_rival
+		animation = schadenfreude
+	}
+
+	trigger = {
+		gen_gw_has_work_trigger = yes
+		exists = scope:gw_rival
+		scope:gw_rival = { is_alive = yes }
+	}
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+		add_character_flag = {
+			flag = gen_gw_seen_0105
+			years = 20
+		}
+	}
+
+	# Go and see it, and say something kind.
+	option = {
+		name = gen_great_work.0105.a
+		scope:gw_rival = {
+			add_opinion = {
+				target = root
+				modifier = respect_opinion
+				opinion = 15
+			}
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 5
+			QUALITY = 10
+		}
+		stress_impact = {
+			arrogant = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 25
+			ai_value_modifier = { ai_honor = 0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = humble
+					has_trait = honest
+					has_trait = gregarious
+				}
+			}
+		}
+	}
+
+	# Work harder.
+	option = {
+		name = gen_great_work.0105.b
+		add_stress = minor_stress_gain
+		add_character_modifier = {
+			modifier = gen_gw_beat_spurred_by_rival_modifier
+			years = 5
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 12
+			QUALITY = 5
+		}
+
+		ai_chance = {
+			base = 25
+			ai_value_modifier = { ai_energy = 0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = ambitious
+					has_trait = diligent
+				}
+			}
+			modifier = {
+				factor = 0.3
+				has_trait = lazy
+			}
+		}
+	}
+
+	# Let the court know what you think of it.
+	option = {
+		name = gen_great_work.0105.c
+		add_prestige = minor_prestige_gain
+		scope:gw_rival = {
+			add_opinion = {
+				target = root
+				modifier = disrespect_opinion
+				opinion = -20
+			}
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 6
+			QUALITY = 0
+		}
+		stress_impact = {
+			humble = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 15
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = arrogant
+					has_trait = callous
+					has_trait = vengeful
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0106: A Demand to See It
+# =====================================================================================
+
+gen_great_work.0106 = {
+	type = character_event
+	title = gen_great_work.0106.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_asker_kind ?= flag:liege }
+				desc = gen_great_work.0106.desc.liege
+			}
+			triggered_desc = {
+				trigger = { scope:gw_asker_kind ?= flag:suitor }
+				desc = gen_great_work.0106.desc.suitor
+			}
+			desc = gen_great_work.0106.desc.neighbour
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0106.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0106.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0106.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0106.desc.harp
+			}
+			desc = gen_great_work.0106.desc.lamp
+		}
+	}
+	theme = diplomacy
+	override_background = { reference = throne_room }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:gw_asker
+		animation = interested
+	}
+
+	trigger = {
+		gen_gw_has_work_trigger = yes
+		exists = scope:gw_asker
+		scope:gw_asker = { is_alive = yes }
+	}
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+		add_character_flag = {
+			flag = gen_gw_seen_0106
+			years = 20
+		}
+	}
+
+	# Show it, then.
+	option = {
+		name = gen_great_work.0106.a
+		scope:gw_asker = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 20
+			}
+		}
+		add_character_modifier = {
+			modifier = gen_gw_beat_shown_to_the_great_modifier
+			years = 3
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 4
+			QUALITY = -5
+		}
+
+		ai_chance = {
+			base = 25
+			ai_value_modifier = { ai_sociability = 0.5 }
+			modifier = {
+				add = 25
+				scope:gw_asker_kind ?= flag:liege
+			}
+			modifier = {
+				add = 15
+				has_trait = gregarious
+			}
+		}
+	}
+
+	# No one sees it until it is done.
+	option = {
+		name = gen_great_work.0106.b
+		scope:gw_asker = {
+			add_opinion = {
+				target = root
+				modifier = disappointed_opinion
+				opinion = -15
+			}
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 10
+			QUALITY = 5
+		}
+
+		ai_chance = {
+			base = 20
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = stubborn
+					has_trait = arrogant
+					has_trait = shy
+					has_trait = paranoid
+				}
+			}
+		}
+	}
+
+	# Make them something else, and send that.
+	option = {
+		name = gen_great_work.0106.c
+		trigger = { gold >= minor_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = minor_gold_value
+		scope:gw_asker = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 10
+			}
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 6
+			QUALITY = 0
+		}
+
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_greed = -0.25 }
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = deceitful
+					has_trait = generous
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0107: The Work and the Hearth
+# =====================================================================================
+
+gen_great_work.0107 = {
+	type = character_event
+	title = gen_great_work.0107.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_hearth_kind ?= flag:spouse }
+				desc = gen_great_work.0107.desc.spouse
+			}
+			desc = gen_great_work.0107.desc.child
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0107.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0107.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0107.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0107.desc.harp
+			}
+			desc = gen_great_work.0107.desc.lamp
+		}
+	}
+	theme = family
+	override_background = { reference = sitting_room }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:gw_hearth
+		animation = sadness
+	}
+
+	trigger = {
+		gen_gw_has_work_trigger = yes
+		exists = scope:gw_hearth
+		scope:gw_hearth = { is_alive = yes }
+	}
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+		add_character_flag = {
+			flag = gen_gw_seen_0107
+			years = 20
+		}
+	}
+
+	# Put down the tools for a season.
+	option = {
+		name = gen_great_work.0107.a
+		scope:gw_hearth = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 15
+			}
+		}
+		add_character_modifier = {
+			modifier = gen_gw_beat_back_at_hearth_modifier
+			years = 3
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 3
+			QUALITY = 0
+		}
+
+		ai_chance = {
+			base = 25
+			ai_value_modifier = { ai_compassion = 0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = compassionate
+					has_trait = gregarious
+					has_trait = content
+				}
+			}
+		}
+	}
+
+	# The work comes first.
+	option = {
+		name = gen_great_work.0107.b
+		scope:gw_hearth = {
+			add_opinion = {
+				target = root
+				modifier = hurt_opinion
+				opinion = -15
+			}
+		}
+		add_character_modifier = {
+			modifier = gen_gw_beat_shut_in_workshop_modifier
+			years = 5
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 14
+			QUALITY = 5
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_compassion = -0.5 }
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = diligent
+					has_trait = ambitious
+					has_trait = callous
+				}
+			}
+		}
+	}
+
+	# Bring them into the workshop.
+	option = {
+		name = gen_great_work.0107.c
+		scope:gw_hearth = {
+			add_opinion = {
+				target = root
+				modifier = pleased_opinion
+				opinion = 10
+			}
+			add_learning_skill = 1
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 7
+			QUALITY = -3
+		}
+
+		ai_chance = {
+			base = 20
+			modifier = {
+				add = 15
+				has_trait = patient
+			}
+			modifier = {
+				add = 10
+				scope:gw_hearth_kind ?= flag:child
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0108: A Pupil
+# =====================================================================================
+
+# The only way the work gets a pupil (gen_gw_set_pupil_effect).
+gen_great_work.0108 = {
+	type = character_event
+	title = gen_great_work.0108.t
+	desc = {
+		desc = gen_great_work.0108.desc.intro
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0108.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0108.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0108.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0108.desc.harp
+			}
+			desc = gen_great_work.0108.desc.lamp
+		}
+		desc = gen_great_work.0108.desc.candidate
+		triggered_desc = {
+			trigger = { exists = scope:gw_child_candidate }
+			desc = gen_great_work.0108.desc.child
+		}
+	}
+	theme = learning
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:gw_candidate
+		animation = interested
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:gw_child_candidate }
+		character = scope:gw_child_candidate
+	}
+
+	trigger = {
+		gen_gw_has_work_trigger = yes
+		exists = scope:gw_candidate
+		scope:gw_candidate = { is_alive = yes }
+	}
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+		add_character_flag = {
+			flag = gen_gw_seen_0108
+			years = 20
+		}
+	}
+
+	# Take the sharp one.
+	option = {
+		name = gen_great_work.0108.a
+		gen_gw_set_pupil_effect = { PUPIL = scope:gw_candidate }
+		custom_tooltip = gen_great_work.0108.pupil.tt
+		scope:gw_candidate = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 25
+			}
+			add_character_modifier = {
+				modifier = gen_gw_beat_pupil_modifier
+				years = 10
+			}
+		}
+		add_character_modifier = {
+			modifier = gen_gw_beat_master_modifier
+			years = 10
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 5
+			QUALITY = 0
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = {
+				add = 20
+				scope:gw_candidate = { learning >= 14 }
+			}
+			modifier = {
+				add = 20
+				scope:gw_candidate = { gen_is_elf_phenotype_trigger = yes }
+			}
+		}
+	}
+
+	# Teach your own child.
+	option = {
+		name = gen_great_work.0108.b
+		trigger = {
+			exists = scope:gw_child_candidate
+			scope:gw_child_candidate = { is_alive = yes }
+		}
+		gen_gw_set_pupil_effect = { PUPIL = scope:gw_child_candidate }
+		custom_tooltip = gen_great_work.0108.pupil_child.tt
+		scope:gw_child_candidate = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 25
+			}
+			add_character_modifier = {
+				modifier = gen_gw_beat_pupil_modifier
+				years = 10
+			}
+		}
+		add_character_modifier = {
+			modifier = gen_gw_beat_master_modifier
+			years = 10
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 5
+			QUALITY = -3
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = {
+				add = 20
+				has_trait = ambitious
+			}
+			modifier = {
+				add = 20
+				scope:gw_child_candidate = { gen_is_elf_phenotype_trigger = yes }
+			}
+			modifier = {
+				factor = 0.3
+				scope:gw_child_candidate = { NOT = { gen_is_elf_phenotype_trigger = yes } }
+			}
+		}
+	}
+
+	# No one is ready yet.
+	option = {
+		name = gen_great_work.0108.c
+		gen_gw_progress_effect = {
+			PROGRESS = 8
+			QUALITY = 0
+		}
+
+		ai_chance = {
+			base = 15
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = arrogant
+					has_trait = paranoid
+					has_trait = shy
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0109: Fire in the Workshop / The War Comes Close
+# =====================================================================================
+
+gen_great_work.0109 = {
+	type = character_event
+	title = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { is_at_war = yes }
+				desc = gen_great_work.0109.t.war
+			}
+			desc = gen_great_work.0109.t.fire
+		}
+	}
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { is_at_war = yes }
+				desc = gen_great_work.0109.desc.war
+			}
+			desc = gen_great_work.0109.desc.fire
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0109.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0109.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0109.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0109.desc.harp
+			}
+			desc = gen_great_work.0109.desc.lamp
+		}
+	}
+	theme = war
+	override_background = {
+		trigger = { is_at_war = yes }
+		reference = army_camp
+	}
+	override_background = {
+		trigger = { is_at_war = no }
+		reference = burning_building
+	}
+
+	left_portrait = {
+		character = root
+		animation = fear
+	}
+
+	trigger = { gen_gw_has_work_trigger = yes }
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+		add_character_flag = {
+			flag = gen_gw_seen_0109
+			years = 20
+		}
+	}
+
+	# Save the work with your own hands.
+	option = {
+		name = gen_great_work.0109.a
+		add_stress = minor_stress_gain
+		add_character_modifier = {
+			modifier = gen_gw_beat_burned_hands_modifier
+			years = 3
+		}
+		gen_gw_progress_effect = {
+			PROGRESS = 2
+			QUALITY = 0
+		}
+
+		ai_chance = {
+			base = 25
+			ai_value_modifier = { ai_boldness = 0.5 }
+			modifier = {
+				add = 20
+				has_trait = brave
+			}
+			modifier = {
+				factor = 0.2
+				has_trait = craven
+			}
+		}
+	}
+
+	# The people first; the work can be made again.
+	option = {
+		name = gen_great_work.0109.b
+		add_prestige = minor_prestige_gain
+		gen_gw_progress_effect = {
+			PROGRESS = -6
+			QUALITY = 0
+		}
+		stress_impact = {
+			callous = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 25
+			ai_value_modifier = { ai_compassion = 0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = compassionate
+					has_trait = just
+				}
+			}
+		}
+	}
+
+	# Pay to protect it.
+	option = {
+		name = {
+			trigger = { is_at_war = yes }
+			text = gen_great_work.0109.c.war
+		}
+		name = {
+			trigger = { is_at_war = no }
+			text = gen_great_work.0109.c.fire
+		}
+		trigger = { gold >= medium_gold_value }
+		show_as_unavailable = { always = yes }
+		remove_short_term_gold = medium_gold_value
+		gen_gw_progress_effect = {
+			PROGRESS = 3
+			QUALITY = 3
+		}
+
+		ai_chance = {
+			base = 20
+			ai_value_modifier = { ai_greed = -0.5 }
+			modifier = {
+				factor = 0.3
+				has_trait = greedy
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0510: The Work Is Finished
+# =====================================================================================
+
+# Fired by the story on its owner: World-Weary, and the work far enough on. Every option ends in
+# gen_gw_complete_effect exactly once; they differ in who is honoured.
+gen_great_work.0510 = {
+	type = character_event
+	title = gen_great_work.0510.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0510.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0510.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0510.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0510.desc.harp
+			}
+			desc = gen_great_work.0510.desc.lamp
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					exists = scope:gw_story.var:gw_hands
+					scope:gw_story.var:gw_hands > 1
+				}
+				desc = gen_great_work.0510.desc.hands
+			}
+			desc = gen_great_work.0510.desc.one_hand
+		}
+		desc = gen_great_work.0510.desc.end
+	}
+	theme = learning
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = personality_content
+	}
+	right_portrait = {
+		trigger = { exists = scope:gw_pupil }
+		character = scope:gw_pupil
+		animation = admiration
+	}
+
+	trigger = { gen_gw_has_work_trigger = yes }
+
+	immediate = {
+		gen_gw_save_story_effect = yes
+	}
+
+	# Unveil it before the whole court.
+	option = {
+		name = gen_great_work.0510.a
+		add_prestige = medium_prestige_gain
+		gen_gw_complete_effect = yes
+
+		ai_chance = {
+			base = 30
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = arrogant
+					has_trait = gregarious
+				}
+			}
+		}
+	}
+
+	# Let the pupil unveil it.
+	option = {
+		name = gen_great_work.0510.b
+		trigger = {
+			exists = scope:gw_pupil
+			scope:gw_pupil = { is_alive = yes }
+		}
+		scope:gw_pupil = {
+			add_prestige = minor_prestige_gain
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 30
+			}
+		}
+		gen_gw_complete_effect = yes
+
+		ai_chance = {
+			base = 30
+			ai_value_modifier = { ai_compassion = 0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = humble
+					has_trait = generous
+				}
+			}
+		}
+	}
+
+	# Dedicate it to the house and those who came before.
+	option = {
+		name = gen_great_work.0510.c
+		trigger = { exists = dynasty }
+		dynasty = { add_dynasty_prestige = minor_dynasty_prestige_gain }
+		gen_gw_complete_effect = yes
+
+		ai_chance = {
+			base = 20
+			modifier = {
+				add = 25
+				has_trait = ambitious
+			}
+			modifier = {
+				add = 15
+				scope:gw_story.var:gw_kind ?= flag:regalia
+			}
+		}
+	}
+
+	# Show it to no one yet. Sit with it a while.
+	option = {
+		name = gen_great_work.0510.d
+		add_stress = major_stress_loss
+		gen_gw_complete_effect = yes
+
+		ai_chance = {
+			base = 15
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = shy
+					has_trait = content
+				}
+			}
+			modifier = {
+				add = 20
+				stress_level >= 1
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0600: the succession dispatcher (hidden)
+# =====================================================================================
+
+# On the dead maker's heir, with scope:gw_story, scope:gw_dead_maker, scope:gw_pupil (if alive) and
+# scope:gw_heir saved by the story. Looks for someone of the family who wants the work, then opens the
+# last wish (if the maker named a pupil who could carry it) or the heir's choice.
+gen_great_work.0600 = {
+	type = character_event
+	hidden = yes
+
+	immediate = {
+		if = {
+			limit = { exists = scope:gw_story }
+			# For the toasts others receive from this heir's choices.
+			save_scope_as = gw_decider
+
+			# The pupil, if the story did not pass one.
+			if = {
+				limit = {
+					NOT = { exists = scope:gw_pupil }
+					scope:gw_story.var:gw_pupil ?= { is_alive = yes }
+				}
+				scope:gw_story.var:gw_pupil = { save_scope_as = gw_pupil }
+			}
+
+			# Family who might want it: the maker's other children, and, when the heir is the maker's
+			# child, the heir's other parent (as a rule the maker's spouse). The holder may be the pupil
+			# rather than the heir (main's on_owner_death), whose parents are nothing to the work.
+			scope:gw_dead_maker ?= {
+				every_child = {
+					limit = { is_alive = yes }
+					add_to_temporary_list = gw_kin_list
+				}
+			}
+			if = {
+				limit = { is_child_of = scope:gw_dead_maker }
+				mother ?= {
+					if = {
+						limit = {
+							is_alive = yes
+							NOT = { this = scope:gw_dead_maker }
+						}
+						add_to_temporary_list = gw_kin_list
+					}
+				}
+				father ?= {
+					if = {
+						limit = {
+							is_alive = yes
+							NOT = { this = scope:gw_dead_maker }
+						}
+						add_to_temporary_list = gw_kin_list
+					}
+				}
+			}
+			ordered_in_list = {
+				list = gw_kin_list
+				limit = {
+					gen_gw_can_take_up_trigger = yes
+					NOT = { this = root }
+					OR = {
+						NOT = { exists = scope:gw_pupil }
+						NOT = { this = scope:gw_pupil }
+					}
+				}
+				order_by = {
+					value = learning
+					if = {
+						limit = {
+							OR = {
+								has_trait = ambitious
+								has_trait = diligent
+							}
+						}
+						add = 10
+					}
+				}
+				save_scope_as = gw_claimant
+			}
+
+			if = {
+				limit = {
+					exists = scope:gw_pupil
+					scope:gw_pupil = {
+						gen_gw_can_take_up_trigger = yes
+						NOT = { this = root }
+					}
+				}
+				trigger_event = gen_great_work.0601
+			}
+			else = {
+				trigger_event = gen_great_work.0602
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0601: The Maker's Last Wish
+# =====================================================================================
+
+# The maker named a pupil, and asked in writing that the work go to them.
+gen_great_work.0601 = {
+	type = character_event
+	title = gen_great_work.0601.t
+	desc = {
+		desc = gen_great_work.0601.desc.intro
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0601.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0601.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0601.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0601.desc.harp
+			}
+			desc = gen_great_work.0601.desc.lamp
+		}
+		desc = gen_great_work.0601.desc.end
+	}
+	theme = death
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = grief
+	}
+	right_portrait = {
+		character = scope:gw_pupil
+		animation = worry
+	}
+
+	trigger = { exists = scope:gw_story }
+
+	# Honour the wish.
+	option = {
+		name = gen_great_work.0601.a
+		trigger = {
+			exists = scope:gw_pupil
+			scope:gw_pupil = {
+				gen_gw_can_take_up_trigger = yes
+				NOT = { this = root }
+			}
+		}
+		scope:gw_pupil = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 30
+			}
+		}
+		gen_gw_pass_work_effect = { TO = scope:gw_pupil }
+
+		ai_chance = {
+			base = 50
+			ai_value_modifier = { ai_honor = 0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = just
+					has_trait = honest
+					has_trait = compassionate
+				}
+			}
+		}
+	}
+
+	# Decide it yourself.
+	option = {
+		name = gen_great_work.0601.b
+		trigger_event = gen_great_work.0602
+
+		ai_chance = {
+			base = 20
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = ambitious
+					has_trait = greedy
+					has_trait = arrogant
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0602: The Unfinished Work (the heir's choice)
+# =====================================================================================
+
+gen_great_work.0602 = {
+	type = character_event
+	title = gen_great_work.0602.t
+	desc = {
+		desc = gen_great_work.0602.desc.intro
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0602.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0602.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0602.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0602.desc.harp
+			}
+			desc = gen_great_work.0602.desc.lamp
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_pupil ?= root }
+				desc = gen_great_work.0602.desc.you_pupil
+			}
+			triggered_desc = {
+				trigger = {
+					exists = scope:gw_pupil
+					scope:gw_pupil = { is_alive = yes }
+				}
+				desc = gen_great_work.0602.desc.pupil
+			}
+			desc = gen_great_work.0602.desc.no_pupil
+		}
+		triggered_desc = {
+			trigger = { exists = scope:gw_claimant }
+			desc = gen_great_work.0602.desc.claimant
+		}
+		triggered_desc = {
+			trigger = {
+				NOT = {
+					is_adult = yes
+					gen_is_elf_phenotype_trigger = yes
+					is_imprisoned = no
+					NOT = { has_trait = incapable }
+					NOT = {
+						any_owned_story = {
+							type = story_gen_great_work
+							NOT = { this = scope:gw_story }
+						}
+					}
+				}
+			}
+			desc = gen_great_work.0602.desc.not_you
+		}
+	}
+	theme = death
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		trigger = {
+			exists = scope:gw_pupil
+			NOT = { scope:gw_pupil = root }
+		}
+		character = scope:gw_pupil
+		animation = beg
+	}
+	lower_right_portrait = {
+		trigger = { exists = scope:gw_claimant }
+		character = scope:gw_claimant
+	}
+
+	trigger = { exists = scope:gw_story }
+
+	# Take it up yourself. A claimant in the family speaks up first (0604).
+	# The heir already holds the story while the chain runs (main's on_owner_death), so this is
+	# gen_gw_can_take_up_trigger with this one story excepted.
+	option = {
+		name = gen_great_work.0602.a
+		trigger = {
+			is_adult = yes
+			gen_is_elf_phenotype_trigger = yes
+			is_imprisoned = no
+			NOT = { has_trait = incapable }
+			NOT = {
+				any_owned_story = {
+					type = story_gen_great_work
+					NOT = { this = scope:gw_story }
+				}
+			}
+		}
+		if = {
+			limit = {
+				exists = scope:gw_claimant
+				scope:gw_claimant = { gen_gw_can_take_up_trigger = yes }
+			}
+			trigger_event = gen_great_work.0604
+		}
+		else = {
+			gen_gw_pass_work_effect = { TO = root }
+		}
+
+		ai_chance = {
+			base = 30
+			modifier = {
+				add = 20
+				learning >= 12
+			}
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = diligent
+					has_trait = ambitious
+				}
+			}
+			modifier = {
+				factor = 0.3
+				has_trait = lazy
+			}
+			modifier = {
+				factor = 0.7
+				exists = scope:gw_pupil
+				NOT = { scope:gw_pupil = root }
+			}
+		}
+	}
+
+	# Give it to the pupil.
+	option = {
+		name = gen_great_work.0602.b
+		trigger = {
+			exists = scope:gw_pupil
+			scope:gw_pupil = {
+				gen_gw_can_take_up_trigger = yes
+				NOT = { this = root }
+			}
+		}
+		scope:gw_pupil = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 20
+			}
+		}
+		gen_gw_pass_work_effect = { TO = scope:gw_pupil }
+
+		ai_chance = {
+			base = 30
+			ai_value_modifier = { ai_honor = 0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = just
+					has_trait = humble
+				}
+			}
+		}
+	}
+
+	# Give it to the claimant.
+	option = {
+		name = gen_great_work.0602.c
+		trigger = {
+			exists = scope:gw_claimant
+			scope:gw_claimant = { gen_gw_can_take_up_trigger = yes }
+		}
+		scope:gw_claimant = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 20
+			}
+		}
+		gen_gw_pass_work_effect = { TO = scope:gw_claimant }
+
+		ai_chance = {
+			base = 15
+			modifier = {
+				add = 15
+				scope:gw_claimant = { learning >= 12 }
+			}
+			modifier = {
+				add = 15
+				scope:gw_claimant = { opinion = { target = root value >= 30 } }
+			}
+		}
+	}
+
+	# Seal it away. A living pupil will not let that pass unspoken (0603).
+	option = {
+		name = gen_great_work.0602.d
+		if = {
+			limit = {
+				exists = scope:gw_pupil
+				scope:gw_pupil = {
+					gen_gw_can_take_up_trigger = yes
+					NOT = { this = root }
+				}
+			}
+			trigger_event = gen_great_work.0603
+		}
+		else = {
+			gen_gw_seal_unfinished_effect = { HOLDER = root }
+		}
+
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = paranoid
+					has_trait = greedy
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0603: The Pupil's Plea
+# =====================================================================================
+
+gen_great_work.0603 = {
+	type = character_event
+	title = gen_great_work.0603.t
+	desc = {
+		desc = gen_great_work.0603.desc.intro
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:jewel }
+				desc = gen_great_work.0603.desc.jewel
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:chronicle }
+				desc = gen_great_work.0603.desc.chronicle
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:regalia }
+				desc = gen_great_work.0603.desc.regalia
+			}
+			triggered_desc = {
+				trigger = { scope:gw_story.var:gw_kind ?= flag:harp }
+				desc = gen_great_work.0603.desc.harp
+			}
+			desc = gen_great_work.0603.desc.lamp
+		}
+		desc = gen_great_work.0603.desc.end
+	}
+	theme = death
+	override_background = { reference = corridor_day }
+
+	left_portrait = {
+		character = root
+		animation = disapproval
+	}
+	right_portrait = {
+		character = scope:gw_pupil
+		animation = beg
+	}
+
+	trigger = { exists = scope:gw_story }
+
+	# Relent.
+	option = {
+		name = gen_great_work.0603.a
+		trigger = {
+			exists = scope:gw_pupil
+			scope:gw_pupil = {
+				gen_gw_can_take_up_trigger = yes
+				NOT = { this = root }
+			}
+		}
+		scope:gw_pupil = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 30
+			}
+		}
+		gen_gw_pass_work_effect = { TO = scope:gw_pupil }
+
+		ai_chance = {
+			base = 40
+			ai_value_modifier = { ai_compassion = 0.5 }
+			modifier = {
+				add = 20
+				OR = {
+					has_trait = compassionate
+					has_trait = forgiving
+					has_trait = fickle
+				}
+			}
+		}
+	}
+
+	# Refuse.
+	option = {
+		name = gen_great_work.0603.b
+		if = {
+			limit = { scope:gw_pupil ?= { is_alive = yes } }
+			scope:gw_pupil = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_great_work.0603.b.toast
+					left_icon = root
+					right_icon = scope:gw_pupil
+					custom_tooltip = gen_great_work.0603.b.toast.tt
+					add_opinion = {
+						target = root
+						modifier = hurt_opinion
+						opinion = -25
+					}
+				}
+			}
+		}
+		gen_gw_seal_unfinished_effect = { HOLDER = root }
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+
+		ai_chance = {
+			base = 20
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = stubborn
+					has_trait = callous
+					has_trait = paranoid
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0604: A Rival Claim
+# =====================================================================================
+
+# The heir said they would take the work up; one of the family wants it instead.
+gen_great_work.0604 = {
+	type = character_event
+	title = gen_great_work.0604.t
+	desc = {
+		desc = gen_great_work.0604.desc.intro
+		first_valid = {
+			triggered_desc = {
+				trigger = { is_landed = yes }
+				desc = gen_great_work.0604.desc.landed
+			}
+			desc = gen_great_work.0604.desc.unlanded
+		}
+	}
+	theme = family
+	override_background = { reference = study }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:gw_claimant
+		animation = anger
+	}
+
+	trigger = { exists = scope:gw_story }
+
+	# It is yours to carry.
+	option = {
+		name = gen_great_work.0604.a
+		# As 0602.a: the heir holds this story while the chain runs.
+		trigger = {
+			is_adult = yes
+			gen_is_elf_phenotype_trigger = yes
+			is_imprisoned = no
+			NOT = { has_trait = incapable }
+			NOT = {
+				any_owned_story = {
+					type = story_gen_great_work
+					NOT = { this = scope:gw_story }
+				}
+			}
+		}
+		if = {
+			limit = { scope:gw_claimant ?= { is_alive = yes } }
+			scope:gw_claimant = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_great_work.0604.a.toast
+					left_icon = root
+					right_icon = scope:gw_claimant
+					custom_tooltip = gen_great_work.0604.a.toast.tt
+					add_opinion = {
+						target = root
+						modifier = angry_opinion
+						opinion = -20
+					}
+				}
+			}
+		}
+		gen_gw_pass_work_effect = { TO = root }
+
+		ai_chance = {
+			base = 40
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = ambitious
+					has_trait = stubborn
+					has_trait = arrogant
+				}
+			}
+		}
+	}
+
+	# Then they carry it.
+	option = {
+		name = gen_great_work.0604.b
+		trigger = {
+			exists = scope:gw_claimant
+			scope:gw_claimant = { gen_gw_can_take_up_trigger = yes }
+		}
+		scope:gw_claimant = {
+			add_opinion = {
+				target = root
+				modifier = grateful_opinion
+				opinion = 25
+			}
+		}
+		gen_gw_pass_work_effect = { TO = scope:gw_claimant }
+
+		ai_chance = {
+			base = 25
+			modifier = {
+				add = 25
+				OR = {
+					has_trait = humble
+					has_trait = content
+					has_trait = lazy
+				}
+			}
+		}
+	}
+
+	# If it must be quarrelled over, no one will have it.
+	option = {
+		name = gen_great_work.0604.c
+		if = {
+			limit = { scope:gw_claimant ?= { is_alive = yes } }
+			scope:gw_claimant = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_great_work.0604.c.toast
+					left_icon = root
+					right_icon = scope:gw_claimant
+					custom_tooltip = gen_great_work.0604.c.toast.tt
+					add_opinion = {
+						target = root
+						modifier = angry_opinion
+						opinion = -10
+					}
+				}
+			}
+		}
+		gen_gw_seal_unfinished_effect = { HOLDER = root }
+
+		ai_chance = {
+			base = 5
+			modifier = {
+				add = 15
+				OR = {
+					has_trait = stubborn
+					has_trait = wrathful
+				}
+			}
+		}
+	}
+}

@@ -6,8 +6,8 @@
 # The attribute lives on the TEETH entity; the head declares it too, mapped to its neutral shape, as
 # vanilla does for its own teeth attributes.
 #
-# In Core beside gen_race_skin and gen_bs_elf_ears for the same reason: Emit/PortraitWriter.cs writes
-# it into every persistent DNA record on every map. Index 0 must stay the empty template, and indices
+# In the Fantasy set beside gen_bs_elf_ears for the same reason: its attributes exist only where
+# RaceHeadWriter patched the teeth assets, i.e. with races on. Index 0 must stay the empty template, and indices
 # are only ever appended: a saved DNA names its template by index.
 #
 # Variants (MapGen/OrcTusks.cs Variants): lower is the standard tusk; stubby and great are inherited

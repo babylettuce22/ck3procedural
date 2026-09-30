@@ -1,0 +1,103 @@
+﻿l_english:
+ # Blood Challenge, the pre-fight scene (events/gen_blood_challenge_scene_events.txt, 0010–0099).
+ # Interaction and resolution loc: gen_blood_challenge_l_english.yml. Aftermath: gen_blood_challenge_aftermath_l_english.yml.
+
+ # ============ Stakes paragraph, shared by every scene ============
+ gen_bc_scene_stakes_up_challenger_title: "\n\nWin, and you walk out of the circle with a claim on [gen_bc_title.GetName]. Lose, and every claim you hold on [gen_bc_scene_opponent.GetHerHis] titles is gone. Fights against a higher chief can end in death."
+ gen_bc_scene_stakes_up_challenger: "\n\nWin, and the clans will know you beat a higher chief. Lose, and every claim you hold on [gen_bc_scene_opponent.GetHerHis] titles is gone. Fights against a higher chief can end in death."
+ gen_bc_scene_stakes_up_defender: "\n\nIf [gen_bc_scene_opponent.GetSheHe] wins, [gen_bc_scene_opponent.GetSheHe] may walk out with a claim on what is yours. If you win, [gen_bc_scene_opponent.GetSheHe] loses every claim on your titles. Fights against a higher chief can end in death."
+ gen_bc_scene_stakes_down_challenger: "\n\nWin, and [gen_bc_scene_opponent.GetFirstName] will owe you, in front of everyone. Lose to your own vassal, and your name will suffer for it, [gen_bc_scene_opponent.GetSheHe] may walk out with a claim on your seat, and your other vassals will be watching. The bout is not to the death, but the winner decides what happens to the one left on the ground."
+ gen_bc_scene_stakes_down_defender: "\n\nIf [gen_bc_scene_opponent.GetSheHe] wins, [gen_bc_scene_opponent.GetSheHe] will have a hold over you. If you win, your chief is shamed in front of [gen_bc_scene_opponent.GetHerHis] own court, and you may walk out with a claim on [gen_bc_scene_opponent.GetHerHis] seat. The bout is not to the death, but the winner decides what happens to the one left on the ground."
+ gen_bc_scene_stakes_peer: "\n\nThe winner takes the prestige and a name the other clans will fear. The loser takes the shame. The bout is not to the death, but the winner decides what happens to the one left on the ground."
+
+ # ============ Shared options and tooltips ============
+ gen_bc_scene_craven_option: "Stay out of reach and wait for a mistake."
+ gen_bc_stance_fury_tt: "You fight in a fury, and the whole circle can see it."
+ gen_bc_stance_cunning_tt: "You have watched how your opponent moves."
+ gen_bc_stance_ancestors_tt: "The ancestors are watching."
+ gen_bc_stance_plain_tt: "No tricks. Strength and skill decide this fight."
+ gen_bc_scene_opponent_fury_tt: "[gen_bc_scene_opponent.GetFirstName] is just as furious now."
+
+ # ============ Modifiers ============
+ gen_bc_fury_modifier: "Blood Fury"
+ gen_bc_fury_modifier_desc: "This character has worked themselves into a fury for a fight in the circle. They hit harder and listen to no one."
+ gen_bc_blood_fury_modifier: "Red Rage"
+ gen_bc_blood_fury_modifier_desc: "This character has let the rage take them before a fight in the circle. They hit very hard and cannot be reasoned with."
+ gen_bc_cunning_modifier: "Studying the Foe"
+ gen_bc_cunning_modifier_desc: "This character is watching their opponent before a fight in the circle. It helps, but the clan sees them hanging back."
+ gen_bc_ancestors_modifier: "The Ancestors Watch"
+ gen_bc_ancestors_modifier_desc: "This character has called on the ancestors before a fight in the circle, and their mind is steadier for it."
+ gen_bc_war_paint_modifier: "Shaman's War-Paint"
+ gen_bc_war_paint_modifier_desc: "This character wears war-paint drawn by a shaman for a fight in the circle."
+ gen_bc_good_omen_modifier: "Good Omens"
+ gen_bc_good_omen_modifier_desc: "A shaman read good omens for this character before a fight in the circle."
+
+ # ============ 0011 The High Seat (upward) ============
+ gen_blood_challenge.0011.t: "The High Seat"
+ gen_blood_challenge.0011.desc_challenger: "You stand in [gen_bc_scene_opponent.GetTitledFirstNamePossessive] hall with [gen_bc_scene_opponent.GetHerHis] chiefs lined along the walls, and you have said it out loud: you challenge [gen_bc_scene_opponent.GetHerHim] by the Blood Right.\n\n[gen_bc_scene_opponent.GetSheHe|U] gets up from the high seat slowly. The chiefs step back from the walls and make the circle with their own bodies. Nobody speaks."
+ gen_blood_challenge.0011.desc_defender: "[gen_bc_scene_opponent.GetTitledFirstName] walked into your hall, past your guards and your chiefs, and called you out by the Blood Right in front of all of them. You cannot refuse without losing face, and you did not.\n\nYou come down from the high seat. Your chiefs step back from the walls and make the circle with their own bodies. They are watching you as much as [gen_bc_scene_opponent.GetHerHim]."
+ gen_blood_challenge.0011.a: "Let the anger build until my tusks ache."
+ gen_blood_challenge.0011.a_blood: "Let the red rage take me."
+ gen_blood_challenge.0011.b: "Watch how [gen_bc_scene_opponent.GetFirstName] moves before I close."
+ gen_blood_challenge.0011.c: "Touch the old scars and call on the ancestors."
+ gen_blood_challenge.0011.d: "Just fight."
+
+ # ============ 0012 The Clan Circle (peer) ============
+ gen_blood_challenge.0012.t: "The Clan Circle"
+ gen_blood_challenge.0012.desc_challenger: "The clans have gathered around the big fire, and you stood up and named [gen_bc_scene_opponent.GetTitledFirstName] in front of everyone. [gen_bc_scene_opponent.GetSheHe|U] has ruled beside you as an equal long enough.\n\nThe drums stop. Warriors from both clans drag benches back and stamp a ring into the dirt. [gen_bc_scene_opponent.GetFirstName] pulls off [gen_bc_scene_opponent.GetHerHis] cloak and steps in."
+ gen_blood_challenge.0012.desc_defender: "The clans have gathered around the big fire, and [gen_bc_scene_opponent.GetTitledFirstName] stood up and named you in front of everyone. [gen_bc_scene_opponent.GetSheHe|U] thinks [gen_bc_scene_opponent.GetSheHe] is the better chief. Now [gen_bc_scene_opponent.GetSheHe] will have to show it.\n\nThe drums stop. Warriors from both clans drag benches back and stamp a ring into the dirt. You pull off your cloak and step in."
+ gen_blood_challenge.0012.a: "Beat my chest and roar until the fire shakes."
+ gen_blood_challenge.0012.a_blood: "Let the red rage take me."
+ gen_blood_challenge.0012.b: "Circle slowly. Watch which foot [gen_bc_scene_opponent.GetSheHe] favours."
+ gen_blood_challenge.0012.c: "Spill a little blood on the ground for the ancestors."
+ gen_blood_challenge.0012.d: "Just fight."
+
+ # ============ 0013 An Example (downward) ============
+ gen_blood_challenge.0013.t: "An Example"
+ gen_blood_challenge.0013.desc_challenger: "[gen_bc_scene_opponent.GetTitledFirstName] has been testing you: slow with the tribute, loud at the fire, too friendly with your rivals. Under the Blood Right you do not need a war to answer that.\n\nYou called [gen_bc_scene_opponent.GetHerHim] into the circle in front of your other vassals, so they can all see what happens to a vassal who forgets [gen_bc_scene_opponent.GetHerHis] place."
+ gen_blood_challenge.0013.desc_defender: "Your chief, [gen_bc_scene_opponent.GetTitledFirstName], has called you into the circle in front of the other vassals. Everyone knows why. [gen_bc_scene_opponent.GetSheHe|U] means to make an example of you.\n\nThe other vassals stand close around the ring. Some of them look sorry for you. Most look glad it is not them."
+ gen_blood_challenge.0013.a: "Get angry. Let them see what a real chief looks like."
+ gen_blood_challenge.0013.a_blood: "Let the red rage take me."
+ gen_blood_challenge.0013.b: "Keep my head. Let [gen_bc_scene_opponent.GetHerHim] make the first mistake."
+ gen_blood_challenge.0013.c: "Swear before the ancestors that no one will make a lesson of me."
+ gen_blood_challenge.0013.d: "Just fight."
+
+ # ============ 0014 Spit in the Dust (any kind) ============
+ gen_blood_challenge.0014.t: "Spit in the Dust"
+ gen_blood_challenge.0014.desc_challenger: "You made the challenge, and the circle is drawn. Before you can step in, [gen_bc_scene_opponent.GetTitledFirstName] spits in the dust at your feet and speaks loud enough for every orc watching to hear."
+ gen_blood_challenge.0014.desc_defender: "[gen_bc_scene_opponent.GetTitledFirstName] made the challenge, and the circle is drawn. Before you can step in, [gen_bc_scene_opponent.GetSheHe] spits in the dust at your feet and speaks loud enough for every orc watching to hear."
+ gen_blood_challenge.0014.desc_insult_old: "\n\n\"Look at those grey tusks. Go sit by the fire, old one. I will try not to break you.\"\n\nSome of the crowd laughs. The rest wait to see what you do."
+ gen_blood_challenge.0014.desc_insult_weak: "\n\n\"I have seen goblins with harder hands. This will be short.\"\n\nSome of the crowd laughs. The rest wait to see what you do."
+ gen_blood_challenge.0014.desc_insult_craven: "\n\n\"You are shaking already. Everyone can see it.\"\n\nSome of the crowd laughs. The rest wait to see what you do."
+ gen_blood_challenge.0014.desc_insult_generic: "\n\n\"Your clan should pick their next chief now. It will save time.\"\n\nSome of the crowd laughs. The rest wait to see what you do."
+ gen_blood_challenge.0014.a: "Spit right back, and worse."
+ gen_blood_challenge.0014.b: "Say nothing. Watch how [gen_bc_scene_opponent.GetSheHe] moves."
+ gen_blood_challenge.0014.c: "Tell [gen_bc_scene_opponent.GetHerHim] my ancestors will answer for me."
+ gen_blood_challenge.0014.d: "Just fight."
+
+ # ============ 0015 The Omens (any kind) ============
+ gen_blood_challenge.0015.t: "The Omens"
+ gen_blood_challenge.0015.desc_challenger: "You made the challenge, and [gen_bc_scene_opponent.GetTitledFirstName] accepted. Before anyone steps in, the circle must be drawn properly, the old way."
+ gen_blood_challenge.0015.desc_defender: "[gen_bc_scene_opponent.GetTitledFirstName] made the challenge, and you accepted. Before anyone steps in, the circle must be drawn properly, the old way."
+ gen_blood_challenge.0015.desc_shaman_named: "\n\n[gen_bc_scene_shaman.GetFirstName], who keeps the spirits for your court, walks the ring with a bowl of ash and bone and marks the ground. At the end [gen_bc_scene_shaman.GetSheHe] comes to you. [gen_bc_scene_shaman.GetSheHe|U] has war-paint ready, for a price, and will read the omens if you ask."
+ gen_blood_challenge.0015.desc_shaman_elder: "\n\nThe oldest shaman of the clan walks the ring with a bowl of ash and bone and marks the ground. At the end the shaman comes to you, with war-paint ready, for a price, and an offer to read the omens if you ask."
+ gen_blood_challenge.0015.a: "Pay for the war-paint."
+ gen_blood_challenge.0015.b: "Read the omens for me."
+ gen_blood_challenge.0015.b.good: "Good Omens"
+ gen_blood_challenge.0015.b.bad: "Bad Omens"
+ gen_blood_challenge.0015.c: "I need no bones. I need anger."
+ gen_blood_challenge.0015.c_blood: "Paint me red. Then get out of the way."
+ gen_blood_challenge.0015.d: "Enough. Just fight."
+
+ # ============ 0016 Your Blood Watches (any kind) ============
+ gen_blood_challenge.0016.t: "Your Blood Watches"
+ gen_blood_challenge.0016.desc_challenger: "You made the challenge, and [gen_bc_scene_opponent.GetTitledFirstName] accepted. The clan has come out to watch, and the circle is filling up."
+ gen_blood_challenge.0016.desc_defender: "[gen_bc_scene_opponent.GetTitledFirstName] made the challenge, and you accepted. The clan has come out to watch, and the circle is filling up."
+ gen_blood_challenge.0016.desc_heir: "\n\nAt the front of the crowd, pushed right up to the line, is your heir [gen_bc_scene_watcher.GetFirstName]. [gen_bc_scene_watcher.GetSheHe|U] is watching you, not [gen_bc_scene_opponent.GetFirstName]. Whatever happens in the next few minutes, [gen_bc_scene_watcher.GetSheHe] will remember it."
+ gen_blood_challenge.0016.desc_child: "\n\nAt the front of the crowd, pushed right up to the line, is your [gen_bc_scene_watcher.Custom('GetDaughterSon')] [gen_bc_scene_watcher.GetFirstName]. [gen_bc_scene_watcher.GetSheHe|U] is watching you, not [gen_bc_scene_opponent.GetFirstName]. Whatever happens in the next few minutes, [gen_bc_scene_watcher.GetSheHe] will remember it."
+ gen_blood_challenge.0016.desc_crowd: "\n\nThe whole clan is watching. Whatever happens in the next few minutes, they will remember it."
+ gen_blood_challenge.0016.a: "Look at [gen_bc_scene_watcher.GetFirstName] once. Then fight for [gen_bc_scene_watcher.GetHerHim]."
+ gen_blood_challenge.0016.b: "Show them all what fury looks like."
+ gen_blood_challenge.0016.b_blood: "Let the red rage take me. Let them all see it."
+ gen_blood_challenge.0016.c: "Fight smart. That is the lesson worth teaching."
+ gen_blood_challenge.0016.d: "Just fight."

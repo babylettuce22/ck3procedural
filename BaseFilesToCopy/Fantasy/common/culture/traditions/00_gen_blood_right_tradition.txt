@@ -1,0 +1,76 @@
+﻿# The Blood Right: among this people any ruler may call another into the circle, and the answer is
+# given with a blade. Its parameter, gen_blood_right, is what the Blood Challenge interaction reads
+# (00_gen_blood_challenge_triggers.txt has the map of the whole system).
+#
+# Every orcish culture starts with it — Cultures.GiveRaceTraditions in the generator guarantees it on
+# top of the race's warrior tradition. Other warlike peoples may adopt it in play; a peaceable one
+# cannot.
+tradition_gen_blood_right = {
+	category = societal
+
+	layers = {
+		0 = martial
+		1 = mena
+		4 = swords.dds
+	}
+
+	can_pick = {
+		custom_description = {
+			text = culture_not_egalitarian
+			NOT = {
+				culture_pillar:ethos_egalitarian = { is_in_list = traits }
+			}
+		}
+	}
+
+	parameters = {
+		gen_blood_right = yes
+	}
+
+	character_modifier = {
+		prowess = 1
+	}
+
+	cost = {
+		prestige = {
+			add = {
+				value = tradition_base_cost
+				desc = BASE
+				format = "BASE_VALUE_FORMAT"
+			}
+			if = {
+				limit = {
+					NOR = {
+						culture_pillar:ethos_bellicose = { is_in_list = traits }
+						culture_pillar:ethos_stoic = { is_in_list = traits }
+					}
+				}
+				add = {
+					value = tradition_incompatible_ethos_penalty
+					desc = not_bellicose_or_stoic_desc
+				}
+			}
+			if = {
+				limit = {
+					culture_tradition_reduction_trigger = { TRADITION = tradition_gen_blood_right }
+				}
+				multiply = {
+					value = 0.5
+					desc = inspired_by_culture_desc
+				}
+			}
+			multiply = tradition_replacement_cost_if_relevant
+		}
+	}
+
+	# Mostly an orcish custom: a culture head who is not an orc rarely reaches for it.
+	ai_will_do = {
+		value = 10
+		if = {
+			limit = {
+				scope:character ?= { has_trait = phenotype_rough_hewn }
+			}
+			value = 150
+		}
+	}
+}

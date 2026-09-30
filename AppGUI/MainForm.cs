@@ -1961,7 +1961,12 @@ public sealed partial class MainForm : ChromeForm
     /// Makes a heightmap file the source, with the size question already answered. The second half
     /// of <see cref="SetHeightmap"/>, and all of it for the Azgaar page, which fits the size itself.
     /// </summary>
-    private void AdoptHeightmapFile(string path, (int Width, int Height)? fit, bool unverified)
+    /// <param name="source">
+    /// What to build from, when it is more than the file itself — the Azgaar page's weathered
+    /// terrain, which starts from the file. The file is still the one remembered either way.
+    /// </param>
+    private void AdoptHeightmapFile(string path, (int Width, int Height)? fit, bool unverified,
+        MapGen.HeightmapProvider? source = null)
     {
         _lastHeightmapFile = path;
 
@@ -1975,7 +1980,7 @@ public sealed partial class MainForm : ChromeForm
         _state.HeightmapFitHeight = fit?.Height;
         _state.HeightmapAllowUnverifiedSize = unverified;
 
-        SetSource(new MapGen.FileHeightmapProvider(path, fit, unverified));
+        SetSource(source ?? new MapGen.FileHeightmapProvider(path, fit, unverified));
     }
 
     /// <summary>

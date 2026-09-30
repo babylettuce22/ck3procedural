@@ -158,6 +158,15 @@ public static partial class ContentWriter
             () => CultureWriter.WriteAll(modDir, cfg, generatedCultures.Declared(), ethnicities, vocabulary,
                 new Rng(cfg.Seed ^ 0x0C1A), retinues?.Innovations));
 
+        // The high elves' Great Work names, in their own tongues. Only where the Fantasy set ships
+        // (the same condition as StaticFileWriter.Fantasy), on an Rng of its own.
+        if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
+        {
+            int named = GreatWorkNameWriter.WriteAll(modDir, generatedCultures.Declared().Cultures, ethnicities,
+                new Rng(cfg.Seed ^ 0x6EA7));
+            Console.WriteLine($"  great works: {named} high-elf culture(s) given {GreatWorkNameWriter.NamesPerCulture} names each");
+        }
+
         if (retinues is not null)
         {
             Core.Stage.Time("men-at-arms", () => RetinueWriter.WriteAll(modDir, retinues));

@@ -72,6 +72,9 @@ gen_aging.0002 = {
 
 	trigger = {
 		has_trait = world_weary
+		# `death` ignores engine immortality, so this is the last chance to refuse. Covers a save
+		# where an immortal already picked up world_weary before the eligibility check caught it.
+		is_immortal = no
 	}
 
 	option = {
@@ -79,6 +82,55 @@ gen_aging.0002 = {
 		death = {
 			death_reason = death_fading
 		}
+	}
+}
+
+# =====================================================================================
+#  Not Yet: the one reprieve
+# =====================================================================================
+# Fired by gen_world_weary_fade_effect in place of the Fading for an ambitious or stubborn elder
+# who has not been reprieved before (gen_fading_reprieve_trigger). The track goes back 45 XP, from
+# 100 to 55, which is about ten years at the pulse's ~4-5 a year.
+#
+# The XP comes off in `immediate`, not the option. At 100 the trait's health = -100 failsafe is
+# active, and a player could leave this event open long enough for it to kill them. The option
+# carries a custom_tooltip instead, so the player can still see what they got.
+gen_aging.0003 = {
+	type = character_event
+	title = gen_aging.0003.t
+	desc = {
+		desc = gen_aging.0003.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_trait = ambitious }
+				desc = gen_aging.0003.desc.ambitious
+			}
+			desc = gen_aging.0003.desc.stubborn
+		}
+	}
+	theme = physical_health
+
+	override_background = { reference = garden }
+
+	left_portrait = {
+		character = root
+		animation = anger
+	}
+
+	trigger = {
+		has_trait = world_weary
+		is_immortal = no
+		gen_fading_reprieve_trigger = yes
+	}
+
+	immediate = {
+		add_character_flag = gen_fading_reprieved
+		add_trait_xp = { trait = world_weary track = world_weary value = -45 }
+	}
+
+	option = {
+		name = gen_aging.0003.a
+		custom_tooltip = gen_aging.0003.a.tt
 	}
 }
 
@@ -389,11 +441,12 @@ gen_aging.0090 = {
 		add_trait_xp = { trait = world_weary track = world_weary value = 25 }
 	}
 
-	# Straight to the farewell.
+	# Straight to the farewell, through the same routing as the pulse (so an ambitious or stubborn
+	# elder gets the one reprieve first).
 	option = {
 		name = gen_aging.0090.fade
 		trigger = { has_trait = world_weary }
-		trigger_event = gen_aging.0002
+		gen_world_weary_fade_effect = yes
 	}
 
 	# Skip the yearly roll and offer the late child now (still needs a woman the trigger accepts).

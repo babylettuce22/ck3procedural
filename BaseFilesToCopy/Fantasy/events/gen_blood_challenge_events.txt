@@ -1,0 +1,540 @@
+﻿namespace = gen_blood_challenge
+
+# The Blood Challenge's own events: the bout's output and invalidation, and the resolution every
+# path ends in. The rest of the chain:
+#   events/gen_blood_challenge_scene_events.txt     — 0010–0099, the pre-fight scene and stances
+#   events/gen_blood_challenge_aftermath_events.txt — 0200–0299 the loser's last choice,
+#                                                     0300–0399 the victor's verdict
+#   common/scripted_effects/00_gen_blood_challenge_effects.txt — the saved scopes and the stakes
+# This file adds the presiding liege (0400/0401) and the rivals' settling (0510).
+# Ids 0001–0009, 0100–0199, 0400–0499 and 0500–0599 belong to this file.
+
+# =====================================================================================
+#  0100 — the bout is over (vanilla single combat's OUTPUT_EVENT)
+# =====================================================================================
+# Vanilla has already shown both fighters their victory or defeat and applied its wound or death.
+# Here the result is taken over as scope:gen_bc_victor/loser, and a loser still on their feet gets
+# the last choice (0200). A loser who cannot act goes straight to the victor's verdict (0300); a
+# dead one straight to the resolution.
+gen_blood_challenge.0100 = {
+	hidden = yes
+
+	immediate = {
+		scope:sc_victor = { save_scope_as = gen_bc_victor }
+		scope:sc_loser = { save_scope_as = gen_bc_loser }
+		if = {
+			limit = {
+				scope:gen_bc_loser = {
+					is_alive = yes
+					NOT = { has_trait = incapable }
+					is_imprisoned = no
+				}
+			}
+			scope:gen_bc_loser = { trigger_event = gen_blood_challenge.0200 }
+		}
+		else_if = {
+			limit = {
+				scope:gen_bc_loser = { is_alive = yes }
+				scope:gen_bc_victor = { is_alive = yes }
+			}
+			scope:gen_bc_victor = { trigger_event = gen_blood_challenge.0300 }
+		}
+		else = {
+			gen_bc_finish_chain_effect = yes
+		}
+	}
+}
+
+# =====================================================================================
+#  0101 — the bout could not happen (vanilla single combat's INVALIDATION_EVENT)
+# =====================================================================================
+# One fighter died, was jailed or fell ill before the first blow. Nobody wins, nobody pays.
+# Fired by gen_bc_start_combat_effect when a fighter can no longer fight. Vanilla itself calls an
+# INVALIDATION_EVENT only when attacker and defender are the same character, and a fighter who dies
+# between rounds just ends the engine's chain — that case is caught by the watchdog below.
+gen_blood_challenge.0101 = {
+	hidden = yes
+
+	immediate = {
+		gen_bc_cleanup_effect = yes
+		scope:gen_bc_challenger = {
+			if = {
+				limit = { is_alive = yes }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = gen_blood_challenge.0101.t
+					left_icon = scope:gen_bc_challenger
+					right_icon = scope:gen_bc_defender
+					custom_tooltip = gen_blood_challenge.0101.tt
+				}
+			}
+		}
+		scope:gen_bc_defender = {
+			if = {
+				limit = { is_alive = yes }
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = gen_blood_challenge.0101.t
+					left_icon = scope:gen_bc_defender
+					right_icon = scope:gen_bc_challenger
+					custom_tooltip = gen_blood_challenge.0101.tt
+				}
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  0102 — watchdog
+# =====================================================================================
+# Sent to both fighters when the challenge is accepted, 60 days out. If the challenge this fighter
+# was in never resolved — the engine dropped the chain when someone died mid-fight, or a delayed
+# event came due on a dead character — they are released. Only this pairing is touched: a later
+# challenge against someone else has a different var:gen_bc_opponent.
+gen_blood_challenge.0102 = {
+	hidden = yes
+
+	trigger = {
+		has_character_flag = gen_bc_in_challenge
+		exists = var:gen_bc_opponent
+		OR = {
+			AND = {
+				this = scope:gen_bc_challenger
+				var:gen_bc_opponent = scope:gen_bc_defender
+			}
+			AND = {
+				this = scope:gen_bc_defender
+				var:gen_bc_opponent = scope:gen_bc_challenger
+			}
+		}
+	}
+
+	immediate = {
+		gen_bc_release_effect = yes
+	}
+}
+
+# =====================================================================================
+#  0500 — the resolution
+# =====================================================================================
+# Every path through the chain ends here (gen_bc_finish_chain_effect). Immediate, not delayed: a
+# delayed event on a character who dies first never fires, and the stakes would be lost. Applies the
+# stakes to the final result, tallies the win, tells both fighters what the fight earned, and clears
+# the circle.
+gen_blood_challenge.0500 = {
+	hidden = yes
+
+	immediate = {
+		scope:gen_bc_victor = {
+			if = {
+				limit = { is_alive = yes }
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_blood_challenge.0500.victor.t
+					left_icon = scope:gen_bc_victor
+					right_icon = scope:gen_bc_loser
+					show_as_tooltip = {
+						gen_bc_apply_stakes_effect = {
+							VICTOR = scope:gen_bc_victor
+							LOSER = scope:gen_bc_loser
+						}
+					}
+					}
+			}
+		}
+		scope:gen_bc_loser = {
+			if = {
+				limit = { is_alive = yes }
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0500.loser.t
+					left_icon = scope:gen_bc_loser
+					right_icon = scope:gen_bc_victor
+					show_as_tooltip = {
+						gen_bc_apply_stakes_effect = {
+							VICTOR = scope:gen_bc_victor
+							LOSER = scope:gen_bc_loser
+						}
+					}
+				}
+			}
+		}
+		gen_bc_apply_stakes_effect = {
+			VICTOR = scope:gen_bc_victor
+			LOSER = scope:gen_bc_loser
+		}
+		scope:gen_bc_victor = {
+			if = {
+				limit = { is_alive = yes }
+				gen_bc_tally_win_effect = yes
+			}
+		}
+		# The liege who presided hears how it went, and wears the result of whoever they backed.
+		if = {
+			limit = {
+				exists = scope:gen_bc_presider
+				scope:gen_bc_presider = { is_alive = yes }
+			}
+			scope:gen_bc_presider = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = gen_blood_challenge.0500.presider.t
+					left_icon = scope:gen_bc_victor
+					right_icon = scope:gen_bc_loser
+					custom_tooltip = gen_blood_challenge.0500.presider.tt
+					gen_bc_presider_outcome_effect = yes
+				}
+			}
+		}
+		gen_bc_cleanup_effect = yes
+		# Rivals who have had it out: the winner decides whether that ends it (0510).
+		if = {
+			limit = {
+				scope:gen_bc_victor = {
+					is_alive = yes
+					is_imprisoned = no
+					NOT = { has_trait = incapable }
+					has_relation_rival = scope:gen_bc_loser
+				}
+				scope:gen_bc_loser = { is_alive = yes }
+			}
+			scope:gen_bc_victor = { trigger_event = gen_blood_challenge.0510 }
+		}
+	}
+}
+
+# =====================================================================================
+#  0400 / 0401 — the presiding liege
+# =====================================================================================
+# Two vassals of one realm are about to fight; their closest shared liege (scope:gen_bc_presider)
+# rules on it before anyone steps into the circle. 0400 re-checks that there is still a fight to
+# rule on — the liege is shown 0401 only then, since a visible event whose trigger fails would stall
+# the chain. A player liege sees 0401; a player fighter hears the ruling by toast.
+gen_blood_challenge.0400 = {
+	hidden = yes
+
+	immediate = {
+		if = {
+			limit = {
+				scope:gen_bc_challenger = { is_alive = yes }
+				scope:gen_bc_defender = { is_alive = yes }
+				NOT = { has_trait = incapable }
+				is_imprisoned = no
+			}
+			trigger_event = gen_blood_challenge.0401
+		}
+		else_if = {
+			# The liege cannot rule, but the fight can still go ahead.
+			limit = {
+				scope:gen_bc_challenger = { is_alive = yes }
+				scope:gen_bc_defender = { is_alive = yes }
+			}
+			scope:gen_bc_viewer = { trigger_event = gen_blood_challenge.0010 }
+		}
+		else = {
+			gen_bc_cleanup_effect = yes
+		}
+	}
+}
+
+gen_blood_challenge.0401 = {
+	type = character_event
+	title = gen_blood_challenge.0401.t
+	desc = {
+		desc = gen_blood_challenge.0401.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_bc_challenger = { has_relation_rival = scope:gen_bc_defender } }
+				desc = gen_blood_challenge.0401.desc_rivals
+			}
+			triggered_desc = {
+				trigger = { exists = scope:gen_bc_title }
+				desc = gen_blood_challenge.0401.desc_claim
+			}
+			desc = gen_blood_challenge.0401.desc_renown
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { gen_bc_follows_blood_right_trigger = yes }
+				desc = gen_blood_challenge.0401.desc_custom
+			}
+			desc = gen_blood_challenge.0401.desc_foreign
+		}
+	}
+	theme = martial
+	override_background = { reference = throne_room }
+
+	left_portrait = {
+		character = scope:gen_bc_challenger
+		animation = anger
+	}
+	right_portrait = {
+		character = scope:gen_bc_defender
+		animation = personality_bold
+	}
+
+	# --- Let them settle it: the Blood Right, kept. ---
+	option = {
+		name = gen_blood_challenge.0401.a
+		if = {
+			limit = { gen_bc_follows_blood_right_trigger = yes }
+			add_prestige = minor_prestige_gain
+		}
+		gen_bc_ruling_toast_effect = { RULING = gen_blood_challenge.0401.ruling_allowed }
+		scope:gen_bc_viewer = { trigger_event = gen_blood_challenge.0010 }
+
+		ai_chance = {
+			base = 50
+			modifier = {
+				add = 30
+				gen_bc_follows_blood_right_trigger = yes
+			}
+			ai_value_modifier = {
+				ai_boldness = 0.25
+			}
+		}
+	}
+
+	# --- Back the challenger. ---
+	option = {
+		name = gen_blood_challenge.0401.b
+		gen_bc_back_fighter_effect = {
+			BACKED = scope:gen_bc_challenger
+			SLIGHTED = scope:gen_bc_defender
+		}
+		gen_bc_ruling_toast_effect = { RULING = gen_blood_challenge.0401.ruling_backed_challenger }
+		scope:gen_bc_viewer = { trigger_event = gen_blood_challenge.0010 }
+
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 30
+				opinion = {
+					target = scope:gen_bc_challenger
+					value >= 30
+				}
+			}
+			modifier = {
+				add = 30
+				OR = {
+					has_relation_friend = scope:gen_bc_challenger
+					is_close_or_extended_family_of = scope:gen_bc_challenger
+				}
+			}
+			modifier = {
+				add = 30
+				OR = {
+					has_relation_rival = scope:gen_bc_defender
+					opinion = {
+						target = scope:gen_bc_defender
+						value <= -30
+					}
+				}
+			}
+			modifier = {
+				factor = 0
+				OR = {
+					has_relation_rival = scope:gen_bc_challenger
+					has_relation_friend = scope:gen_bc_defender
+				}
+			}
+		}
+	}
+
+	# --- Back the defender. ---
+	option = {
+		name = gen_blood_challenge.0401.c
+		gen_bc_back_fighter_effect = {
+			BACKED = scope:gen_bc_defender
+			SLIGHTED = scope:gen_bc_challenger
+		}
+		gen_bc_ruling_toast_effect = { RULING = gen_blood_challenge.0401.ruling_backed_defender }
+		scope:gen_bc_viewer = { trigger_event = gen_blood_challenge.0010 }
+
+		ai_chance = {
+			base = 10
+			modifier = {
+				add = 30
+				opinion = {
+					target = scope:gen_bc_defender
+					value >= 30
+				}
+			}
+			modifier = {
+				add = 30
+				OR = {
+					has_relation_friend = scope:gen_bc_defender
+					is_close_or_extended_family_of = scope:gen_bc_defender
+				}
+			}
+			modifier = {
+				add = 30
+				OR = {
+					has_relation_rival = scope:gen_bc_challenger
+					opinion = {
+						target = scope:gen_bc_challenger
+						value <= -30
+					}
+				}
+			}
+			modifier = {
+				factor = 0
+				OR = {
+					has_relation_rival = scope:gen_bc_defender
+					has_relation_friend = scope:gen_bc_challenger
+				}
+			}
+		}
+	}
+
+	# --- Forbid it. Costs a liege of the Blood Right some face; both fighters resent it. ---
+	option = {
+		name = gen_blood_challenge.0401.d
+		if = {
+			limit = { gen_bc_follows_blood_right_trigger = yes }
+			add_prestige = minor_prestige_loss
+		}
+		scope:gen_bc_challenger = {
+			add_opinion = {
+				modifier = gen_bc_forbade_my_fight_opinion
+				target = root
+			}
+		}
+		scope:gen_bc_defender = {
+			add_opinion = {
+				modifier = gen_bc_forbade_my_fight_opinion
+				target = root
+			}
+		}
+		custom_tooltip = gen_blood_challenge.0401.d.refund_tt
+		hidden_effect = {
+			scope:gen_bc_challenger = { add_prestige_no_experience = scope:gen_bc_cost }
+		}
+		gen_bc_ruling_toast_effect = { RULING = gen_blood_challenge.0401.ruling_forbidden }
+		gen_bc_cleanup_effect = yes
+
+		ai_chance = {
+			base = 5
+			# A liege who does not keep the Blood Right sees only two vassals about to maim each other.
+			modifier = {
+				add = 60
+				NOT = { gen_bc_follows_blood_right_trigger = yes }
+			}
+			modifier = {
+				add = 40
+				OR = {
+					is_close_or_extended_family_of = scope:gen_bc_challenger
+					is_close_or_extended_family_of = scope:gen_bc_defender
+				}
+			}
+			ai_value_modifier = {
+				ai_compassion = 0.3
+				ai_boldness = -0.3
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  0510 — settled in blood
+# =====================================================================================
+# The winner of a fight between rivals decides whether it ends the rivalry or only feeds it. Fired
+# from 0500 after the stakes, when both rivals are still alive.
+gen_blood_challenge.0510 = {
+	type = character_event
+	title = gen_blood_challenge.0510.t
+	desc = gen_blood_challenge.0510.desc
+	theme = martial
+	override_background = { reference = army_camp }
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+	right_portrait = {
+		character = scope:gen_bc_loser
+		animation = pain
+	}
+
+	# --- End it here: the rivalry is over, and the loser knows it was fair. ---
+	option = {
+		name = gen_blood_challenge.0510.a
+		add_prestige = minor_prestige_gain
+		remove_relation_rival = scope:gen_bc_loser
+		scope:gen_bc_loser = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = gen_blood_challenge.0510.a.toast
+				left_icon = scope:gen_bc_loser
+				right_icon = root
+				add_opinion = {
+					modifier = gen_bc_settled_in_blood_opinion
+					target = root
+				}
+			}
+		}
+		add_opinion = {
+			modifier = gen_bc_settled_in_blood_opinion
+			target = scope:gen_bc_loser
+		}
+
+		stress_impact = {
+			vengeful = medium_stress_impact_gain
+			forgiving = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 40
+			ai_value_modifier = {
+				ai_compassion = 0.5
+				ai_vengefulness = -0.5
+				ai_honor = 0.25
+			}
+			modifier = {
+				add = 30
+				OR = {
+					has_trait = forgiving
+					has_trait = just
+				}
+			}
+		}
+	}
+
+	# --- Grind them into the dirt: the rivalry stands, and now they fear you. ---
+	option = {
+		name = gen_blood_challenge.0510.b
+		add_dread = minor_dread_gain
+		scope:gen_bc_loser = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = gen_blood_challenge.0510.b.toast
+				left_icon = scope:gen_bc_loser
+				right_icon = root
+				add_opinion = {
+					modifier = gen_bc_ground_me_down_opinion
+					target = root
+				}
+				add_stress = minor_stress_gain
+			}
+		}
+
+		stress_impact = {
+			forgiving = medium_stress_impact_gain
+			compassionate = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			ai_value_modifier = {
+				ai_vengefulness = 0.5
+				ai_compassion = -0.5
+			}
+			modifier = {
+				add = 30
+				OR = {
+					has_trait = vengeful
+					has_trait = sadistic
+					has_trait = arrogant
+				}
+			}
+		}
+	}
+}

@@ -54,6 +54,14 @@ public sealed class AzgaarChoices
     /// </summary>
     public bool FantasyRaces { get; set; } = true;
 
+    /// <summary>
+    /// How the terrain is finished. The one override whose first card is not the export's picture
+    /// as it stands: Azgaar's heightmap is a stack of flat terraces, so the default keeps its
+    /// coastline, ranges and uplands and makes the rest the way the map types do
+    /// (<see cref="MapGen.AzgaarRelief"/>). As drawn is the exported PNG, stretched onto CK3's scale.
+    /// </summary>
+    public AzgaarTerrain Terrain { get; set; } = AzgaarTerrain.Weathered;
+
     public AzgaarChoices Clone() => (AzgaarChoices)MemberwiseClone();
 
     public double CountyScale => Density switch
@@ -99,4 +107,25 @@ public sealed class AzgaarChoices
         cfg.EnableFantasyEthnicities = FantasyRaces && hasRaceTags;
         cfg.RaceMode = MapConfig.FantasyRaceMode.LowFantasy;
     }
+
+    /// <summary>
+    /// The heightmap source these choices build from. Weathered is made here rather than in
+    /// <see cref="ApplyTo"/> because it is a source, not a setting: it takes the seed
+    /// <see cref="ApplyTo"/> just wrote so the terrain belongs to the same world as everything else.
+    /// </summary>
+    public MapGen.HeightmapProvider Source(int seed, (int Width, int Height)? fit) => Terrain switch
+    {
+        AzgaarTerrain.Weathered => new MapGen.AzgaarReliefProvider(HeightmapPath, ExportPath, seed, fit),
+        _ => new MapGen.FileHeightmapProvider(HeightmapPath, fit),
+    };
+}
+
+/// <summary>How an Azgaar world's terrain is finished; see <see cref="AzgaarChoices.Terrain"/>.</summary>
+public enum AzgaarTerrain
+{
+    /// <summary>Azgaar's coastline, ranges and uplands, with hills, ridges and valleys made by the Forge.</summary>
+    Weathered,
+
+    /// <summary>The exported heightmap as it stands, terraces and all.</summary>
+    AsDrawn,
 }

@@ -1,0 +1,535 @@
+﻿# The Blood Challenge: starting the bout, what winning and losing mean, and the win tally.
+# See 00_gen_blood_challenge_triggers.txt for the map of the whole system.
+#
+# Saved scopes, set in the interaction's on_accept and carried through vanilla's single-combat events
+# into every event of the chain:
+#   scope:gen_bc_challenger, scope:gen_bc_defender
+#   scope:gen_bc_kind   flag:peer / flag:upward / flag:downward
+#   scope:gen_bc_title  the title the fight puts at stake (only when one qualifies — guard with exists):
+#                       upward, the defender's, claimed if the challenger wins; downward, the liege's,
+#                       claimed if the vassal wins
+#   scope:gen_bc_viewer who is shown the pre-fight scene
+#   scope:gen_bc_presider the closest liege both fighters share, when two vassals of one realm fight
+#                       (neither the other's liege); they rule on it first (0400/0401)
+#   scope:gen_bc_backed the fighter the presider backed, if they backed one
+# From the output event (0100) on:
+#   scope:gen_bc_victor, scope:gen_bc_loser, and scope:gen_bc_reversed once the loser turns it around.
+#
+# The kinds:
+#   peer     — wounds only. Prestige and a little dread to the winner.
+#   upward   — vanilla `possible`: a loser already badly wounded can die. The challenger wins a pressed
+#              claim on scope:gen_bc_title; losing costs them every claim they held on the defender.
+#   downward — wounds only. A liege who wins takes a hook on the vassal, who resents being made an
+#              example of (or respects a fair beating, if brave or just). A vassal who wins earns a
+#              pressed claim on scope:gen_bc_title and the respect of the liege's other vassals of the
+#              same culture; the liege holds it against them. Calling out a vassal in good standing
+#              costs the liege a little tyranny (the interaction's on_send).
+
+# Saves every scope the chain needs. Run in the interaction's on_accept (scope:actor, scope:recipient).
+gen_bc_save_scopes_effect = {
+	scope:actor = { save_scope_as = gen_bc_challenger }
+	scope:recipient = { save_scope_as = gen_bc_defender }
+	# What the challenge cost, so a refund later in the chain (a forbidding liege, 0401) needs no
+	# scope:actor/recipient.
+	save_scope_value_as = {
+		name = gen_bc_cost
+		value = gen_bc_challenge_cost_value
+	}
+	if = {
+		limit = { gen_bc_is_downward_trigger = yes }
+		save_scope_value_as = { name = gen_bc_kind value = flag:downward }
+		# The seat the liege risks: a vassal who beats the chief who called them out earns a claim.
+		scope:actor = {
+			ordered_held_title = {
+				limit = { gen_bc_claimable_title_trigger = { CLAIMANT = scope:recipient } }
+				order_by = tier
+				save_scope_as = gen_bc_title
+			}
+		}
+	}
+	else_if = {
+		limit = { gen_bc_is_upward_trigger = yes }
+		save_scope_value_as = { name = gen_bc_kind value = flag:upward }
+		scope:recipient = {
+			ordered_held_title = {
+				limit = { gen_bc_claimable_title_trigger = { CLAIMANT = scope:actor } }
+				order_by = tier
+				save_scope_as = gen_bc_title
+			}
+		}
+	}
+	else = {
+		save_scope_value_as = { name = gen_bc_kind value = flag:peer }
+	}
+	# A player watches their own fight; between two AIs the challenger's side is shown (to nobody).
+	if = {
+		limit = { scope:actor = { is_ai = no } }
+		scope:actor = { save_scope_as = gen_bc_viewer }
+	}
+	else_if = {
+		limit = { scope:recipient = { is_ai = no } }
+		scope:recipient = { save_scope_as = gen_bc_viewer }
+	}
+	else = {
+		scope:actor = { save_scope_as = gen_bc_viewer }
+	}
+	# Two vassals of one realm, neither the other's liege: their closest shared liege presides.
+	if = {
+		limit = {
+			NOT = { scope:actor = { is_liege_or_above_of = scope:recipient } }
+			NOT = { scope:recipient = { is_liege_or_above_of = scope:actor } }
+			scope:actor = {
+				any_liege_or_above = { is_liege_or_above_of = scope:recipient }
+			}
+		}
+		scope:actor = {
+			ordered_liege_or_above = {
+				limit = { is_liege_or_above_of = scope:recipient }
+				order_by = {
+					value = 0
+					subtract = highest_held_title_tier
+				}
+				save_scope_as = gen_bc_presider
+			}
+		}
+	}
+}
+
+# After the accept: to the presiding liege first when there is one (0400), otherwise straight to the
+# pre-fight scene.
+gen_bc_begin_effect = {
+	if = {
+		limit = { exists = scope:gen_bc_presider }
+		scope:gen_bc_presider = { trigger_event = gen_blood_challenge.0400 }
+	}
+	else = {
+		scope:gen_bc_viewer = { trigger_event = gen_blood_challenge.0010 }
+	}
+}
+
+# The bout itself, on vanilla's engine. Called once, from every option of the pre-fight scene.
+#
+# Both fighters are re-checked first: the scene can sit open for days, and configure marks both sides
+# engaged_in_single_combat with no expiry before it looks at them — a dead or jailed defender would
+# leave the challenger barred from every duel for good. A fight that cannot start is called off (0101).
+gen_bc_start_combat_effect = {
+	hidden_effect = {
+		scope:gen_bc_challenger = { gen_bc_arm_orc_effect = yes }
+		scope:gen_bc_defender = { gen_bc_arm_orc_effect = yes }
+	}
+	if = {
+		limit = {
+			NOT = {
+				scope:gen_bc_challenger = {
+					is_alive = yes
+					is_imprisoned = no
+					can_start_single_combat_trigger = yes
+				}
+				scope:gen_bc_defender = {
+					is_alive = yes
+					is_imprisoned = no
+					can_start_single_combat_trigger = yes
+				}
+			}
+		}
+		if = {
+			limit = { scope:gen_bc_challenger = { is_alive = yes } }
+			scope:gen_bc_challenger = { trigger_event = gen_blood_challenge.0101 }
+		}
+		else_if = {
+			limit = { scope:gen_bc_defender = { is_alive = yes } }
+			scope:gen_bc_defender = { trigger_event = gen_blood_challenge.0101 }
+		}
+	}
+	else_if = {
+		limit = { scope:gen_bc_kind = flag:upward }
+		configure_start_single_combat_effect = {
+			SC_INITIATOR = scope:gen_bc_challenger
+			SC_ATTACKER = scope:gen_bc_challenger
+			SC_DEFENDER = scope:gen_bc_defender
+			FATALITY = possible
+			FIXED = no
+			LOCALE = throne_room
+			OUTPUT_EVENT = gen_blood_challenge.0100
+			INVALIDATION_EVENT = gen_blood_challenge.0101
+		}
+	}
+	else_if = {
+		limit = { scope:gen_bc_kind = flag:downward }
+		configure_start_single_combat_effect = {
+			SC_INITIATOR = scope:gen_bc_challenger
+			SC_ATTACKER = scope:gen_bc_challenger
+			SC_DEFENDER = scope:gen_bc_defender
+			FATALITY = no
+			FIXED = no
+			LOCALE = courtyard
+			OUTPUT_EVENT = gen_blood_challenge.0100
+			INVALIDATION_EVENT = gen_blood_challenge.0101
+		}
+	}
+	else = {
+		configure_start_single_combat_effect = {
+			SC_INITIATOR = scope:gen_bc_challenger
+			SC_ATTACKER = scope:gen_bc_challenger
+			SC_DEFENDER = scope:gen_bc_defender
+			FATALITY = no
+			FIXED = no
+			LOCALE = terrain_scope
+			OUTPUT_EVENT = gen_blood_challenge.0100
+			INVALIDATION_EVENT = gen_blood_challenge.0101
+		}
+	}
+}
+
+# An orc who has never fought picks up an axe, a mace or a hammer rather than vanilla's likely sword.
+# Vanilla's set_signature_weapon_effect (00_personal_details_effects.txt) only rolls a weapon when the
+# character has none and no weapon artifact equipped, and the duel narration is written around
+# var:signature_weapon — so setting it first turns every line of the fight into cleaving and
+# smashing without touching vanilla. Run on a fighter; it lasts for all their later duels too.
+gen_bc_arm_orc_effect = {
+	if = {
+		limit = {
+			has_trait = phenotype_rough_hewn
+			NOR = {
+				has_variable = signature_weapon
+				has_variable = temporary_signature_weapon
+			}
+			NOT = {
+				any_equipped_character_artifact = { artifact_slot_type = primary_armament }
+			}
+		}
+		random_list = {
+			45 = { set_variable = { name = signature_weapon value = flag:axe } }
+			30 = { set_variable = { name = signature_weapon value = flag:mace } }
+			25 = { set_variable = { name = signature_weapon value = flag:hammer } }
+		}
+	}
+}
+
+# The loser got back up and won. Swaps the result; everything after this reads the new one.
+gen_bc_reverse_outcome_effect = {
+	scope:gen_bc_victor = { save_scope_as = gen_bc_swap }
+	scope:gen_bc_loser = { save_scope_as = gen_bc_victor }
+	scope:gen_bc_swap = { save_scope_as = gen_bc_loser }
+	save_scope_value_as = { name = gen_bc_reversed value = yes }
+}
+
+# Every path through the chain ends here: the resolution event, on whichever fighter still lives.
+gen_bc_finish_chain_effect = {
+	if = {
+		limit = { scope:gen_bc_challenger = { is_alive = yes } }
+		scope:gen_bc_challenger = { trigger_event = gen_blood_challenge.0500 }
+	}
+	else_if = {
+		limit = { scope:gen_bc_defender = { is_alive = yes } }
+		scope:gen_bc_defender = { trigger_event = gen_blood_challenge.0500 }
+	}
+}
+
+# What the fight was for. VICTOR and LOSER are the final result (the aftermath events preview a
+# turnaround by passing them swapped, inside show_as_tooltip). Dead characters gain and lose nothing.
+gen_bc_apply_stakes_effect = {
+	if = {
+		limit = { scope:gen_bc_kind = flag:upward }
+		if = {
+			limit = { $VICTOR$ = scope:gen_bc_challenger }
+			# The challenger took the circle: an earned claim on the seat, and the name that goes with it.
+			# The prestige only just covers the challenge's cost when a claim was at stake
+			# (gen_bc_challenge_cost_value), so the claim is the prize, not a prestige farm.
+			$VICTOR$ = {
+				if = {
+					limit = {
+						is_alive = yes
+						exists = scope:gen_bc_title
+					}
+					add_pressed_claim = scope:gen_bc_title
+				}
+				if = {
+					limit = { is_alive = yes }
+					add_prestige = medium_prestige_gain
+				}
+			}
+			$LOSER$ = {
+				if = {
+					limit = { is_alive = yes }
+					add_prestige = medium_prestige_loss
+					add_opinion = {
+						modifier = gen_bc_challenged_my_seat_opinion
+						target = $VICTOR$
+					}
+				}
+			}
+		}
+		else = {
+			# The ruler held the circle: the challenger's claims on them are spent.
+			$VICTOR$ = {
+				if = {
+					limit = { is_alive = yes }
+					add_prestige = medium_prestige_gain
+					add_dread = 5
+					add_opinion = {
+						modifier = gen_bc_challenged_my_seat_opinion
+						target = $LOSER$
+					}
+				}
+			}
+			$LOSER$ = {
+				if = {
+					limit = { is_alive = yes }
+					add_prestige = major_prestige_loss
+					every_claim = {
+						explicit = yes
+						limit = { holder ?= $VICTOR$ }
+						$LOSER$ = { remove_claim = prev }
+					}
+				}
+			}
+		}
+	}
+	else_if = {
+		limit = { scope:gen_bc_kind = flag:downward }
+		if = {
+			limit = { $VICTOR$ = scope:gen_bc_challenger }
+			# The chief put the upstart down, in front of everyone.
+			$VICTOR$ = {
+				if = {
+					limit = { is_alive = yes }
+					add_prestige = minor_prestige_gain
+					if = {
+						limit = {
+							$LOSER$ = { is_alive = yes }
+							can_add_hook = {
+								type = favor_hook
+								target = $LOSER$
+							}
+						}
+						add_hook = {
+							type = favor_hook
+							target = $LOSER$
+						}
+					}
+				}
+			}
+			# Beaten in front of the court by their own chief: most resent it; the brave and the just
+			# call it a fair fight fairly lost.
+			$LOSER$ = {
+				if = {
+					limit = { is_alive = yes }
+					add_prestige = minor_prestige_loss
+					if = {
+						limit = {
+							$VICTOR$ = { is_alive = yes }
+							OR = {
+								has_trait = brave
+								has_trait = just
+							}
+						}
+						add_opinion = {
+							modifier = gen_bc_bested_me_fairly_opinion
+							target = $VICTOR$
+						}
+					}
+					else_if = {
+						limit = { $VICTOR$ = { is_alive = yes } }
+						add_opinion = {
+							modifier = gen_bc_made_an_example_of_me_opinion
+							target = $VICTOR$
+						}
+					}
+				}
+			}
+		}
+		else = {
+			# The vassal beat the chief who called them out: a claim on the chief's seat, and the other
+			# vassals of their people take note. The chief does not forget it.
+			$VICTOR$ = {
+				if = {
+					limit = { is_alive = yes }
+					add_prestige = medium_prestige_gain
+					if = {
+						limit = { exists = scope:gen_bc_title }
+						add_pressed_claim = scope:gen_bc_title
+					}
+				}
+			}
+			$LOSER$ = {
+				if = {
+					limit = { is_alive = yes }
+					add_prestige = medium_prestige_loss
+					if = {
+						limit = { $VICTOR$ = { is_alive = yes } }
+						add_opinion = {
+							modifier = gen_bc_challenged_my_seat_opinion
+							target = $VICTOR$
+						}
+						every_vassal = {
+							limit = {
+								NOT = { this = $VICTOR$ }
+								culture = $VICTOR$.culture
+							}
+							custom = gen_bc_every_same_culture_vassal
+							add_opinion = {
+								modifier = gen_bc_humbled_our_liege_opinion
+								target = $VICTOR$
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	else = {
+		$VICTOR$ = {
+			if = {
+				limit = { is_alive = yes }
+				add_prestige = medium_prestige_gain
+				add_dread = 3
+			}
+		}
+		$LOSER$ = {
+			if = {
+				limit = { is_alive = yes }
+				add_prestige = minor_prestige_loss
+			}
+		}
+	}
+}
+
+# One more win in the circle. Three make a name, seven a legend, twelve an old warrior nobody has
+# managed to kill (the tiers also carry health and years — 00_gen_blood_challenge_modifiers.txt).
+# Run on the final victor.
+gen_bc_tally_win_effect = {
+	if = {
+		limit = { NOT = { has_variable = gen_bc_wins } }
+		set_variable = {
+			name = gen_bc_wins
+			value = 0
+		}
+	}
+	change_variable = {
+		name = gen_bc_wins
+		add = 1
+	}
+	if = {
+		limit = {
+			var:gen_bc_wins >= 12
+			NOT = { has_character_modifier = gen_bc_unbroken_modifier }
+		}
+		remove_character_modifier = gen_bc_blood_proven_modifier
+		remove_character_modifier = gen_bc_circle_master_modifier
+		add_character_modifier = gen_bc_unbroken_modifier
+	}
+	else_if = {
+		limit = {
+			var:gen_bc_wins >= 7
+			var:gen_bc_wins < 12
+			NOT = { has_character_modifier = gen_bc_circle_master_modifier }
+		}
+		remove_character_modifier = gen_bc_blood_proven_modifier
+		add_character_modifier = gen_bc_circle_master_modifier
+	}
+	else_if = {
+		limit = {
+			var:gen_bc_wins >= 3
+			var:gen_bc_wins < 7
+			NOT = { has_character_modifier = gen_bc_blood_proven_modifier }
+		}
+		add_character_modifier = gen_bc_blood_proven_modifier
+	}
+}
+
+# One fighter out of the circle: the busy flag, the opponent marker and the scene's stances. Run on
+# the fighter. The watchdog (0102) uses it alone; the chain's own ends use gen_bc_cleanup_effect.
+gen_bc_release_effect = {
+	remove_character_flag = gen_bc_in_challenge
+	remove_variable = gen_bc_opponent
+	remove_character_modifier = gen_bc_liege_favour_modifier
+	gen_bc_clear_stance_effect = yes
+}
+
+# The presiding liege backs one fighter (0401, root = the liege): the backed fighter fights with the
+# liege's favour and remembers it; the other remembers too.
+gen_bc_back_fighter_effect = {
+	$BACKED$ = { save_scope_as = gen_bc_backed }
+	$BACKED$ = {
+		add_character_modifier = {
+			modifier = gen_bc_liege_favour_modifier
+			days = 30
+		}
+		add_opinion = {
+			modifier = gen_bc_backed_me_opinion
+			target = root
+		}
+	}
+	$SLIGHTED$ = {
+		add_opinion = {
+			modifier = gen_bc_backed_my_foe_opinion
+			target = root
+		}
+	}
+	custom_tooltip = gen_bc_backed_outcome.tt
+}
+
+# Tells both fighters how their liege ruled (0401, root = the liege). RULING is the toast's text key.
+gen_bc_ruling_toast_effect = {
+	scope:gen_bc_challenger = {
+		send_interface_toast = {
+			type = event_toast_effect_neutral
+			title = gen_bc_ruling.t
+			left_icon = root
+			right_icon = scope:gen_bc_challenger
+			custom_tooltip = $RULING$
+		}
+	}
+	scope:gen_bc_defender = {
+		send_interface_toast = {
+			type = event_toast_effect_neutral
+			title = gen_bc_ruling.t
+			left_icon = root
+			right_icon = scope:gen_bc_defender
+			custom_tooltip = $RULING$
+		}
+	}
+}
+
+# What the presiding liege's ruling means once the fight is over. Run in 0500 on the final result.
+# Backing the winner is a good look; backing the loser is not.
+gen_bc_presider_outcome_effect = {
+	scope:gen_bc_presider = {
+		if = {
+			limit = {
+				is_alive = yes
+				exists = scope:gen_bc_backed
+				scope:gen_bc_backed = scope:gen_bc_victor
+			}
+			add_prestige = minor_prestige_gain
+		}
+		else_if = {
+			limit = {
+				is_alive = yes
+				exists = scope:gen_bc_backed
+			}
+			add_prestige = minor_prestige_loss
+		}
+	}
+}
+
+# Both fighters out of the circle, and vanilla's bare chests put away.
+gen_bc_cleanup_effect = {
+	scope:gen_bc_challenger = {
+		if = {
+			limit = { is_alive = yes }
+			gen_bc_release_effect = yes
+		}
+	}
+	scope:gen_bc_defender = {
+		if = {
+			limit = { is_alive = yes }
+			gen_bc_release_effect = yes
+		}
+	}
+	single_combat_clean_shirtlessness_effect = {
+		ATTACKER = scope:gen_bc_challenger
+		DEFENDER = scope:gen_bc_defender
+	}
+}

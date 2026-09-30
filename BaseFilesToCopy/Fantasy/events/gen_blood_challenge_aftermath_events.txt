@@ -1,0 +1,1580 @@
+﻿namespace = gen_blood_challenge
+
+# The aftermath of a Blood Challenge: what the beaten fighter does on the ground, and what the victor
+# does with them.
+#
+# The rest of the chain: MAIN's interaction (00_gen_blood_challenge_interactions.txt) and hidden events
+# 0100/0101/0500 (gen_blood_challenge_events.txt); AGENT C's pre-fight scene 0010-0099
+# (gen_blood_challenge_scene_events.txt). MAIN's 0100 sends 0200 to the loser (alive and able) or 0300
+# to the victor (loser alive but unable). This file owns 0200-0399:
+#
+#   0200  hidden router: checks the loser can act, draws two risk options, sends 0201
+#   0201  "On the Ground" - the loser: Yield, or two of five risks (Blood Rage, Fight Dirty,
+#         Defiant Howl, Reach for the Blade, Last Insult)
+#   0300  hidden router: checks both are still alive and the victor can act, sends 0301
+#   0301  "The Verdict" - the victor: Spare, Finish It, Take a Tusk (or Make Them Crawl)
+#
+# Every path ends exactly once in 0300 or gen_bc_finish_chain_effect (MAIN -> 0500). 0200 is never sent
+# twice: after a turnaround the NEW victor gets the verdict, never a second "On the Ground".
+# Helpers (wounds, kills, the verdict hand-off) are in 00_gen_blood_challenge_aftermath_effects.txt.
+#
+# House rules: every roll ends in a toast to the roller and one to the other fighter, including the
+# "nothing worse happened" branches; the odds are shown (random_list / duel chances).
+
+
+# =====================================================================================
+#  0200: router for the downed loser
+# =====================================================================================
+
+# Hidden so that a loser who cannot act still moves the chain on (a failed trigger on a visible
+# event would strand it). The draw is done here, once, so 0201's two risk options never change while
+# it is open.
+gen_blood_challenge.0200 = {
+	type = character_event
+	hidden = yes
+
+	immediate = {
+		save_scope_as = gen_bc_ab_downed
+		if = {
+			limit = { exists = scope:gen_bc_victor }
+			scope:gen_bc_victor = { save_scope_as = gen_bc_ab_foe }
+		}
+		if = {
+			limit = {
+				exists = scope:gen_bc_ab_foe
+				scope:gen_bc_ab_foe = { is_alive = yes }
+				is_alive = yes
+				NOT = { has_trait = incapable }
+				is_imprisoned = no
+			}
+			# First risk option. Characters who suit an option are likelier to be offered it.
+			random_list = {
+				10 = {
+					modifier = {
+						add = 10
+						OR = {
+							has_trait = wrathful
+							has_trait = berserker
+							has_character_flag = gen_bc_stance_fury
+						}
+					}
+					save_scope_value_as = { name = gen_bc_ab_pick_a value = flag:rage }
+				}
+				10 = {
+					modifier = {
+						add = 10
+						OR = {
+							has_trait = deceitful
+							has_character_flag = gen_bc_stance_cunning
+						}
+					}
+					save_scope_value_as = { name = gen_bc_ab_pick_a value = flag:dirty }
+				}
+				10 = {
+					modifier = {
+						add = 10
+						OR = {
+							has_trait = zealous
+							has_character_flag = gen_bc_stance_ancestors
+						}
+					}
+					save_scope_value_as = { name = gen_bc_ab_pick_a value = flag:howl }
+				}
+				10 = {
+					save_scope_value_as = { name = gen_bc_ab_pick_a value = flag:blade }
+				}
+				10 = {
+					modifier = {
+						add = 10
+						has_trait = arrogant
+					}
+					save_scope_value_as = { name = gen_bc_ab_pick_a value = flag:insult }
+				}
+			}
+			# Second risk option: same pool, never the first one again.
+			random_list = {
+				10 = {
+					trigger = { NOT = { scope:gen_bc_ab_pick_a = flag:rage } }
+					modifier = {
+						add = 10
+						OR = {
+							has_trait = wrathful
+							has_trait = berserker
+							has_character_flag = gen_bc_stance_fury
+						}
+					}
+					save_scope_value_as = { name = gen_bc_ab_pick_b value = flag:rage }
+				}
+				10 = {
+					trigger = { NOT = { scope:gen_bc_ab_pick_a = flag:dirty } }
+					modifier = {
+						add = 10
+						OR = {
+							has_trait = deceitful
+							has_character_flag = gen_bc_stance_cunning
+						}
+					}
+					save_scope_value_as = { name = gen_bc_ab_pick_b value = flag:dirty }
+				}
+				10 = {
+					trigger = { NOT = { scope:gen_bc_ab_pick_a = flag:howl } }
+					modifier = {
+						add = 10
+						OR = {
+							has_trait = zealous
+							has_character_flag = gen_bc_stance_ancestors
+						}
+					}
+					save_scope_value_as = { name = gen_bc_ab_pick_b value = flag:howl }
+				}
+				10 = {
+					trigger = { NOT = { scope:gen_bc_ab_pick_a = flag:blade } }
+					save_scope_value_as = { name = gen_bc_ab_pick_b value = flag:blade }
+				}
+				10 = {
+					trigger = { NOT = { scope:gen_bc_ab_pick_a = flag:insult } }
+					modifier = {
+						add = 10
+						has_trait = arrogant
+					}
+					save_scope_value_as = { name = gen_bc_ab_pick_b value = flag:insult }
+				}
+			}
+			trigger_event = gen_blood_challenge.0201
+		}
+		# Alive but unable (MAIN normally catches this in 0100): straight to the verdict.
+		else_if = {
+			limit = {
+				exists = scope:gen_bc_ab_foe
+				scope:gen_bc_ab_foe = { is_alive = yes }
+				is_alive = yes
+			}
+			scope:gen_bc_ab_foe = { trigger_event = gen_blood_challenge.0300 }
+		}
+		else = {
+			gen_bc_finish_chain_effect = yes
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0201: On the Ground
+# =====================================================================================
+
+# root = the downed loser (scope:gen_bc_ab_downed), scope:gen_bc_ab_foe = the victor standing over them.
+gen_blood_challenge.0201 = {
+	type = character_event
+	title = gen_blood_challenge.0201.t
+	desc = {
+		# Who you fought and why.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					this = scope:gen_bc_challenger
+				}
+				desc = gen_blood_challenge.0201.desc.upward_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:upward }
+				desc = gen_blood_challenge.0201.desc.upward_defender
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:downward
+					this = scope:gen_bc_challenger
+				}
+				desc = gen_blood_challenge.0201.desc.downward_liege
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:downward }
+				desc = gen_blood_challenge.0201.desc.downward_vassal
+			}
+			desc = gen_blood_challenge.0201.desc.peer
+		}
+		# How badly you are hurt.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					has_trait_rank = {
+						trait = wounded
+						rank >= 2
+					}
+				}
+				desc = gen_blood_challenge.0201.desc.badly_hurt
+			}
+			desc = gen_blood_challenge.0201.desc.hurt
+		}
+		desc = gen_blood_challenge.0201.desc.end
+	}
+	theme = skull
+
+	left_portrait = {
+		character = root
+		triggered_animation = {
+			trigger = { portrait_should_wield_sword_trigger = yes }
+			animation = sword_yield_start
+		}
+		animation = pain
+	}
+	right_portrait = {
+		character = scope:gen_bc_ab_foe
+		scripted_animation = duel_celebrate
+	}
+
+	# Background: the circle stands wherever the fight was set (MAIN's scope:locale, as in vanilla
+	# single_combat.0031); an army camp if no locale was given.
+	override_background = {
+		trigger = {
+			scope:locale ?= flag:terrain_scope
+			exists = scope:background_terrain_scope
+		}
+		reference = terrain_scope
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:battlefield }
+		reference = battlefield
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:courtyard }
+		reference = courtyard
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:throne_room }
+		reference = throne_room
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:feast }
+		reference = feast
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:temple }
+		reference = temple
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:market }
+		reference = market
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:tavern }
+		reference = tavern
+	}
+	override_background = {
+		trigger = {
+			OR = {
+				NOT = { exists = scope:locale }
+				scope:locale ?= flag:army_camp
+			}
+		}
+		reference = army_camp
+	}
+
+	# --- Yield: the only safe choice. The victor decides what happens next. ---
+	option = {
+		name = gen_blood_challenge.0201.yield
+		show_as_tooltip = {
+			gen_bc_apply_stakes_effect = {
+				VICTOR = scope:gen_bc_ab_foe
+				LOSER = root
+			}
+		}
+		custom_tooltip = gen_blood_challenge.0201.verdict_tt
+		hidden_effect = {
+			save_scope_value_as = { name = gen_bc_ab_route value = flag:yielded }
+		}
+		scope:gen_bc_ab_foe = { trigger_event = gen_blood_challenge.0300 }
+
+		stress_impact = {
+			wrathful = minor_stress_impact_gain
+			arrogant = minor_stress_impact_gain
+			stubborn = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 60
+			ai_value_modifier = {
+				ai_boldness = -0.5
+				ai_rationality = 0.25
+			}
+			modifier = {
+				add = 30
+				has_trait = craven
+			}
+			modifier = {	# Already one wound from dying.
+				add = 40
+				has_trait_rank = {
+					trait = wounded
+					rank = 3
+				}
+			}
+		}
+	}
+
+	# --- Blood Rage: turn it around in a fury, or take a worse wound, or die. ---
+	option = {
+		name = gen_blood_challenge.0201.rage
+		trigger = {
+			OR = {
+				scope:gen_bc_ab_pick_a = flag:rage
+				scope:gen_bc_ab_pick_b = flag:rage
+			}
+		}
+		skill = prowess
+		trait = wrathful
+		trait = berserker
+		duel = {
+			skill = prowess
+			target = scope:gen_bc_ab_foe
+			# You turn the fight around.
+			30 = {
+				desc = gen_blood_challenge.0201.rage.win
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 2
+					min = -25
+				}
+				modifier = {
+					add = 15
+					has_trait = wrathful
+				}
+				modifier = {
+					add = 20
+					has_trait = berserker
+				}
+				modifier = {
+					add = 10
+					has_trait = brave
+				}
+				modifier = {
+					add = 15
+					has_character_flag = gen_bc_stance_fury
+				}
+				modifier = {
+					add = -10
+					has_trait = craven
+				}
+				min = 5
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_blood_challenge.0201.rage.win
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					show_as_tooltip = {
+						gen_bc_apply_stakes_effect = {
+							VICTOR = root
+							LOSER = scope:gen_bc_ab_foe
+						}
+					}
+					custom_tooltip = gen_blood_challenge.0201.turned_tt
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = gen_blood_challenge.0201.rage.win.foe
+						desc = gen_blood_challenge.0201.rage.win.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+						gen_bc_ab_wound_turned_effect = yes
+					}
+				}
+				gen_bc_ab_turn_it_around_effect = yes
+				gen_bc_ab_close_effect = yes
+			}
+			# The fury carries you up and straight back into the dirt.
+			40 = {
+				desc = gen_blood_challenge.0201.rage.wound
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0201.rage.wound
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					gen_bc_ab_wound_downed_effect = yes
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = gen_blood_challenge.0201.rage.wound.foe
+						desc = gen_blood_challenge.0201.rage.wound.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+					}
+				}
+				hidden_effect = {
+					save_scope_value_as = { name = gen_bc_ab_route value = flag:defiant }
+				}
+				gen_bc_ab_close_effect = yes
+			}
+			# The victor kills you before you are fully up.
+			20 = {
+				desc = gen_blood_challenge.0201.rage.death
+				modifier = {
+					add = 15
+					scope:gen_bc_kind = flag:upward
+				}
+				modifier = {
+					add = -5
+					scope:gen_bc_kind = flag:downward
+				}
+				modifier = {	# Fury helps you up and gets you killed.
+					add = 10
+					has_character_flag = gen_bc_stance_fury
+				}
+				min = 5
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0201.rage.death
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					gen_bc_ab_kill_effect = {
+						KILLER = scope:gen_bc_ab_foe
+						VICTIM = root
+						DELIBERATE = no
+						REASON = gen_bc_death_blood_challenge
+					}
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = gen_blood_challenge.0201.rage.death.foe
+						desc = gen_blood_challenge.0201.rage.death.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+					}
+				}
+				gen_bc_ab_close_effect = yes
+			}
+		}
+
+		stress_impact = {
+			wrathful = minor_stress_impact_loss
+			craven = medium_stress_impact_gain
+			calm = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_boldness = 0.5
+				ai_rationality = -0.25
+			}
+			modifier = {
+				add = 30
+				has_trait = wrathful
+			}
+			modifier = {
+				add = 40
+				has_trait = berserker
+			}
+			modifier = {
+				add = 20
+				has_character_flag = gen_bc_stance_fury
+			}
+			modifier = {
+				factor = 0.25
+				has_trait_rank = {
+					trait = wounded
+					rank = 3
+				}
+			}
+		}
+	}
+
+	# --- Fight Dirty: sand and a hidden knife. The circle sees it whatever happens. ---
+	option = {
+		name = gen_blood_challenge.0201.dirty
+		trigger = {
+			OR = {
+				scope:gen_bc_ab_pick_a = flag:dirty
+				scope:gen_bc_ab_pick_b = flag:dirty
+			}
+		}
+		skill = intrigue
+		trait = deceitful
+		trait = arbitrary
+		trait = honest
+		trait = just
+		# Win or lose, the clans watched you do it.
+		add_prestige = minor_prestige_loss
+		gen_bc_ab_onlookers_frown_effect = {
+			ACTOR = root
+			OPINION = gen_bc_fought_dirty_opinion
+			TT = gen_blood_challenge.0201.dirty.onlookers_tt
+		}
+		duel = {
+			skill = intrigue
+			target = scope:gen_bc_ab_foe
+			# The trick works and you turn the fight around.
+			35 = {
+				desc = gen_blood_challenge.0201.dirty.win
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 2
+					min = -30
+				}
+				modifier = {
+					add = 15
+					has_trait = deceitful
+				}
+				modifier = {
+					add = 10
+					has_trait = arbitrary
+				}
+				modifier = {
+					add = 20
+					has_character_flag = gen_bc_stance_cunning
+				}
+				min = 5
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_blood_challenge.0201.dirty.win
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					show_as_tooltip = {
+						gen_bc_apply_stakes_effect = {
+							VICTOR = root
+							LOSER = scope:gen_bc_ab_foe
+						}
+					}
+					custom_tooltip = gen_blood_challenge.0201.turned_tt
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = gen_blood_challenge.0201.dirty.win.foe
+						desc = gen_blood_challenge.0201.dirty.win.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+						gen_bc_ab_wound_turned_effect = yes
+						add_opinion = {
+							target = scope:gen_bc_ab_downed
+							modifier = gen_bc_fought_dirty_opinion
+						}
+					}
+				}
+				gen_bc_ab_turn_it_around_effect = yes
+				gen_bc_ab_close_effect = yes
+			}
+			# Caught: the victor punishes you for it.
+			40 = {
+				desc = gen_blood_challenge.0201.dirty.caught
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0201.dirty.caught
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					gen_bc_ab_wound_downed_effect = yes
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = gen_blood_challenge.0201.dirty.caught.foe
+						desc = gen_blood_challenge.0201.dirty.caught.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+						add_opinion = {
+							target = scope:gen_bc_ab_downed
+							modifier = gen_bc_fought_dirty_opinion
+						}
+					}
+				}
+				hidden_effect = {
+					save_scope_value_as = { name = gen_bc_ab_route value = flag:dirty }
+				}
+				gen_bc_ab_close_effect = yes
+			}
+			# Caught, and killed for it.
+			15 = {
+				desc = gen_blood_challenge.0201.dirty.death
+				modifier = {
+					add = 15
+					scope:gen_bc_kind = flag:upward
+				}
+				modifier = {
+					add = -5
+					scope:gen_bc_kind = flag:downward
+				}
+				modifier = {
+					add = 10
+					scope:gen_bc_ab_foe = {
+						OR = {
+							has_trait = wrathful
+							has_trait = vengeful
+						}
+					}
+				}
+				min = 5
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0201.dirty.death
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					gen_bc_ab_kill_effect = {
+						KILLER = scope:gen_bc_ab_foe
+						VICTIM = root
+						DELIBERATE = no
+						REASON = gen_bc_death_blood_challenge
+					}
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = gen_blood_challenge.0201.dirty.death.foe
+						desc = gen_blood_challenge.0201.dirty.death.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+					}
+				}
+				gen_bc_ab_close_effect = yes
+			}
+		}
+
+		stress_impact = {
+			honest = medium_stress_impact_gain
+			just = minor_stress_impact_gain
+			deceitful = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_honor = -0.5
+				ai_boldness = 0.25
+			}
+			modifier = {
+				add = 25
+				has_trait = deceitful
+			}
+			modifier = {
+				add = 10
+				has_trait = arbitrary
+			}
+			modifier = {
+				add = 20
+				has_character_flag = gen_bc_stance_cunning
+			}
+			modifier = {
+				factor = 0.1
+				OR = {
+					has_trait = honest
+					has_trait = just
+				}
+			}
+			modifier = {
+				factor = 0.25
+				has_trait_rank = {
+					trait = wounded
+					rank = 3
+				}
+			}
+		}
+	}
+
+	# --- Defiant Howl: no turnaround. Respect, a beating, or death. ---
+	option = {
+		name = gen_blood_challenge.0201.howl
+		trigger = {
+			OR = {
+				scope:gen_bc_ab_pick_a = flag:howl
+				scope:gen_bc_ab_pick_b = flag:howl
+			}
+		}
+		trait = brave
+		trait = zealous
+		random_list = {
+			# The victor respects it and lets you walk out.
+			40 = {
+				desc = gen_blood_challenge.0201.howl.respect
+				modifier = {
+					add = 15
+					has_trait = brave
+				}
+				modifier = {
+					add = 10
+					has_trait = zealous
+				}
+				modifier = {
+					add = 20
+					has_character_flag = gen_bc_stance_ancestors
+				}
+				modifier = {
+					add = 10
+					scope:gen_bc_ab_foe = {
+						OR = {
+							has_trait = brave
+							has_trait = zealous
+						}
+					}
+				}
+				modifier = {
+					add = -10
+					scope:gen_bc_ab_foe = { has_trait = sadistic }
+				}
+				min = 5
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_blood_challenge.0201.howl.respect
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					add_prestige = medium_prestige_gain
+					add_opinion = {
+						target = scope:gen_bc_ab_foe
+						modifier = duel_mutual_respect_opinion
+					}
+					custom_tooltip = gen_blood_challenge.0201.no_verdict_tt
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = gen_blood_challenge.0201.howl.respect.foe
+						desc = gen_blood_challenge.0201.howl.respect.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+						add_opinion = {
+							target = scope:gen_bc_ab_downed
+							modifier = duel_mutual_respect_opinion
+						}
+					}
+				}
+				gen_bc_finish_chain_effect = yes
+			}
+			# The victor beats you back down.
+			35 = {
+				desc = gen_blood_challenge.0201.howl.beaten
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0201.howl.beaten
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					gen_bc_ab_wound_downed_effect = yes
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = gen_blood_challenge.0201.howl.beaten.foe
+						desc = gen_blood_challenge.0201.howl.beaten.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+					}
+				}
+				hidden_effect = {
+					save_scope_value_as = { name = gen_bc_ab_route value = flag:defiant }
+				}
+				gen_bc_ab_close_effect = yes
+			}
+			# The victor takes the howl as a refusal to yield and finishes it.
+			15 = {
+				desc = gen_blood_challenge.0201.howl.death
+				modifier = {
+					add = 15
+					scope:gen_bc_kind = flag:upward
+				}
+				modifier = {
+					add = -5
+					scope:gen_bc_kind = flag:downward
+				}
+				modifier = {
+					add = 10
+					scope:gen_bc_ab_foe = {
+						OR = {
+							has_trait = wrathful
+							has_trait = sadistic
+						}
+					}
+				}
+				min = 5
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0201.howl.death
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					gen_bc_ab_kill_effect = {
+						KILLER = scope:gen_bc_ab_foe
+						VICTIM = root
+						DELIBERATE = no
+						REASON = gen_bc_death_blood_challenge
+					}
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = gen_blood_challenge.0201.howl.death.foe
+						desc = gen_blood_challenge.0201.howl.death.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+					}
+				}
+				gen_bc_ab_close_effect = yes
+			}
+		}
+
+		stress_impact = {
+			craven = medium_stress_impact_gain
+			humble = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_boldness = 0.3
+				ai_zeal = 0.3
+			}
+			modifier = {
+				add = 15
+				has_trait = brave
+			}
+			modifier = {
+				add = 15
+				has_trait = zealous
+			}
+			modifier = {
+				add = 20
+				has_character_flag = gen_bc_stance_ancestors
+			}
+			modifier = {
+				factor = 0.25
+				has_trait_rank = {
+					trait = wounded
+					rank = 3
+				}
+			}
+		}
+	}
+
+	# --- Reach for the Blade: plain odds, no trait help. ---
+	option = {
+		name = gen_blood_challenge.0201.blade
+		trigger = {
+			OR = {
+				scope:gen_bc_ab_pick_a = flag:blade
+				scope:gen_bc_ab_pick_b = flag:blade
+			}
+		}
+		skill = prowess
+		duel = {
+			skill = prowess
+			target = scope:gen_bc_ab_foe
+			# You get the weapon and turn it around.
+			25 = {
+				desc = gen_blood_challenge.0201.blade.win
+				compare_modifier = {
+					value = scope:duel_value
+					multiplier = 1.5
+					min = -20
+				}
+				min = 5
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_blood_challenge.0201.blade.win
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					show_as_tooltip = {
+						gen_bc_apply_stakes_effect = {
+							VICTOR = root
+							LOSER = scope:gen_bc_ab_foe
+						}
+					}
+					custom_tooltip = gen_blood_challenge.0201.turned_tt
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = gen_blood_challenge.0201.blade.win.foe
+						desc = gen_blood_challenge.0201.blade.win.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+						gen_bc_ab_wound_turned_effect = yes
+					}
+				}
+				gen_bc_ab_turn_it_around_effect = yes
+				gen_bc_ab_close_effect = yes
+			}
+			# The victor stamps on your hand.
+			45 = {
+				desc = gen_blood_challenge.0201.blade.wound
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0201.blade.wound
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					gen_bc_ab_wound_downed_effect = yes
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = gen_blood_challenge.0201.blade.wound.foe
+						desc = gen_blood_challenge.0201.blade.wound.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+					}
+				}
+				hidden_effect = {
+					save_scope_value_as = { name = gen_bc_ab_route value = flag:defiant }
+				}
+				gen_bc_ab_close_effect = yes
+			}
+			# The victor strikes before you reach it.
+			15 = {
+				desc = gen_blood_challenge.0201.blade.death
+				modifier = {
+					add = 15
+					scope:gen_bc_kind = flag:upward
+				}
+				modifier = {
+					add = -5
+					scope:gen_bc_kind = flag:downward
+				}
+				min = 5
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0201.blade.death
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					gen_bc_ab_kill_effect = {
+						KILLER = scope:gen_bc_ab_foe
+						VICTIM = root
+						DELIBERATE = no
+						REASON = gen_bc_death_blood_challenge
+					}
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = gen_blood_challenge.0201.blade.death.foe
+						desc = gen_blood_challenge.0201.blade.death.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+					}
+				}
+				gen_bc_ab_close_effect = yes
+			}
+		}
+
+		stress_impact = {
+			craven = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 15
+			ai_value_modifier = {
+				ai_boldness = 0.3
+			}
+			modifier = {
+				add = 10
+				prowess >= 12
+			}
+			modifier = {
+				factor = 0.25
+				has_trait_rank = {
+					trait = wounded
+					rank = 3
+				}
+			}
+		}
+	}
+
+	# --- Last Insult: the victor laughs, beats you down, or kills you. Depends on the victor. ---
+	option = {
+		name = gen_blood_challenge.0201.insult
+		trigger = {
+			OR = {
+				scope:gen_bc_ab_pick_a = flag:insult
+				scope:gen_bc_ab_pick_b = flag:insult
+			}
+		}
+		trait = arrogant
+		random_list = {
+			# The victor laughs.
+			40 = {
+				desc = gen_blood_challenge.0201.insult.laugh
+				modifier = {
+					add = 10
+					scope:gen_bc_ab_foe = {
+						OR = {
+							has_trait = calm
+							has_trait = gregarious
+						}
+					}
+				}
+				modifier = {
+					add = -20
+					scope:gen_bc_ab_foe = { has_trait = wrathful }
+				}
+				modifier = {
+					add = -10
+					scope:gen_bc_ab_foe = { has_trait = vengeful }
+				}
+				modifier = {
+					add = -20
+					scope:gen_bc_ab_foe = {
+						OR = {
+							has_relation_rival = root
+							has_relation_nemesis = root
+						}
+					}
+				}
+				min = 5
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_blood_challenge.0201.insult.laugh
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					add_prestige = minor_prestige_gain
+					custom_tooltip = gen_blood_challenge.0201.no_verdict_tt
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = gen_blood_challenge.0201.insult.laugh.foe
+						desc = gen_blood_challenge.0201.insult.laugh.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+						add_opinion = {
+							target = scope:gen_bc_ab_downed
+							modifier = gen_bc_made_me_laugh_opinion
+						}
+					}
+				}
+				gen_bc_finish_chain_effect = yes
+			}
+			# The victor beats you for it.
+			30 = {
+				desc = gen_blood_challenge.0201.insult.struck
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0201.insult.struck
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					gen_bc_ab_wound_downed_effect = yes
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = gen_blood_challenge.0201.insult.struck.foe
+						desc = gen_blood_challenge.0201.insult.struck.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+					}
+				}
+				hidden_effect = {
+					save_scope_value_as = { name = gen_bc_ab_route value = flag:defiant }
+				}
+				gen_bc_ab_close_effect = yes
+			}
+			# The victor kills you in anger.
+			20 = {
+				desc = gen_blood_challenge.0201.insult.death
+				modifier = {
+					add = 15
+					scope:gen_bc_kind = flag:upward
+				}
+				modifier = {
+					add = -5
+					scope:gen_bc_kind = flag:downward
+				}
+				modifier = {
+					add = 15
+					scope:gen_bc_ab_foe = { has_trait = wrathful }
+				}
+				modifier = {
+					add = 10
+					scope:gen_bc_ab_foe = { has_trait = vengeful }
+				}
+				modifier = {
+					add = 15
+					scope:gen_bc_ab_foe = {
+						OR = {
+							has_relation_rival = root
+							has_relation_nemesis = root
+						}
+					}
+				}
+				modifier = {
+					add = 10
+					scope:gen_bc_ab_foe = { has_character_flag = gen_bc_stance_fury }
+				}
+				min = 5
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0201.insult.death
+					left_icon = root
+					right_icon = scope:gen_bc_ab_foe
+					gen_bc_ab_kill_effect = {
+						KILLER = scope:gen_bc_ab_foe
+						VICTIM = root
+						DELIBERATE = no
+						REASON = gen_bc_death_blood_challenge
+					}
+				}
+				scope:gen_bc_ab_foe = {
+					send_interface_toast = {
+						type = event_toast_effect_neutral
+						title = gen_blood_challenge.0201.insult.death.foe
+						desc = gen_blood_challenge.0201.insult.death.foe.desc
+						left_icon = scope:gen_bc_ab_downed
+						right_icon = scope:gen_bc_ab_foe
+					}
+				}
+				gen_bc_ab_close_effect = yes
+			}
+		}
+
+		stress_impact = {
+			arrogant = minor_stress_impact_loss
+			humble = minor_stress_impact_gain
+			shy = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 10
+			ai_value_modifier = {
+				ai_boldness = 0.3
+				ai_rationality = -0.3
+			}
+			modifier = {
+				add = 20
+				has_trait = arrogant
+			}
+			modifier = {
+				factor = 0.25
+				scope:gen_bc_ab_foe = { has_trait = wrathful }
+			}
+			modifier = {
+				factor = 0.25
+				has_trait_rank = {
+					trait = wounded
+					rank = 3
+				}
+			}
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0300: router for the victor's verdict
+# =====================================================================================
+
+# Sent to scope:gen_bc_victor by MAIN's 0100 (loser alive but unable), by 0200, or by 0201 (after a
+# yield, a beating, or a turnaround, when then the NEW victor gets it). Hidden for the same reason as
+# 0200: a verdict with no one left to judge, or a victor who cannot give one, must still end the chain.
+gen_blood_challenge.0300 = {
+	type = character_event
+	hidden = yes
+
+	immediate = {
+		if = {
+			limit = {
+				exists = scope:gen_bc_loser
+				scope:gen_bc_loser = { is_alive = yes }
+				is_alive = yes
+				NOT = { has_trait = incapable }
+				is_imprisoned = no
+			}
+			scope:gen_bc_loser = { save_scope_as = gen_bc_ab_fallen }
+			save_scope_as = gen_bc_ab_judge	# names the victor in toasts sent to the fallen
+			trigger_event = gen_blood_challenge.0301
+		}
+		# No one to judge, or no one fit to judge: the loser is simply left alive.
+		else = {
+			gen_bc_finish_chain_effect = yes
+		}
+	}
+}
+
+
+# =====================================================================================
+#  0301: The Verdict
+# =====================================================================================
+
+# root = the victor, scope:gen_bc_ab_fallen = the beaten loser. Every option ends the chain.
+gen_blood_challenge.0301 = {
+	type = character_event
+	title = gen_blood_challenge.0301.t
+	desc = {
+		# How the fight ended.
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_bc_ab_route ?= flag:reversed }
+				desc = gen_blood_challenge.0301.desc.reversed
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_ab_route ?= flag:dirty }
+				desc = gen_blood_challenge.0301.desc.dirty
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_ab_route ?= flag:defiant }
+				desc = gen_blood_challenge.0301.desc.defiant
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_ab_route ?= flag:yielded }
+				desc = gen_blood_challenge.0301.desc.yielded
+			}
+			desc = gen_blood_challenge.0301.desc.unable
+		}
+		# What the fight was for.
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:upward
+					this = scope:gen_bc_challenger
+				}
+				desc = gen_blood_challenge.0301.desc.upward_challenger
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:upward }
+				desc = gen_blood_challenge.0301.desc.upward_defender
+			}
+			triggered_desc = {
+				trigger = {
+					scope:gen_bc_kind = flag:downward
+					this = scope:gen_bc_challenger	# downward: the liege issued it
+				}
+				desc = gen_blood_challenge.0301.desc.downward_liege
+			}
+			triggered_desc = {
+				trigger = { scope:gen_bc_kind = flag:downward }
+				desc = gen_blood_challenge.0301.desc.downward_vassal
+			}
+			desc = gen_blood_challenge.0301.desc.peer
+		}
+		desc = gen_blood_challenge.0301.desc.end
+	}
+	theme = dread
+
+	left_portrait = {
+		character = root
+		scripted_animation = duel_celebrate
+	}
+	right_portrait = {
+		character = scope:gen_bc_ab_fallen
+		triggered_animation = {
+			trigger = { portrait_should_wield_sword_trigger = yes }
+			animation = sword_yield_start
+		}
+		animation = pain
+	}
+
+	override_background = {
+		trigger = {
+			scope:locale ?= flag:terrain_scope
+			exists = scope:background_terrain_scope
+		}
+		reference = terrain_scope
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:battlefield }
+		reference = battlefield
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:courtyard }
+		reference = courtyard
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:throne_room }
+		reference = throne_room
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:feast }
+		reference = feast
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:temple }
+		reference = temple
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:market }
+		reference = market
+	}
+	override_background = {
+		trigger = { scope:locale ?= flag:tavern }
+		reference = tavern
+	}
+	override_background = {
+		trigger = {
+			OR = {
+				NOT = { exists = scope:locale }
+				scope:locale ?= flag:army_camp
+			}
+		}
+		reference = army_camp
+	}
+
+	# --- The fallen died while the verdict was open (a player can leave it for days). ---
+	option = {
+		name = gen_blood_challenge.0301.too_late
+		trigger = { scope:gen_bc_ab_fallen = { is_alive = no } }
+		gen_bc_finish_chain_effect = yes
+	}
+
+	# --- Spare: grateful or humiliated, by the loser's nature. ---
+	option = {
+		name = gen_blood_challenge.0301.spare
+		trigger = { scope:gen_bc_ab_fallen = { is_alive = yes } }
+		add_prestige = minor_prestige_gain
+		scope:gen_bc_ab_fallen = {
+			# Grateful: the meek, the kind, and a peer who fought a fair fight and has no grudge.
+			if = {
+				limit = {
+					NOT = { has_relation_rival = root }
+					NOT = { has_relation_nemesis = root }
+					OR = {
+						has_trait = craven
+						has_trait = humble
+						has_trait = compassionate
+						has_trait = forgiving
+						AND = {
+							scope:gen_bc_kind = flag:peer
+							NOT = { has_trait = arrogant }
+							NOT = { has_trait = vengeful }
+							NOT = { has_trait = wrathful }
+						}
+					}
+				}
+				send_interface_toast = {
+					type = event_toast_effect_good
+					title = gen_blood_challenge.0301.spare.grateful
+					desc = gen_blood_challenge.0301.spare.grateful.desc
+					left_icon = scope:gen_bc_ab_fallen
+					right_icon = root
+					add_opinion = {
+						target = root
+						modifier = gen_bc_spared_me_opinion
+					}
+				}
+			}
+			# Humiliated: to the proud, mercy is an insult.
+			else = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = gen_blood_challenge.0301.spare.shamed
+					desc = gen_blood_challenge.0301.spare.shamed.desc
+					left_icon = scope:gen_bc_ab_fallen
+					right_icon = root
+					add_opinion = {
+						target = root
+						modifier = gen_bc_spared_to_shame_me_opinion
+					}
+				}
+			}
+		}
+		gen_bc_finish_chain_effect = yes
+
+		stress_impact = {
+			compassionate = minor_stress_impact_loss
+			forgiving = minor_stress_impact_loss
+			sadistic = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 60
+			ai_value_modifier = {
+				ai_compassion = 0.5
+				ai_vengefulness = -0.3
+			}
+			modifier = {
+				add = 20
+				has_trait = forgiving
+			}
+			modifier = {
+				add = 30
+				is_close_or_extended_family_of = scope:gen_bc_ab_fallen
+			}
+			modifier = {
+				factor = 0.3
+				OR = {
+					has_relation_rival = scope:gen_bc_ab_fallen
+					has_relation_nemesis = scope:gen_bc_ab_fallen
+				}
+			}
+		}
+	}
+
+	# --- Finish It: kill the beaten loser. ---
+	option = {
+		name = gen_blood_challenge.0301.finish
+		trigger = { scope:gen_bc_ab_fallen = { is_alive = yes } }
+		add_dread = medium_dread_gain
+		# An upward fight is for a seat, and the Blood Right lets the victor take a life for it.
+		# Anywhere else, killing a beaten foe turns the watching clans against you.
+		if = {
+			limit = { scope:gen_bc_kind = flag:upward }
+			custom_tooltip = gen_blood_challenge.0301.finish.blood_right_tt
+		}
+		else = {
+			gen_bc_ab_onlookers_frown_effect = {
+				ACTOR = root
+				OPINION = gen_bc_killed_beaten_foe_opinion
+				TT = gen_blood_challenge.0301.finish.onlookers_tt
+			}
+		}
+		gen_bc_ab_kill_effect = {
+			KILLER = root
+			VICTIM = scope:gen_bc_ab_fallen
+			DELIBERATE = yes
+			REASON = gen_bc_death_finished
+		}
+		gen_bc_finish_chain_effect = yes
+
+		stress_impact = {
+			compassionate = medium_stress_impact_gain
+			forgiving = medium_stress_impact_gain
+			just = minor_stress_impact_gain
+			sadistic = minor_stress_impact_loss
+			wrathful = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 3
+			ai_value_modifier = {
+				ai_compassion = -0.5
+				ai_vengefulness = 0.5
+			}
+			modifier = {
+				add = 10
+				scope:gen_bc_kind = flag:upward
+			}
+			modifier = {
+				add = 15
+				has_trait = sadistic
+			}
+			modifier = {
+				add = 25
+				has_relation_rival = scope:gen_bc_ab_fallen
+			}
+			modifier = {
+				add = 50
+				has_relation_nemesis = scope:gen_bc_ab_fallen
+			}
+			modifier = {
+				factor = 0
+				has_trait = compassionate
+			}
+			modifier = {
+				factor = 0.2
+				is_close_or_extended_family_of = scope:gen_bc_ab_fallen
+				NOT = { has_relation_nemesis = scope:gen_bc_ab_fallen }
+			}
+		}
+	}
+
+	# --- Take a Tusk: only a foe with a whole pair of tusks (an orc, or a half-orc). ---
+	option = {
+		name = gen_blood_challenge.0301.tusk
+		trigger = {
+			scope:gen_bc_ab_fallen = {
+				is_alive = yes
+				gen_has_tusks_trigger = yes
+				NOT = { gen_has_broken_tusk_trigger = yes }
+			}
+		}
+		add_character_modifier = {
+			modifier = gen_bc_tusk_trophy_modifier
+			years = 20
+		}
+		add_dread = minor_dread_gain
+		add_prestige = minor_prestige_gain
+		scope:gen_bc_ab_fallen = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = gen_blood_challenge.0301.tusk.fallen
+				desc = gen_blood_challenge.0301.tusk.fallen.desc
+				left_icon = scope:gen_bc_ab_fallen
+				right_icon = root
+				custom_tooltip = gen_blood_challenge.0301.tusk.broken_tt
+				hidden_effect = { gen_break_tusk_effect = yes }
+				add_character_modifier = {
+					modifier = gen_bc_broken_tusk_modifier
+					years = 20
+				}
+				add_opinion = {
+					target = root
+					modifier = gen_bc_took_my_tusk_opinion
+				}
+			}
+		}
+		gen_bc_finish_chain_effect = yes
+
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+			sadistic = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 25
+			ai_value_modifier = {
+				ai_vengefulness = 0.3
+				ai_compassion = -0.3
+			}
+			modifier = {
+				add = 15
+				has_trait = sadistic
+			}
+			modifier = {
+				add = 10
+				has_trait = arrogant
+			}
+			modifier = {
+				add = 20
+				has_relation_rival = scope:gen_bc_ab_fallen
+			}
+			modifier = {
+				factor = 0.3
+				is_close_or_extended_family_of = scope:gen_bc_ab_fallen
+			}
+		}
+	}
+
+	# --- Make Them Crawl: the humiliation for a foe with no tusk left to take. ---
+	option = {
+		name = gen_blood_challenge.0301.crawl
+		trigger = {
+			scope:gen_bc_ab_fallen = { is_alive = yes }
+			NOT = {
+				scope:gen_bc_ab_fallen = {
+					gen_has_tusks_trigger = yes
+					NOT = { gen_has_broken_tusk_trigger = yes }
+				}
+			}
+		}
+		add_dread = miniscule_dread_gain
+		add_prestige = minor_prestige_gain
+		scope:gen_bc_ab_fallen = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = gen_blood_challenge.0301.crawl.fallen
+				desc = gen_blood_challenge.0301.crawl.fallen.desc
+				left_icon = scope:gen_bc_ab_fallen
+				right_icon = root
+				add_character_modifier = {
+					modifier = gen_bc_crawled_from_circle_modifier
+					years = 10
+				}
+				add_opinion = {
+					target = root
+					modifier = gen_bc_made_me_crawl_opinion
+				}
+			}
+		}
+		gen_bc_finish_chain_effect = yes
+
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+			sadistic = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 20
+			ai_value_modifier = {
+				ai_vengefulness = 0.3
+				ai_compassion = -0.3
+			}
+			modifier = {
+				add = 15
+				has_trait = sadistic
+			}
+			modifier = {
+				add = 10
+				has_trait = arrogant
+			}
+			modifier = {
+				add = 20
+				has_relation_rival = scope:gen_bc_ab_fallen
+			}
+			modifier = {
+				factor = 0.3
+				is_close_or_extended_family_of = scope:gen_bc_ab_fallen
+			}
+		}
+	}
+}

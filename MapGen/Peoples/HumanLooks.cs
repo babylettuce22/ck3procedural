@@ -184,9 +184,15 @@ public static class HumanLooks
 
             var data = new Data();
             ReadEthnicities(Path.Combine(gameDir, "common", "ethnicities"), data);
-            if (vocabulary is not null) ReadRecipes(vocabulary, data);
 
-            Cache[gameDir] = data;
+            // Cached only when complete: a caller that wants just the ethnicities (the bookmark DNA
+            // writer) must not leave a recipe-less entry for the next world's placement to find.
+            if (vocabulary is not null)
+            {
+                ReadRecipes(vocabulary, data);
+                Cache[gameDir] = data;
+            }
+
             return data;
         }
     }

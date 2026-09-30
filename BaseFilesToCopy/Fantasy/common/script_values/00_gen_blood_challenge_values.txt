@@ -1,0 +1,21 @@
+﻿# The Blood Challenge's prestige cost (00_gen_blood_challenge_interactions.txt), with scope:actor
+# and scope:recipient. The interaction's cost and its refund on refusal both read this.
+#
+# A fight for renown is cheap. A fight for a seat costs what the win pays back (medium prestige), and
+# when it would also earn a claim it costs a major sum: the claim is the prize, so calling out every
+# greater ruler in reach for claims is a real expense rather than a farm.
+gen_bc_challenge_cost_value = {
+	value = minor_prestige_value
+	if = {
+		limit = { gen_bc_is_upward_trigger = yes }
+		value = medium_prestige_value
+		if = {
+			limit = {
+				scope:recipient = {
+					any_held_title = { gen_bc_claimable_title_trigger = { CLAIMANT = scope:actor } }
+				}
+			}
+			value = major_prestige_value
+		}
+	}
+}

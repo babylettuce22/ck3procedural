@@ -15,8 +15,10 @@ public static class TerrainMaskWriter
     {
         // Province resolution, because that is the size TerrainTextureWriter emits the detail
         // textures at and these masks are read straight back out of them. The two are one
-        // decision; see the ceiling documented on TerrainTextureWriter.WriteAll.
-        int width = cfg.ProvinceWidth, height = cfg.ProvinceHeight;
+        // decision; see the ceiling documented on TerrainTextureWriter.WriteAll. Small maps get
+        // their detail maps at a multiple of that (TerrainTextureWriter.DetailScale).
+        int scale = TerrainTextureWriter.DetailScale(cfg);
+        int width = cfg.ProvinceWidth * scale, height = cfg.ProvinceHeight * scale;
 
         string terrainDir = Path.Combine(modDir, "gfx", "map", "terrain");
         var index = ReadTga(Path.Combine(terrainDir, "detail_index.tga"));

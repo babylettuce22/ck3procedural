@@ -1,0 +1,138 @@
+﻿l_english:
+ gen_blood_challenge.0301.too_late: "It is over. There is no one left to judge."
+ # Aftermath of a Blood Challenge: events/gen_blood_challenge_aftermath_events.txt (0200-0399).
+ # 0201 is the downed loser's choice, 0301 the victor's verdict. Toast titles double as the
+ # outcome lines in each option's odds tooltip, so they state the result plainly.
+
+ # ============ Death reasons ============
+ gen_bc_death_blood_challenge: "was slain in a Blood Challenge"
+ gen_bc_death_blood_challenge_killer: "was slain in a Blood Challenge by [TARGET_CHARACTER.GetUIName]"
+ gen_bc_death_finished: "was killed after losing a Blood Challenge"
+ gen_bc_death_finished_killer: "was killed by [TARGET_CHARACTER.GetUIName] after losing a Blood Challenge"
+
+ # ============ Opinions ============
+ gen_bc_fought_dirty_opinion: "Fought Dirty in the Circle"
+ gen_bc_killed_beaten_foe_opinion: "Killed a Beaten Foe"
+ gen_bc_spared_me_opinion: "Spared My Life"
+ gen_bc_spared_to_shame_me_opinion: "Spared Me to Shame Me"
+ gen_bc_took_my_tusk_opinion: "Took My Tusk"
+ gen_bc_made_me_crawl_opinion: "Made Me Crawl"
+ gen_bc_made_me_laugh_opinion: "Made Me Laugh"
+
+ # ============ Modifiers ============
+ gen_bc_broken_tusk_modifier: "Tusk Taken"
+ gen_bc_broken_tusk_modifier_desc: "This character lost a Blood Challenge, and the victor broke off one of this character's tusks as a trophy. Everyone can see the stump."
+ gen_bc_tusk_trophy_modifier: "Tusk Trophy"
+ gen_bc_tusk_trophy_modifier_desc: "This character wears the tusk of a beaten foe, taken in the circle of a Blood Challenge."
+ gen_bc_crawled_from_circle_modifier: "Crawled from the Circle"
+ gen_bc_crawled_from_circle_modifier_desc: "This character lost a Blood Challenge and was made to crawl out of the circle in front of both clans."
+
+ # ============ 0201: On the Ground ============
+ gen_blood_challenge.0201.t: "On the Ground"
+ gen_blood_challenge.0201.desc.upward_challenger: "You challenged [gen_bc_ab_foe.GetTitledFirstName] for [gen_bc_ab_foe.GetHerHis] seat, and [gen_bc_ab_foe.GetSheHe] has beaten you. You are on your back in the dirt of the circle, and the whole clan is watching."
+ gen_blood_challenge.0201.desc.upward_defender: "[gen_bc_ab_foe.GetTitledFirstName] challenged you for your seat, and [gen_bc_ab_foe.GetSheHe] has beaten you. You are on your back in the dirt of the circle, and the whole clan is watching."
+ gen_blood_challenge.0201.desc.downward_liege: "You called your own vassal [gen_bc_ab_foe.GetFirstName] into the circle to put [gen_bc_ab_foe.GetHerHim] in [gen_bc_ab_foe.GetHerHis] place. Instead, [gen_bc_ab_foe.GetSheHe] has put you on the ground in front of your whole court."
+ gen_blood_challenge.0201.desc.downward_vassal: "Your liege [gen_bc_ab_foe.GetFirstName] called you into the circle, and [gen_bc_ab_foe.GetSheHe] has beaten you. You are on the ground in front of [gen_bc_ab_foe.GetHerHis] whole court."
+ gen_blood_challenge.0201.desc.peer: "[gen_bc_ab_foe.GetTitledFirstName] has beaten you in the circle. You are on the ground, and both your clans are watching."
+ gen_blood_challenge.0201.desc.badly_hurt: "\n\nBlood is running into your eyes and your ribs are broken. One more blow could kill you."
+ gen_blood_challenge.0201.desc.hurt: "\n\nYou are hurt, but you can still move. Your weapon lies an arm's length away."
+ gen_blood_challenge.0201.desc.end: "\n\n[gen_bc_ab_foe.GetFirstName] stands over you and waits for you to yield. The circle has gone quiet."
+
+ gen_blood_challenge.0201.yield: "I yield. The fight is yours."
+ gen_blood_challenge.0201.rage: "Blood Rage: get up and keep fighting!"
+ gen_blood_challenge.0201.dirty: "Fight Dirty: sand in the eyes, a hidden knife."
+ gen_blood_challenge.0201.howl: "Defiant Howl: I will not yield. Hear me, ancestors!"
+ gen_blood_challenge.0201.blade: "Reach for the Blade: crawl to the weapon."
+ gen_blood_challenge.0201.insult: "Last Insult: you hit like a whelp, [gen_bc_ab_foe.GetFirstName]."
+
+ gen_blood_challenge.0201.verdict_tt: "[gen_bc_ab_foe.GetFirstName] decides what happens to you."
+ gen_blood_challenge.0201.turned_tt: "You are now the victor of this Blood Challenge, and you decide what happens to [gen_bc_ab_foe.GetFirstName]."
+ gen_blood_challenge.0201.no_verdict_tt: "You still lose the Blood Challenge, but you walk out of the circle on your own feet."
+ gen_blood_challenge.0201.dirty.onlookers_tt: "Everyone of your culture watching the circle thinks less of you: #N -20#! opinion (Fought Dirty in the Circle)"
+
+ # Blood Rage
+ gen_blood_challenge.0201.rage.win: "You Turn the Fight Around"
+ gen_blood_challenge.0201.rage.win.foe: "[gen_bc_ab_downed.GetFirstName] Rose in a Rage"
+ gen_blood_challenge.0201.rage.win.foe.desc: "[gen_bc_ab_downed.GetFirstName] got up roaring and beat you down. [gen_bc_ab_downed.GetSheHe|U] is the victor now."
+ gen_blood_challenge.0201.rage.wound: "The Rage Fails"
+ gen_blood_challenge.0201.rage.wound.foe: "[gen_bc_ab_downed.GetFirstName] Would Not Stay Down"
+ gen_blood_challenge.0201.rage.wound.foe.desc: "[gen_bc_ab_downed.GetFirstName] got up in a rage. You knocked [gen_bc_ab_downed.GetHerHim] down again, harder."
+ gen_blood_challenge.0201.rage.death: "Killed in Your Rage"
+ gen_blood_challenge.0201.rage.death.foe: "You Killed [gen_bc_ab_downed.GetFirstName]"
+ gen_blood_challenge.0201.rage.death.foe.desc: "[gen_bc_ab_downed.GetFirstName] came at you in a rage after [gen_bc_ab_downed.GetSheHe] was beaten. You killed [gen_bc_ab_downed.GetHerHim]."
+
+ # Fight Dirty
+ gen_blood_challenge.0201.dirty.win: "The Trick Works"
+ gen_blood_challenge.0201.dirty.win.foe: "[gen_bc_ab_downed.GetFirstName] Fought Dirty"
+ gen_blood_challenge.0201.dirty.win.foe.desc: "[gen_bc_ab_downed.GetFirstName] threw sand in your eyes and cut you with a hidden knife. [gen_bc_ab_downed.GetSheHe|U] is the victor now, and the whole circle saw how."
+ gen_blood_challenge.0201.dirty.caught: "Caught in the Act"
+ gen_blood_challenge.0201.dirty.caught.foe: "[gen_bc_ab_downed.GetFirstName] Tried to Fight Dirty"
+ gen_blood_challenge.0201.dirty.caught.foe.desc: "[gen_bc_ab_downed.GetFirstName] went for a hidden knife. You saw it coming and beat [gen_bc_ab_downed.GetHerHim] for it."
+ gen_blood_challenge.0201.dirty.death: "Killed for Your Treachery"
+ gen_blood_challenge.0201.dirty.death.foe: "You Killed [gen_bc_ab_downed.GetFirstName]"
+ gen_blood_challenge.0201.dirty.death.foe.desc: "[gen_bc_ab_downed.GetFirstName] went for a hidden knife after [gen_bc_ab_downed.GetSheHe] was beaten. You killed [gen_bc_ab_downed.GetHerHim] for it."
+
+ # Defiant Howl
+ gen_blood_challenge.0201.howl.respect: "Your Howl Is Respected"
+ gen_blood_challenge.0201.howl.respect.foe: "[gen_bc_ab_downed.GetFirstName] Refused to Yield"
+ gen_blood_challenge.0201.howl.respect.foe.desc: "[gen_bc_ab_downed.GetFirstName] howled to the ancestors instead of yielding. You let [gen_bc_ab_downed.GetHerHim] walk out of the circle."
+ gen_blood_challenge.0201.howl.beaten: "Beaten Down Again"
+ gen_blood_challenge.0201.howl.beaten.foe: "[gen_bc_ab_downed.GetFirstName] Refused to Yield"
+ gen_blood_challenge.0201.howl.beaten.foe.desc: "[gen_bc_ab_downed.GetFirstName] howled at you instead of yielding. You beat [gen_bc_ab_downed.GetHerHim] until [gen_bc_ab_downed.GetSheHe] stopped."
+ gen_blood_challenge.0201.howl.death: "Killed for Your Defiance"
+ gen_blood_challenge.0201.howl.death.foe: "You Killed [gen_bc_ab_downed.GetFirstName]"
+ gen_blood_challenge.0201.howl.death.foe.desc: "[gen_bc_ab_downed.GetFirstName] would not yield, so you finished the fight."
+
+ # Reach for the Blade
+ gen_blood_challenge.0201.blade.win: "You Reach the Blade"
+ gen_blood_challenge.0201.blade.win.foe: "[gen_bc_ab_downed.GetFirstName] Got [gen_bc_ab_downed.GetHerHis] Weapon Back"
+ gen_blood_challenge.0201.blade.win.foe.desc: "[gen_bc_ab_downed.GetFirstName] crawled to [gen_bc_ab_downed.GetHerHis] weapon and turned the fight around. [gen_bc_ab_downed.GetSheHe|U] is the victor now."
+ gen_blood_challenge.0201.blade.wound: "Your Hand Is Crushed"
+ gen_blood_challenge.0201.blade.wound.foe: "[gen_bc_ab_downed.GetFirstName] Went for [gen_bc_ab_downed.GetHerHis] Weapon"
+ gen_blood_challenge.0201.blade.wound.foe.desc: "[gen_bc_ab_downed.GetFirstName] crawled for [gen_bc_ab_downed.GetHerHis] weapon. You stamped on [gen_bc_ab_downed.GetHerHis] hand."
+ gen_blood_challenge.0201.blade.death: "Killed Before You Reach It"
+ gen_blood_challenge.0201.blade.death.foe: "You Killed [gen_bc_ab_downed.GetFirstName]"
+ gen_blood_challenge.0201.blade.death.foe.desc: "[gen_bc_ab_downed.GetFirstName] crawled for [gen_bc_ab_downed.GetHerHis] weapon. You killed [gen_bc_ab_downed.GetHerHim] before [gen_bc_ab_downed.GetSheHe] reached it."
+
+ # Last Insult
+ gen_blood_challenge.0201.insult.laugh: "[gen_bc_ab_foe.GetFirstName] Laughs"
+ gen_blood_challenge.0201.insult.laugh.foe: "[gen_bc_ab_downed.GetFirstName] Insulted You"
+ gen_blood_challenge.0201.insult.laugh.foe.desc: "Beaten and bleeding, [gen_bc_ab_downed.GetFirstName] still found something rude to say. You laughed, and so did the circle."
+ gen_blood_challenge.0201.insult.struck: "[gen_bc_ab_foe.GetFirstName] Beats You for It"
+ gen_blood_challenge.0201.insult.struck.foe: "[gen_bc_ab_downed.GetFirstName] Insulted You"
+ gen_blood_challenge.0201.insult.struck.foe.desc: "[gen_bc_ab_downed.GetFirstName] insulted you from the ground. You beat [gen_bc_ab_downed.GetHerHim] for it."
+ gen_blood_challenge.0201.insult.death: "Killed for Your Insult"
+ gen_blood_challenge.0201.insult.death.foe: "You Killed [gen_bc_ab_downed.GetFirstName]"
+ gen_blood_challenge.0201.insult.death.foe.desc: "[gen_bc_ab_downed.GetFirstName] insulted you from the ground. You killed [gen_bc_ab_downed.GetHerHim] for it."
+
+ # ============ 0301: The Verdict ============
+ gen_blood_challenge.0301.t: "The Verdict"
+ gen_blood_challenge.0301.desc.reversed: "[gen_bc_ab_fallen.GetFirstName] had you on the ground. Then you got up, and now [gen_bc_ab_fallen.GetSheHe] is the one in the dirt."
+ gen_blood_challenge.0301.desc.dirty: "[gen_bc_ab_fallen.GetFirstName] tried to fight dirty after [gen_bc_ab_fallen.GetSheHe] was beaten. It did not work, and you have put [gen_bc_ab_fallen.GetHerHim] down a second time."
+ gen_blood_challenge.0301.desc.defiant: "[gen_bc_ab_fallen.GetFirstName] would not stay down, so you put [gen_bc_ab_fallen.GetHerHim] down again. This time [gen_bc_ab_fallen.GetSheHe] is not getting up."
+ gen_blood_challenge.0301.desc.yielded: "[gen_bc_ab_fallen.GetFirstName] lies in the dirt of the circle and yields to you."
+ gen_blood_challenge.0301.desc.unable: "[gen_bc_ab_fallen.GetFirstName] is down in the dirt of the circle and cannot get up."
+ gen_blood_challenge.0301.desc.upward_challenger: "\n\nYou challenged [gen_bc_ab_fallen.GetHerHim] for [gen_bc_ab_fallen.GetHerHis] seat and you have won. By the Blood Right, [gen_bc_ab_fallen.GetHerHis] life is yours to take, and no one here would call it murder."
+ gen_blood_challenge.0301.desc.upward_defender: "\n\n[gen_bc_ab_fallen.GetSheHe|U] challenged you for your seat and lost. By the Blood Right, [gen_bc_ab_fallen.GetHerHis] life is yours to take, and no one here would call it murder."
+ gen_blood_challenge.0301.desc.downward_liege: "\n\n[gen_bc_ab_fallen.GetSheHe|U] is your vassal, and you called [gen_bc_ab_fallen.GetHerHim] into the circle to remind [gen_bc_ab_fallen.GetHerHim] of it. Everyone has been reminded."
+ gen_blood_challenge.0301.desc.downward_vassal: "\n\n[gen_bc_ab_fallen.GetSheHe|U] is your liege, and [gen_bc_ab_fallen.GetSheHe] called you into this circle. Now [gen_bc_ab_fallen.GetHerHis] whole court has seen [gen_bc_ab_fallen.GetHerHim] beaten by a vassal."
+ gen_blood_challenge.0301.desc.peer: "\n\nBoth your clans are watching to see what you do with [gen_bc_ab_fallen.GetHerHim]. Killing a beaten foe is allowed, but it is not admired."
+ gen_blood_challenge.0301.desc.end: "\n\nThe circle is waiting for your verdict."
+
+ gen_blood_challenge.0301.spare: "Get up, [gen_bc_ab_fallen.GetFirstName]. You fought well enough."
+ gen_blood_challenge.0301.finish: "Finish it."
+ gen_blood_challenge.0301.tusk: "Hold [gen_bc_ab_fallen.GetHerHim] down. I'll take a tusk."
+ gen_blood_challenge.0301.crawl: "Crawl out of my circle."
+
+ gen_blood_challenge.0301.finish.blood_right_tt: "The fight was for a seat. By the Blood Right, no one of your culture will hold this killing against you."
+ gen_blood_challenge.0301.finish.onlookers_tt: "Everyone of your culture watching the circle thinks less of you: #N -20#! opinion (Killed a Beaten Foe)"
+ gen_blood_challenge.0301.tusk.broken_tt: "[gen_bc_ab_fallen.GetFirstName] loses one of [gen_bc_ab_fallen.GetHerHis] tusks for good."
+
+ gen_blood_challenge.0301.spare.grateful: "Spared by [gen_bc_ab_judge.GetFirstName]"
+ gen_blood_challenge.0301.spare.grateful.desc: "[gen_bc_ab_judge.GetFirstName] beat you and let you live. You will not forget it."
+ gen_blood_challenge.0301.spare.shamed: "Spared by [gen_bc_ab_judge.GetFirstName]"
+ gen_blood_challenge.0301.spare.shamed.desc: "[gen_bc_ab_judge.GetFirstName] beat you and let you live, as if you were not worth killing. The whole circle saw it."
+ gen_blood_challenge.0301.tusk.fallen: "[gen_bc_ab_judge.GetFirstName] Took Your Tusk"
+ gen_blood_challenge.0301.tusk.fallen.desc: "[gen_bc_ab_judge.GetFirstName] had you held down and broke off one of your tusks. [gen_bc_ab_judge.GetSheHe|U] wears it now."
+ gen_blood_challenge.0301.crawl.fallen: "Made to Crawl"
+ gen_blood_challenge.0301.crawl.fallen.desc: "[gen_bc_ab_judge.GetFirstName] made you crawl out of the circle on your hands and knees, in front of both clans."

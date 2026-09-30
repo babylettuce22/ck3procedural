@@ -23,10 +23,26 @@ gen_world_weary_eligible_trigger = {
 	NOT = { has_trait = world_weary }
 	age >= 80
 	NOT = { has_game_rule = off_elderly_health }
-	# A truly immortal character (ruler designer / console) never fades. Checked by TRAIT, not by
-	# the is_immortal flag — the flag is deliberately on every elf, dusk elves included, now, the engine
-	# `immortal = yes` property lives only on this trait.
-	NOT = { has_trait = immortal }
+	# A truly immortal character never fades. This is the engine's `is_immortal` trigger, which reads
+	# the `immortal = yes` trait property, not the `is_immortal` trait FLAG every elf carries.
+	#
+	# It used to be `has_trait = immortal`, which missed the wilderness and ruins dummies: their
+	# immortality is the `wilderness` trait's property, and vanilla's `immortal` trait lists
+	# `incapable` as an opposite, so the dummy loses it the moment it is made incapable at game
+	# start. On a map whose Unsettled culture drew a wood-elf ethnicity both dummies became sylvan,
+	# faded ~28 years in, and scattered every unsettled county to real rulers (seed 817008, 895).
+	is_immortal = no
+}
+
+# May this elder refuse the Fading once? Ambitious and stubborn elves have one reprieve: when
+# the world_weary track maxes, they get gen_aging.0003 ("Not Yet") instead of gen_aging.0002,
+# which sets the track back about ten years. The flag makes it once per life.
+gen_fading_reprieve_trigger = {
+	NOT = { has_character_flag = gen_fading_reprieved }
+	OR = {
+		has_trait = ambitious
+		has_trait = stubborn
+	}
 }
 
 # May age catch up with this dwarf this year?

@@ -1,0 +1,477 @@
+﻿# Gnome Tinkering, commissions: any ruler, of any people, may pay a gnome of the Tinker's Bench to build
+# them a contraption. See 00_gen_tinker_commission_triggers.txt for the commission pieces.
+#
+# Commission a Contraption: the actor ticks one project (curio, waterworks, war engine, or a clockwork
+# limb if they are missing one; never the grand invention, which a gnome builds only for themself),
+# pays the materials (spent) and a fee (to the tinkerer), and the tinkerer starts main's project loop
+# with the actor as patron. The result is delivered to the patron (main's gen_tk_save_beneficiary_effect)
+# and the patron answers it in gen_tinker.0450.
+#
+# Hurry the Commission: one impatient letter per commission (gen_tinker.0401 → 0402).
+#
+# Gold moves in on_accept, not through `cost`, so a player tinkerer who says no costs the actor nothing
+# (vanilla's gift interaction pays the same way).
+
+gen_tk_commission_interaction = {
+	icon = artisan_inspiration
+	category = interaction_category_friendly
+	interface_priority = 25
+	desc = gen_tk_commission_interaction_desc
+	greeting = positive
+	notification_text = gen_tk_commission_interaction_notification
+	popup_on_receive = yes
+	ai_min_reply_days = 1
+	ai_max_reply_days = 5
+
+	# The actor-only half: a landed adult, free.
+	is_available = {
+		is_adult = yes
+		is_landed = yes
+		is_imprisoned = no
+	}
+
+	is_shown = {
+		scope:actor != scope:recipient
+		scope:recipient = {
+			gen_tk_has_tinkering_trigger = yes
+			is_adult = yes
+		}
+		gen_tk_commission_within_reach_trigger = yes
+	}
+
+	is_valid_showing_failures_only = {
+		scope:recipient = {
+			custom_tooltip = {
+				text = gen_tk_commission_busy_tt
+				NOT = { has_character_flag = gen_tk_working }
+			}
+			custom_tooltip = {
+				text = gen_tk_commission_unskilled_tt
+				learning >= 12
+			}
+			is_imprisoned = no
+			NOT = { has_trait = incapable }
+		}
+		scope:actor = {
+			custom_tooltip = {
+				text = gen_tk_commission_already_waiting_tt
+				NOT = { gen_tk_awaiting_commission_trigger = yes }
+			}
+			custom_tooltip = {
+				text = gen_tk_commission_cannot_afford_tt
+				gold >= gen_tk_commission_price_value
+			}
+		}
+		# Main's own test last, so nothing it adds later is missed. Everything else in it is checked (and
+		# explained) above, so what is left to fail is the year's rest after a commission; the raw flag test
+		# would otherwise show as the failure text.
+		custom_tooltip = {
+			text = gen_tk_commission_resting_tt
+			scope:recipient = { gen_tk_can_take_commission_trigger = yes }
+		}
+	}
+
+	localization_values = {
+		PRICE_CURIO = scope:actor.gen_tk_commission_price_curio_value
+		PRICE_MILL = scope:actor.gen_tk_commission_price_mill_value
+		PRICE_ENGINE = scope:actor.gen_tk_commission_price_engine_value
+		PRICE_LIMB = scope:actor.gen_tk_commission_price_limb_value
+	}
+
+	options_heading = gen_tk_commission_options_heading
+	send_options_exclusive = yes
+
+	send_option = {
+		flag = gen_tk_opt_curio
+		localization = gen_tk_commission_option_curio
+		current_description = gen_tk_commission_option_curio_desc
+		starts_enabled = { always = yes }
+		is_valid = {
+			scope:actor = { gold >= gen_tk_commission_price_curio_value }
+		}
+	}
+
+	send_option = {
+		flag = gen_tk_opt_mill
+		localization = gen_tk_commission_option_mill
+		current_description = gen_tk_commission_option_mill_desc
+		is_shown = {
+			scope:actor = { exists = capital_county }
+		}
+		is_valid = {
+			scope:actor = { gold >= gen_tk_commission_price_mill_value }
+		}
+	}
+
+	send_option = {
+		flag = gen_tk_opt_engine
+		localization = gen_tk_commission_option_engine
+		current_description = gen_tk_commission_option_engine_desc
+		is_shown = {
+			scope:actor = { is_landed = yes }
+		}
+		is_valid = {
+			scope:actor = { gold >= gen_tk_commission_price_engine_value }
+		}
+	}
+
+	send_option = {
+		flag = gen_tk_opt_limb
+		localization = gen_tk_commission_option_limb
+		current_description = gen_tk_commission_option_limb_desc
+		is_shown = {
+			scope:actor = { gen_tk_commission_needs_limb_trigger = yes }
+		}
+		is_valid = {
+			scope:actor = { gold >= gen_tk_commission_price_limb_value }
+		}
+	}
+
+	auto_accept = no
+
+	on_accept = {
+		# The bench may have filled while the answer was on its way (the tinkerer started a project of
+		# their own): then no gold moves and nothing starts.
+		if = {
+			limit = { scope:recipient = { has_character_flag = gen_tk_working } }
+			scope:actor = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = gen_tk_commission_bench_full.t
+					left_icon = scope:recipient
+					right_icon = scope:actor
+					custom_tooltip = gen_tk_commission_bench_full.tt
+				}
+			}
+		}
+		else = {
+			# The bookkeeping first, while the ticked option still prices it.
+			scope:recipient = { gen_tk_commission_record_effect = yes }
+			scope:actor = {
+				pay_short_term_gold = {
+					target = scope:recipient
+					gold = gen_tk_commission_fee_value
+				}
+				remove_short_term_gold = gen_tk_commission_materials_value
+				custom_tooltip = gen_tk_commission_accepted.tt
+				hidden_effect = {
+					# Outlasts the longest commission (waterworks/engine, up to 540 days, plus however long
+					# a player leaves its events open); delivery (0450) or
+					# a lost commission removes it sooner.
+					add_character_flag = {
+						flag = gen_tk_awaiting_commission
+						days = 900
+					}
+				}
+			}
+			scope:recipient = {
+				gen_tk_set_patron_effect = { PATRON = scope:actor }
+				if = {
+					limit = { scope:gen_tk_opt_mill ?= yes }
+					gen_tk_begin_project_effect = { PROJECT = flag:mill }
+				}
+				else_if = {
+					limit = { scope:gen_tk_opt_engine ?= yes }
+					gen_tk_begin_project_effect = { PROJECT = flag:engine }
+				}
+				else_if = {
+					limit = { scope:gen_tk_opt_limb ?= yes }
+					gen_tk_begin_project_effect = { PROJECT = flag:limb }
+				}
+				else = {
+					gen_tk_begin_project_effect = { PROJECT = flag:curio }
+				}
+			}
+		}
+	}
+
+	# A polite no. Nothing lost but the courier's time.
+	on_decline = {
+		scope:actor = {
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = gen_tk_commission_declined.t
+				left_icon = scope:recipient
+				right_icon = scope:actor
+				custom_tooltip = gen_tk_commission_declined.tt
+			}
+		}
+	}
+
+	# Paid work is welcome: a stranger at neutral opinion offering a count's curio is taken on (about
+	# -15 + 10 + 12 for the fee = +7), a stranger they dislike (-20 opinion) is not. A lord's own courtier
+	# or vassal hardly says no (+25). Greed and diligence help, laziness and a war at home do not, and
+	# gnomes are partial to dwarves and wary of orcs and giants (their row of the race matrix,
+	# 00_phenotype_traits.txt — trait_compatibility would read it, but it mixes in every personality
+	# trait, so the race lines are spelled out here and can show in the breakdown).
+	ai_accept = {
+		base = -15
+
+		modifier = {
+			desc = gen_tk_ai_paid_work
+			add = 10
+		}
+		modifier = {
+			desc = gen_tk_ai_fee
+			add = scope:actor.gen_tk_commission_fee_accept_value
+		}
+		opinion_modifier = {
+			who = scope:recipient
+			opinion_target = scope:actor
+			multiplier = 0.5
+		}
+		modifier = {
+			desc = gen_tk_ai_subject
+			scope:recipient = {
+				OR = {
+					is_courtier_of = scope:actor
+					is_vassal_of = scope:actor
+				}
+			}
+			add = 25
+		}
+		modifier = {
+			desc = gen_tk_ai_greedy
+			scope:recipient = { has_trait = greedy }
+			add = 10
+		}
+		modifier = {
+			desc = gen_tk_ai_diligent
+			scope:recipient = { has_trait = diligent }
+			add = 10
+		}
+		modifier = {
+			desc = gen_tk_ai_ambitious
+			scope:recipient = { has_trait = ambitious }
+			add = 5
+		}
+		modifier = {
+			desc = gen_tk_ai_lazy
+			scope:recipient = { has_trait = lazy }
+			add = -25
+		}
+		modifier = {
+			desc = gen_tk_ai_at_war
+			scope:recipient = {
+				is_ruler = yes
+				is_at_war = yes
+			}
+			add = -20
+		}
+		modifier = {
+			desc = gen_tk_ai_rival
+			scope:recipient = {
+				OR = {
+					has_relation_rival = scope:actor
+					has_relation_nemesis = scope:actor
+				}
+			}
+			add = -100
+		}
+		# The gnome's race feelings (only when the tinkerer is a gnome).
+		modifier = {
+			desc = gen_tk_ai_race_dwarf
+			scope:recipient = { has_trait = phenotype_diminutive }
+			scope:actor = { has_trait = phenotype_stocky }
+			add = 10
+		}
+		modifier = {
+			desc = gen_tk_ai_race_warm
+			scope:recipient = { has_trait = phenotype_diminutive }
+			scope:actor = {
+				OR = {
+					has_trait = phenotype_diminutive
+					has_trait = phenotype_human
+				}
+			}
+			add = 5
+		}
+		modifier = {
+			desc = gen_tk_ai_race_wary
+			scope:recipient = { has_trait = phenotype_diminutive }
+			scope:actor = {
+				OR = {
+					has_trait = phenotype_towering
+					has_trait = phenotype_rough_hewn
+				}
+			}
+			add = -10
+		}
+	}
+
+	# AI
+
+	ai_target_quick_trigger = {
+		adult = yes
+	}
+	ai_targets = {
+		ai_recipients = courtiers
+		ai_recipients = guests
+		ai_recipients = vassals
+		ai_recipients = liege
+	}
+	ai_targets = {
+		ai_recipients = neighboring_rulers
+		chance = 0.5
+	}
+
+	ai_frequency_by_tier = {
+		barony = 0
+		county = 120
+		duchy = 72
+		kingdom = 48
+		empire = 48
+		hegemony = 48
+	}
+
+	# A ruler with gold to spare (twice the price) and a reason: a missing hand or leg (limb), a war
+	# (engine), a head for money (waterworks), a taste for show (curio). The best-scoring option is the
+	# one sent. Players are asked less often.
+	ai_will_do = {
+		base = 0
+
+		modifier = {
+			add = 50
+			scope:gen_tk_opt_limb ?= yes
+		}
+		modifier = {
+			add = 30
+			scope:gen_tk_opt_engine ?= yes
+			scope:actor = { is_at_war = yes }
+		}
+		modifier = {
+			add = 10
+			scope:gen_tk_opt_engine ?= yes
+			scope:actor = {
+				OR = {
+					has_trait = wrathful
+					has_trait = ambitious
+				}
+			}
+		}
+		modifier = {
+			add = 10
+			scope:gen_tk_opt_mill ?= yes
+		}
+		modifier = {
+			add = 15
+			scope:gen_tk_opt_mill ?= yes
+			scope:actor = {
+				OR = {
+					has_trait = greedy
+					has_trait = diligent
+				}
+			}
+		}
+		modifier = {
+			add = 5
+			scope:gen_tk_opt_curio ?= yes
+		}
+		modifier = {
+			add = 15
+			scope:gen_tk_opt_curio ?= yes
+			scope:actor = {
+				OR = {
+					has_trait = arrogant
+					has_trait = ambitious
+					has_royal_court = yes
+				}
+			}
+		}
+		modifier = {
+			factor = 0
+			scope:actor.gold < {
+				value = scope:actor.gen_tk_commission_price_value
+				multiply = 2
+			}
+		}
+		modifier = {
+			factor = 0.5
+			scope:recipient = { is_ai = no }
+		}
+	}
+}
+
+# Hurry the Commission: a letter to the tinkerer building the actor's contraption. The tinkerer answers
+# in gen_tinker.0401. Once per commission.
+gen_tk_hurry_commission_interaction = {
+	icon = icon_personal
+	category = interaction_category_diplomacy
+	interface_priority = 20
+	desc = gen_tk_hurry_commission_interaction_desc
+	use_diplomatic_range = no
+	auto_accept = yes
+
+	is_available = {
+		is_adult = yes
+		is_imprisoned = no
+	}
+
+	is_shown = {
+		scope:actor != scope:recipient
+		gen_tk_is_working_for_actor_trigger = yes
+	}
+
+	is_valid_showing_failures_only = {
+		scope:recipient = {
+			custom_tooltip = {
+				text = gen_tk_hurry_already_tt
+				NOT = { has_variable = gen_tk_commission_hurried }
+			}
+			# Once the test is set, its day cannot move: nothing left to hurry.
+			custom_tooltip = {
+				text = gen_tk_hurry_too_late_tt
+				exists = var:gen_tk_stage
+				var:gen_tk_stage < 3
+			}
+			is_imprisoned = no
+		}
+	}
+
+	on_accept = {
+		scope:actor = { save_scope_as = gen_tk_c_patron }
+		scope:recipient = {
+			save_scope_as = gen_tk_c_maker
+			set_variable = {
+				name = gen_tk_commission_hurried
+				value = yes
+			}
+			# Nobody likes being hurried, whatever they answer.
+			add_opinion = {
+				modifier = gen_tk_hurried_me_opinion
+				target = scope:actor
+			}
+			trigger_event = gen_tinker.0401
+		}
+		custom_tooltip = gen_tk_hurry_commission.tt
+	}
+
+	# AI: the impatient write, the patient wait.
+	ai_target_quick_trigger = {
+		adult = yes
+	}
+	ai_targets = {
+		ai_recipients = courtiers
+		ai_recipients = guests
+		ai_recipients = vassals
+		ai_recipients = liege
+		ai_recipients = neighboring_rulers
+	}
+	ai_frequency = 12
+
+	ai_will_do = {
+		base = 5
+		modifier = {
+			add = 30
+			scope:actor = { has_trait = impatient }
+		}
+		modifier = {
+			add = 10
+			scope:actor = { has_trait = arrogant }
+		}
+		modifier = {
+			factor = 0
+			scope:actor = { has_trait = patient }
+		}
+	}
+}

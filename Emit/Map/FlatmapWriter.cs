@@ -157,11 +157,12 @@ public static class FlatmapWriter
 
         // The two files are the same picture — CK3 wants a terrain-gameplay-plane copy alongside
         // the flat map, and this generator has never drawn them differently. Encoding `pixels`
-        // twice produced two byte-identical files at forty megabytes each; copying the first is
-        // the same result for half the writing. If the TGP variant ever grows a look of its own
-        // this goes back to a second WriteBgra.
+        // twice produced two byte-identical files; copying the first is the same result for half
+        // the writing. If the TGP variant ever grows a look of its own this goes back to a second
+        // encode. DXT1, as vanilla's is: the parchment is opaque, and the ink's dark-on-light
+        // lines are the two-colour block DXT1 holds best.
         string flatmap = Path.Combine(flatMapDir, "flatmap.dds");
-        DdsWriter.WriteBgra(flatmap, w, h, pixels);
+        DdsWriter.WriteCompressed(flatmap, w, h, pixels, alpha: false);
         File.Copy(flatmap, Path.Combine(flatMapDir, "flatmap_tgp.dds"), overwrite: true);
 
         Console.WriteLine($"  flatmap: rendered illuminated flatmaps ({w}x{h})");

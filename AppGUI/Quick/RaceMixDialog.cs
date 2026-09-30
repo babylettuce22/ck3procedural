@@ -107,7 +107,14 @@ internal sealed class RaceMixDialog : ChromeForm
         _body.Controls.AddRange([_intro, _bar, _restCaption, _note, _reset, _cancel, _done]);
         _humans.AddTo(_body);
         foreach (var (_, line) in _races) line.AddTo(_body);
-        _body.Layout += (_, _) => Arrange(_body.ClientSize.Width);
+        _body.Layout += (_, _) =>
+        {
+            // The load-time measure of the wrapped labels comes out too tall, so the window follows
+            // what the content really came to (see InspirationDialog, which found it). After this
+            // layout, not inside it: WinForms drops a resize asked for from within one.
+            int height = Arrange(_body.ClientSize.Width);
+            if (IsHandleCreated && height != _body.ClientSize.Height) BeginInvoke(Refit);
+        };
         _body.Paint += (_, e) => PaintDots(e.Graphics);
 
         Controls.Add(_body);
@@ -127,8 +134,20 @@ internal sealed class RaceMixDialog : ChromeForm
     protected override void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
+        Refit();
+    }
+
+    /// <summary>
+    /// By how far the content and the body differ, not by adding up the rows above it: the drawn
+    /// frame hands the system caption's height to the client area on top of the caption row, so
+    /// "content + caption row" came out a system caption too tall.
+    /// </summary>
+    private void Refit()
+    {
+        if (IsDisposed) return;
         int width = S(Inner) + 2 * S(Gutter);
-        ClientSize = new Size(width, Arrange(width) + (CaptionBar?.Height ?? 0) + 1);
+        int delta = Arrange(width) - _body.ClientSize.Height;
+        if (delta != 0 || ClientSize.Width != width) ClientSize = new Size(width, ClientSize.Height + delta);
     }
 
     protected override void OnShown(EventArgs e)

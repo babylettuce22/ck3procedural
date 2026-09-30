@@ -1,0 +1,92 @@
+﻿# Gnome Tinkering: what a project costs, and the prestige riding on its test.
+# See 00_gen_tinker_triggers.txt for the map of the system.
+#
+# Costs are read with the PAYER as root/this: the tinkerer at the workbench (gen_tinker.0010), or the
+# patron of a commission (the commission interaction reuses these for its price).
+#
+# A project is a fixed base, pitched against vanilla's own prices (commissioning an artifact is 100,
+# a first-tier building 150), plus a few months of the payer's income, so a king pays a king's price.
+
+gen_tk_cost_curio_value = {		# a clockwork curio: about a commissioned artifact
+	value = monthly_character_income
+	multiply = 3
+	add = 100
+	round = yes
+}
+
+gen_tk_cost_limb_value = {		# a clockwork limb: small, but fiddly
+	value = monthly_character_income
+	multiply = 2
+	add = 75
+	round = yes
+}
+
+gen_tk_cost_engine_value = {	# a war engine: timber, iron and rope by the cartload
+	value = monthly_character_income
+	multiply = 4
+	add = 150
+	round = yes
+}
+
+gen_tk_cost_mill_value = {		# waterworks: more than a building, and it lasts twenty years
+	value = monthly_character_income
+	multiply = 5
+	add = 200
+	round = yes
+}
+
+gen_tk_cost_invention_value = {	# a grand invention: the dearest thing on the bench
+	value = monthly_character_income
+	multiply = 6
+	add = 250
+	round = yes
+}
+
+# The prestige the maker wins or loses at the test (gen_tinker.0350). Read with the tinkerer as root,
+# after the roll (scope:gen_tk_result). The whole court watching doubles it; a quiet test at night
+# halves it. The test event's tooltips (gen_tk_test_stakes_*.tt) state these same numbers.
+gen_tk_outcome_prestige_value = {
+	value = 0
+	if = {
+		limit = { scope:gen_tk_result ?= flag:masterwork }
+		add = 150
+	}
+	else_if = {
+		limit = { scope:gen_tk_result ?= flag:works }
+		add = 75
+	}
+	else_if = {
+		limit = { scope:gen_tk_result ?= flag:dud }
+		add = -50
+	}
+	else = {
+		add = -100
+	}
+	if = {
+		limit = { var:gen_tk_audience ?= flag:court }
+		multiply = 2
+	}
+	else_if = {
+		limit = { var:gen_tk_audience ?= flag:night }
+		multiply = 0.5
+	}
+	round = yes
+}
+
+# A grand invention's extra renown, on whoever receives it.
+gen_tk_invention_prestige_value = {
+	value = 100
+	if = {
+		limit = { scope:gen_tk_result ?= flag:masterwork }
+		value = 200
+	}
+}
+
+# How far a grand invention pushes its people's current fascination (percent of the way).
+gen_tk_invention_fascination_value = {
+	value = 10
+	if = {
+		limit = { scope:gen_tk_result ?= flag:masterwork }
+		value = 20
+	}
+}

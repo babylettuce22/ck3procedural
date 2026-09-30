@@ -1,0 +1,115 @@
+﻿# Blood Challenge, the pre-fight scene: stance effects.
+#
+# The scene events (events/gen_blood_challenge_scene_events.txt, gen_blood_challenge.0010–0099) let
+# the viewer pick how they go into the circle. Each stance sets one character flag that the aftermath
+# events (events/gen_blood_challenge_aftermath_events.txt, 0200–0399) read to shift their odds, and
+# most add a short scene modifier (common/modifiers/00_gen_blood_challenge_scene_modifiers.txt):
+#
+#   gen_bc_stance_fury       fought in a fury       → Blood Rage more likely to turn it around, more deadly
+#   gen_bc_stance_cunning    watched the foe first  → Fight Dirty more likely to work
+#   gen_bc_stance_ancestors  called on the ancestors → Defiant Howl more likely to rally
+#
+# Each stance carries a flavour line (custom_tooltip), but never says what it does after the fight:
+# that shows itself in how the aftermath goes (the user's rule — flavour yes, mechanics previews no).
+# Flags last 180 days as a safety net; the main session clears them for real
+# with gen_bc_clear_stance_effect in the resolution (0500) and the invalidation event (0101).
+#
+# Each apply effect first clears any earlier stance (hidden), so a character only ever holds one.
+# None of these start the fight: every scene option calls gen_bc_start_combat_effect itself.
+
+
+# Removes all three stance flags and every temporary scene modifier. Safe on anyone: removing an
+# absent flag or modifier does nothing. Called by the main session on both combatants.
+gen_bc_clear_stance_effect = {
+	remove_character_flag = gen_bc_stance_fury
+	remove_character_flag = gen_bc_stance_cunning
+	remove_character_flag = gen_bc_stance_ancestors
+	remove_character_modifier = gen_bc_fury_modifier
+	remove_character_modifier = gen_bc_blood_fury_modifier
+	remove_character_modifier = gen_bc_cunning_modifier
+	remove_character_modifier = gen_bc_ancestors_modifier
+	remove_character_modifier = gen_bc_war_paint_modifier
+	remove_character_modifier = gen_bc_good_omen_modifier
+}
+
+# Who the scene viewer is fighting. The viewer is either side of the challenge, so the scene
+# events use this instead of guessing. Run with the viewer as `this`.
+gen_bc_scene_setup_effect = {
+	if = {
+		limit = { this = scope:gen_bc_challenger }
+		scope:gen_bc_defender = { save_scope_as = gen_bc_scene_opponent }
+	}
+	else = {
+		scope:gen_bc_challenger = { save_scope_as = gen_bc_scene_opponent }
+	}
+}
+
+# --- Fury: +2 prowess for the bout, -2 diplomacy; aftermath rage is likelier and deadlier. ---
+gen_bc_apply_fury_stance_effect = {
+	hidden_effect = { gen_bc_clear_stance_effect = yes }
+	add_character_flag = { flag = gen_bc_stance_fury days = 180 }
+	add_character_modifier = { modifier = gen_bc_fury_modifier days = 30 }
+	custom_tooltip = gen_bc_stance_fury_tt
+}
+
+# --- Blood fury (berserker/wrathful only): +3 prowess, -3 diplomacy; same aftermath as fury. ---
+gen_bc_apply_blood_fury_stance_effect = {
+	hidden_effect = { gen_bc_clear_stance_effect = yes }
+	add_character_flag = { flag = gen_bc_stance_fury days = 180 }
+	add_character_modifier = { modifier = gen_bc_blood_fury_modifier days = 30 }
+	custom_tooltip = gen_bc_stance_fury_tt
+}
+
+# Picks the right fury for the character: the stronger one for berserkers and the wrathful.
+# Used where a scene has a single fury-like option rather than a gated pair.
+gen_bc_apply_best_fury_stance_effect = {
+	if = {
+		limit = {
+			OR = {
+				has_trait = berserker
+				has_trait = wrathful
+			}
+		}
+		gen_bc_apply_blood_fury_stance_effect = yes
+	}
+	else = {
+		gen_bc_apply_fury_stance_effect = yes
+	}
+}
+
+# --- Cunning: +1 prowess, -1 monthly prestige (the clan sees you hang back); dirty tricks work better. ---
+gen_bc_apply_cunning_stance_effect = {
+	hidden_effect = { gen_bc_clear_stance_effect = yes }
+	add_character_flag = { flag = gen_bc_stance_cunning days = 180 }
+	add_character_modifier = { modifier = gen_bc_cunning_modifier days = 30 }
+	custom_tooltip = gen_bc_stance_cunning_tt
+}
+
+# --- Cunning without the modifier: the craven option. Flag only; its option pays in prestige. ---
+gen_bc_apply_wary_stance_effect = {
+	hidden_effect = { gen_bc_clear_stance_effect = yes }
+	add_character_flag = { flag = gen_bc_stance_cunning days = 180 }
+	custom_tooltip = gen_bc_stance_cunning_tt
+}
+
+# --- Ancestors: no prowess; stress relief now and less stress for a month; the howl rallies better. ---
+gen_bc_apply_ancestors_stance_effect = {
+	hidden_effect = { gen_bc_clear_stance_effect = yes }
+	add_character_flag = { flag = gen_bc_stance_ancestors days = 180 }
+	add_stress = minor_stress_loss
+	add_character_modifier = { modifier = gen_bc_ancestors_modifier days = 30 }
+	custom_tooltip = gen_bc_stance_ancestors_tt
+}
+
+# --- Ancestors flag alone, for scene options that pay their own way (war-paint, omens, family). ---
+gen_bc_apply_ancestors_flag_effect = {
+	hidden_effect = { gen_bc_clear_stance_effect = yes }
+	add_character_flag = { flag = gen_bc_stance_ancestors days = 180 }
+	custom_tooltip = gen_bc_stance_ancestors_tt
+}
+
+# --- No stance. Clears anything stale and says so. ---
+gen_bc_apply_no_stance_effect = {
+	hidden_effect = { gen_bc_clear_stance_effect = yes }
+	custom_tooltip = gen_bc_stance_plain_tt
+}

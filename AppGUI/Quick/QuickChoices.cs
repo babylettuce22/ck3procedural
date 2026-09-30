@@ -80,15 +80,29 @@ public sealed class QuickChoices
     /// </summary>
     public QuickRaceMix? Mix { get; set; }
 
+    /// <summary>
+    /// The corner of the real world the invented peoples are modelled on, or null for anywhere.
+    /// Kept while the peoples are real CK3 ones, like the fantasy pick, but only applied to
+    /// invented ones; see <see cref="InspirationInWorld"/>.
+    /// </summary>
+    public QuickInspiration? Inspiration { get; set; }
+
     public QuickChoices Clone()
     {
         var copy = (QuickChoices)MemberwiseClone();
         copy.Mix = Mix?.Clone();
+        copy.Inspiration = Inspiration?.Clone();
         return copy;
     }
 
     /// <summary>The mix the world is actually made with: none unless it has races.</summary>
     public QuickRaceMix? MixInWorld => FantasyInWorld == QuickFantasy.None ? null : Mix;
+
+    /// <summary>
+    /// The inspiration the world is actually made with: none for real CK3 peoples, whose looks,
+    /// dress and names are vanilla's own.
+    /// </summary>
+    public QuickInspiration? InspirationInWorld => People == QuickPeople.Invented ? Inspiration : null;
 
     /// <summary>
     /// Whether the relief choice is applied region by region (<see cref="AppGUI.RegionalRelief"/>)
@@ -103,7 +117,10 @@ public sealed class QuickChoices
         var (w, h) = Pixels;
         return $"Quick world: {MapType}, seed {Seed}, relief {Relief} ({(RegionalRelief ? "regional" : "map-wide")}), mountains {Mountains}, "
                + $"size {Size} ({w}x{h}), era {Era}, climate {Climate}, density {Density}, "
-               + $"people {People}, fantasy {FantasyInWorld}"
+               + $"people {People}"
+               + (InspirationInWorld is { } inspiration
+                   ? $" (inspiration: {inspiration.Describe()}; theme {inspiration.Theme}, faces {inspiration.Look})" : "")
+               + $", fantasy {FantasyInWorld}"
                + (MixInWorld is { } mix ? $" (custom mix: {mix.Describe(FantasyInWorld)})" : "")
                + $", politics {Politics}, rulers {Rulers}, "
                + $"wilderness {(Wilderness ? "on" : "off")}, wars {(Wars ? "on" : "off")}, "
@@ -215,6 +232,10 @@ public sealed class QuickChoices
         bool invented = People == QuickPeople.Invented;
         cfg.NativeRankTitles = invented && NativeTitles;
         cfg.NativeRealmNames = invented && NativeRealms;
+
+        // Where the invented peoples draw their culture and faces from. Without one both stay as
+        // the reset left them, varied, which is every Quick world made before the choice existed.
+        InspirationInWorld?.ApplyTo(cfg);
 
         // The fantasy choice, which for now is the world's races. Low and High are the generator's
         // own two tunings; every other race setting (how many races, terrain, minorities) stays at

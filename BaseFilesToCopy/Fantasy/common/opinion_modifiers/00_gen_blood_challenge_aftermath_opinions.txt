@@ -1,0 +1,55 @@
+﻿# Opinions from the aftermath of a Blood Challenge (events/gen_blood_challenge_aftermath_events.txt).
+#
+# The fight itself, refusals and the stakes are MAIN's (00_gen_blood_challenge_opinions.txt). These are
+# only what the downed fighter and the victor do after the engine has named a winner. Vanilla
+# duel_mutual_respect_opinion covers the Defiant Howl's respect, so it has no twin here.
+
+# Same-culture onlookers, and the victim, toward someone who threw sand or drew a hidden knife.
+gen_bc_fought_dirty_opinion = {
+	opinion = -20
+	decaying = yes
+	years = 10
+}
+
+# Same-culture onlookers toward a victor who killed a beaten foe in a peer or downward fight.
+# (An upward fight is for a seat: the Blood Right allows the kill, so there is no penalty.)
+gen_bc_killed_beaten_foe_opinion = {
+	opinion = -20
+	decaying = yes
+	years = 15
+}
+
+# The spared loser, grateful.
+gen_bc_spared_me_opinion = {
+	opinion = 25
+	decaying = yes
+	years = 15
+}
+
+# The spared loser, who takes the mercy as an insult.
+gen_bc_spared_to_shame_me_opinion = {
+	opinion = -15
+	decaying = yes
+	years = 10
+}
+
+# The loser toward the victor who broke off one of their tusks.
+gen_bc_took_my_tusk_opinion = {
+	opinion = -40
+	decaying = yes
+	years = 30
+}
+
+# The loser toward the victor who made them crawl out of the circle.
+gen_bc_made_me_crawl_opinion = {
+	opinion = -30
+	decaying = yes
+	years = 15
+}
+
+# The victor toward a downed foe whose last insult made them laugh.
+gen_bc_made_me_laugh_opinion = {
+	opinion = 15
+	decaying = yes
+	years = 10
+}

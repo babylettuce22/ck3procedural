@@ -71,7 +71,16 @@ public static class RaceHeadWriter
     public static void WriteAll(string modDir, string gameDir, MapConfig cfg)
     {
         if (!RaceMorphWriter.RacesOn(cfg)) return;
+        RaceHeadCache.Write(modDir, gameDir, Build);
+    }
 
+    /// <summary>
+    /// Everything this writer ships, built from the installed game into <paramref name="modDir"/>
+    /// (a staging folder, when called through <see cref="RaceHeadCache"/>). Its log lines go to
+    /// <paramref name="log"/> so a cache hit can replay them.
+    /// </summary>
+    private static void Build(string modDir, string gameDir, List<string> log)
+    {
         string portraits = Path.Combine(gameDir, "gfx", "models", "portraits");
         string outPortraits = Path.Combine(modDir, "gfx", "models", "portraits");
 
@@ -97,7 +106,7 @@ public static class RaceHeadWriter
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
-            Console.WriteLine($"  WARNING: pointed ears skipped, elves keep round ears: {e.Message}");
+            log.Add($"  WARNING: pointed ears skipped, elves keep round ears: {e.Message}");
             ears.Clear();
         }
 
@@ -116,7 +125,7 @@ public static class RaceHeadWriter
             }
             catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
             {
-                Console.WriteLine($"  WARNING: {face.Label} skipped, {face.Fallback}: {e.Message}");
+                log.Add($"  WARNING: {face.Label} skipped, {face.Fallback}: {e.Message}");
             }
         }
 
@@ -132,7 +141,7 @@ public static class RaceHeadWriter
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
-            Console.WriteLine($"  WARNING: orc tusks skipped, orcs keep human teeth: {e.Message}");
+            log.Add($"  WARNING: orc tusks skipped, orcs keep human teeth: {e.Message}");
             teeth.Clear();
         }
 
@@ -144,7 +153,7 @@ public static class RaceHeadWriter
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
-            Console.WriteLine($"  WARNING: horns skipped, no horn models or horn gene this run: {e.Message}");
+            log.Add($"  WARNING: horns skipped, no horn models or horn gene this run: {e.Message}");
             horns.Clear();
         }
 
@@ -160,7 +169,7 @@ public static class RaceHeadWriter
         }
         catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
         {
-            Console.WriteLine($"  WARNING: race head shapes skipped, the head asset could not be patched: {e.Message}");
+            log.Add($"  WARNING: race head shapes skipped, the head asset could not be patched: {e.Message}");
             return;
         }
 
@@ -185,19 +194,19 @@ public static class RaceHeadWriter
         if (horns.Count > 0)
         {
             WriteHorns(modDir, horns);
-            bands = WriteHornCrowns(modDir, gameDir);
+            bands = WriteHornCrowns(modDir, gameDir, log);
         }
 
         if (ears.Count > 0)
-            Console.WriteLine($"  pointed ears written: {ears.Count} blendshapes " +
+            log.Add($"  pointed ears written: {ears.Count} blendshapes " +
                               $"(tip travel {ears.Max(m => m.Shape.MaxShift):0.00}, " +
                               $"{ears.Min(m => m.Shape.Moved)}-{ears.Max(m => m.Shape.Moved)} vertices moved)");
         foreach (var (face, bySex) in faces)
-            Console.WriteLine($"  {face.Label} written: {string.Join(", ", bySex.Select(g => $"{g.Key} {g.Value.Shape.Moved} vertices moved, max {g.Value.Shape.MaxShift:0.00}"))}");
+            log.Add($"  {face.Label} written: {string.Join(", ", bySex.Select(g => $"{g.Key} {g.Value.Shape.Moved} vertices moved, max {g.Value.Shape.MaxShift:0.00}"))}");
         if (teeth.Count > 0)
-            Console.WriteLine($"  orc tusks written: {string.Join(", ", teeth.Select(t => $"{t.Sex} {t.Meshes.Count} teeth meshes, {t.Follows} lip-follow shapes"))}");
+            log.Add($"  orc tusks written: {string.Join(", ", teeth.Select(t => $"{t.Sex} {t.Meshes.Count} teeth meshes, {t.Follows} lip-follow shapes"))}");
         if (horns.Count > 0)
-            Console.WriteLine($"  horns written: {Horns.Styles.Length} styles, " +
+            log.Add($"  horns written: {Horns.Styles.Length} styles, {Horns.OrnamentMeshes().Count()} ornament shapes x {Horns.Metals.Length} metals, " +
                               $"{string.Join(", ", horns.Select(h => $"{h.Sex} {h.Meshes.Count} meshes"))}, " +
                               $"{bands} crowns worn as bands over horns");
     }
@@ -266,6 +275,7 @@ public static class RaceHeadWriter
     /// <summary>Where the horn models, textures and asset live.</summary>
     public const string HornModelDir = "gfx/models/portraits/attachments/gen_horns";
     private const string HornTexture = "gen_horns_keratin";
+    private const string MetalTexture = "gen_horns_metal";
     private const string HornGeneFile = "common/genes/gen_horns.txt";
 
     /// <summary>
@@ -280,7 +290,11 @@ public static class RaceHeadWriter
     /// <summary>One sex's horns: mesh files by name, the skin-mound blendshape, follow shapes per style.</summary>
     private sealed record HornOutput(
         string Sex, List<(string Name, PdxNode Root)> Meshes, PdxNode Boss,
-        Dictionary<string, List<(string Id, string[] Attributes)>> Follows);
+        Dictionary<string, List<(string Id, string[] Attributes)>> Follows,
+        Dictionary<string, List<(string Id, string[] Attributes)>> OrnamentFollows);
+
+    /// <summary>File/pdxmesh stem of one ornament mesh: <c>{sex}_gen_horn_orn_{style}_{shape}</c>.</summary>
+    private static string OrnamentMeshName(string sex, string style, string shape) => $"{sex}_gen_horn_orn_{style}_{shape}";
 
     /// <summary>
     /// Every horn style for one sex, built from the installed game's head: the two-horn mesh per
@@ -318,13 +332,12 @@ public static class RaceHeadWriter
         }
 
         var meshes = new List<(string, PdxNode)>();
-        var follows = new Dictionary<string, List<(string, string[])>>();
-        foreach (string style in Horns.Styles)
-        {
-            var tube = Horns.Build(style, roots, scale, hp, hn, flip);
-            string name = $"{sex}_gen_horns_{style}";
-            meshes.Add(($"{name}.mesh", HornMesh(template, $"{name}Shape", tube, tube.P, skull, headSkeleton)));
 
+        // One skinned mesh plus one follow shape per root-moving head blendshape. The follow moves
+        // each side rigidly by that side's root shift, so horn and ornament ride the skin alike.
+        List<(string, string[])> Emit(string name, string nodeStem, Horns.Tube tube)
+        {
+            meshes.Add(($"{name}.mesh", HornMesh(template, $"{name}Shape", tube, tube.P, skull, headSkeleton)));
             var list = new List<(string, string[])>();
             int index = 0;
             foreach (var (shapeId, attributes, deltas) in moves)
@@ -341,11 +354,22 @@ public static class RaceHeadWriter
 
                 // The node inside the file gets a short name: PdxMesh refuses 64+ characters, the long
                 // id is already the file and blend_shape name, and nothing references the node itself.
-                meshes.Add(($"{id}.mesh", HornMesh(template, $"{sex}_horn_{style}_f{index++}Shape", tube, moved, skull, null)));
+                meshes.Add(($"{id}.mesh", HornMesh(template, $"{nodeStem}_f{index++}Shape", tube, moved, skull, null)));
                 list.Add((id, attributes));
             }
 
-            follows[style] = list;
+            return list;
+        }
+
+        var follows = new Dictionary<string, List<(string, string[])>>();
+        foreach (string style in Horns.Styles)
+            follows[style] = Emit($"{sex}_gen_horns_{style}", $"{sex}_horn_{style}", Horns.Build(style, roots, scale, hp, hn, flip));
+
+        var ornamentFollows = new Dictionary<string, List<(string, string[])>>();
+        foreach (var (style, shape) in Horns.OrnamentMeshes())
+        {
+            string name = OrnamentMeshName(sex, style, shape);
+            ornamentFollows[name] = Emit(name, $"{sex}_ho_{style}_{shape}", Horns.Ornament(style, shape, roots, scale, hp, hn, flip));
         }
 
         // The skin mound, on a vanilla head blendshape as the container (as the ears are).
@@ -360,7 +384,7 @@ public static class RaceHeadWriter
         bossMesh.Set("ta", PdxProp.Of(boss.Ta));
         SetBounds(bossMesh, boss.P);
 
-        return new HornOutput(sex, meshes, bossRoot, follows);
+        return new HornOutput(sex, meshes, bossRoot, follows, ornamentFollows);
     }
 
     /// <summary>
@@ -426,11 +450,12 @@ public static class RaceHeadWriter
         string dir = Path.Combine(modDir, HornModelDir.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(dir);
 
+        // ~240 small files (every style and ornament with its follow shapes, both sexes). Written in
+        // parallel: on Windows the cost is file creation, not bytes — sequentially the ornaments
+        // alone added ~0.7 s (measured 2026-09-29). Each file is independent.
+        Parallel.ForEach(horns.SelectMany(h => h.Meshes), m => PdxMesh.Write(Path.Combine(dir, m.Name), m.Root));
         foreach (var h in horns)
-        {
-            foreach (var (name, root) in h.Meshes) PdxMesh.Write(Path.Combine(dir, name), root);
             PdxMesh.Write(Path.Combine(modDir, "gfx", "models", "portraits", $"{h.Sex}_head", "blendshapes", $"{h.Sex}_bs_gen_horn_boss.mesh"), h.Boss);
-        }
 
         // Keratin textures: diffuse generated; normal flat (ridges are geometry; x in R/G, y in A);
         // properties as vanilla's plain olifant ivory — no scattering, no metal — rougher (alpha 120).
@@ -438,6 +463,16 @@ public static class RaceHeadWriter
         DdsWriter.WriteBgra(Path.Combine(dir, $"{HornTexture}_diffuse.dds"), w, hgt, diffuse);
         DdsWriter.WriteBgra(Path.Combine(dir, $"{HornTexture}_normal.dds"), 4, 4, Solid(0, 128, 128, 128));
         DdsWriter.WriteBgra(Path.Combine(dir, $"{HornTexture}_properties.dds"), 4, 4, Solid(0, 0, 0, 120));
+
+        // Ornament metals: one diffuse per metal over one shared shiny-metal properties map.
+        foreach (var (metal, r, g, b) in Horns.Metals)
+        {
+            var (mw, mh, md) = Horns.MetalDiffuse(r, g, b);
+            DdsWriter.WriteBgra(Path.Combine(dir, $"{MetalTexture}_{metal}_diffuse.dds"), mw, mh, md);
+        }
+
+        var (pw, ph, pd) = Horns.MetalProperties();
+        DdsWriter.WriteBgra(Path.Combine(dir, $"{MetalTexture}_properties.dds"), pw, ph, pd);
 
         var asset = new StringBuilder();
         foreach (var h in horns)
@@ -457,6 +492,32 @@ public static class RaceHeadWriter
                 asset.Append("}\n\n");
             }
 
+        // Ornaments: one pdxmesh per (style, shape), one entity per metal swapping only the diffuse
+        // (the pattern of vanilla's eye variants, e.g. male_eyes_dark_iris_entity).
+        foreach (var h in horns)
+            foreach (var (style, shape) in Horns.OrnamentMeshes())
+            {
+                string name = OrnamentMeshName(h.Sex, style, shape);
+                var follows = h.OrnamentFollows[name];
+                asset.Append($"pdxmesh = {{\n\tname = \"{name}_mesh\"\n\tfile = \"{name}.mesh\"\n\n\tmeshsettings = {{\n")
+                     .Append($"\t\tname = \"{name}Shape\"\n\t\tindex = 0\n")
+                     .Append($"\t\ttexture_diffuse = \"{MetalTexture}_{Horns.Metals[0].Name}_diffuse.dds\"\n\t\ttexture_normal = \"{HornTexture}_normal.dds\"\n")
+                     .Append($"\t\ttexture_specular = \"{MetalTexture}_properties.dds\"\n")
+                     .Append("\t\tshader = \"portrait_attachment\"\n\t\tshader_file = \"gfx/FX/jomini/portrait.shader\"\n\t}\n");
+                foreach (var (id, _) in follows) asset.Append($"\tblend_shape = {{ id = \"{id}\"\ttype = \"{id}.mesh\" }}\n");
+                asset.Append("}\n\n");
+
+                foreach (var (metal, _, _, _) in Horns.Metals)
+                {
+                    asset.Append($"entity = {{\n\tname = \"{name}_{metal}_entity\"\n\tpdxmesh = \"{name}_mesh\"\n")
+                         .Append($"\tmeshsettings = {{\n\t\tname = \"{name}Shape\"\n\t\tindex = 0\n")
+                         .Append($"\t\ttexture_diffuse = \"{MetalTexture}_{metal}_diffuse.dds\"\n\t}}\n");
+                    foreach (var (id, attributes) in follows)
+                        foreach (string a in attributes) asset.Append($"\tattribute = {{ name = \"{a}\"\t\tblend_shape = \"{id}\" }}\n");
+                    asset.Append("}\n\n");
+                }
+            }
+
         File.WriteAllText(Path.Combine(dir, "gen_horns.asset"), asset.ToString(), new UTF8Encoding(false));
 
         var accessories = new StringBuilder("# Generated: horn accessories. See Emit/RaceHeadWriter.cs WriteHorns for the headgear rules.\n\n");
@@ -465,13 +526,39 @@ public static class RaceHeadWriter
             {
                 bool filed = style == Horns.Filed;
                 accessories.Append($"{h.Sex}_gen_horns_{style} = {{\n");
-                if (!filed) accessories.Append($"\tset_tags = \"{HornsWornTag}\"\n");
+                // The style tag tells the ornament accessory which horn it sits on (a character's
+                // style often comes from DNA, which no portrait rule can read). Filed stumps get only
+                // the style tag, never gen_horns_worn, so they still wear the real crown.
+                accessories.Append(filed
+                    ? $"\tset_tags = \"{Horns.StyleTag(style)}\"\n"
+                    : $"\tset_tags = \"{HornsWornTag},{Horns.StyleTag(style)}\"\n");
                 accessories.Append("\tentity = { required_tags = \"enclosed_helmet\" shared_pose_entity = head }\n");
                 if (!filed)
                     accessories.Append($"\tentity = {{ required_tags = \"crown\" shared_pose_entity = head entity = \"{h.Sex}_gen_horns_{style}_entity\" }}\n");
                 accessories.Append($"\tentity = {{ required_tags = \"snug_headgear\" shared_pose_entity = head entity = \"{h.Sex}_gen_horns_{Horns.Filed}_entity\" }}\n")
                     .Append($"\tentity = {{ required_tags = \"\" shared_pose_entity = head entity = \"{h.Sex}_gen_horns_{style}_entity\" }}\n}}\n\n");
             }
+
+        // Ornament accessories, one per (kind, metal). They mirror the horn lines above, reading the
+        // horn's style from its tag: hidden under a closed helmet; on the full horn under a crown;
+        // on the stump under other close headgear; otherwise on the horn as worn. No horn tag, nothing.
+        // The crown line needs TWO tags at once ("crown,<style tag>") — the comma list Elder Kings 2 uses
+        // in gene settings; no vanilla entity line does. Unproven in game until the user sees it.
+        foreach (var h in horns)
+            foreach (string kind in Horns.OrnamentKinds)
+                foreach (var (metal, _, _, _) in Horns.Metals)
+                {
+                    string Entity(string style) => $"{OrnamentMeshName(h.Sex, style, Horns.ShapeOn(style, kind))}_{metal}_entity";
+                    accessories.Append($"{h.Sex}_{Horns.OrnamentTemplateOf(kind, metal)} = {{\n")
+                        .Append("\tentity = { required_tags = \"enclosed_helmet\" shared_pose_entity = head }\n");
+                    foreach (string style in Horns.Styles.Where(s => s != Horns.Filed))
+                        accessories.Append($"\tentity = {{ required_tags = \"crown,{Horns.StyleTag(style)}\" shared_pose_entity = head entity = \"{Entity(style)}\" }}\n");
+                    foreach (string style in Horns.Styles.Where(s => s != Horns.Filed))
+                        accessories.Append($"\tentity = {{ required_tags = \"snug_headgear,{Horns.StyleTag(style)}\" shared_pose_entity = head entity = \"{Entity(Horns.Filed)}\" }}\n");
+                    foreach (string style in Horns.Styles)
+                        accessories.Append($"\tentity = {{ required_tags = \"{Horns.StyleTag(style)}\" shared_pose_entity = head entity = \"{Entity(style)}\" }}\n");
+                    accessories.Append("\tentity = { required_tags = \"\" shared_pose_entity = head }\n}\n\n");
+                }
         string accDir = Path.Combine(modDir, "gfx", "portraits", "accessories");
         Directory.CreateDirectory(accDir);
         ParadoxText.WriteBom(Path.Combine(accDir, "gen_horns.txt"), accessories.ToString());
@@ -492,6 +579,20 @@ public static class RaceHeadWriter
             gene.Append($"\t\t{Horns.TemplateOf(style)} = {{\n\t\t\tindex = {i + 1}\n\t\t\tmale = {{ 1 = male_gen_horns_{style} }}\n")
                 .Append($"\t\t\tfemale = {{ 1 = female_gen_horns_{style} }}\n\t\t\tboy = male\n\t\t\tgirl = female\n\t\t}}\n\n");
         }
+
+        gene.Append("\t}\n\n");
+
+        // Ornaments: never inherited — a portrait rule gives them by culture and rank.
+        gene.Append($"\t{Horns.OrnamentGene} = {{\n\t\tinheritable = no\n\n");
+        gene.Append($"\t\t{Horns.OrnamentNoneTemplate} = {{\n\t\t\tindex = 0\n\t\t\tmale = {{ 1 = empty }}\n\t\t\tfemale = male\n\t\t\tboy = male\n\t\t\tgirl = female\n\t\t}}\n\n");
+        int ornamentIndex = 1;
+        foreach (string kind in Horns.OrnamentKinds)
+            foreach (var (metal, _, _, _) in Horns.Metals)
+            {
+                string t = Horns.OrnamentTemplateOf(kind, metal);
+                gene.Append($"\t\t{t} = {{\n\t\t\tindex = {ornamentIndex++}\n\t\t\tmale = {{ 1 = male_{t} }}\n")
+                    .Append($"\t\t\tfemale = {{ 1 = female_{t} }}\n\t\t\tboy = male\n\t\t\tgirl = female\n\t\t}}\n\n");
+            }
 
         gene.Append("\t}\n}\n");
         string genePath = Path.Combine(modDir, HornGeneFile.Replace('/', Path.DirectorySeparatorChar));
@@ -547,7 +648,7 @@ public static class RaceHeadWriter
     /// Copied from the installed game at generation, so a patch that changes a crown is picked up by
     /// regenerating. Returns how many crowns were re-declared; 0 with a warning if the band is missing.
     /// </summary>
-    private static int WriteHornCrowns(string modDir, string gameDir)
+    private static int WriteHornCrowns(string modDir, string gameDir, List<string> log)
     {
         string accDir = Path.Combine(gameDir, "gfx", "portraits", "accessories");
         if (!Directory.Exists(accDir)) return 0;
@@ -567,7 +668,7 @@ public static class RaceHeadWriter
             if (declared.TryGetValue(BandAccessory(sex), out var body) && DefaultEntity(body) is { } entity) band[sex] = entity;
             else
             {
-                Console.WriteLine($"  WARNING: horned heads keep their crowns: {BandAccessory(sex)} is not in this game version");
+                log.Add($"  WARNING: horned heads keep their crowns: {BandAccessory(sex)} is not in this game version");
                 return 0;
             }
         }

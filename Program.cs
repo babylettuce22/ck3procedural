@@ -36,6 +36,7 @@ public static class Program
         var previewLoc = new List<string>();
         bool fitHeightmap = false;
         bool allowUnverifiedSize = false;
+        bool azgaarWeathered = false;
 
         // Tri-state on purpose. The debug PNGs cost about a tenth of a full run — six seconds on a
         // 9216x4608 map — and a run that is writing a mod almost never wants them, but a run with
@@ -288,6 +289,19 @@ public static class Program
                     cfg.AzgaarJsonPath = options.AzgaarJsonPath;
                     break;
 
+                // How an Azgaar world's terrain is finished: "drawn" (the default here) builds the
+                // --heightmap PNG as it stands; "weathered" keeps its coastline and reads the ranges
+                // and uplands from the --azgaar export's grid, then adds the Forge's hills, ridges
+                // and erosion — the Azgaar page's default. See MapGen.AzgaarRelief.
+                case "--azgaar-terrain" when i + 1 < args.Length:
+                    azgaarWeathered = args[++i].ToLowerInvariant() switch
+                    {
+                        "weathered" => true,
+                        "drawn" => false,
+                        var other => throw new ArgumentException($"--azgaar-terrain {other}: expected weathered or drawn"),
+                    };
+                    break;
+
                 // Optional. A climate paint file saved by the GUI's Climate tab (the PNG beside a
                 // preset, or one exported from the tab). Where it is painted it sets the climate;
                 // everywhere else the model's own stands, as it does without the flag.
@@ -452,6 +466,13 @@ public static class Program
                 // Fantasy races are unaffected either way. Varied is the default.
                 case "--dominant-look" when i + 1 < args.Length:
                     cfg.DominantLook = Enum.Parse<MapConfig.HumanLook>(args[++i], ignoreCase: true);
+                    break;
+
+                // Which region's vanilla looks the cultures' dress, buildings, units and heraldry
+                // come from, and which language styles their names are coined in; see
+                // CultureLookTheme. With --dominant-look this is a Quick world's inspiration.
+                case "--culture-theme" when i + 1 < args.Length:
+                    cfg.CultureAestheticsTheme = Enum.Parse<MapConfig.CultureLookTheme>(args[++i], ignoreCase: true);
                     break;
 
                 case "--no-history":
@@ -784,6 +805,19 @@ public static class Program
             };
         }
 
+        if (azgaarWeathered)
+        {
+            // Last, so the fit and the size waiver are already on the file it starts from.
+            if (options.Heightmap is not MapGen.FileHeightmapProvider file || string.IsNullOrWhiteSpace(options.AzgaarJsonPath))
+            {
+                Console.Error.WriteLine("--azgaar-terrain weathered needs --heightmap <png> and --azgaar <export.json>.");
+                return 1;
+            }
+
+            options.Heightmap = new MapGen.AzgaarReliefProvider(file.Path, options.AzgaarJsonPath, cfg.Seed,
+                file.FitTo, file.AllowUnverifiedSize);
+        }
+
         if (preview3d)
         {
             if (options.Heightmap is null)
@@ -916,6 +950,8 @@ public static class Program
                 "       [--land-top 0-255] [--land-top-percentile 0-100]");
             Console.Error.WriteLine(
                 "       [--azgaar <export.json>]  optional; borrows names from an Azgaar map");
+            Console.Error.WriteLine(
+                "       [--azgaar-terrain drawn|weathered]  drawn (default) builds the PNG as it stands; weathered adds hills, ridges and erosion");
             Console.Error.WriteLine(
                 "       [--impassable-mask <mask.png>]  optional; white = impassable, black = passable, painted over provinces.png");
             Console.Error.WriteLine(

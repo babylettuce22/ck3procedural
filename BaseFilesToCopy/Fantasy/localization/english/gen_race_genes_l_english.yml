@@ -1,0 +1,15 @@
+﻿l_english:
+ # Names for the race head-feature genes, shown in the ruler designer. With the genes themselves
+ # (Fantasy/common/genes, plus the generated horn genes) these ship only when races are on.
+ # The pointed-ear gene (common/genes/gen_bs_elf_ears.txt).
+ gen_bs_elf_ears:0 "Pointed Ears"
+ # The orc tusk gene (common/genes/gen_bs_orc_tusks.txt).
+ gen_bs_orc_tusks:0 "Tusks"
+ # Horns: the accessory genes are generated with the horn models; the skin mound is static.
+ gen_horns:0 "Horns"
+ gen_bs_horn_boss:0 "Horn Base"
+ gen_horn_ornaments:0 "Horn Ornaments"
+ # The giantkin brow and jaw (common/genes/gen_bs_giant_face.txt).
+ gen_bs_giant_face:0 "Giant's Brow"
+ # The orc brow (common/genes/gen_bs_orc_brow.txt).
+ gen_bs_orc_brow:0 "Orcish Brow"

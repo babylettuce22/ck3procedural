@@ -683,6 +683,24 @@ public static class Cultures
         ],
     };
 
+    /// <summary>
+    /// The mod's own traditions a race always keeps, from the Fantasy set
+    /// (<c>BaseFilesToCopy/Fantasy/common/culture/traditions</c>). Unlike <see cref="RaceTraditions"/>
+    /// these are not in the install's vocabulary, are never drawn from, and sit outside the
+    /// five-tradition ceiling: they are the race's customs, not its character, and granting them
+    /// never displaces a tradition the ground gave. The Fantasy set ships exactly when races are on,
+    /// which is the only time this runs, so the key never dangles.
+    /// </summary>
+    private static readonly Dictionary<RaceArchetype, string[]> RaceCustoms = new()
+    {
+        // The Blood Right: orcish rulers settle standing in the circle (the Blood Challenge).
+        [RaceArchetype.Orc] = ["tradition_gen_blood_right"],
+        // The Tinker's Bench: gnomes build contraptions, and others hire them to (Gnome Tinkering).
+        [RaceArchetype.Gnome] = ["tradition_gen_tinkers_bench"],
+        // The Long Labour: a high-elf king may swear a lifelong Great Work (Emit/Culture/GreatWorkNameWriter.cs names them).
+        [RaceArchetype.HighElf] = ["tradition_gen_long_labour"],
+    };
+
     /// <summary>Most traditions <see cref="PickTraditions"/> ever gives; a race's promise swaps
     /// rather than adds once a culture is at it.</summary>
     private const int MaxTraditions = 5;
@@ -722,6 +740,21 @@ public static class Cultures
                 }
 
                 culture.Traditions.Add(rng.Pick(candidates));
+                granted++;
+            }
+        }
+
+        // After the draws, and drawing nothing, so every culture of another race comes out exactly
+        // as it did before the customs existed.
+        foreach (var culture in cultures)
+        {
+            if (culture.Inherited || culture.Key == UnsettledKey) continue;
+            if (!RaceCustoms.TryGetValue(raceOf(culture), out var customs)) continue;
+
+            foreach (string custom in customs)
+            {
+                if (culture.Traditions.Contains(custom)) continue;
+                culture.Traditions.Add(custom);
                 granted++;
             }
         }
@@ -1399,10 +1432,15 @@ public static class Cultures
                     cloth.Contains("byzantine") || cloth.Contains("greek") || cloth.Contains("roman")
                     || unit.Contains("byzantine") || bld.Contains("byzantine") || src.Contains("greek"),
 
+                // Vanilla's West and East African peoples build and arm the mena way too, so the
+                // units and buildings alone let 31 African-dressed looks in: half the pool, and the
+                // likelier half in any hot land. The region's own dress, or its units and buildings
+                // on a people not dressed as Africans.
                 MapConfig.CultureLookTheme.MiddleEasternMena =>
                     cloth.Contains("mena") || cloth.Contains("arabic") || cloth.Contains("persian")
-                    || cloth.Contains("bedouin") || cloth.Contains("berber") || unit.Contains("mena")
-                    || bld.Contains("mena"),
+                    || cloth.Contains("bedouin") || cloth.Contains("berber") || cloth.Contains("iranian")
+                    || cloth.Contains("abbasid")
+                    || ((unit.Contains("mena") || bld.Contains("mena")) && !cloth.Contains("african")),
 
                 MapConfig.CultureLookTheme.SteppeNomadic =>
                     cloth.Contains("steppe") || cloth.Contains("mongol") || cloth.Contains("turkic")

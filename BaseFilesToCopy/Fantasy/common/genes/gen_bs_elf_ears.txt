@@ -10,8 +10,10 @@
 # The value is the blendshape weight, 0 human to 1 full, so it tiers like vanilla's gene_bs_ genes
 # (MapGen/Ethnicities.cs NeutralOf) and half a value is a half-elf's ear.
 #
-# The gene DECLARATION stays in Core, beside gen_race_skin, because Emit/PortraitWriter.cs writes
-# it into every persistent DNA record on every map. Index 0 must stay the empty template: it is
+# In the Fantasy set, not Core: the attributes it names are declared only by the head assets
+# RaceHeadWriter patches, which it does only when races are on, so a human-only map shipping this
+# file referenced attributes no model defines (ck3-tiger missing-item). Emit/PortraitWriter.cs pads
+# persistent DNA records with it under the same gate. Index 0 must stay the empty template: it is
 # what those records, and every character whose DNA does not mention the gene, fall back to.
 #
 # Tied to snug headgear the way vanilla's own upper-ear shape is, so a close helmet hides the tip

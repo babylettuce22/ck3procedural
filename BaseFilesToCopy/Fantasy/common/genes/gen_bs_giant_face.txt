@@ -4,8 +4,8 @@
 # shape. The giantkin row of RaceMorphs (MapGen/Ethnicities.cs) puts it in their ethnicities and
 # Emit/RaceMorphWriter.cs forces it by trait.
 #
-# In Core beside the other race-feature genes: Emit/PortraitWriter.cs writes it into every persistent
-# DNA record on every map. Index 0 must stay the empty template.
+# In the Fantasy set beside the other race-feature genes: its attribute exists only where
+# RaceHeadWriter patched the head assets, i.e. with races on. Index 0 must stay the empty template.
 
 morph_genes = {
 	gen_bs_giant_face = {
