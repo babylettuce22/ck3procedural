@@ -398,12 +398,13 @@ public static class MapGraphicsWriter
     /// <summary>
     /// gfx/FX/province_effects.fxh with the effect mask read over a disc rather than one texel.
     ///
-    /// A situation phase's <c>map_province_effect</c> (the Wilds' summer grass, the Great Steppe's
-    /// droughts, snows and green seasons) is stored per province and looked up through the province
-    /// indirection texture. Vanilla's terrain path blends the four texels around the pixel, so the
-    /// effect fades over exactly one province-map pixel and ends on the border as a ruled line. That
-    /// is invisible where vanilla uses it, on steppe that looks the same either side, and loud on
-    /// ours, where a Wilds frontier greens a desert county next to a bare one.
+    /// A situation phase's <c>map_province_effect</c> (the Great Steppe's droughts, snows and green
+    /// seasons) is stored per province and looked up through the province indirection texture.
+    /// Vanilla's terrain path blends the four texels around the pixel, so the effect fades over
+    /// exactly one province-map pixel and ends on the border as a ruled line. That is invisible on
+    /// vanilla's steppe, which looks the same either side, and loud on ours, where the steppe
+    /// region can end against desert or forest. (The Wilds used to paint summer grass this way
+    /// too; it no longer names any effect.)
     ///
     /// The replacement averages <see cref="EffectTaps"/> point lookups spread over a disc, which is
     /// the share of the neighbourhood carrying the effect: 1 deep inside, 0.5 on the border, 0 a

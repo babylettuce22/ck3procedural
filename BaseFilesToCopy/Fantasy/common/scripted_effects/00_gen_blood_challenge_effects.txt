@@ -234,8 +234,8 @@ gen_bc_apply_stakes_effect = {
 		if = {
 			limit = { $VICTOR$ = scope:gen_bc_challenger }
 			# The challenger took the circle: an earned claim on the seat, and the name that goes with it.
-			# The prestige only just covers the challenge's cost when a claim was at stake
-			# (gen_bc_challenge_cost_value), so the claim is the prize, not a prestige farm.
+			# The prestige (+150) is less than the challenge cost when a claim was at stake (350,
+			# gen_bc_challenge_cost_value), so the claim is the prize, not a prestige farm.
 			$VICTOR$ = {
 				if = {
 					limit = {

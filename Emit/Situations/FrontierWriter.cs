@@ -35,6 +35,19 @@ public static class FrontierWriter
 
     private const string StartPhase = "wilds_untamed";
 
+    /// <summary>
+    /// Each participant group's <c>map_color</c>, in the order the map legend lists them. The
+    /// situation map mode colours a county by its holder's group, and no .gui datafunction reads
+    /// a group's colour back, so <c>GuiWriter.PatchSituationWindow</c> draws the legend's swatches from this
+    /// table. <see cref="TypeBody"/> carries <c>@key@</c> placeholders filled from it.
+    /// </summary>
+    public static readonly (string Group, byte R, byte G, byte B)[] GroupColors =
+    [
+        ("the_wild", 72, 150, 62),
+        ("colonists", 214, 168, 64),
+        ("marcher_lords", 96, 120, 176),
+    ];
+
     private static readonly (string Key, string Name, string Desc)[] Catalysts =
     [
         ("catalyst_wilds_colony_founded", "Colony Founded", "An expedition has taken root in the wild."),
@@ -126,7 +139,11 @@ public static class FrontierWriter
             }
 
             b.Field("situation_group_type", "major");
-            b.Field("map_mode", "sub_regions");
+            // Coloured by who holds each county, not by which frontier it is in: wild green,
+            // colonies gold, marcher lords blue, and anyone outside the situation uncoloured —
+            // the Struggle look, and it shows a frontier filling up. Two frontiers side by side
+            // are no longer told apart by colour; the window names them. See `the_wild` below.
+            b.Field("map_mode", "participant_groups");
             b.Field("is_unique", "yes");
 
             // Default is `yes`, meaning "the phase icons are flat art" — which for vanilla's
@@ -157,7 +174,12 @@ public static class FrontierWriter
             }
             b.Blank();
 
-            b.Raw(TypeBody);
+            string body = TypeBody;
+            foreach (var (group, r, g, bl) in GroupColors)
+                body = body.Replace($"@{group}@", $"{{ {r} {g} {bl} }}");
+            if (body.Contains("map_color = @"))
+                throw new InvalidOperationException("A participant group's map_color has no entry in GroupColors.");
+            b.Raw(body);
         }
 
         string dir = Path.Combine(modDir, "common", "situation", "situations");
@@ -200,13 +222,14 @@ public static class FrontierWriter
         	#
         	# Read order is first valid. A colonist's realm is in the region because the colony was
         	# a wild county; a marcher lord's own domain has to touch it, which until somebody
-        	# founds a colony means holding a county on the ring. Neither dummy holder joins.
+        	# founds a colony means holding a county on the ring. The dummy holders join only
+        	# `the_wild`, last in the list.
         	participant_groups = {
         		colonists = {
         			icon = "gfx/interface/icons/activities/activity_roaming.dds"
         			auto_add_landless_rulers = no
         			require_realm_in_sub_region = yes
-        			map_color = { 214 168 64 }
+        			map_color = @colonists@
         			is_character_valid = {
         				government_has_flag = government_is_colony
         			}
@@ -216,7 +239,7 @@ public static class FrontierWriter
         			auto_add_landless_rulers = no
         			require_realm_in_sub_region = no
         			require_domain_in_sub_region = yes
-        			map_color = { 96 120 176 }
+        			map_color = @marcher_lords@
         			is_character_valid = {
         				NOT = { government_has_flag = government_is_wilderness }
         				highest_held_title_tier >= tier_county
@@ -249,6 +272,21 @@ public static class FrontierWriter
         				}
         			}
         		}
+
+        		# The land itself, for the map. `map_mode = participant_groups` colours a county
+        		# by its holder's group, so without this the ground still to be won would be as
+        		# uncoloured as the rest of the world. Both dummies (wilderness and ruins) run
+        		# wilderness_government. No phase gives this group a modifier set and it has no
+        		# on_join. Every participant loop in this file is limited to humans, so nothing
+        		# reaches the dummy through it.
+        		the_wild = {
+        			icon = "gfx/interface/icons/combat_effects/defender_forest.dds"
+        			auto_add_landless_rulers = no
+        			map_color = @the_wild@
+        			is_character_valid = {
+        				government_has_flag = government_is_wilderness
+        			}
+        		}
         	}
 
         	start_phase = wilds_untamed
@@ -260,30 +298,14 @@ public static class FrontierWriter
         			icon = "gfx/interface/icons/combat_effects/defender_forest.dds"
         			illustration = "gfx/interface/illustrations/event_scenes/forest_pine.dds"
 
-        			# ---- The one thing that draws the frontier on the terrain itself ----
+        			# ---- No map_province_effect, in any phase ----
         			#
-        			# `map_province_effect` is not a map mode and does not wait for one: it paints
-        			# the ground on the ORDINARY map, all the time, for every province of the
-        			# sub-region. `map_mode = sub_regions` colours the frontiers only while the
-        			# situation's map mode is up; this is what makes them visible the rest of the
-        			# time, and what makes an era turning something the player can SEE happen.
-        			#
-        			# `summer` of the four the engine has, and it is not a guess. The shader
-        			# (gfx/FX/province_effects.fxh, ApplySummerDiffuseTerrain) blends grass patches
-        			# over the terrain through SummerGrassOverlayColor and tints trees through
-        			# SummerOverlayTree — vegetation taking the ground, which is precisely what an
-        			# unclaimed county is. drought and flood are damage, snow is weather. The four
-        			# indices are fixed in the shader, so a fifth would mean overriding a vanilla
-        			# .fxh and re-doing it every patch.
-        			#
-        			# The intensity is the era, and it only ever falls: the wild is thickest where
-        			# nobody has gone, thins as colonies stand, and is gone from a settled frontier
-        			# (which therefore names no effect at all rather than naming one at 0). The
-        			# effect covers the ring counties too, since they are part of the sub-region —
-        			# slightly generous, and it reads correctly as the frontier being a zone rather
-        			# than a line.
-        			map_province_effect = summer
-        			map_province_effect_intensity = 0.75
+        			# The frontiers are shown by the situation's map mode, while it is up, and
+        			# nowhere else. A `map_province_effect` paints the
+        			# ORDINARY map all the time: `summer` was here at 0.75/0.45/0.2 by era, and it
+        			# turned every desert frontier into green grassland with sand streaks. The
+        			# terrain should show what the land is, not which situation owns it.
+        			# The sub-region still includes the ring counties.
 
         			on_start = {
         				wilds_phase_announce_effect = { PHASE = wilds_untamed }
@@ -323,10 +345,6 @@ public static class FrontierWriter
         		wilds_pioneers = {
         			icon = "gfx/interface/icons/activities/activity_survey.dds"
         			illustration = "gfx/interface/illustrations/event_scenes/genericcamp.dds"
-
-        			# Colonies stand in it now; the wild is thinner. See wilds_untamed.
-        			map_province_effect = summer
-        			map_province_effect_intensity = 0.45
 
         			on_start = {
         				wilds_phase_announce_effect = { PHASE = wilds_pioneers }
@@ -410,10 +428,6 @@ public static class FrontierWriter
         			icon = "gfx/interface/icons/council_task_types/task_develop_county.dds"
         			illustration = "gfx/interface/illustrations/event_scenes/ep2_village_festival_western.dds"
 
-        			# Most of it is fields now. The last trace. See wilds_untamed.
-        			map_province_effect = summer
-        			map_province_effect_intensity = 0.2
-
         			on_start = {
         				wilds_phase_announce_effect = { PHASE = wilds_closing }
         			}
@@ -464,8 +478,8 @@ public static class FrontierWriter
         							#
         							# A `marcher_lords` county_modifier lands on every county the
         							# lord holds INSIDE the sub-region, and the sub-region includes
-        							# the ring — see the note on map_province_effect in
-        							# wilds_untamed. So this is not paid for colonising anything.
+        							# the ring — see the note at the top of wilds_untamed. So this
+        							# is not paid for colonising anything.
         							# It is paid for holding ordinary, already-developed land that
         							# happens to border the wild, and at +0.15 it paid the man who
         							# never went out more than wilds_settlement_set pays the
@@ -485,11 +499,6 @@ public static class FrontierWriter
         		wilds_settled = {
         			icon = "gfx/interface/icons/combat_effects/defender_farmland.dds"
         			illustration = "gfx/interface/illustrations/event_scenes/ep2_hunt_forest_managed.dds"
-
-        			# No map_province_effect at all — see wilds_untamed. A settled frontier is
-        			# ordinary country and should look like it; the ground going back to normal
-        			# IS the reward, and it is the only phase transition the player sees from the
-        			# map without opening anything.
 
         			on_start = {
         				wilds_phase_announce_effect = { PHASE = wilds_settled }
@@ -1290,6 +1299,8 @@ public static class FrontierWriter
         loc.Add($"{TypeKey}_participant_group_colonists_desc", "Rulers whose only land is a colony in this frontier.");
         loc.Add($"{TypeKey}_participant_group_marcher_lords", "Marcher Lords");
         loc.Add($"{TypeKey}_participant_group_marcher_lords_desc", "Rulers who hold a county in this frontier or on its edge.");
+        loc.Add($"{TypeKey}_participant_group_the_wild", "The Wild");
+        loc.Add($"{TypeKey}_participant_group_the_wild_desc", "The land no one has claimed yet, and the ruins no one has reclaimed.");
         loc.Blank();
 
         // TWO name keys per phase, and the window reads a different one in each column.

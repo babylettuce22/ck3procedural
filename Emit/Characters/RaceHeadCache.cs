@@ -102,6 +102,10 @@ internal static class RaceHeadCache
             if (Directory.Exists(d)) inputs.AddRange(Directory.EnumerateFiles(d, "*", SearchOption.AllDirectories));
         }
 
+        // Beard meshes and assets: BuildBeardFollows derives a follow shape from each.
+        string beards = Path.Combine(portraits, "m_beards");
+        if (Directory.Exists(beards)) inputs.AddRange(Directory.EnumerateFiles(beards, "*", SearchOption.AllDirectories));
+
         string accessories = Path.Combine(gameDir, "gfx", "portraits", "accessories");
         if (Directory.Exists(accessories)) inputs.AddRange(Directory.EnumerateFiles(accessories, "*.txt"));
 

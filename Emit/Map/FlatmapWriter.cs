@@ -119,7 +119,11 @@ public static class FlatmapWriter
                     g = (baseG * owg) / 255.0f;
                     b = (baseB * owb) / 255.0f;
 
-                    if (dist == 1)
+                    if (cfg.FlatmapCoastInk)
+                    {
+                        // FlatmapInk draws the coast and its waterlines at the map's scale.
+                    }
+                    else if (dist == 1)
                     {
                         // Coastline boundary ink stroke
                         r *= 0.45f; g *= 0.40f; b *= 0.35f;
@@ -144,11 +148,11 @@ public static class FlatmapWriter
 
         // Pen work over the finished parchment, before it is encoded — so the thumbnail and the
         // struggle art cut from the returned buffer carry it too.
-        if (cfg.FlatmapRoads || cfg.FlatmapFlourishes || cfg.FlatmapHachures)
+        if (cfg.FlatmapRoads || cfg.FlatmapFlourishes || cfg.FlatmapHachures || cfg.FlatmapCoastInk)
         {
             string inked = FlatmapInk.Draw(pixels, w, h, landMask, provinces, order, routes, wilderness,
                 cfg.Seed, cfg.FlatmapRoads, cfg.FlatmapFlourishes, cfg.FlatmapFeather,
-                elevation, cfg.FlatmapHachures, landmarks, gameDir);
+                elevation, cfg.FlatmapHachures, landmarks, gameDir, cfg.FlatmapCoastInk);
             Console.WriteLine($"  flatmap: {inked}");
         }
 

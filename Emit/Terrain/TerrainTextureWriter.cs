@@ -896,6 +896,72 @@ public static class TerrainTextureWriter
     private const int SlopeStoneSpan = 3;
 
     /// <summary>
+    /// The land-height band snow can reach, as percentiles of this map's land: nothing below the
+    /// first, full height from the second. The mountain class is the real gate (see
+    /// TerrainPalette.RidgeSnow); these only grade it within the ranges.
+    /// </summary>
+    private const double SnowPeakLoPercentile = 0.95;
+    private const double SnowPeakHiPercentile = 0.993;
+
+    /// <summary>
+    /// Height against the mean of two rings of eight neighbours, at <paramref name="inner"/> and
+    /// <paramref name="outer"/> pixels: positive on a crest, negative in a hollow. A difference of
+    /// two blurs, taken per pixel so no blurred copy of the heightmap is stored.
+    /// </summary>
+    private static float Ridge(float[] elevation, int width, int height, int x, int y, int inner, int outer)
+    {
+        float sum = 0;
+        int n = 0;
+        foreach (int r in (ReadOnlySpan<int>)[inner, outer])
+        {
+            int d = Math.Max(1, (int)Math.Round(r * 0.7071));
+            ReadOnlySpan<(int, int)> ring = [(r, 0), (-r, 0), (0, r), (0, -r), (d, d), (d, -d), (-d, d), (-d, -d)];
+            foreach (var (dx, dy) in ring)
+            {
+                int sx = Math.Clamp(x + dx, 0, width - 1), sy = Math.Clamp(y + dy, 0, height - 1);
+                sum += elevation[(long)sy * width + sx];
+                n++;
+            }
+        }
+        return elevation[(long)y * width + x] - sum / n;
+    }
+
+    /// <summary>
+    /// The ridge value a crest reaches on this map's high ground — the 85th percentile of the
+    /// positive ones where <paramref name="sampled"/> admits — so ridge reads 0..1 on any relief.
+    /// </summary>
+    private static float RidgeFull(float[] elevation, int width, int height,
+        Func<int, int, bool> sampled, int inner, int outer)
+    {
+        const int Stride = 4;
+        var values = new List<float>();
+        for (int y = 0; y < height; y += Stride)
+            for (int x = 0; x < width; x += Stride)
+            {
+                if (!sampled(x, y)) continue;
+                float r = Ridge(elevation, width, height, x, y, inner, outer);
+                if (r > 0) values.Add(r);
+            }
+        if (values.Count == 0) return 0;
+        values.Sort();
+        return values[(int)(values.Count * 0.85)];
+    }
+
+    /// <summary>Two height percentiles of this map's land, sampled on a stride.</summary>
+    private static (float Lo, float Hi) LandHeightPercentiles(float[] elevation, int width, int height,
+        Func<int, int, bool> land, double lo, double hi)
+    {
+        const int Stride = 4;
+        var values = new List<float>();
+        for (int y = 0; y < height; y += Stride)
+            for (int x = 0; x < width; x += Stride)
+                if (land(x, y)) values.Add(elevation[(long)y * width + x]);
+        if (values.Count == 0) return (float.MaxValue, float.MaxValue);
+        values.Sort();
+        return (values[(int)((values.Count - 1) * lo)], values[(int)((values.Count - 1) * hi)]);
+    }
+
+    /// <summary>
     /// Two gradient thresholds off this map's own coast: where cliff rock starts showing, and where
     /// it has taken the face over completely.
     ///
@@ -1092,6 +1158,18 @@ public static class TerrainTextureWriter
             : (float.MaxValue, float.MaxValue);
         float slopeRange = Math.Max(1e-4f, slopeHi - slopeLo);
 
+        // Where snow goes: how high among this map's land a pixel stands, and how much of a crest it
+        // sits on — see TerrainPalette.RidgeSnow. The ridge is height against the mean of two rings
+        // of neighbours, a difference of two blurs taken without storing either, at roughly the
+        // scale of the offline mock's sigma-2 minus sigma-8 (rings at ~3 and ~12 texels).
+        int ridgeInner = Math.Max(1, (int)Math.Round(3 * toHeightX));
+        int ridgeOuter = Math.Max(2, (int)Math.Round(12 * toHeightX));
+        var (peakLo, peakHi) = LandHeightPercentiles(elevation, hWidth, hHeight, IsLand,
+            SnowPeakLoPercentile, SnowPeakHiPercentile);
+        float peakRange = Math.Max(1e-4f, peakHi - peakLo);
+        float ridgeFull = RidgeFull(elevation, hWidth, hHeight,
+            (x, y) => elevation[(long)y * hWidth + x] >= peakLo, ridgeInner, ridgeOuter);
+
         Console.WriteLine(hasRelief
             ? $"  terrain: hill rock from gradient {ruggedLo:F2} (full at {ruggedHi:F2}), " +
               $"measured over {ruggedSpan} px"
@@ -1222,6 +1300,14 @@ public static class TerrainTextureWriter
                             / slopeRange, 0, 1))
                         : 0.0;
 
+                    int ex = Math.Clamp((int)hx, 0, hWidth - 1), ey = Math.Clamp((int)hy, 0, hHeight - 1);
+                    float here = elevation[(long)ey * hWidth + ex];
+                    double peak = Math.Clamp((here - peakLo) / peakRange, 0, 1);
+                    double ridge = peak > 0 && ridgeFull > 0
+                        ? Math.Clamp(Ridge(elevation, hWidth, hHeight, ex, ey, ridgeInner, ridgeOuter)
+                            / ridgeFull, 0, 1)
+                        : 0.0;
+
                     byte self = label[pSrc];
 
                     // Dry ground the province map calls sea — the sliver where a province coast and
@@ -1234,7 +1320,7 @@ public static class TerrainTextureWriter
 
                     var blend = TerrainPalette.For(TerrainPalette.TerrainOf(self),
                         TerrainPalette.ClimateFromLabel(self), relief, nA, nB, nC,
-                        canopyDensity, zoneA, zoneB, rugged, slope);
+                        canopyDensity, zoneA, zoneB, rugged, slope, peak, ridge);
 
                     // Distance from here to the nearest ground of a different class, measured
                     // inside its own region. A smooth function of a real distance is what makes a
@@ -1344,7 +1430,7 @@ public static class TerrainTextureWriter
                                 byte winner = boundaryOther[pSrc];
                                 var neighbour = TerrainPalette.For(TerrainPalette.TerrainOf(winner),
                                     TerrainPalette.ClimateFromLabel(winner), relief, nA, nB, nC,
-                                    canopyDensity, zoneA, zoneB, rugged, slope);
+                                    canopyDensity, zoneA, zoneB, rugged, slope, peak, ridge);
 
                                 blend = TerrainPalette.Merge(blend, neighbour, a);
 
@@ -1354,7 +1440,7 @@ public static class TerrainTextureWriter
                                     var runnerUp = TerrainPalette.For(
                                         TerrainPalette.TerrainOf(second),
                                         TerrainPalette.ClimateFromLabel(second), relief, nA, nB, nC,
-                                        canopyDensity, zoneA, zoneB, rugged, slope);
+                                        canopyDensity, zoneA, zoneB, rugged, slope, peak, ridge);
 
                                     blend = TerrainPalette.Merge(blend, runnerUp, b);
                                 }

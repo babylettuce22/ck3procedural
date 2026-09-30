@@ -31,8 +31,10 @@ gen_gw_swear_decision = {
 		trigger_event = gen_great_work.0010
 	}
 
-	# Rare by design: a secure, wealthy, learned king with years ahead.
-	ai_check_interval = 60
+	# Rare by design: a secure, wealthy, learned king with years ahead. The gold gate does most of the
+	# filtering, so the AI checks every two years at 15 — aiming at roughly one AI Great Work a century
+	# for every five or so eligible high-elf kings (user, 2026-09-30; was every five years at 5).
+	ai_check_interval = 24
 	ai_potential = {
 		age < 70
 		OR = {
@@ -42,7 +44,7 @@ gen_gw_swear_decision = {
 		}
 	}
 	ai_will_do = {
-		base = 5
+		base = 15
 		modifier = {
 			add = 10
 			OR = {

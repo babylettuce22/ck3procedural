@@ -392,7 +392,7 @@ public static class Program
                     cfg.CalendarEnabled = false;
                     break;
 
-                // Pen work on the parchment flat map, on by default. See Emit/Map/FlatmapInk.cs.
+                // Pen work on the parchment flat map, on by default (the feather excepted). See Emit/Map/FlatmapInk.cs.
                 case "--flatmap-roads":
                     cfg.FlatmapRoads = true;
                     break;
@@ -413,6 +413,12 @@ public static class Program
                     break;
                 case "--no-flatmap-hachures":
                     cfg.FlatmapHachures = false;
+                    break;
+                case "--flatmap-coast-ink":
+                    cfg.FlatmapCoastInk = true;
+                    break;
+                case "--no-flatmap-coast-ink":
+                    cfg.FlatmapCoastInk = false;
                     break;
 
                 // Vanilla's surround shader, unpatched. See MapGraphicsWriter.WriteSurroundShader.

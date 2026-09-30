@@ -75,6 +75,12 @@ public sealed class QuickChoices
     public bool NativeRealms { get; set; }
 
     /// <summary>
+    /// The paper map with all its pen work — roads, compass rose, hatching, hachures, waterlines,
+    /// lettering and border — or off for the plain parchment it was before any of it was inked.
+    /// </summary>
+    public bool DetailedPaperMap { get; set; } = true;
+
+    /// <summary>
     /// A hand-set race mix, or null for the fantasy choice's own. Kept while Fantasy is None, like
     /// the pick itself, but only applied with races on; see <see cref="MixInWorld"/>.
     /// </summary>
@@ -124,7 +130,8 @@ public sealed class QuickChoices
                + (MixInWorld is { } mix ? $" (custom mix: {mix.Describe(FantasyInWorld)})" : "")
                + $", politics {Politics}, rulers {Rulers}, "
                + $"wilderness {(Wilderness ? "on" : "off")}, wars {(Wars ? "on" : "off")}, "
-               + $"native titles {(NativeTitles ? "on" : "off")}, native realms {(NativeRealms ? "on" : "off")}";
+               + $"native titles {(NativeTitles ? "on" : "off")}, native realms {(NativeRealms ? "on" : "off")}, "
+               + $"paper map {(DetailedPaperMap ? "detailed" : "plain")}";
     }
 
     /// <summary>
@@ -232,6 +239,13 @@ public sealed class QuickChoices
         bool invented = People == QuickPeople.Invented;
         cfg.NativeRankTitles = invented && NativeTitles;
         cfg.NativeRealmNames = invented && NativeRealms;
+
+        // Every half of the paper map's pen work together. Plain is the parchment alone, with the
+        // parchment pass's own thin coast. The edge feather is not pen work and stays as reset.
+        cfg.FlatmapRoads = DetailedPaperMap;
+        cfg.FlatmapFlourishes = DetailedPaperMap;
+        cfg.FlatmapHachures = DetailedPaperMap;
+        cfg.FlatmapCoastInk = DetailedPaperMap;
 
         // Where the invented peoples draw their culture and faces from. Without one both stay as
         // the reset left them, varied, which is every Quick world made before the choice existed.

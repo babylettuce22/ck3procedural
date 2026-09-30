@@ -47,19 +47,26 @@ story_gen_great_work = {
 			name = gw_progress
 			value = 0
 		}
-		# A learned maker starts ahead: twice their learning, so ~30 to ~50 for a scholarly king.
+		# The care taken: every beat's quality change is summed and counted, and the finished work's
+		# tier reads the AVERAGE (gen_gw_care_value), so neither the number of beats nor of hands moves
+		# it. The first maker's learning gives a small nudge: (learning - 15) / 10, from -1 to +1.5.
 		set_variable = {
-			name = gw_quality
-			value = story_owner.learning
+			name = gw_care_sum
+			value = 0
 		}
-		change_variable = {
-			name = gw_quality
-			multiply = 2
+		set_variable = {
+			name = gw_beats
+			value = 0
 		}
-		clamp_variable = {
-			name = gw_quality
-			min = 0
-			max = 60
+		set_variable = {
+			name = gw_talent
+			value = {
+				value = story_owner.learning
+				subtract = 15
+				divide = 10
+				min = -1
+				max = 1.5
+			}
 		}
 		set_variable = {
 			name = gw_milestone
@@ -184,13 +191,17 @@ story_gen_great_work = {
 		}
 	}
 
-	# The long years: a beat every four to seven.
+	# The long years: a beat every four to seven, until the maker's working life nears its end (the
+	# weary maker's own beats are below, and only after the handover is refused).
 	effect_group = {
 		years = { 4 7 }
 		trigger = {
 			NOT = { exists = var:gw_in_succession }
 			NOT = { exists = var:gw_finishing }
-			story_owner = { is_alive = yes }
+			story_owner = {
+				is_alive = yes
+				NOT = { gen_gw_maker_near_end_trigger = yes }
+			}
 		}
 		triggered_effect = {
 			trigger = { always = yes }
@@ -222,9 +233,11 @@ story_gen_great_work = {
 		}
 	}
 
-	# The maker would not hand it on: the last years hurry, at a weary maker's pace.
+	# The maker would not hand it on: a little more work in the last years, at a weary maker's pace.
+	# Every three to four years at half pace, so refusing buys some headway but no sprint: an ordinary
+	# maker still needs an heir, a gifted one (learning 20+ with a scholar's habits) can finish alone.
 	effect_group = {
-		years = { 1 2 }
+		years = { 3 4 }
 		trigger = {
 			NOT = { exists = var:gw_in_succession }
 			exists = var:gw_handover_offered

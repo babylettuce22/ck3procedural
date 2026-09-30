@@ -19,6 +19,14 @@ gen_bc_killed_beaten_foe_opinion = {
 	years = 15
 }
 
+# The close family of a foe killed after a peer or downward fight. Half of vanilla's
+# murdered_close_relation_opinion (-30, 25 years): the victim stepped into the circle of their own will.
+gen_bc_killed_kin_in_circle_opinion = {
+	opinion = -15
+	decaying = yes
+	years = 12
+}
+
 # The spared loser, grateful.
 gen_bc_spared_me_opinion = {
 	opinion = 25

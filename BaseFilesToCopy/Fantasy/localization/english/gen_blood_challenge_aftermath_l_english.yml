@@ -13,6 +13,7 @@
  # ============ Opinions ============
  gen_bc_fought_dirty_opinion: "Fought Dirty in the Circle"
  gen_bc_killed_beaten_foe_opinion: "Killed a Beaten Foe"
+ gen_bc_killed_kin_in_circle_opinion: "Killed Our Kin in the Circle"
  gen_bc_spared_me_opinion: "Spared My Life"
  gen_bc_spared_to_shame_me_opinion: "Spared Me to Shame Me"
  gen_bc_took_my_tusk_opinion: "Took My Tusk"
@@ -126,6 +127,7 @@
 
  gen_blood_challenge.0301.finish.blood_right_tt: "The fight was for a seat. By the Blood Right, no one of your culture will hold this killing against you."
  gen_blood_challenge.0301.finish.onlookers_tt: "Everyone of your culture watching the circle thinks less of you: #N -20#! opinion (Killed a Beaten Foe)"
+ gen_blood_challenge.0301.finish.kin_tt: "[gen_bc_ab_fallen.GetFirstName]'s close family will not forgive it: #N -15#! opinion (Killed Our Kin in the Circle)"
  gen_blood_challenge.0301.tusk.broken_tt: "[gen_bc_ab_fallen.GetFirstName] loses one of [gen_bc_ab_fallen.GetHerHis] tusks for good."
 
  gen_blood_challenge.0301.spare.grateful: "Spared by [gen_bc_ab_judge.GetFirstName]"

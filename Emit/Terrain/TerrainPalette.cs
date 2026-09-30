@@ -395,10 +395,12 @@ public static class TerrainPalette
     /// classes still want that fine detail, so they keep <paramref name="rugged"/>. Negative means
     /// the caller has none, and <paramref name="rugged"/> stands in.
     /// </param>
+    /// <param name="peak">How high among this map's land the pixel stands, for <see cref="RidgeSnow"/>.</param>
+    /// <param name="ridge">How much of a crest the pixel sits on, for <see cref="RidgeSnow"/>.</param>
     public static Blend For(TerrainClass terrain, Climate climate, double relief,
         double nA, double nB, double nC,
         double canopyDensity = 0.5, double zoneA = 0.5, double zoneB = 0.5,
-        double rugged = 0.5, double slope = -1)
+        double rugged = 0.5, double slope = -1, double peak = 0, double ridge = 0)
     {
         var blend = Biome(terrain, climate, relief, nA, nB, nC, canopyDensity, zoneA, zoneB, rugged);
 
@@ -413,6 +415,13 @@ public static class TerrainPalette
         if (stone > 0)
             blend = Merge(Normalized(blend),
                 Normalized(SlopeStone(PaintedFamily(terrain, climate), slope, nA, nC)), stone);
+
+        if (terrain is TerrainClass.Mountains or TerrainClass.DesertMountains)
+        {
+            var snowClimate = terrain is TerrainClass.DesertMountains ? Climate.Desert : climate;
+            double snow = RidgeSnow(snowClimate, peak, ridge, slope, nC);
+            if (snow > 0.01) blend = Merge(Normalized(blend), Single(Snow), snow);
+        }
 
         return blend;
     }
@@ -1103,7 +1112,8 @@ public static class TerrainPalette
     /// mountain read as one flat stony field from foot to summit.
     ///
     /// <paramref name="relief"/> is 0 at sea level and 1 at the mountain line, so the bands are
-    /// cut on it directly and snow exists only above it.
+    /// cut on it directly. Snow is not painted here any more — see <see cref="RidgeSnow"/>, which
+    /// <see cref="For"/> merges over this band by ridge shape rather than as a cap by height.
     ///
     /// <c>central_mountain</c> is gone from here. It held a fixed 60 — about a fifth of every
     /// mountain pixel — while vanilla uses it outside the central family as a 2-5% contaminant,
@@ -1118,26 +1128,70 @@ public static class TerrainPalette
         // palette that switches on a contour puts its whole set in along that contour.
         double foot = 1.0 - Ramp(r, 0.60, 0.30);
         double face = Ramp(r, 0.45, 0.30);
-        double cap = Ramp(r, 1.18, 0.20);
 
         var (lowA, lowB, confA, confB) = LowlandPair(family, nA, nB);
 
-        // Tropical mountains carry no snow line and barely change texture with height — the
-        // sampled Sumatran face reads gen_tropical_mountain 100% from base to summit — so the cap
-        // is suppressed and the face material is left to take the pixel on its own.
-        double snow = climate is Climate.Tropical ? 0 : cap * (210 + nC * 40) - 25;
-
         return Mix(
-            family.Mountain, (byte)Math.Clamp(55 + 165 * face * (1.0 - 0.62 * cap), 0, 255),
+            family.Mountain, (byte)Math.Clamp(55 + 165 * face, 0, 255),
             // The transition is the shoulder between valley and rock, so it peaks partway up
             // rather than at either end. Pooled, it is the single heaviest material in northern
             // and mediterranean mountains — ahead of the mountain material itself.
             family.Transition, (byte)Math.Clamp(25 + 130 * Bump(r, 0.55, 0.60), 0, 255),
             family.Hills, (byte)Math.Clamp(110 * foot, 0, 255),
             lowA, (byte)Math.Clamp((30 + 120 * foot) * confA, 0, 255),
-            Snow, (byte)Math.Clamp(snow, 0, 255),
             lowB, (byte)Math.Clamp(75 * foot * confB, 0, 255)
         );
+    }
+
+    /// <summary>
+    /// How much of a mountain pixel is snow: on the crests and upper faces, not as a sheet.
+    ///
+    /// The old cap ramped in by height from just above the mountain line, so every mountain carried
+    /// one white sheet — 64% snow on the top 2% of land against vanilla's 4.5%, heaviest in the high
+    /// valleys and lightest on the ridges. Vanilla's is the inverse: 16% on ridge crests, none in
+    /// high valleys, and several times more on steep faces than on gentle ones, in thousands of
+    /// small streaks. This follows that shape, a little more generously than vanilla on purpose
+    /// (the user found vanilla's amount sparse): mocked offline on a Forge world it came to 1.5% of
+    /// land against vanilla's 0.5% and the old cap's 3.2%, largest patch ~4,100 u² against one of
+    /// ~50,000 (2026-09-30).
+    ///
+    /// Only mountain ground asks for it — the class is the gate. Taken off a land-height percentile
+    /// alone it freckled snow over forested hill country wherever a map has few real ranges.
+    /// </summary>
+    /// <param name="peak">0 at the land's 95th height percentile, 1 at its 99.3rd and above — the
+    /// summit line, above which ground is always snow.</param>
+    /// <param name="ridge">0 in a hollow or on a flat, 1 on a crest as sharp as this map's high ground gets.</param>
+    /// <param name="steep">The slope measure, 0..1.</param>
+    /// <param name="nC">The fine selector, used as the breakup that turns a band into streaks.</param>
+    private static double RidgeSnow(Climate climate, double peak, double ridge, double steep, double nC)
+    {
+        double strength = climate switch
+        {
+            // Tropical mountains carry no snow line — the sampled Sumatran face reads
+            // gen_tropical_mountain from base to summit.
+            Climate.Tropical => 0.0,
+            // Only a touch less: vanilla's desert mountains are ~2% snow against 1-3% for the rest.
+            // Their 10% here was the old sheet, not a sign they want thinning.
+            Climate.Desert or Climate.Drylands => 0.8,
+            _ => 1.0,
+        };
+        if (strength <= 0 || peak <= 0) return 0;
+
+        // The ridge carries almost all of it: with a larger flat share (0.25, as the offline mock
+        // had), lowering the threshold enough for the mock's amount snowed the high ground over
+        // regardless of shape and the sheet came back (64,551 u², valleys as white as crests).
+        // A steeper gain than the mock's makes up for the writer's contrast curve, which pushes a
+        // minority layer back down.
+        double s = peak * (0.1 + 0.9 * ridge) * (0.5 + 0.5 * steep);
+        s = Math.Clamp((s + 0.8 * (nC - 0.5) - 0.07) / 0.22, 0, 1);
+
+        // The summit line: the very top of the land is snow whatever its shape. A flattened top has
+        // no ridge to speak of, so by shape alone it drew bare rock with noise-driven blobs of
+        // snow across the highest ground on the map (seen in game 2026-09-30). The fine selector
+        // raggeds the line so it does not trace a clean height contour.
+        double summit = Ramp(peak + 0.3 * (nC - 0.5), 0.93, 0.06);
+
+        return strength * Math.Min(0.97, Math.Max(1.1 * s, 0.95 * summit));
     }
 
     /// <summary>

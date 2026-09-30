@@ -1389,7 +1389,10 @@ gen_blood_challenge.0301 = {
 		trigger = { scope:gen_bc_ab_fallen = { is_alive = yes } }
 		add_dread = medium_dread_gain
 		# An upward fight is for a seat, and the Blood Right lets the victor take a life for it.
-		# Anywhere else, killing a beaten foe turns the watching clans against you.
+		# Anywhere else, killing a beaten foe turns the watching clans against you, and costs about half
+		# what vanilla charges for the same death in a dungeon (the victim chose the circle): half an
+		# execution's tyranny (execution_tyranny_gain, 10) for killing one's own vassal, and half the
+		# murdered-kin opinion from the victim's close family.
 		if = {
 			limit = { scope:gen_bc_kind = flag:upward }
 			custom_tooltip = gen_blood_challenge.0301.finish.blood_right_tt
@@ -1399,6 +1402,25 @@ gen_blood_challenge.0301 = {
 				ACTOR = root
 				OPINION = gen_bc_killed_beaten_foe_opinion
 				TT = gen_blood_challenge.0301.finish.onlookers_tt
+			}
+			if = {
+				limit = { scope:gen_bc_ab_fallen.liege ?= root }
+				add_tyranny = 5
+			}
+			custom_tooltip = gen_blood_challenge.0301.finish.kin_tt
+			hidden_effect = {
+				scope:gen_bc_ab_fallen = {
+					every_close_family_member = {
+						limit = {
+							is_alive = yes
+							NOT = { this = root }
+						}
+						add_opinion = {
+							target = root
+							modifier = gen_bc_killed_kin_in_circle_opinion
+						}
+					}
+				}
 			}
 		}
 		gen_bc_ab_kill_effect = {

@@ -133,6 +133,7 @@ internal sealed class QuickPage : Panel
     private readonly ToggleCard _wars = new() { Name = "quickWars", Text = "Wars at the start", Description = "Rivals already at war on the first day." };
     private readonly ToggleCard _nativeTitles = new() { Name = "quickNativeTitles", Text = "Native titles", Description = "Kings and dukes titled in their people's own language." };
     private readonly ToggleCard _nativeRealms = new() { Name = "quickNativeRealms", Text = "Native realm names", Description = "Kingdoms and duchies named in it too." };
+    private readonly ToggleCard _detailedPaperMap = new() { Name = "quickDetailedPaperMap", Text = "Detailed paper map", Description = "Roads, mountains, waterlines and a compass rose inked on the zoomed-out map." };
 
     // review step
     private readonly List<(Label Key, Label Value, TextLink Change)> _summary = [];
@@ -220,6 +221,7 @@ internal sealed class QuickPage : Panel
         _wilderness.Toggled += on => _choices.Wilderness = on;
         _wars.Toggled += on => _choices.Wars = on;
         _nativeTitles.Toggled += on => _choices.NativeTitles = on;
+        _detailedPaperMap.Toggled += on => _choices.DetailedPaperMap = on;
         _nativeRealms.Toggled += on => _choices.NativeRealms = on;
 
         BuildChrome();
@@ -227,7 +229,7 @@ internal sealed class QuickPage : Panel
         BuildGroupsStep(_worldPanel, "Shape the world", "Size, era and climate. The defaults make a good first world.",
             [_size, _era, _climate, _density], toggles: null);
         BuildGroupsStep(_peoplePanel, "People and politics", "Who lives here, who rules, and what else the world holds.",
-            [_peopleGroup, _fantasy, _politics, _rulers], toggles: [_wilderness, _wars, _nativeTitles, _nativeRealms],
+            [_peopleGroup, _fantasy, _politics, _rulers], toggles: [_wilderness, _wars, _nativeTitles, _nativeRealms, _detailedPaperMap],
             headingLinks: new()
             {
                 [_peopleGroup] = (_inspirationLink, () => InspirationLinkShown),
@@ -486,6 +488,7 @@ internal sealed class QuickPage : Panel
         // A matter of taste rather than of the world, so a surprise keeps what the player chose.
         _choices.NativeTitles = kept.NativeTitles;
         _choices.NativeRealms = kept.NativeRealms;
+        _choices.DetailedPaperMap = kept.DetailedPaperMap;
         _choices.Mountains = kept.Mountains;
         // So is fantasy: a surprise should not put elves into a player's historical game. Nor
         // should it throw away a race mix set by hand.
@@ -616,6 +619,7 @@ internal sealed class QuickPage : Panel
         _wars.On = _choices.Wars;
         _nativeTitles.On = _choices.NativeTitles;
         _nativeRealms.On = _choices.NativeRealms;
+        _detailedPaperMap.On = _choices.DetailedPaperMap;
         ShowNativeToggles();
         _seedBox.Text = _choices.Seed.ToString();
         foreach (var (relief, button) in _reliefButtons) Theme.StyleSegment(button, relief == _choices.Relief);
@@ -992,6 +996,7 @@ internal sealed class QuickPage : Panel
         if (_choices.Wars) extras.Add("Wars at the start");
         if (_choices.People == QuickPeople.Invented && _choices.NativeTitles) extras.Add("Native titles");
         if (_choices.People == QuickPeople.Invented && _choices.NativeRealms) extras.Add("Native realm names");
+        extras.Add(_choices.DetailedPaperMap ? "Detailed paper map" : "Plain paper map");
         return
         [
             $"{CurrentType?.Title ?? _choices.MapType}  ·  seed {_choices.Seed}",

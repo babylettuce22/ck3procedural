@@ -2262,6 +2262,16 @@ public sealed class MapConfig : CustomTypeDescriptor
     public bool FlatmapHachures { get; set; } = true;
 
     /// <summary>
+    /// The coastline and the waterlines off it inked on the parchment flat map by
+    /// <see cref="Emit.FlatmapInk"/>, at line widths that scale with the map, instead of the fixed
+    /// one-pixel coast and faint pixel rings the base parchment pass paints.
+    /// </summary>
+    [Category("06 Map Objects")]
+    [DisplayName("Paper Map Coast Ink")]
+    [Description("Ink the coastline on the flat (paper) map with hand-drawn waterlines running parallel to the shore, widening and fading out to sea.")]
+    public bool FlatmapCoastInk { get; set; } = true;
+
+    /// <summary>
     /// Feathers the flat map's edges into the table through the blue channel of
     /// <c>gfx/map/surround_map/surround_mask.dds</c>, which vanilla's terrain shader reads as the
     /// flat map's transparency. Only open sea near the edge fades — land and a buffer round every
@@ -2288,12 +2298,13 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// <summary>
     /// Ships vanilla's <c>gfx/FX/province_effects.fxh</c> with its effect mask averaged over a
     /// jittered disc instead of one bilinear texel, so a situation's drought, summer grass or snow
-    /// fades across a province border rather than stopping on it. Patched from the installed game
-    /// at each generation by <see cref="Emit.MapGraphicsWriter"/>; off leaves vanilla's shader.
+    /// (the Great Steppe's seasons) fades across a province border rather than stopping on it.
+    /// Patched from the installed game at each generation by <see cref="Emit.MapGraphicsWriter"/>;
+    /// off leaves vanilla's shader.
     /// </summary>
     [Category("06 Map Objects")]
     [DisplayName("Soft Province Effects")]
-    [Description("Fade the ground effects situations paint on whole provinces (the Wilds' grass, the steppe's droughts and snows) across province borders instead of ending them in a hard line. Patches one of the game's shaders from your installed copy of CK3 each time a map is generated. Turn it off if a game update ever makes those effects look wrong.")]
+    [Description("Fade the ground effects situations paint on whole provinces (the steppe's droughts, snows and green seasons) across province borders instead of ending them in a hard line. Patches one of the game's shaders from your installed copy of CK3 each time a map is generated. Turn it off if a game update ever makes those effects look wrong.")]
     public bool SoftProvinceEffects { get; set; } = true;
 
 

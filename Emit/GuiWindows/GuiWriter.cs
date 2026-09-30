@@ -920,7 +920,9 @@ public static class GuiWriter
     }
 
     /// <summary>
-    /// Hides the shared situation window's "Ends:" line for the Wilds situation.
+    /// Hides the shared situation window's "Ends:" line for the Wilds situation, puts the current
+    /// era's art behind the selected frontier, and switches the map to the situation map mode
+    /// while The Wilds is open.
     ///
     /// <code>
     /// Related base files:
@@ -1006,8 +1008,103 @@ public static class GuiWriter
                 .ModifyTexture("gfx/interface/component_masks/mask_fade_horizontal.dds", "alphamultiply")
                 .Node);
 
+        // ---- The frontiers on the map while the window is open ----
+        //
+        // `map_mode = sub_regions` in the situation type only says how the `situation` map mode
+        // colours this situation; nothing turns that map mode on. The generic window never does.
+        // Vanilla reaches it only from the Great Steppe's own window, which carries a mini map-mode
+        // bar with a `GetMapMode( 'situation' )` button, and the Silk Road and Dynastic Cycle
+        // windows switch on their `_show` / `_hide` states. Opening The Wilds therefore changed
+        // nothing on the map (seen in game 2026-09-30).
+        //
+        // This does both: the same bar the steppe window has (situation + realms), and a switch
+        // when the window opens.
+        //
+        // The switch sits on the WINDOW's `_show`, where the Dynastic Cycle and Silk Road put
+        // theirs. The first try put it on the bar's own `_show` (the bar is `visible`-gated, the
+        // way the chariot race widget gets a `_show`), and in game the map still opened on Realms
+        // (2026-09-30). A child's state fires when the Situation datacontext arrives, which is
+        // before the engine's own view-open map-mode reset, and the window's fires after it.
+        // The root states are shared by every situation on this window (the nomad extras, the
+        // natural disasters), so the key is chosen with Select_CString, which vanilla uses for the
+        // same job in its character window. Every other situation "switches" to the mode already
+        // up, which does nothing. The bar's `_hide` still resets to Realms when the player moves
+        // from The Wilds to another situation without closing the window.
+        var root = doc.Widget("situation window root", "window_situation");
+
+        GuiNode? RootState(string name) => root.Node?.Children.FirstOrDefault(c =>
+            c.IsBlock && c.Key == "state"
+            && c.Children.Any(k => !k.IsBlock && k.Key == "name" && k.Value == name));
+
+        GuiNode SwitchTo(string ours) => GuiNode.Leaf("on_start", GuiExpr.Raw(
+            $"SetMapMode( Select_CString( {isOurs.Inner}, '{ours}', GetCurrentMapMode.GetKey ) )").Quoted);
+
+        doc.At("situation window show state", RootState("_show")).Append(SwitchTo("situation"));
+        doc.At("situation window hide state", RootState("_hide")).Append(SwitchTo("realms"));
+
+        root.Append(GuiBuilder.Of("mini_map_mode", "gen_wilds_mini_map_mode")
+                .Visible(isOurs)
+                .ParentAnchor("bottom|left")
+                .Field("widgetanchor", "bottom|right")
+                .Position(-250, -25)
+                .Add(GuiBuilder.State("_show").Quoted("on_start", "[SetMapMode( 'situation' )]"))
+                .Add(GuiBuilder.State("_hide").Quoted("on_start", "[SetMapMode( 'realms' )]"))
+                .Add(GuiBuilder.BlockOverride("widget_size").Size(280, 60))
+                .Add(GuiBuilder.BlockOverride("map_mode_buttons")
+                    .Add(MapModeButton("situation"))
+                    .Add(MapModeButton("realms")))
+                .Node);
+
+        // ---- A legend for the map mode's colours ----
+        //
+        // The situation map mode colours a county by its holder's participant group, and nothing
+        // on screen says which colour is which. Vanilla has no legend widget to borrow: struggles
+        // bake involvement colours into their panel art, and no datafunction reads a group's
+        // map_color back. So the swatches come from FrontierWriter.GroupColors, the same table
+        // the situation's map_color fields are filled from. The names are the groups' own loc
+        // keys. It sits straight above the mini map-mode bar (60 tall at -25) with the bar's
+        // backdrop, and shows only while the situation map mode is up.
+        var legend = GuiBuilder.VBox("gen_wilds_map_legend")
+            .Visible(GuiExpr.And(isOurs, GuiExpr.Raw("IsMapMode( 'situation' )")))
+            .ParentAnchor("bottom|left")
+            .Field("widgetanchor", "bottom|right")
+            .Position(-250, -90)
+            .Inline("minimumsize", "280", "0")
+            .Margin(12, 8)
+            .Spacing(4)
+            .Add(GuiBuilder.Background()
+                .Using("Background_Area_Dark")
+                .Inline("margin", "10", "0")
+                .Color("0.15", "0.15", "0.15", "0.75"));
+
+        foreach (var (group, r, g, b) in FrontierWriter.GroupColors)
+        {
+            legend.Add(GuiBuilder.HBox()
+                .ExpandingH()
+                .Spacing(8)
+                .Add(GuiBuilder.Icon()
+                    .Size(16, 16)
+                    .Texture("gfx/interface/colors/white.dds")
+                    .Color(Channel(r), Channel(g), Channel(b), "1"))
+                .Add(GuiBuilder.TextSingle()
+                    .Text($"{FrontierWriter.TypeKey}_participant_group_{group}"))
+                .Add(GuiBuilder.Expand()));
+        }
+
+        root.Append(legend.Node);
+
         doc.Ship(modDir);
     }
+
+    /// <summary>A 0-255 colour channel as the 0-1 float a .gui <c>color</c> takes.</summary>
+    private static string Channel(byte value)
+        => (value / 255.0).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>One round map-mode button, as vanilla's mini map-mode bars write it.</summary>
+    private static GuiBuilder MapModeButton(string mapMode)
+        => GuiBuilder.Of("icon_button_mapmode")
+            .Add(GuiBuilder.BlockOverride("mm_datacontext")
+                .DataContext($"[GetMapMode( '{mapMode}' )]"));
 
     private static void PatchInventoryWindow(string modDir, string gameDir)
     {

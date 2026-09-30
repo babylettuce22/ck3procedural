@@ -40,22 +40,27 @@ gen_tk_base_risk_value = {
 }
 
 # The four weights of the test (gen_tk_final_roll_effect). Quality ~0–100, risk ~0–60.
+#
+# A point of quality moves 1.7 weight (masterwork +0.8, works +0.4, dud -0.5); a point of risk moves 1
+# (explodes). Tuned so +10 quality and -10 risk are worth about the same, and a "+10 quality, +10 risk"
+# gamble keeps the success odds and trades duds for masterworks and explosions. At quality 60, risk 15:
+# masterwork 23%, works 45%, dud 21%, explodes 11%.
 gen_tk_masterwork_weight_value = {
 	value = var:gen_tk_quality
-	multiply = 0.5
-	subtract = 10
+	multiply = 0.8
+	subtract = 15
 	min = 0
 }
 
 gen_tk_works_weight_value = {
 	value = var:gen_tk_quality
-	multiply = 0.3
+	multiply = 0.4
 	add = 40
 }
 
 gen_tk_dud_weight_value = {
 	value = var:gen_tk_quality
-	multiply = -0.4
+	multiply = -0.5
 	add = 60
 	min = 10
 }

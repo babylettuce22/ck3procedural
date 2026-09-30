@@ -452,6 +452,185 @@ public static class MapDataWriter
         }
     }
 
+    /// <summary>Sub-pixel shore distances are stored in 1/32 px; this marks "not measured".</summary>
+    private const byte SmoothDistanceNone = 255;
+    private const float SmoothDistanceScale = 32f;
+
+    /// <summary>Blur that rounds the land mask's pixel corners into a coastline curve.</summary>
+    private const double SmoothShoreSigma = 1.2;
+
+    /// <summary>
+    /// Each shelf water pixel's distance, in pixels to 1/32, from a smooth coastline: the 0.5
+    /// isoline of the land mask blurred by <see cref="SmoothShoreSigma"/>. The chamfer rings of
+    /// <see cref="MeasureCoastDistances"/> are whole pixels, so the shelf they shape has eight
+    /// heights and every contour — the waterline and the shore waves drawn along it — copies the
+    /// land mask's one-pixel stairs, a world unit per step on a 4096 map. Found 2026-09-30 in an
+    /// offline render of the waves; prototyped on seed 4242, where it changed 4.7% of water pixels.
+    ///
+    /// The isoline is found where it crosses the edges between pixel centres (linear in the
+    /// blurred field), and the nearest crossing is carried to each pixel by two raster passes of
+    /// vector propagation. Only pixels the chamfer puts within <paramref name="shelfReach"/> are
+    /// measured. Worked in bands of rows with a margin wide enough for the blur and the reach, so
+    /// no full-map float field is ever held; bands are independent, so they run in parallel.
+    /// Land and water are read by class only, and ShapeCoastline never changes a pixel's class.
+    /// </summary>
+    private static byte[] MeasureSmoothShoreDistance(ushort[] full, int width, int height, byte[] waterDistance,
+        int shelfReach)
+    {
+        var result = new byte[full.Length];
+        Array.Fill(result, SmoothDistanceNone);
+
+        int radius = (int)Math.Ceiling(4 * SmoothShoreSigma);
+        var kernel = new float[2 * radius + 1];
+        double sum = 0;
+        for (int k = -radius; k <= radius; k++)
+            sum += kernel[k + radius] = (float)Math.Exp(-k * k / (2 * SmoothShoreSigma * SmoothShoreSigma));
+        for (int k = 0; k < kernel.Length; k++) kernel[k] = (float)(kernel[k] / sum);
+
+        const int Band = 64;
+        int margin = shelfReach + 4;                        // seeds up to reach + a little beyond
+        int bands = (height + Band - 1) / Band;
+
+        Parallel.For(0, bands, band =>
+        {
+            int y0 = band * Band, y1 = Math.Min(height, y0 + Band);
+            int p0 = Math.Max(0, y0 - margin), p1 = Math.Min(height, y1 + margin);
+            int rows = p1 - p0;
+
+            // Nothing to measure in this band: no shelf pixel in its own rows.
+            bool any = false;
+            for (long i = (long)y0 * width, end = (long)y1 * width; i < end && !any; i++)
+                any = full[i] <= WaterLevel16 && waterDistance[i] <= shelfReach;
+            if (!any) return;
+
+            // Blurred land mask over the padded rows (edges clamp): horizontal, then vertical.
+            int b0 = Math.Max(0, p0 - radius), b1 = Math.Min(height, p1 + radius);
+            var horiz = new float[(b1 - b0) * width];
+            for (int y = b0; y < b1; y++)
+            {
+                long row = (long)y * width;
+                int hr = (y - b0) * width;
+                for (int x = 0; x < width; x++)
+                {
+                    float s = 0;
+                    for (int k = -radius; k <= radius; k++)
+                    {
+                        int xx = Math.Clamp(x + k, 0, width - 1);
+                        if (full[row + xx] > WaterLevel16) s += kernel[k + radius];
+                    }
+                    horiz[hr + x] = s;
+                }
+            }
+            var f = new float[rows * width];
+            for (int y = p0; y < p1; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    float s = 0;
+                    for (int k = -radius; k <= radius; k++)
+                    {
+                        int yy = Math.Clamp(y + k, 0, height - 1);
+                        s += kernel[k + radius] * horiz[(yy - b0) * width + x];
+                    }
+                    f[(y - p0) * width + x] = s;
+                }
+
+            // Seeds: where the isoline crosses the edge to the right or below, offered to both ends.
+            var sx = new float[rows * width];
+            var sy = new float[rows * width];
+            var best = new float[rows * width];
+            Array.Fill(best, float.MaxValue);
+
+            void Offer(int li, int x, int y, float px, float py)
+            {
+                float dx = px - x, dy = py - y, dist = dx * dx + dy * dy;
+                if (dist < best[li]) { best[li] = dist; sx[li] = px; sy[li] = py; }
+            }
+
+            for (int ly = 0; ly < rows; ly++)
+                for (int x = 0; x < width; x++)
+                {
+                    int li = ly * width + x, y = p0 + ly;
+                    float a = f[li] - 0.5f;
+                    if (x + 1 < width)
+                    {
+                        float b = f[li + 1] - 0.5f;
+                        if ((a < 0) != (b < 0))
+                        {
+                            float px = x + a / (a - b);
+                            Offer(li, x, y, px, y);
+                            Offer(li + 1, x + 1, y, px, y);
+                        }
+                    }
+                    if (ly + 1 < rows)
+                    {
+                        float b = f[li + width] - 0.5f;
+                        if ((a < 0) != (b < 0))
+                        {
+                            float py = y + a / (a - b);
+                            Offer(li, x, y, x, py);
+                            Offer(li + width, x, y + 1, x, py);
+                        }
+                    }
+                }
+
+            // Carry the nearest seed: forward then backward, each row swept both ways.
+            void Pull(int li, int x, int y, int from)
+            {
+                if (best[from] == float.MaxValue) return;
+                Offer(li, x, y, sx[from], sy[from]);
+            }
+
+            for (int ly = 0; ly < rows; ly++)
+            {
+                int y = p0 + ly;
+                for (int x = 0; x < width; x++)
+                {
+                    int li = ly * width + x;
+                    if (x > 0) Pull(li, x, y, li - 1);
+                    if (ly > 0)
+                    {
+                        Pull(li, x, y, li - width);
+                        if (x > 0) Pull(li, x, y, li - width - 1);
+                        if (x + 1 < width) Pull(li, x, y, li - width + 1);
+                    }
+                }
+                for (int x = width - 2; x >= 0; x--) Pull(ly * width + x, x, y, ly * width + x + 1);
+            }
+            for (int ly = rows - 1; ly >= 0; ly--)
+            {
+                int y = p0 + ly;
+                for (int x = width - 1; x >= 0; x--)
+                {
+                    int li = ly * width + x;
+                    if (x + 1 < width) Pull(li, x, y, li + 1);
+                    if (ly + 1 < rows)
+                    {
+                        Pull(li, x, y, li + width);
+                        if (x + 1 < width) Pull(li, x, y, li + width + 1);
+                        if (x > 0) Pull(li, x, y, li + width - 1);
+                    }
+                }
+                for (int x = 1; x < width; x++) Pull(ly * width + x, x, y, ly * width + x - 1);
+            }
+
+            for (int y = y0; y < y1; y++)
+            {
+                long row = (long)y * width;
+                int lrow = (y - p0) * width;
+                for (int x = 0; x < width; x++)
+                {
+                    long i = row + x;
+                    if (full[i] > WaterLevel16 || waterDistance[i] > shelfReach) continue;
+                    float bd = best[lrow + x];
+                    if (bd == float.MaxValue) continue;
+                    result[i] = (byte)Math.Min(254, (int)Math.Round(Math.Sqrt(bd) * SmoothDistanceScale));
+                }
+            }
+        });
+
+        return result;
+    }
+
     /// <summary>
     /// Bevels the land side of every shore and gives every water pixel its depth by distance from
     /// land: a shelf that plunges to the floor over <c>shelfReach</c> pixels, or over
@@ -499,8 +678,28 @@ public static class MapDataWriter
 
         var (landDistance, waterDistance) = Core.Stage.Detail("        · coast distances",
             () => MeasureCoastDistances(full, width, height, Math.Max(shelfReach, landReach)));
+        var smoothDistance = Core.Stage.Detail("        · smooth coast distances",
+            () => MeasureSmoothShoreDistance(full, width, height, waterDistance, shelfReach));
 
         var source = (ushort[])full.Clone();
+
+        // Whether an 8-neighbour is water past ring 0, i.e. water the whole-pixel shelf made wet.
+        bool BordersShelfWater(int x, int y)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                int yy = y + dy;
+                if (yy < 0 || yy >= height) continue;
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int xx = x + dx;
+                    if ((dx == 0 && dy == 0) || xx < 0 || xx >= width) continue;
+                    long j = (long)yy * width + xx;
+                    if (source[j] <= WaterLevel16 && waterDistance[j] > 0) return true;
+                }
+            }
+            return false;
+        }
 
         Parallel.For(0, height, y =>
         {
@@ -533,10 +732,25 @@ public static class MapDataWriter
                     // 2. WATER-SIDE FAST PLUNGE (3-4 pixels down to deep black bed)
                     // Plunges: d=1 (~16/255), d=2 (~9/255), d=3 (~3/255), d>=4 (0)
                     int d = waterDistance[i];
-                    int reach = d > 0 && d <= shelfReach && InMajorRiver(x, y) ? riverReach : shelfReach;
+                    bool river = d <= shelfReach && InMajorRiver(x, y);
+                    int reach = d > 0 && river ? riverReach : shelfReach;
                     if (d <= reach)
                     {
-                        float t = (float)d / reach;
+                        // The sea shelf reads the sub-pixel distance, so its contours (and the
+                        // waterline between rings 0 and 1) follow the coast rather than the pixel
+                        // grid. Rivers keep the whole-pixel profile. See MeasureSmoothShoreDistance.
+                        float dd = d;
+                        byte q = smoothDistance[i];
+                        // Two guards keep narrow water as it was. A pixel far from any isoline is
+                        // in a channel or pocket the blur closed over (c well past d). And ring 0
+                        // was always the dry shelf top: it may only sink where it borders ring 1+,
+                        // or one- and two-pixel pockets turn into puddles (339 on seed 4242).
+                        if (!river && q != SmoothDistanceNone && (d > 0 || BordersShelfWater(x, y)))
+                        {
+                            float c = Math.Max(0f, q / SmoothDistanceScale - 0.5f);
+                            if (c <= d + 1) dd = c;
+                        }
+                        float t = Math.Min(1f, dd / reach);
                         float plunge = (1.0f - t) * (1.0f - t); // Quadratic rapid drop
                         int shelfHeight = (int)Math.Round((WaterLevel16 - Step255 * 3) * plunge);
                         full[i] = (ushort)Math.Clamp(shelfHeight, 0, WaterLevel16);

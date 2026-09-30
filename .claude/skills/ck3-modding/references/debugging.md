@@ -38,6 +38,10 @@ portrait editor (debug mode) exports DNA strings. Music/sound: definitions in `m
 plus the install's `gfx/`. PoD's `common/dna_data/` (per-clan DNA files) and `common/genes/`
 overrides are a good worked example of heavy portrait modding.
 
+**On this machine:** head shapes (genes, ethnicities, portrait modifiers, head blendshapes and
+bone-driven sliders) and map ground can be rendered offline in seconds. See
+`offline-renders.md`, which also documents the full gene → attribute → blendshape/`.anim` chain.
+
 ## Tooling and resources
 
 - **ck3-tiger** (`<tiger>`) is the primary validator; see `validation.md`.

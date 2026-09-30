@@ -188,7 +188,9 @@ internal static class RaceMorphs
             new("gene_height", "normal_height", 0.86f, 1.00f),
             new("gene_bs_body_type", "body_fat_head_fat_full", 0.52f, 0.62f),
             new("gene_bs_body_shape", "body_shape_triangle_full", 0.72f, 0.95f, Tiered: false),
-            new("gene_jaw_width", "jaw_width_pos", 0.75f, 1.00f),
+            // Was 0.75-1.00; GiantFace's jaw now pushes the gonial angles out itself, so the slider
+            // no longer has to carry the width alone. Women get their own value in FemaleOf.
+            new("gene_jaw_width", "jaw_width_pos", 0.65f, 0.85f),
             // The brow shelf and heavy jaw (Emit/Characters/RaceHeadWriter.cs, MapGen/GiantFace.cs).
             // It replaced gene_bs_forehead_brow_forward, which only pinched the brows into a frown;
             // that gene is now forced to zero so an inherited human brow cannot stack on the shelf.
@@ -275,6 +277,7 @@ internal static class RaceMorphs
     /// range", 01_genes_morph.txt), so their jaws came out the most oversized thing on the map (user,
     /// in game, 2026-09-29). Here: a moderately broad jaw rather than a maximal one, a light jaw shape,
     /// and chin and jaw brought back toward vanilla. Untiered, like the men's corrections.
+    /// Giantkin women: the same jaw exposure, stacked on the GiantFace jaw; see their entry.
     /// </summary>
     public static IReadOnlyList<RaceMorph> FemaleOf(RaceArchetype archetype) => archetype switch
     {
@@ -284,6 +287,16 @@ internal static class RaceMorphs
             new("gene_bs_jaw_def", "jaw_def_pos", 0.10f, 0.28f, Tiered: false),
             new("gene_chin_width", "chin_width_pos", 0.55f, 0.66f, Tiered: false),
             new("gene_jaw_forward", "jaw_forward_pos", 0.50f, 0.60f, Tiered: false),
+        ],
+        // Giantkin women: the same full-male-range jaw_width exposure as dwarf women, and GiantFace
+        // already pushes the gonial angles out and broadens the chin, while body_shape_triangle_full
+        // adds up to +0.4 neck_width on top of the ethnicity's 0.85-1.0. Each of the three was widened
+        // twice. Still above neutral so they stay broad; head width is left at the race's value.
+        RaceArchetype.Giantkin =>
+        [
+            new("gene_jaw_width", "jaw_width_pos", 0.55f, 0.65f, Tiered: false),
+            new("gene_chin_width", "chin_width_pos", 0.55f, 0.68f, Tiered: false),
+            new("gene_neck_width", "neck_width_pos", 0.55f, 0.70f, Tiered: false),
         ],
         _ => []
     };

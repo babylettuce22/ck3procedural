@@ -102,14 +102,16 @@ gen_gw_lamp_3_modifier = {
 	fertility = 0.1
 }
 
-# ---- The finished works (artifact modifiers). One per kind, at vanilla's illustrious tier (the user's
+# ---- The finished works (artifact modifiers). Three per kind, by the care taken over the long years
+# (gen_gw_care_value): the middle tier below, and a lesser (~70%) and greater (~130%) version after the
+# unfinished modifier at the end of this file. The middle tier is the old single modifier, at vanilla's illustrious tier (the user's
 # ruling, 2026-09-30): calibrated on King David's Harp (+6 grandeur and seven effects) and the Kantele
 # (domain development and fertility). Two lifetimes' work should read like a legend, not a trinket.
 # Rarity comes from the long years' quality (gen_gw_prepare_artifact_effect): famed at worst.
 
-# The jewel: a court the world comes to see.
+# The jewel: a court the world comes to see. (Grandeur 6 like the other kinds; was 8 — user, 2026-09-30.)
 gen_gw_artifact_jewel_modifier = {
-	court_grandeur_baseline_add = 8
+	court_grandeur_baseline_add = 6
 	monthly_prestige = 1
 	monthly_prestige_gain_mult = 0.1
 	attraction_opinion = 15
@@ -162,4 +164,92 @@ gen_gw_artifact_unfinished_modifier = {
 	court_grandeur_baseline_add = 3
 	monthly_prestige = 0.5
 	general_opinion = 3
+}
+
+# ---- Lesser and greater tiers of the finished works. A lesser work (little care: average quality
+# change per beat under 1.5) is ~70% of the middle tier and famed; a greater one (5 and up) ~130% and
+# illustrious. gen_gw_retier_artifact_effect swaps them in after the artifact is made.
+
+gen_gw_artifact_jewel_lesser_modifier = {
+	court_grandeur_baseline_add = 4
+	monthly_prestige = 0.75
+	monthly_prestige_gain_mult = 0.05
+	attraction_opinion = 10
+	general_opinion = 3
+	diplomacy = 1
+}
+gen_gw_artifact_jewel_greater_modifier = {
+	court_grandeur_baseline_add = 8
+	monthly_prestige = 1.25
+	monthly_prestige_gain_mult = 0.15
+	attraction_opinion = 20
+	general_opinion = 7
+	diplomacy = 3
+}
+
+gen_gw_artifact_chronicle_lesser_modifier = {
+	court_grandeur_baseline_add = 4
+	learning = 2
+	monthly_learning_lifestyle_xp_gain_mult = 0.1
+	cultural_head_fascination_mult = 0.1
+	monthly_dynasty_prestige_mult = 0.05
+	same_culture_opinion = 5
+}
+gen_gw_artifact_chronicle_greater_modifier = {
+	court_grandeur_baseline_add = 8
+	learning = 4
+	monthly_learning_lifestyle_xp_gain_mult = 0.2
+	cultural_head_fascination_mult = 0.2
+	monthly_dynasty_prestige_mult = 0.15
+	same_culture_opinion = 15
+}
+
+gen_gw_artifact_regalia_lesser_modifier = {
+	court_grandeur_baseline_add = 4
+	vassal_opinion = 7
+	legitimacy_gain_mult = 0.15
+	vassal_limit = 5
+	monthly_prestige = 0.75
+}
+gen_gw_artifact_regalia_greater_modifier = {
+	court_grandeur_baseline_add = 8
+	vassal_opinion = 13
+	legitimacy_gain_mult = 0.25
+	vassal_limit = 15
+	domain_limit = 1
+	monthly_prestige = 1.25
+}
+
+gen_gw_artifact_harp_lesser_modifier = {
+	court_grandeur_baseline_add = 4
+	diplomacy = 2
+	stress_loss_mult = 0.15
+	attraction_opinion = 7
+	general_opinion = 3
+	monthly_prestige = 0.25
+}
+gen_gw_artifact_harp_greater_modifier = {
+	court_grandeur_baseline_add = 8
+	diplomacy = 4
+	stress_loss_mult = 0.35
+	attraction_opinion = 13
+	general_opinion = 7
+	monthly_prestige = 0.75
+}
+
+gen_gw_artifact_lamp_lesser_modifier = {
+	court_grandeur_baseline_add = 4
+	health = 0.35
+	fertility = 0.1
+	life_expectancy = 3
+	development_growth_factor = 0.1
+	stress_loss_mult = 0.05
+}
+gen_gw_artifact_lamp_greater_modifier = {
+	court_grandeur_baseline_add = 8
+	health = 0.65
+	fertility = 0.2
+	life_expectancy = 7
+	development_growth_factor = 0.2
+	stress_loss_mult = 0.15
 }

@@ -4,7 +4,10 @@
 # The work's state lives on its STORY (story_gen_great_work), whose owner is the current maker:
 #   var:gw_kind          flag:jewel / chronicle / regalia / harp / lamp
 #   var:gw_progress      0–100; the work can be finished at 75 once the maker is World-Weary
-#   var:gw_quality       ~0–100; decides the finished artifact's rarity
+#   var:gw_care_sum      every beat's quality change, summed; var:gw_beats counts the beats and
+#   var:gw_talent        the first maker's learning nudge. gen_gw_care_value (their average plus the
+#                        nudge) picks the finished artifact's tier and rarity. A story from before
+#                        2026-09-30 starts counting at its next beat (none yet: the middle tier).
 #   var:gw_maker         who swore it
 #   var:gw_pupil         a pupil, if one was taken (events/gen_great_work_events.txt)
 #   var:gw_milestone     0–3, the boons already given
@@ -108,19 +111,32 @@ gen_gw_progress_effect = {
 			name = gw_progress
 			add = scope:gw_gain
 		}
-		change_variable = {
-			name = gw_quality
-			add = $QUALITY$
-		}
 		clamp_variable = {
 			name = gw_progress
 			min = 0
 			max = 100
 		}
-		clamp_variable = {
-			name = gw_quality
-			min = 0
-			max = 100
+		# One more beat of care (the hand-off's catch-up call, 0 and 0, is not a beat).
+		if = {
+			limit = {
+				OR = {
+					scope:gw_dp != 0
+					scope:gw_dq != 0
+				}
+			}
+			if = {
+				limit = { NOT = { exists = var:gw_beats } }
+				set_variable = { name = gw_care_sum value = 0 }
+				set_variable = { name = gw_beats value = 0 }
+			}
+			change_variable = {
+				name = gw_care_sum
+				add = $QUALITY$
+			}
+			change_variable = {
+				name = gw_beats
+				add = 1
+			}
 		}
 	}
 	if = {
@@ -318,12 +334,28 @@ gen_gw_prepare_artifact_effect = {
 		gen_gw_set_owner_name_vars_effect = yes
 	}
 	scope:gw_story.var:gw_maker ?= { save_scope_as = gw_maker_origin }
-	# A finished work is famed at worst and illustrious for most (quality 45+); a sealed, unfinished
-	# one a step lower. The caller sets scope:gw_unfinished_rarity for the sealed form.
+	# The care taken (gen_gw_care_value) sets the tier: flag:lesser under 1.5, flag:greater at 5 and up,
+	# else flag:middle. A finished work is illustrious unless lesser (famed); a sealed, unfinished one a
+	# step lower. The caller sets scope:gw_unfinished_rarity for the sealed form.
+	save_scope_value_as = {
+		name = gw_care
+		value = gen_gw_care_value
+	}
+	if = {
+		limit = { scope:gw_care >= 5 }
+		save_scope_value_as = { name = gw_tier value = flag:greater }
+	}
+	else_if = {
+		limit = { scope:gw_care < 1.5 }
+		save_scope_value_as = { name = gw_tier value = flag:lesser }
+	}
+	else = {
+		save_scope_value_as = { name = gw_tier value = flag:middle }
+	}
 	if = {
 		limit = { exists = scope:gw_unfinished_rarity }
 		if = {
-			limit = { scope:gw_story.var:gw_quality >= 60 }
+			limit = { NOT = { scope:gw_tier = flag:lesser } }
 			set_artifact_rarity_famed = yes
 		}
 		else = {
@@ -331,11 +363,28 @@ gen_gw_prepare_artifact_effect = {
 		}
 	}
 	else_if = {
-		limit = { scope:gw_story.var:gw_quality >= 45 }
+		limit = { NOT = { scope:gw_tier = flag:lesser } }
 		set_artifact_rarity_illustrious = yes
 	}
 	else = {
 		set_artifact_rarity_famed = yes
+	}
+}
+
+# A finished work of the lesser or greater tier swaps the kind's middle modifier (created with it) for
+# its own. On nothing in particular; reads scope:newly_created_artifact and scope:gw_tier.
+gen_gw_retier_artifact_effect = {
+	scope:newly_created_artifact = {
+		if = {
+			limit = { scope:gw_tier ?= flag:lesser }
+			remove_artifact_modifier = gen_gw_artifact_$KIND$_modifier
+			add_artifact_modifier = gen_gw_artifact_$KIND$_lesser_modifier
+		}
+		else_if = {
+			limit = { scope:gw_tier ?= flag:greater }
+			remove_artifact_modifier = gen_gw_artifact_$KIND$_modifier
+			add_artifact_modifier = gen_gw_artifact_$KIND$_greater_modifier
+		}
 	}
 }
 
@@ -361,6 +410,29 @@ gen_gw_create_work_artifact_effect = {
 	}
 	else = {
 		gen_gw_kind_artifact_effect = { KIND = lamp DLC = roads_to_power VISUALS = tree_automa TYPE = pedestal UNFINISHED = $UNFINISHED$ }
+	}
+	# The tier's own modifier (the sealed form keeps its single unfinished modifier).
+	if = {
+		limit = { NOT = { always = $UNFINISHED$ } }
+		if = {
+			limit = { scope:gw_story.var:gw_kind = flag:jewel }
+			gen_gw_retier_artifact_effect = { KIND = jewel }
+		}
+		else_if = {
+			limit = { scope:gw_story.var:gw_kind = flag:chronicle }
+			gen_gw_retier_artifact_effect = { KIND = chronicle }
+		}
+		else_if = {
+			limit = { scope:gw_story.var:gw_kind = flag:regalia }
+			gen_gw_retier_artifact_effect = { KIND = regalia }
+		}
+		else_if = {
+			limit = { scope:gw_story.var:gw_kind = flag:harp }
+			gen_gw_retier_artifact_effect = { KIND = harp }
+		}
+		else = {
+			gen_gw_retier_artifact_effect = { KIND = lamp }
+		}
 	}
 	scope:newly_created_artifact = {
 		set_variable = { name = gen_gw_great_work value = yes }

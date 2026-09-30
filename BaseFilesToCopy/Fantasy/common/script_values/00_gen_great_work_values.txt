@@ -61,3 +61,24 @@ gen_gw_takeup_cost_value = {
 	round = yes
 	min = 150
 }
+
+# The care taken over the work, which sets the finished artifact's tier (gen_gw_prepare_artifact_effect):
+# the average quality change per beat, plus the first maker's learning nudge (the story's on_setup).
+# Always taking the fastest option averages about +3 (middle tier); choosing care about +6.5 (top tier,
+# 5 and up); many shortcuts and setbacks fall under 1.5 (lower tier). Read with scope:gw_story saved.
+# A work with no beats counted yet (sworn before this existed) reads as the middle tier.
+gen_gw_care_value = {
+	value = 3
+	if = {
+		limit = {
+			exists = scope:gw_story.var:gw_beats
+			scope:gw_story.var:gw_beats > 0
+		}
+		value = scope:gw_story.var:gw_care_sum
+		divide = scope:gw_story.var:gw_beats
+		if = {
+			limit = { exists = scope:gw_story.var:gw_talent }
+			add = scope:gw_story.var:gw_talent
+		}
+	}
+}

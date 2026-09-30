@@ -3,25 +3,33 @@
 # "works" and a stronger "masterwork" version. See 00_gen_tinker_triggers.txt for the map of the system.
 
 # ---------------------------------------------------------------- Curio (artifact modifiers)
-# The trinket (a clockwork songbird), for anyone.
+# The trinket (a clockwork songbird), for anyone: a charming toy that soothes its owner and delights
+# visitors.
 gen_tk_curio_trinket_modifier = {
 	learning = 1
 	monthly_prestige = 0.1
+	stress_loss_mult = 0.1
+	attraction_opinion = 5
 }
 gen_tk_curio_trinket_masterwork_modifier = {
 	learning = 2
 	monthly_prestige = 0.25
+	stress_loss_mult = 0.15
+	attraction_opinion = 10
 }
 
-# The court piece (a clockwork orrery), for a ruler with a royal court.
+# The court piece (a clockwork orrery), for a ruler with a royal court: the heavens turning in brass,
+# something to study.
 gen_tk_curio_orrery_modifier = {
 	court_grandeur_baseline_add = 2
 	learning = 1
+	monthly_learning_lifestyle_xp_gain_mult = 0.1
 }
 gen_tk_curio_orrery_masterwork_modifier = {
 	court_grandeur_baseline_add = 4
 	learning = 2
 	monthly_prestige = 0.2
+	monthly_learning_lifestyle_xp_gain_mult = 0.2
 }
 
 # ---------------------------------------------------------------- Waterworks (county, 20 years)
@@ -30,10 +38,11 @@ gen_tk_waterworks_modifier = {
 	development_growth_factor = 0.15
 	tax_mult = 0.05
 }
+# A masterwork is the real prize (user, 2026-09-30): the plain works stay modest.
 gen_tk_waterworks_masterwork_modifier = {
 	icon = county_modifier_development_positive
-	development_growth_factor = 0.3
-	tax_mult = 0.1
+	development_growth_factor = 0.4
+	tax_mult = 0.2
 	county_opinion_add = 5
 }
 

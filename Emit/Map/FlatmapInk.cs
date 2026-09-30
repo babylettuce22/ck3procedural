@@ -26,6 +26,8 @@ using Pt = (double X, double Y);
 ///   hatching over the unsettled wilderness, and a graduated border around the sheet.
 /// * <b>Hachures</b> (<see cref="Config.MapConfig.FlatmapHachures"/>): slope strokes
 ///   over the impassable mountains and a ")(" mark on each pass through them.
+/// * <b>Coast</b> (<see cref="Config.MapConfig.FlatmapCoastInk"/>): the coastline and the
+///   waterlines ruled off it, drawn here at the map's scale instead of by the parchment pass.
 ///
 /// Everything is drawn as ink: a coverage layer is built up shape by shape, taking the maximum
 /// where shapes overlap so a crossing or a joint never prints darker than the line, and is then
@@ -59,7 +61,8 @@ public static class FlatmapInk
     /// <summary>Draws the enabled halves onto <paramref name="bgra"/> in place and returns a line for the log.</summary>
     public static string Draw(byte[] bgra, int w, int h, bool[] land, ProvinceMap provinces, int[] order,
         RouteNetwork? routes, WildernessMap? wilderness, int seed, bool roads, bool flourishes, bool feather = false,
-        float[]? elevation = null, bool hachures = false, IReadOnlyList<Landmark>? landmarks = null, string? gameDir = null)
+        float[]? elevation = null, bool hachures = false, IReadOnlyList<Landmark>? landmarks = null, string? gameDir = null,
+        bool coast = false)
     {
         var cv = new Canvas(bgra, w, h);
         double k = Scale(w);
@@ -70,6 +73,10 @@ public static class FlatmapInk
         var (rose, roseRadius) = flourishes ? PlaceRose(land, w, h, k, inset) : (null, 0);
 
         bool Occluded(Pt p) => rose is { } rc && Dist(p, rc) < roseRadius * 1.08;
+
+        // First: the sea's own linework, under everything ruled or lettered across it.
+        if (coast)
+            notes.Add(InkCoast(cv, land, k, seed, inset + (BorderBand + 3) * k, Occluded));
 
         if (flourishes && wilderness is not null)
         {
@@ -386,6 +393,212 @@ public static class FlatmapInk
     private static void Dotted(Canvas cv, List<Pt> run, int spacing, double r)
     {
         for (int i = spacing / 2; i < run.Count; i += spacing) cv.Disc(run[i], r);
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Coast
+
+    /// <summary>
+    /// At k = 1, for each waterline out from the coast: how far out it stands, its half-width,
+    /// how dark it prints, and how much of it the pen leaves out (a threshold on the break noise,
+    /// whose values bunch round 0.5, so 0.3 already lifts the pen for a good part of the line).
+    /// </summary>
+    private static readonly (double At, double Half, double Strength, double Gap)[] Waterlines =
+    [
+        (5.5, 0.5, 0.55, 0.28),
+        (12, 0.45, 0.42, 0.36),
+        (20, 0.4, 0.3, 0.42),
+        (30, 0.36, 0.2, 0.47),
+    ];
+
+    /// <summary>
+    /// At k = 1: water narrower than twice this — a river, a strait — keeps its coastline but gets
+    /// no waterlines, which would crowd it.
+    /// </summary>
+    private const double WaterlineOpen = 14;
+
+    /// <summary>
+    /// The coastline, and waterlines ruled parallel to it out to sea the way an engraver shaded
+    /// the water off a coast: each line further out than the last by a wider step, finer and
+    /// fainter, wandering a little and more broken the further it stands from land. Measured on
+    /// an exact distance from the land, so the lines keep their width and spacing at any map size
+    /// and bend round a headland instead of squaring off. The coast is inked everywhere (the
+    /// border's paper covers it at the edge); the waterlines stop at the frame's inner rule and
+    /// keep off the rose.
+    /// </summary>
+    private static string InkCoast(Canvas cv, bool[] land, double k, int seed, double frame, Func<Pt, bool> occluded)
+    {
+        int w = cv.W, h = cv.H;
+        var d2 = LandDistanceSquared(land, w, h);
+
+        // The coastline, on the water side of the land's edge.
+        double coastWidth = 1.1 * k;
+        cv.TouchAll();
+        Parallel.For(0, h, y =>
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                if (land[i]) continue;
+                double e = Math.Sqrt(d2[i]) - 0.5;
+                if (e <= coastWidth + 0.5) cv.Set(i, Math.Clamp(coastWidth + 0.5 - e, 0, 1));
+            }
+        });
+        cv.Ink(Sepia, 0.75);
+
+        // The waterlines are measured on a blurred copy of the distance, so they round off the
+        // pixel coast's jags instead of echoing them.
+        var off = new float[w * h];
+        Parallel.For(0, off.Length, i => off[i] = land[i] ? 0 : (float)Math.Sqrt(d2[i]) - 0.5f);
+        int soften = Math.Max(1, (int)Math.Round(2.5 * k));
+        var smooth = BoxBlur(BoxBlur(off, w, h, soften), w, h, soften);
+
+        // Open water: within reach of somewhere a full WaterlineOpen from every shore. A pocket
+        // where a river widens has a little of that too, and would get a ring of its own, so deep
+        // water counts only in stretches of some size.
+        double open = WaterlineOpen * k;
+        var deep = new bool[w * h];
+        Parallel.For(0, deep.Length, i => deep[i] = off[i] >= open);
+        DropSmall(deep, w, h, (long)(4 * open * open));
+        var toDeep = LandDistanceSquared(deep, w, h);
+
+        double reach = (Waterlines[^1].At + 4) * k;
+        int f = (int)Math.Ceiling(frame);
+        long wander = seed * 7919L + 1, breaks = seed * 104729L + 2;
+        cv.TouchAll();
+        Parallel.For(f, h - f, y =>
+        {
+            for (int x = f; x < w - f; x++)
+            {
+                int i = y * w + x;
+                if (land[i] || toDeep[i] >= open * open) continue;
+                double e = smooth[i];
+                if (e > reach) continue;
+                // Tapered, not cut, where the water narrows.
+                double taper = SmoothStep(open, open - 4 * k, Math.Sqrt(toDeep[i]));
+
+                // One wander for all the lines, growing outward, so they drift together and never cross.
+                double drift = ValueNoise(x / (22 * k), y / (22 * k), wander) - 0.5;
+                double best = 0;
+                for (int r = 0; r < Waterlines.Length; r++)
+                {
+                    var (at, half, strength, gap) = Waterlines[r];
+                    double target = (at + drift * (0.8 + 0.6 * r)) * k;
+                    double c = Math.Clamp(half * k + 0.5 - Math.Abs(e - target), 0, 1);
+                    if (c <= 0) continue;
+                    double pen = ValueNoise(x / (14 * k), y / (14 * k), breaks + r);
+                    c *= SmoothStep(gap - 0.04, gap + 0.04, pen) * strength;
+                    if (c > best) best = c;
+                }
+                if (best > 0 && !occluded((x + 0.5, y + 0.5))) cv.Set(i, best * taper);
+            }
+        });
+        cv.Ink(Sepia, 1.0);
+
+        return $"coastline and {Waterlines.Length} waterlines";
+    }
+
+    /// <summary>Clears every connected patch of <paramref name="mask"/> smaller than <paramref name="minArea"/> pixels.</summary>
+    private static void DropSmall(bool[] mask, int w, int h, long minArea)
+    {
+        var seen = new bool[mask.Length];
+        var queue = new Queue<int>();
+        var members = new List<int>();
+        for (int start = 0; start < mask.Length; start++)
+        {
+            if (!mask[start] || seen[start]) continue;
+            seen[start] = true;
+            queue.Enqueue(start);
+            members.Clear();
+            while (queue.Count > 0)
+            {
+                int i = queue.Dequeue();
+                members.Add(i);
+                int x = i % w, y = i / w;
+                if (x > 0 && mask[i - 1] && !seen[i - 1]) { seen[i - 1] = true; queue.Enqueue(i - 1); }
+                if (x < w - 1 && mask[i + 1] && !seen[i + 1]) { seen[i + 1] = true; queue.Enqueue(i + 1); }
+                if (y > 0 && mask[i - w] && !seen[i - w]) { seen[i - w] = true; queue.Enqueue(i - w); }
+                if (y < h - 1 && mask[i + w] && !seen[i + w]) { seen[i + w] = true; queue.Enqueue(i + w); }
+            }
+            if (members.Count < minArea)
+                foreach (int i in members) mask[i] = false;
+        }
+    }
+
+    /// <summary>
+    /// Squared Euclidean distance from each pixel's centre to the nearest land pixel's centre (0 on
+    /// land, infinite on a map with none): Felzenszwalb and Huttenlocher's two-pass transform,
+    /// down the columns and then along the rows.
+    /// </summary>
+    private static float[] LandDistanceSquared(bool[] land, int w, int h)
+    {
+        var d2 = new float[w * h];
+        Parallel.For(0, w, x =>
+        {
+            var fc = new double[h]; var dc = new double[h]; var v = new int[h]; var z = new double[h + 1];
+            for (int y = 0; y < h; y++) fc[y] = land[y * w + x] ? 0 : double.PositiveInfinity;
+            Transform1D(fc, dc, v, z, h);
+            for (int y = 0; y < h; y++) d2[y * w + x] = (float)dc[y];
+        });
+        Parallel.For(0, h, y =>
+        {
+            var fr = new double[w]; var dr = new double[w]; var v = new int[w]; var z = new double[w + 1];
+            for (int x = 0; x < w; x++) fr[x] = d2[y * w + x];
+            Transform1D(fr, dr, v, z, w);
+            for (int x = 0; x < w; x++) d2[y * w + x] = (float)dr[x];
+        });
+        return d2;
+    }
+
+    /// <summary>The lower envelope of the parabolas rooted at each finite sample of <paramref name="f"/>.</summary>
+    private static void Transform1D(double[] f, double[] d, int[] v, double[] z, int n)
+    {
+        int k = -1;
+        for (int q = 0; q < n; q++)
+        {
+            if (double.IsPositiveInfinity(f[q])) continue;
+            double s = double.NegativeInfinity;
+            while (k >= 0)
+            {
+                s = (f[q] + (double)q * q - (f[v[k]] + (double)v[k] * v[k])) / (2.0 * (q - v[k]));
+                if (s > z[k]) break;
+                k--;
+            }
+            k++;
+            v[k] = q;
+            z[k] = k == 0 ? double.NegativeInfinity : s;
+        }
+        if (k < 0)
+        {
+            Array.Fill(d, double.PositiveInfinity, 0, n);
+            return;
+        }
+        z[k + 1] = double.PositiveInfinity;
+        int j = 0;
+        for (int q = 0; q < n; q++)
+        {
+            while (z[j + 1] < q) j++;
+            double dq = q - v[j];
+            d[q] = dq * dq + f[v[j]];
+        }
+    }
+
+    /// <summary>Smoothly interpolated lattice noise in 0..1, one lattice cell per unit.</summary>
+    private static double ValueNoise(double x, double y, long seed)
+    {
+        long cx = (long)Math.Floor(x), cy = (long)Math.Floor(y);
+        double fx = x - cx, fy = y - cy;
+        double sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+        double Corner(long ax, long ay) => Hash01(seed, ax * 1_000_003L + ay);
+        double top = Corner(cx, cy) + (Corner(cx + 1, cy) - Corner(cx, cy)) * sx;
+        double bottom = Corner(cx, cy + 1) + (Corner(cx + 1, cy + 1) - Corner(cx, cy + 1)) * sx;
+        return top + (bottom - top) * sy;
+    }
+
+    private static double SmoothStep(double a, double b, double x)
+    {
+        double t = Math.Clamp((x - a) / (b - a), 0, 1);
+        return t * t * (3 - 2 * t);
     }
 
     // ------------------------------------------------------------------------------------------

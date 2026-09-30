@@ -18,6 +18,7 @@ namespace Ck3MapGen.Emit;
 /// gfx/models/portraits/{male,female}_head/blendshapes/{sex}_bs_gen_orc_brow.mesh     (see OrcBrow)
 /// gfx/models/portraits/{male,female}_head/{sex}_teeth/{sex}_teeth.asset         (see PatchTeethAsset)
 /// gfx/models/portraits/{male,female}_head/{sex}_teeth/*.mesh                    (see BuildTeeth)
+/// gfx/models/portraits/m_beards/**/{beard}.asset + {beard}_bs_gen_*.mesh          (see BuildBeardFollows)
 /// </code>
 ///
 /// The tusk half is described at <see cref="BuildTeeth"/> and <see cref="OrcTusks"/>; its gene,
@@ -43,7 +44,7 @@ namespace Ck3MapGen.Emit;
 /// Only written when fantasy races are on, so a human-only map ships vanilla's head untouched.
 /// Proved in game with the standalone elf_ear_probe mod on 2026-09-28.
 /// </summary>
-public static class RaceHeadWriter
+public static partial class RaceHeadWriter
 {
     /// <summary>The gene and its templates; defined beside the shape in <see cref="PointedEars"/>.</summary>
     public const string Gene = PointedEars.Gene;
@@ -157,6 +158,18 @@ public static class RaceHeadWriter
             horns.Clear();
         }
 
+        // Beards follow the male face shapes the way tusks and horns do (see BuildBeardFollows).
+        var beards = new List<BeardOutput>();
+        try
+        {
+            beards = BuildBeardFollows(portraits, Generated("male"), log);
+        }
+        catch (Exception e) when (e is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            log.Add($"  WARNING: beard follow shapes skipped, giant chins may show through beards: {e.Message}");
+            beards.Clear();
+        }
+
         if (ears.Count == 0 && teeth.Count == 0 && horns.Count == 0 && faces.Count == 0) return;
 
         var assets = new List<(string Path, byte[] Bytes)>();
@@ -188,6 +201,14 @@ public static class RaceHeadWriter
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllBytes(path, bytes);
+        }
+
+        foreach (var b in beards)
+        {
+            foreach (var (rel, root) in b.Meshes) PdxMesh.Write(Path.Combine(outPortraits, rel), root);
+            string assetPath = Path.Combine(outPortraits, b.AssetRel);
+            Directory.CreateDirectory(Path.GetDirectoryName(assetPath)!);
+            File.WriteAllBytes(assetPath, b.Asset);
         }
 
         int bands = 0;
