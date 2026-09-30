@@ -175,6 +175,20 @@ public static partial class ContentWriter
         var governments = MapGen.Governments.Build(empires, counties, realms, provinceTerrain, coastal,
             development, cultures, worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017), azgaar, stateGovernments);
 
+        // The sees rebuilt on the world the history left, over the ones BuildWorld grew from the
+        // generated one: a see's counties follow the conversions above, land that fell to the
+        // wilds or went tribal leaves the church's reach, and the de jure drift is the grain it
+        // grows on. Same Faith objects, so the writers read the rebuilt sees and rites.
+        // Stage 0 of the history-sim religion plan; the sim itself does not model sees yet.
+        if (VanillaVocabulary.Current is { } vocabulary)
+        {
+            var seeCounties = counties.Where(c => c.Tier == "c").ToList();
+            var seeGraph = MapGen.CountyNetwork.Graph(seeCounties, provinces, order, landCount, provinceTerrain,
+                _ => 1.0, 0.0);
+            MapGen.Sees.Build(faiths, seeCounties, seeGraph, governments, development, worldCenters, cultures,
+                vocabulary, cfg, wilderness);
+        }
+
         // The additional bookmarks, around the applied year: each date's map from whichever run
         // covered it, titled on the frontier it had, and the governments that follow. Before the
         // hegemon's realm is expanded, as BuildWorld orders it for a generated world.
@@ -399,6 +413,11 @@ public static partial class ContentWriter
 
         Core.Stage.Time("culture files", () => CultureWriter.WriteAll(modDir, cfg, generatedCultures.Declared(),
             world.Ethnicities, world.Vocabulary, new Rng(cfg.Seed ^ 0x0C1A), retinues?.Innovations));
+
+        // The sees were rebuilt on the history's world in ApplyRealms; everything declared from them
+        // follows, or the title history below names sees and rites the files no longer declare.
+        Core.Stage.Time("religion files (sees)", () =>
+            ReligionWriter.WriteSeeDependent(modDir, faiths.Declared(), cfg.Seed, cfg.ReligionTooltips));
 
         Core.Stage.Time("compatibility", () =>
         {

@@ -9,7 +9,12 @@ namespace Ck3MapGen.Emit;
 /// </summary>
 public static class ModWriter
 {
-    public const string SupportedVersion = "1.19.0.6";
+    /// <summary>
+    /// The game version the launcher checks the mod against. A wildcard patch, so a 1.20 hotfix does
+    /// not flag every generated world as outdated; the generator reads the installed game's own
+    /// files, so it follows hotfixes within a version.
+    /// </summary>
+    public const string SupportedVersion = "1.20.*";
 
     /// <summary>
     /// Directories where a vanilla file left in place is actively harmful because it is keyed to

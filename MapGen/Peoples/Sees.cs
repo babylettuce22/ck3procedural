@@ -111,9 +111,13 @@ public static class Sees
     /// <summary>
     /// Clears and rebuilds every generated faith's sees and rites, and each religion's see words.
     /// </summary>
+    /// <param name="wilderness">
+    /// The land no see reaches. Needed when rebuilding after an applied history (see
+    /// ContentWriter.ApplyRealms), whose frontier can differ from the generated one.
+    /// </param>
     public static void Build(FaithMap faiths, List<Title> counties, RegionGrowth.Graph graph,
         GovernmentMap governments, Dictionary<Title, int> development, WorldCenterMap? worldCenters,
-        CultureMap cultures, VanillaVocabulary vocab, MapConfig cfg)
+        CultureMap cultures, VanillaVocabulary vocab, MapConfig cfg, WildernessMap? wilderness = null)
     {
         foreach (var faith in faiths.Faiths)
         {
@@ -127,14 +131,20 @@ public static class Sees
         var index = new Dictionary<Title, int>();
         for (int i = 0; i < counties.Count; i++) index[counties[i]] = i;
 
+        // Which counties follow each faith, read off the county map rather than Faith.Counties: an
+        // applied history's conversions (ContentWriter.ChangePeoples) rewrite the map and leave the
+        // lists as generated.
+        var followers = counties
+            .Where(c => wilderness?.Contains(c) != true && faiths.ByCounty.ContainsKey(c))
+            .GroupBy(c => faiths.ByCounty[c])
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         int seeNumber = 0, riteCount = 0, faithsWith = 0;
         foreach (var faith in faiths.Faiths)
         {
-            if (!Eligible(faith)) continue;
+            if (!Eligible(faith) || !followers.TryGetValue(faith, out var own)) continue;
 
-            var heartland = faith.Counties
-                .Where(c => index.ContainsKey(c) && faiths.ByCounty.GetValueOrDefault(c) == faith && Settled(governments.For(c)))
-                .ToList();
+            var heartland = own.Where(c => Settled(governments.For(c))).ToList();
             if (heartland.Count < MinHeartland) continue;
 
             var sees = Grow(faith, heartland, counties, index, graph, development, worldCenters, ref seeNumber);
@@ -142,7 +152,7 @@ public static class Sees
 
             faith.Sees.AddRange(sees);
             RankSees(faith);
-            FoundRites(faith, index, graph, cultures, vocab, cfg);
+            FoundRites(faith, own, index, graph, cultures, vocab, cfg);
             riteCount += faith.Rites.Count;
             faithsWith++;
         }
@@ -322,10 +332,10 @@ public static class Sees
     /// largest great sees; every see then keeps the rite of the nearest founding seat (the primate's
     /// being the main rite), and so do the faith's counties outside any see.
     /// </summary>
-    private static void FoundRites(Faith faith, Dictionary<Title, int> index, RegionGrowth.Graph graph,
-        CultureMap cultures, VanillaVocabulary vocab, MapConfig cfg)
+    private static void FoundRites(Faith faith, List<Title> own, Dictionary<Title, int> index,
+        RegionGrowth.Graph graph, CultureMap cultures, VanillaVocabulary vocab, MapConfig cfg)
     {
-        int wanted = (int)Math.Ceiling(faith.Counties.Count / (double)CountiesPerRite) - 1;
+        int wanted = (int)Math.Ceiling(own.Count / (double)CountiesPerRite) - 1;
         var founders = faith.Sees.Where(s => s.Rank == SeeRank.Great)
             .OrderByDescending(s => s.Counties.Count).ThenBy(s => s.Seat.Index)
             .Take(Math.Max(0, wanted)).ToList();
@@ -391,10 +401,10 @@ public static class Sees
 
         var founded = faith.Rites.ToDictionary(r => r.Founder);
         foreach (var see in faith.Sees)
-            see.Rite = founded.TryGetValue(see, out var own) ? own : see == primate ? null : Nearest(see.Seat);
+            see.Rite = founded.TryGetValue(see, out var foundedHere) ? foundedHere : see == primate ? null : Nearest(see.Seat);
 
         var seeOf = faith.Sees.SelectMany(s => s.Counties.Select(c => (c, s))).ToDictionary(p => p.c, p => p.s);
-        foreach (var county in faith.Counties.Where(index.ContainsKey))
+        foreach (var county in own)
         {
             var rite = seeOf.TryGetValue(county, out var see) ? see.Rite : Nearest(county);
             rite?.Counties.Add(county);

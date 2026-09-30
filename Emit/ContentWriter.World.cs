@@ -479,7 +479,7 @@ public static partial class ContentWriter
             var seeGraph = MapGen.CountyNetwork.Graph(seeCounties, provinces, order, landCount, provinceTerrain,
                 _ => 1.0, 0.0);
             MapGen.Sees.Build(faiths, seeCounties, seeGraph, governments, development, worldCenters, cultures,
-                vocabulary, cfg);
+                vocabulary, cfg, wilderness);
         });
 
         // Farmland and oases, placed from settlement and drainage rather than from climate. Runs

@@ -1568,7 +1568,15 @@ public static partial class CompatibilityWriter
     /// <param name="ProceduralOnly">Left alone on a VanillaWorld map, where the effect can still find
     /// what it needs.</param>
     /// <param name="Why">Written above the stub.</param>
-    private readonly record struct HistoricalStub(string Key, bool ProceduralOnly, string Why);
+    /// <param name="Body">
+    /// The stub's own lines, for an effect vanilla declares with <c>$PARAM$</c>s. A scripted effect
+    /// with no <c>$…$</c> in its body refuses arguments ("Scripted effect should have no arguments",
+    /// then "PostValidate … returned false"), and the half-built call crashes the game when it runs:
+    /// the votive-crown stub, called as <c>{ OWNER = this }</c>, did at game start (2026-09-30). So a
+    /// stub must name every parameter its callers pass, in a body that does nothing.
+    /// <see cref="WriteHistoricalSetupStubs"/> refuses to ship one that does not.
+    /// </param>
+    private readonly record struct HistoricalStub(string Key, bool ProceduralOnly, string Why, string[]? Body = null);
 
     /// <summary>
     /// The effects <see cref="WriteHistoricalSetupStubs"/> stubs, and why each one can only fail here.
@@ -1607,7 +1615,9 @@ public static partial class CompatibilityWriter
             Christian relic they can never use ("Is Holy Relic but not for" their faith). The event's
             other region-seeded relics (Excalibur, Orthodox icons) test for Christianity and never
             fire here. Seen 2026-09-30. Nothing else calls this effect.
-            """),
+            Keeps $OWNER$, which its caller passes (see HistoricalStub.Body).
+            """,
+            Body: ["$OWNER$ = { save_temporary_scope_as = gen_votive_crown_stub }"]),
     ];
 
     /// <summary>
@@ -1649,10 +1659,34 @@ public static partial class CompatibilityWriter
 
         // Last file wins, as it does for the engine: that is the definition being overridden.
         var origin = new Dictionary<string, string>(StringComparer.Ordinal);
+        var parameters = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (string path in Directory.GetFiles(source, "*.txt"))
-            foreach (var (key, _, _, _) in ScriptScan.TopLevelDeclarations(
-                         File.ReadAllLines(path), c => char.IsLetterOrDigit(c) || c is '_'))
-                if (wanted.ContainsKey(key)) origin[key] = Path.GetFileName(path);
+        {
+            string[] fileLines = File.ReadAllLines(path);
+            foreach (var (key, first, last, _) in ScriptScan.TopLevelDeclarations(
+                         fileLines, c => char.IsLetterOrDigit(c) || c is '_'))
+            {
+                if (!wanted.ContainsKey(key)) continue;
+                origin[key] = Path.GetFileName(path);
+                parameters[key] = System.Text.RegularExpressions.Regex
+                    .Matches(string.Join('\n', fileLines[first..(last + 1)]), @"\$([A-Za-z_0-9]+)\$")
+                    .Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+            }
+        }
+
+        // A stub that drops a parameter vanilla's definition takes would crash the game at the call
+        // (see HistoricalStub.Body): report it and leave vanilla's effect in place instead.
+        foreach (var stub in wanted.Values.ToList())
+        {
+            if (!parameters.TryGetValue(stub.Key, out var needed) || needed.Count == 0) continue;
+            string body = string.Join('\n', stub.Body ?? []);
+            var dropped = needed.Where(p => !body.Contains($"${p}$", StringComparison.Ordinal)).ToList();
+            if (dropped.Count == 0) continue;
+
+            Console.WriteLine($"  historical setup: WARNING {stub.Key} takes ${string.Join("$, $", dropped)}$ "
+                              + "and its stub does not; left unstubbed rather than crash the call");
+            wanted.Remove(stub.Key);
+        }
 
         foreach (string missing in wanted.Keys.Where(k => !origin.ContainsKey(k)))
             Console.WriteLine($"  historical setup: WARNING vanilla no longer defines {missing} — "
@@ -1675,7 +1709,9 @@ public static partial class CompatibilityWriter
         foreach (var stub in stubs)
         {
             b.Comment($"{origin[stub.Key]}\n{stub.Why}");
-            using (b.Block(stub.Key)) { }
+            using (b.Block(stub.Key))
+                foreach (string line in stub.Body ?? [])
+                    b.Token(line);
             b.Blank();
         }
 

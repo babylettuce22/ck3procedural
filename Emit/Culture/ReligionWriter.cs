@@ -187,6 +187,20 @@ public static class ReligionWriter
         ParadoxText.WriteBom(Path.Combine(riteDir, "00_generated_rites.txt"), riteFile.ToString());
     }
 
+    /// <summary>
+    /// What an applied history's re-emit has to rewrite after <see cref="MapGen.Sees"/> were rebuilt
+    /// on its world (ContentWriter.ApplyRealms): the religion, faith and rite files (the rites'
+    /// founders and the ecclesiastical fields depend on the sees), their localisation, and every see
+    /// declaration. Holy sites and icons are the generated world's and a history does not move them.
+    /// Without this the title history named sees the landed titles no longer declared.
+    /// </summary>
+    internal static void WriteSeeDependent(string modDir, FaithMap faiths, int seed, bool tooltips)
+    {
+        WriteReligions(modDir, faiths);
+        WriteLocalisation(modDir, faiths, seed, tooltips);
+        SeeWriter.WriteAll(modDir, faiths);
+    }
+
     private static void WeightedTraits(JominiBuilder b, string field, IReadOnlyList<string> traits)
     {
         using (b.Block(field))
