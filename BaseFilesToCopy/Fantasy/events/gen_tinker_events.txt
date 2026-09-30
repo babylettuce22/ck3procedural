@@ -1,0 +1,24 @@
+﻿namespace = gen_tinker
+
+# Gnome Tinkering: main's own events (ids 0001–0009). The rest of the chain is in
+# gen_tinker_test_events.txt, gen_tinker_workshop_events.txt and gen_tinker_commission_events.txt;
+# the loop itself is in common/scripted_effects/00_gen_tinker_effects.txt.
+
+# =====================================================================================
+#  0005 — caution's extra wait is over (hidden)
+# =====================================================================================
+# gen_tk_spend_caution_effect sends this instead of the stage event when risk was taken off during
+# the last stage; now the stage due (by var:gen_tk_stage) is scheduled as usual. Ignored when it
+# belongs to a project since abandoned (the serial check), like every stage dispatcher.
+gen_tinker.0005 = {
+	hidden = yes
+
+	trigger = { gen_tk_event_is_current_trigger = yes }
+
+	immediate = {
+		if = {
+			limit = { has_character_flag = gen_tk_working }
+			gen_tk_schedule_current_stage_effect = yes
+		}
+	}
+}

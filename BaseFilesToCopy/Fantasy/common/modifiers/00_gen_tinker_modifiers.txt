@@ -8,7 +8,7 @@ gen_tk_tinkerer_modifier = {
 	monthly_prestige = 0.25
 }
 
-# Seven working contraptions. Replaces Tinkerer, and opens the Grand Invention to any learning.
+# Seven working contraptions. Replaces Tinkerer (either opens the Grand Invention to any learning).
 gen_tk_master_artificer_modifier = {
 	icon = learning_positive
 	learning = 2

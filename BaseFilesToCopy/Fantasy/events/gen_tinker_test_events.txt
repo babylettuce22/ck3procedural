@@ -160,7 +160,8 @@ gen_tinker.0010 = {
 		trigger = {
 			NOT = { has_character_flag = gen_tk_working }
 			OR = {
-				learning >= 18
+				learning >= 16
+				has_character_modifier = gen_tk_tinkerer_modifier
 				has_character_modifier = gen_tk_master_artificer_modifier
 			}
 			gold >= gen_tk_cost_invention_value

@@ -14,7 +14,7 @@
  gen_tinker.0010.d: "A clockwork limb. For myself, since nobody else will make one properly."
  gen_tinker.0010.d.tt: "If it works: a clockwork hand (for a maimed maker) or leg (for a one-legged one) that gives back about #P half#! of what the injury takes. A masterwork gives back more — most of the strength and poise, if not quite all the finer skills. The injury itself remains"
  gen_tinker.0010.e: "A grand invention. The one I have been saving."
- gen_tinker.0010.e.tt: "Needs #V 18 Learning#!, or to be a #V Master Artificer#!.\nIf it works: #P +100#! prestige, and your people's current fascination moves #P 10%#! of the way along. A masterwork: #P +200#! and #P 20%#!. If your people are not pursuing an innovation, the prestige is doubled instead"
+ gen_tinker.0010.e.tt: "Needs #V 16 Learning#!, or to be a #V Tinkerer#!.\nIf it works: #P +100#! prestige, and your people's current fascination moves #P 10%#! of the way along. A masterwork: #P +200#! and #P 20%#!. If your people are not pursuing an innovation, the prestige is doubled instead"
  gen_tinker.0010.f: "Not now. The bench can wait."
  gen_tinker.0010.f.tt: "Nothing is built, and nothing is spent"
 

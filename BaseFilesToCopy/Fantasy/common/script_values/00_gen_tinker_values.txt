@@ -27,8 +27,10 @@ gen_tk_base_quality_value = {
 }
 
 # Where a project's risk starts: every contraption can go wrong; weapons and grand ideas more so.
+# 15 / 25 / 30 since 2026-09-30 (was 10 / 20 / 25), with the entry prices lowered to match
+# (00_gen_tinker_cost_values.txt) — except the grand invention, dear whatever its risk.
 gen_tk_base_risk_value = {
-	value = 10
+	value = 15
 	if = {
 		limit = { var:gen_tk_project ?= flag:engine }
 		add = 10
@@ -45,10 +47,19 @@ gen_tk_base_risk_value = {
 # (explodes). Tuned so +10 quality and -10 risk are worth about the same, and a "+10 quality, +10 risk"
 # gamble keeps the success odds and trades duds for masterworks and explosions. At quality 60, risk 15:
 # masterwork 23%, works 45%, dud 21%, explodes 11%.
+#
+# Risk is a gamble, not only a danger (user, 2026-09-30): each point of risk also adds 0.6 to the
+# masterwork and takes 0.4 off the plain "works", so a daring build dazzles or blows up and a careful
+# one reliably works. At quality 60: risk 15 → masterwork 29%, works 40%, dud 21%, explodes 10%;
+# risk 40 → 33%, 27%, 17%, 23%. Caution's other price is time (gen_tk_adjust_effect).
 gen_tk_masterwork_weight_value = {
 	value = var:gen_tk_quality
 	multiply = 0.8
 	subtract = 15
+	add = {
+		value = var:gen_tk_risk
+		multiply = 0.6
+	}
 	min = 0
 }
 
@@ -56,6 +67,11 @@ gen_tk_works_weight_value = {
 	value = var:gen_tk_quality
 	multiply = 0.4
 	add = 40
+	subtract = {
+		value = var:gen_tk_risk
+		multiply = 0.4
+	}
+	min = 10
 }
 
 gen_tk_dud_weight_value = {

@@ -98,12 +98,37 @@ gen_assign_phenotype_effect = {
 			}
 			host = { save_scope_as = gen_phenotype_source }
 		}
+		# Any other member of the culture whose race came from the culture. Needed because the head
+		# can be the one without a race: a peasant-revolt leader (vanilla create_character, back-dated
+		# birth) who wins becomes the culture's most powerful member before their first pulse, then
+		# has no liege or host, and every courtier invented for their court copies from them. A
+		# headless 100-year run (ck3run soak, 2026-09-30) left three cultures locked like that for
+		# 30+ years. This is a full scan, but it only runs for a character nothing above could
+		# place, which is a handful per year.
+		else_if = {
+			limit = {
+				any_living_character = {
+					has_same_culture_as = scope:gen_phenotype_target
+					gen_has_phenotype_trigger = yes
+					NOT = { has_character_flag = gen_phenotype_from_gene }
+				}
+			}
+			random_living_character = {
+				limit = {
+					has_same_culture_as = scope:gen_phenotype_target
+					gen_has_phenotype_trigger = yes
+					NOT = { has_character_flag = gen_phenotype_from_gene }
+				}
+				save_scope_as = gen_phenotype_source
+			}
+		}
 
-		# No source is still possible, not a failure: a culture whose head, liege and host are all
-		# dead or untagged simply waits for next year's pulse. (This file set only ships on fantasy
-		# maps now — see Emit/StaticFileWriter.cs — so the old "human maps fall through here for
-		# free" case no longer arises; on a fantasy map nearly everyone finds a source, humans
-		# included, which is what stamps phenotype_human onto engine-generated human courtiers.)
+		# No source is still possible: a culture (typically a new hybrid) with no raced member at all.
+		# A character there without a fantasy ethnicity has a human body, since the gene branch above
+		# already took every fantasy one, so it is human; see the last block. (This file set only
+		# ships on fantasy maps — see Emit/StaticFileWriter.cs — and on a fantasy map nearly everyone
+		# finds a source, humans included, which is what stamps phenotype_human onto engine-generated
+		# human courtiers.)
 		#
 		# Re-asks gen_has_phenotype_trigger rather than trusting the branch structure above. The gene
 		# branch assigns directly and saves no source, so it should fall through here harmlessly —
@@ -116,6 +141,16 @@ gen_assign_phenotype_effect = {
 				exists = scope:gen_phenotype_source
 			}
 			gen_copy_phenotype_effect = yes
+		}
+		# Last resort, human by body. Without it such a character, and every courtier who later copies
+		# from them, stays raceless for good.
+		if = {
+			limit = {
+				NOT = { gen_has_phenotype_trigger = yes }
+				NOT = { exists = scope:gen_phenotype_source }
+				NOT = { gen_has_fantasy_race_ethnicity_trigger = yes }
+			}
+			add_trait = phenotype_human
 		}
 	}
 }

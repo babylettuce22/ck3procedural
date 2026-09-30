@@ -6,32 +6,34 @@
 #
 # A project is a fixed base, pitched against vanilla's own prices (commissioning an artifact is 100,
 # a first-tier building 150), plus a few months of the payer's income, so a king pays a king's price.
+# The bases were cut about a fifth on 2026-09-30 when starting risk went up (00_gen_tinker_values.txt):
+# more things blow up now, so trying costs less. The grand invention stays dear regardless.
 
 gen_tk_cost_curio_value = {		# a clockwork curio: about a commissioned artifact
 	value = monthly_character_income
 	multiply = 3
-	add = 100
+	add = 80
 	round = yes
 }
 
 gen_tk_cost_limb_value = {		# a clockwork limb: small, but fiddly
 	value = monthly_character_income
 	multiply = 2
-	add = 75
+	add = 60
 	round = yes
 }
 
 gen_tk_cost_engine_value = {	# a war engine: timber, iron and rope by the cartload
 	value = monthly_character_income
 	multiply = 4
-	add = 150
+	add = 120
 	round = yes
 }
 
 gen_tk_cost_mill_value = {		# waterworks: more than a building, and it lasts twenty years
 	value = monthly_character_income
 	multiply = 5
-	add = 200
+	add = 160
 	round = yes
 }
 

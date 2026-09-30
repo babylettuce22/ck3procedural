@@ -220,6 +220,23 @@ public static class ArtifactWriter
                             guard = gate;
                         }
 
+                        // Feature selection also reads scope:quality and scope:wealth: the material,
+                        // cordage and cloth groups of every armour type fail without them ("Failed to
+                        // pick feature for group 'armor_material'"), leaving a helmet and nothing else.
+                        // The create_artifact fields below set the artifact's values but not these
+                        // scopes. Vanilla's create_artifact_*_effect saves both first, and a ck3run
+                        // probe (2026-09-30) showed only that variant getting a material.
+                        using (b.Block("save_scope_value_as"))
+                        {
+                            b.Field("name", "quality");
+                            b.Field("value", art.Quality);
+                        }
+                        using (b.Block("save_scope_value_as"))
+                        {
+                            b.Field("name", "wealth");
+                            b.Field("value", art.Wealth);
+                        }
+
                         using (b.Block("create_artifact"))
                         {
                             b.Quoted("name", art.NameKey);
@@ -227,8 +244,8 @@ public static class ArtifactWriter
                             b.Field("type", art.Type);
                             b.Field("visuals", art.Visuals);
                             b.Field("template", art.Template);
-                            b.Field("wealth", art.Wealth);
-                            b.Field("quality", art.Quality);
+                            b.Field("wealth", "scope:wealth");
+                            b.Field("quality", "scope:quality");
                             b.Field("modifier", art.Modifier);
 
                             // A field of create_artifact, not a saved scope: `save_scope_as =
