@@ -1,5 +1,7 @@
 # CK3 Procedural Tool
 
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20development-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/babylettuce22)
+
 **A world generator for Crusader Kings III.** Start from nothing, or from your own heightmap
 or Azgaar map, and end with a complete, playable total-conversion mod: a new world with its own
 coasts, climate and rivers, peoples speaking related languages, faiths with their own symbols,
