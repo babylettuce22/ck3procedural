@@ -1,15 +1,20 @@
 # CK3 Procedural Tool
 
-Generate and edit Crusader Kings III worlds from a heightmap. The tool builds provinces,
-rivers, climate, terrain, titles, cultures, faiths, rulers and history, then exports a
-playable total-conversion mod, all from a Windows desktop app.
+**A world generator for Crusader Kings III.** Start from nothing, or from your own heightmap
+or Azgaar map, and end with a complete, playable total-conversion mod: a new world with its own
+coasts, climate and rivers, peoples speaking related languages, faiths with their own symbols,
+and a simulated history that decides who holds what when the game begins.
+
+Make a few choices in the Quick generator and watch the world take shape, or open every setting
+and tune it by hand. Then inspect and edit any title, culture, faith or ruler before you play.
 
 <img width="1790" height="935" alt="CK3 Procedural Tool desktop interface and map preview" src="https://github.com/user-attachments/assets/bece6c17-74fb-4f13-a539-60a07c044c55" />
 
 ## Features
 
-- **Terrain from any source.** Import a heightmap PNG, sculpt one in the embedded
-  [CK3 Heightmap Forge](https://github.com/babylettuce22/ck3-heightmap-forge), or bring an
+- **Terrain from any source.** Let the Quick generator build it, sculpt your own in the embedded
+  [CK3 Heightmap Forge](https://github.com/babylettuce22/ck3-heightmap-forge), import a
+  heightmap PNG, or bring an
   [Azgaar](https://azgaar.github.io) Full JSON export for names, borders, cultures and religions.
 - **A full map pipeline.** Climate (with an optional painted Köppen layer), drainage and
   navigable rivers, provinces, terrain, map graphics, flatmap, trees, animals and locators.
