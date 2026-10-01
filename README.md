@@ -98,6 +98,11 @@ marked work in progress. A successful build doesn't prove a generated mod works:
 emitted content should be checked with [ck3-tiger](https://github.com/amtep/ck3-tiger) and in
 game. See [Validation and current limits](docs/features.md#validation-and-current-limits).
 
+## Support
+
+The tool and the mods it makes are free. If you enjoy it, you can support development on
+[Ko-fi](https://ko-fi.com/babylettuce22).
+
 ## License and credits
 
 The source is released under the [MIT License](LICENSE).
