@@ -4,10 +4,14 @@
 # (40_doctrines_special.txt), and every clerical-region interaction, the ecumenical council and the
 # landed-realm-priest setup at game start test it (faith.has_doctrine_parameter or
 # rite_has_parameter). The engine itself never reads it: a region binds through title history
-# whatever the faith. So a generated faith with sees (MapGen/Peoples/Sees.cs) carries this doctrine,
-# written by ReligionWriter on the faith and on each of its rites, and gets the same interactions a
-# Christian faith does. The Christian-only machinery (cardinals, bulls, the Church situation, the
-# Schism) keys on Christianity separately and stays Christian.
+# whatever the faith. So a generated faith that may hold sees (MapGen/Peoples/Sees.cs, Eligible)
+# carries this doctrine, written by ReligionWriter on the faith and on each of its rites, and gets
+# the same see interactions a Christian faith does; one that reforms in play is given it by
+# common/on_action/zz_gen_clerical_regions_on_actions.txt. The Christian-only machinery keys on
+# Christianity separately and stays Christian: the ecumenical and investiture councils
+# (can_hold_ecumenical_council_trigger is religion = christianity_religion, checked before this
+# parameter), cardinals (has_clerical_electors, and the college is led from k_papal_state), bulls,
+# the Church situation and the Schism.
 #
 # Hidden, as vanilla hides its classification doctrines: it is a fact about the faith, not a choice.
 

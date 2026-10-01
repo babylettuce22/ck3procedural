@@ -1,0 +1,67 @@
+﻿# Long-lived fathers (gen_father_fertility_pulse_effect, 00_gen_aging_effects.txt).
+#
+# Vanilla never stops a man siring: MALE_FERTILITY_MULTIPLIER bottoms out at 0.5 past 70, and a couple's
+# chance is the AVERAGE of both partners' fertility (00_defines.txt). Built for human spans, that let an
+# elf father go on for a century through a string of wives — a 1164 save had sylvan and high-elf fathers
+# of 13–17 children, siring into their 90s and past 110. The user's fix (2026-09-30): stretch the male
+# age curve to the race's span, and give fathers the per-child brake vanilla gives only mothers
+# (MOTHER_FERTILITY_REDUCTION_PER_PREVIOUS_CHILD). Elves and dwarves only.
+#
+# Sized against each race's own fertility: an elf's is 0.15 (0.5 base, -0.35 race), a dwarf's 0.5.
+# A father at 0 still leaves a young wife's half of the couple's chance, so this tapers, not stops.
+
+# ---- Elves: slow from 60, nearly done by 90 (a human slows from 35 and is done by 70).
+gen_ff_elf_age_1_modifier = {
+	icon = fertility_negative
+	fertility = -0.04
+}
+gen_ff_elf_age_2_modifier = {
+	icon = fertility_negative
+	fertility = -0.08
+}
+gen_ff_elf_age_3_modifier = {
+	icon = fertility_negative
+	fertility = -0.15
+}
+
+# ---- Elves: a full house (4 / 6 / 8 children already).
+gen_ff_elf_brood_1_modifier = {
+	icon = fertility_negative
+	fertility = -0.04
+}
+gen_ff_elf_brood_2_modifier = {
+	icon = fertility_negative
+	fertility = -0.08
+}
+gen_ff_elf_brood_3_modifier = {
+	icon = fertility_negative
+	fertility = -0.15
+}
+
+# ---- Dwarves: slow from 70, nearly done by 90 (their span is twenty years past a human's).
+gen_ff_dwarf_age_1_modifier = {
+	icon = fertility_negative
+	fertility = -0.1
+}
+gen_ff_dwarf_age_2_modifier = {
+	icon = fertility_negative
+	fertility = -0.25
+}
+gen_ff_dwarf_age_3_modifier = {
+	icon = fertility_negative
+	fertility = -0.5
+}
+
+# ---- Dwarves: a full house.
+gen_ff_dwarf_brood_1_modifier = {
+	icon = fertility_negative
+	fertility = -0.1
+}
+gen_ff_dwarf_brood_2_modifier = {
+	icon = fertility_negative
+	fertility = -0.2
+}
+gen_ff_dwarf_brood_3_modifier = {
+	icon = fertility_negative
+	fertility = -0.35
+}

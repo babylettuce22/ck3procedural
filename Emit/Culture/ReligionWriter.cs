@@ -129,11 +129,14 @@ public static class ReligionWriter
                     b.Field("family", religion.Abrahamic ? MapGen.Faiths.AbrahamicFamily : MapGen.Faiths.Family);
                     b.Field("graphical_faith", religion.GraphicalFaith);
 
-                    // A religion with clerical regions names ecclesiastical government for its
+                    // A religion with an institutional clergy names ecclesiastical government for its
                     // theocrats, as vanilla's Christianity does: grants and Adopt Theocratic Rule hand
                     // out whatever this names, and without it a see's successor falls back to plain
-                    // theocracy_government, which has no treasury, domicile or lease hierarchy.
-                    if (religion.HasSees)
+                    // theocracy_government, which has no treasury, domicile or lease hierarchy. Every
+                    // such religion, not only those with sees today: a faith of it that reforms in
+                    // play founds sees (zz_gen_clerical_regions_on_actions.txt), and its prince-bishops
+                    // are written ecclesiastical (HistoryWriter.TitleGovernment).
+                    if (religion.Ecclesiastical || religion.HasSees)
                     {
                         b.Field("theocracy_government_type", "ecclesiastical_government");
                         b.Field("theocracy_lease_contract_type", "ecclesiastical_lease");
@@ -267,7 +270,26 @@ public static class ReligionWriter
 
         // Clerical regions: the parameter every clerical-region interaction tests. On the faith, and
         // restated on its rites below, since a rite's doctrines replace the faith's group by group.
-        if (faith.Sees.Count > 0) doctrines.Add(ClericalRegionsDoctrine);
+        // Every faith that could hold sees, not only those that do on the start date: one whose
+        // land is still tribal founds its first sees in play, as its lords settle, through vanilla's
+        // Request Ecclesiastical Title Creation, and one whose sees come on a later bookmark needs
+        // the doctrine on that bookmark too.
+        if (faith.HasClericalRegions || faith.Sees.Count > 0 || faith.EraSees.Count > 0) doctrines.Add(ClericalRegionsDoctrine);
+
+        // Electors: vanilla's own hidden doctrine, which is all vanilla's theocratic_elective law asks
+        // of a faith besides its head holding the head-of-faith title. The sees are the elector
+        // titles (HistoryWriter.WriteSees), so its archbishops elect the head. See the see-electors plan.
+        if (faith.HasElectors) doctrines.Add(ElectorsDoctrine);
+
+        // Sacraments follow the hierarchy, as in vanilla, where the one religion with sacraments
+        // central (Christianity) is also the one with sees. Central is what lets its archbishops and
+        // spiritual head excommunicate (excommunicate_interaction: clergy ruler of duke tier or more,
+        // faith_has_sacraments_central_trigger) and its faithful seek indulgences. A faith-level
+        // override of the religion's draw, like the anointment rite above; guarded on the religion
+        // having drawn the group, which is this install declaring it.
+        if (faith.HasClericalRegions && religion.Doctrines.TryGetValue("sacraments_group", out string? sacraments)
+            && sacraments != SacramentsCentral)
+            doctrines.Add(SacramentsCentral);
 
         var (eminent, ordinary) = SplitHolySites(faith);
 
@@ -342,6 +364,11 @@ public static class ReligionWriter
 
     /// <summary>The hidden doctrine that carries <c>has_clerical_regions</c>; see BaseFilesToCopy/Core.</summary>
     internal const string ClericalRegionsDoctrine = "special_doctrine_gen_clerical_regions";
+
+    private const string SacramentsCentral = "doctrine_sacraments_central";
+
+    /// <summary>Vanilla's hidden doctrine carrying <c>has_clerical_electors</c> (40_doctrines_special.txt).</summary>
+    internal const string ElectorsDoctrine = "special_doctrine_has_clerical_electors";
 
     /// <summary>The loc key a faith's main rite is named by once the faith has regional rites.</summary>
     private static string MainRiteName(Faith faith) => $"{faith.Key}_main_rite";

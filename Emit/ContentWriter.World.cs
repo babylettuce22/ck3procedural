@@ -478,8 +478,8 @@ public static partial class ContentWriter
             var seeCounties = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
             var seeGraph = MapGen.CountyNetwork.Graph(seeCounties, provinces, order, landCount, provinceTerrain,
                 _ => 1.0, 0.0);
-            MapGen.Sees.Build(faiths, seeCounties, seeGraph, governments, development, worldCenters, cultures,
-                vocabulary, cfg, wilderness);
+            BuildSees(faiths, seeCounties, seeGraph, realms, governments, eraGovernments, development, worldCenters,
+                cultures, vocabulary, cfg, wilderness);
         });
 
         // Farmland and oases, placed from settlement and drainage rather than from climate. Runs
@@ -612,6 +612,46 @@ public static partial class ContentWriter
     /// one on a later date too, crowned and sworn to the same way. An era map that carries its own
     /// wilderness (<see cref="RealmMap.Wilderness"/>) is crowned and tallied on it.
     /// </summary>
+    internal static void BuildSees(FaithMap faiths, List<Title> seeCounties, MapGen.RegionGrowth.Graph seeGraph,
+        RealmMap realms, GovernmentMap governments, Dictionary<int, GovernmentMap>? eraGovernments,
+        Dictionary<Title, int> development, WorldCenterMap worldCenters, CultureMap cultures,
+        VanillaVocabulary vocabulary, MapConfig cfg, WildernessMap wilderness)
+    {
+        // An era map that is the start date's own (a world whose realms were not grown) is copied
+        // from it later by BookmarkEras, bishoprics and all, so it is not carved again.
+        RealmMap? EraMap(int year) => realms.EraMaps?.GetValueOrDefault(year) is { } map && !ReferenceEquals(map, realms) ? map : null;
+
+        var dates = eraGovernments?.OrderBy(kv => kv.Key)
+            .Select(kv => new MapGen.SeeDate(kv.Key, kv.Value, EraMap(kv.Key)?.Wilderness))
+            .ToList();
+        MapGen.Sees.Build(faiths, seeCounties, seeGraph, governments, development, worldCenters, cultures,
+            vocabulary, cfg, wilderness, dates);
+        if (!cfg.GeneratedSees) return;
+
+        // The prince-bishops, on each date's own realm map before any ruler is drawn from it. The
+        // start date first and then outward, each preferring the counties the dates before it carved.
+        var previous = new HashSet<Title>();
+        var start = MapGen.PrinceBishops.Carve(faiths, realms, governments, wilderness, development, worldCenters,
+            cfg.EraYearAt(cfg.StartYear), s => s.Counties, previous);
+        var tally = new List<string> { $"{start.Count} on the start date" };
+
+        foreach (var (year, eraGovernment) in (eraGovernments ?? []).OrderBy(kv => Math.Abs(kv.Key - cfg.StartYear)).ThenBy(kv => kv.Key))
+        {
+            if (EraMap(year) is not { } map)
+            {
+                foreach (var county in start) eraGovernment.Set(county, GovernmentMap.Theocracy);
+                tally.Add($"{start.Count} in {year}");
+                continue;
+            }
+
+            var carved = MapGen.PrinceBishops.Carve(faiths, map, eraGovernment, map.Wilderness ?? wilderness,
+                development, worldCenters, cfg.EraYearAt(year), s => s.Eras.GetValueOrDefault(year), previous);
+            tally.Add($"{carved.Count} in {year}");
+        }
+
+        Console.WriteLine($"  prince-bishops: {string.Join(", ", tally)}");
+    }
+
     internal static Dictionary<int, GovernmentMap> EraGovernments(MapConfig cfg, RealmMap realms, List<Title> empires,
         List<Title> counties, TerrainClass[] provinceTerrain, bool[] coastal, Dictionary<Title, int> development,
         CultureMap cultures, WorldCenterMap worldCenters, WildernessMap wilderness, AzgaarImport? azgaar,

@@ -60,7 +60,7 @@ public static class CultureWriter
 
                 // Indented one level too deep until the builder made that unrepresentable. CK3
                 // ignores whitespace, so this was never a functional bug -- only an invisible one.
-                b.Field("audio_parameter", "european");
+                b.Field("audio_parameter", AudioParameterFor(heritage));
 
                 using (b.Block("parameters")) { }
 
@@ -186,6 +186,22 @@ public static class CultureWriter
     /// rewrite path (<see cref="WorldOverwrite"/>) has no vocabulary in hand; it is always read
     /// before anything is generated.
     /// </summary>
+    /// <summary>
+    /// The ambience flag (court room, multiplayer lobby) of the vanilla heritage behind the
+    /// culture this heritage borrowed its look from, so a heritage that builds mena walls also
+    /// sounds mena. Click sounds on the map do not come from here -- those follow the holding's
+    /// building asset, which <c>building_gfx</c> already picks. European when the chain breaks.
+    /// </summary>
+    internal static string AudioParameterFor(Heritage heritage)
+    {
+        if (VanillaVocabulary.Current is { } vocab
+            && vocab.CultureHeritages.TryGetValue(heritage.Look.SourceCulture, out var vanilla)
+            && vocab.HeritageAudio.TryGetValue(vanilla, out var audio))
+            return audio;
+
+        return "european";
+    }
+
     internal static VanillaVocabulary.HouseFrame? HouseFrameFor(Culture culture)
     {
         if (VanillaVocabulary.Current is not { } vocab) return null;
@@ -274,8 +290,14 @@ public static class CultureWriter
                 b.Field("mother_name_chance", "5");
                 b.Blank();
 
-                using (b.Block("mercenary_names"))
-                    b.Token($"{{ name = \"mercenary_company_{culture.Key}\" }}");
+                // The engine spawns a culture's mercenary companies only from this block, more of
+                // them the more counties the culture holds (defines LEVELS = { 0 7 14 }; 136 of
+                // vanilla's 218 name lists have none). The Unsettled people "hold" every wild
+                // county, so with it they fielded the maximum three companies of Unsettled captains
+                // and courtiers in play (qw, 2026-09-30: 18 of the 20 Unsettled adherents).
+                if (culture.Key != MapGen.Cultures.UnsettledKey)
+                    using (b.Block("mercenary_names"))
+                        b.Token($"{{ name = \"mercenary_company_{culture.Key}\" }}");
             }
 
             b.Blank();

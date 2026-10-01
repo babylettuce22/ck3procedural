@@ -29,9 +29,32 @@ public sealed class See
     /// <summary>The rite this see's counties keep: the faith's main rite unless a regional one reaches it.</summary>
     public Rite? Rite { get; set; }
 
-    /// <summary>The geographical region the title history binds, <c>et_gen_N_region</c>.</summary>
+    /// <summary>The geographical region the title history binds on the start date, <c>et_gen_N_region</c>.</summary>
     public string RegionKey => $"et_{Key["d_et_".Length..]}_region";
+
+    /// <summary>
+    /// Where the see stands on each additional bookmark, by year, the seat first: absent on a date it
+    /// does not stand. Each date binds a region of its own, as vanilla's et_867_* and et_1066_* do.
+    /// </summary>
+    public Dictionary<int, List<Title>> Eras { get; } = [];
+
+    /// <summary>An additional bookmark's region, <c>et_gen_N_1066_region</c>.</summary>
+    public string RegionKeyAt(int year) => $"et_{Key["d_et_".Length..]}_{year}_region";
+
+    /// <summary>
+    /// The see's Synod Seat, <c>d_cd_gen_N</c>: the landless elector title its archbishop holds beside
+    /// it when the faith elects its head (<see cref="Faith.HasElectors"/>). Separate because the engine
+    /// refuses to make a clerical-region title an elector ("already has incompatible special data",
+    /// qw 2026-09-30), so it is shaped like vanilla's cardinalates (d_cd_*) instead.
+    /// </summary>
+    public string SynodSeatKey => $"d_cd_gen_{Key["d_et_gen_".Length..]}";
 }
+
+/// <summary>
+/// An additional bookmark as the sees see it: what each county is governed as on that date and the
+/// frontier then. Sees grow on settled land, so a date that is less tribal has more of them.
+/// </summary>
+public sealed record SeeDate(int Year, GovernmentMap Governments, WildernessMap? Wilderness);
 
 /// <summary>
 /// A regional rite of a faith, founded by one of its great sees (<c>founder = d_et_gen_N</c> in
@@ -75,9 +98,10 @@ public sealed record SeeWords(string See, string GreatSee, string Primacy);
 /// generated-sees plan (agreed 2026-09-30):
 ///
 /// <list type="bullet">
-/// <item><b>Which faiths:</b> organised faiths of a religion with institutional clergy, i.e. not lay
-///   clergy (vanilla's Islamic shape, whose landed clerics 1.20 refuses outside a clerical region
-///   anyway), with a settled heartland of at least <see cref="MinHeartland"/> counties.</item>
+/// <item><b>Which faiths:</b> organised faiths with a spiritual head of faith, of a religion with
+///   institutional clergy, i.e. not lay clergy (vanilla's Islamic shape, whose landed clerics 1.20
+///   refuses outside a clerical region anyway), with a settled heartland of at least
+///   <see cref="MinHeartland"/> counties. See <see cref="Eligible"/>.</item>
 /// <item><b>Coverage:</b> the heartland only: the faith's counties under a settled government.
 ///   Tribal and nomad fringes stay mission land, as vanilla's 867 map leaves pagan Europe.</item>
 /// <item><b>Seats:</b> the head of faith's seat is the primate see; the rest are seeded at holy
@@ -88,6 +112,10 @@ public sealed record SeeWords(string See, string GreatSee, string Primacy);
 /// <item><b>Rites:</b> about one per hundred counties of the faith (the engine's
 ///   <c>MAX_FAITH_SIZE_PER_RITE</c>), each founded by a great see, named for its seat
 ///   ("Kelian Rite") or a founding saint ("Varnianism").</item>
+/// <item><b>Bookmarks:</b> each additional bookmark grows its own sees on that date's settled land,
+///   keeping the seats of the sees already standing where it can, so a see is the same title across
+///   the dates it stands on and only the region it binds moves. A date less tribal than the start
+///   has more sees, as vanilla's 1066 has more than its 867.</item>
 /// </list>
 ///
 /// Its own random streams throughout, so turning sees off moves nothing else in the world.
@@ -95,6 +123,9 @@ public sealed record SeeWords(string See, string GreatSee, string Primacy);
 public static class Sees
 {
     public const int MinHeartland = 6;
+
+    /// <summary>Sees a faith needs on the start date before its archbishops elect its head (the user's choice, 2026-09-30).</summary>
+    public const int MinElectorSees = 3;
     public const double CountiesPerSee = 10;
     public const int CountiesPerRite = 100;
 
@@ -104,9 +135,11 @@ public static class Sees
     /// <summary>
     /// Doctrine groups a regional rite may differ in: devotional practice rather than anything that
     /// decides succession, marriage law or clergy, so a rite never changes who may rule or wed.
+    /// Sacraments are left out (the user, 2026-09-30): they decide who may excommunicate, and a see
+    /// faith holds them central as a whole (ReligionWriter).
     /// </summary>
     private static readonly string[] RiteDoctrineGroups =
-        ["doctrine_pilgrimage", "doctrine_funeral", "monasticism_group", "sacraments_group", "preservation"];
+        ["doctrine_pilgrimage", "doctrine_funeral", "monasticism_group", "preservation"];
 
     /// <summary>
     /// Clears and rebuilds every generated faith's sees and rites, and each religion's see words.
@@ -115,17 +148,29 @@ public static class Sees
     /// The land no see reaches. Needed when rebuilding after an applied history (see
     /// ContentWriter.ApplyRealms), whose frontier can differ from the generated one.
     /// </param>
+    /// <param name="dates">
+    /// The additional bookmarks, each grown its own sees after the start date's. Null or empty for a
+    /// world with one bookmark, which then comes out exactly as it did before bookmarks had sees.
+    /// </param>
     public static void Build(FaithMap faiths, List<Title> counties, RegionGrowth.Graph graph,
         GovernmentMap governments, Dictionary<Title, int> development, WorldCenterMap? worldCenters,
-        CultureMap cultures, VanillaVocabulary vocab, MapConfig cfg, WildernessMap? wilderness = null)
+        CultureMap cultures, VanillaVocabulary vocab, MapConfig cfg, WildernessMap? wilderness = null,
+        IReadOnlyList<SeeDate>? dates = null)
     {
         foreach (var faith in faiths.Faiths)
         {
             faith.Sees.Clear();
+            faith.EraSees.Clear();
             faith.Rites.Clear();
             faith.MainRiteAdjective = null;
+            faith.HasClericalRegions = cfg.GeneratedSees && Eligible(faith);
+            faith.HasElectors = false;
         }
-        foreach (var religion in faiths.Religions) religion.SeeWords = null;
+        foreach (var religion in faiths.Religions)
+        {
+            religion.SeeWords = null;
+            religion.Ecclesiastical = cfg.GeneratedSees && Institutional(religion);
+        }
         if (!cfg.GeneratedSees) return;
 
         var index = new Dictionary<Title, int>();
@@ -134,10 +179,11 @@ public static class Sees
         // Which counties follow each faith, read off the county map rather than Faith.Counties: an
         // applied history's conversions (ContentWriter.ChangePeoples) rewrite the map and leave the
         // lists as generated.
-        var followers = counties
-            .Where(c => wilderness?.Contains(c) != true && faiths.ByCounty.ContainsKey(c))
+        Dictionary<Faith, List<Title>> Followers(WildernessMap? wild) => counties
+            .Where(c => wild?.Contains(c) != true && faiths.ByCounty.ContainsKey(c))
             .GroupBy(c => faiths.ByCounty[c])
             .ToDictionary(g => g.Key, g => g.ToList());
+        var followers = Followers(wilderness);
 
         int seeNumber = 0, riteCount = 0, faithsWith = 0;
         foreach (var faith in faiths.Faiths)
@@ -147,27 +193,101 @@ public static class Sees
             var heartland = own.Where(c => Settled(governments.For(c))).ToList();
             if (heartland.Count < MinHeartland) continue;
 
-            var sees = Grow(faith, heartland, counties, index, graph, development, worldCenters, ref seeNumber);
-            if (sees.Count == 0) continue;
+            var grown = Grow(faith, heartland, counties, index, graph, development, worldCenters, []);
+            if (grown.Count == 0) continue;
 
-            faith.Sees.AddRange(sees);
+            foreach (var (seat, region) in grown)
+            {
+                var see = new See { Key = $"d_et_gen_{seeNumber++}", Faith = faith, Seat = seat };
+                see.Counties.AddRange(region);
+                faith.Sees.Add(see);
+            }
+
+            if (faith.Head is { Temporal: false } head && faith.Sees.FirstOrDefault(s => s.Seat == head.Seat) is { } primate)
+                primate.Rank = SeeRank.Primate;
+
             RankSees(faith);
             FoundRites(faith, own, index, graph, cultures, vocab, cfg);
+
+            // Its archbishops elect its head once it has enough of them (see-electors plan, 2026-09-30).
+            faith.HasElectors = faith.Sees.Count >= MinElectorSees;
             riteCount += faith.Rites.Count;
             faithsWith++;
         }
 
+        // The other bookmarks, after every start-date see is numbered, so a world's start-date keys
+        // are the same with bookmarks or without. Outward from the start, the nearest date first, so
+        // each date keeps the seats of the one beside it rather than of a date centuries away.
+        int eraSees = 0;
+        foreach (var date in (dates ?? []).OrderBy(d => Math.Abs(d.Year - cfg.StartYear)).ThenBy(d => d.Year))
+        {
+            var followersThen = Followers(date.Wilderness ?? wilderness);
+            foreach (var faith in faiths.Faiths)
+            {
+                if (!Eligible(faith) || !followersThen.TryGetValue(faith, out var own)) continue;
+
+                var heartland = own.Where(c => Settled(date.Governments.For(c))).ToList();
+                if (heartland.Count < MinHeartland) continue;
+
+                var standing = faith.AllSees.ToList();
+                var grown = Grow(faith, heartland, counties, index, graph, development, worldCenters,
+                    standing.Select(s => s.Seat).ToHashSet());
+
+                foreach (var (seat, region) in grown)
+                {
+                    var see = standing.FirstOrDefault(s => s.Seat == seat);
+                    if (see is null)
+                    {
+                        see = new See { Key = $"d_et_gen_{seeNumber++}", Faith = faith, Seat = seat };
+                        faith.EraSees.Add(see);
+                        standing.Add(see);
+                    }
+                    see.Eras[date.Year] = region;
+                    eraSees++;
+                }
+            }
+        }
+
+        // A see founded on another date keeps the rite of the nearest founding seat, as the start
+        // date's do; it founds none of its own, the rites being the start date's.
+        foreach (var faith in faiths.Faiths.Where(f => f.EraSees.Count > 0 && f.Sees.Count > 0))
+            foreach (var see in faith.EraSees)
+                see.Rite = NearestRite(faith, see.Seat, index, graph);
+
         if (cfg.NativeRankTitles)
-            foreach (var religion in faiths.Religions.Where(r => r.Faiths.Any(f => f.Sees.Count > 0)))
+            foreach (var religion in faiths.Religions.Where(r => r.HasSees))
                 religion.SeeWords = CoinWords(religion.Language, cfg.Seed);
 
-        Console.WriteLine($"  sees: {seeNumber} clerical regions for {faithsWith} faiths, {riteCount} regional rites");
+        Console.WriteLine($"  sees: {faiths.Faiths.Sum(f => f.Sees.Count)} clerical regions for {faithsWith} faiths, {riteCount} regional rites"
+            + (dates is { Count: > 0 }
+                ? $"; on the other bookmarks {string.Join(", ", dates.OrderBy(d => d.Year).Select(d => $"{d.Year}: {faiths.Faiths.Sum(f => f.AllSees.Count(s => s.Eras.ContainsKey(d.Year)))}"))}"
+                  + $" ({faiths.Faiths.Sum(f => f.EraSees.Count)} not standing on the start date)"
+                : ""));
     }
 
-    /// <summary>Organised, generated, and of a religion whose clergy is an institution.</summary>
+    /// <summary>
+    /// Organised, generated, of a religion whose clergy is an institution, and led by a spiritual head
+    /// of faith: a faith that holds sees, or may found them in play (the clerical-regions doctrine,
+    /// see ReligionWriter).
+    ///
+    /// The head is vanilla's own line: only the churches with a Pope or a patriarch have sees, which is
+    /// about a third of its map. Without it every organised faith qualified, and a world of organised
+    /// churches was covered end to end (qw, 2026-09-30: 23 sees over 83 % of the settled land, 14 of 17
+    /// faiths eligible; with the head, two faiths and about a third). A faith that reforms in play
+    /// with a spiritual head gains them (zz_gen_clerical_regions_on_actions.txt).
+    /// </summary>
     public static bool Eligible(Faith faith)
-        => !faith.Inherited && faith.IsOrganized && !faith.Religion.LayClergy && !faith.Religion.Inherited
+        => !faith.Inherited && faith.IsOrganized && Institutional(faith.Religion)
+           && faith.Head is { Temporal: false }
            && faith.Key != Faiths.UnsettledFaithKey;
+
+    /// <summary>
+    /// A generated religion whose clergy is an institution rather than lay: one whose theocrats are
+    /// ecclesiastical, as Christianity's are, whether or not a faith of it has sees yet, since a faith
+    /// that reforms in play founds them (BaseFilesToCopy/Core zz_gen_clerical_regions_on_actions.txt).
+    /// </summary>
+    public static bool Institutional(Religion religion)
+        => !religion.LayClergy && !religion.Inherited && religion.Key != Faiths.UnsettledReligionKey;
 
     /// <summary>Land a church hierarchy reaches: neither tribal nor nomad.</summary>
     private static bool Settled(string government)
@@ -181,9 +301,14 @@ public static class Sees
     /// go to the nearest seat, the smallest see claiming first, so sees come out of similar size
     /// and never split a duchy between two archbishops.
     /// </summary>
-    private static List<See> Grow(Faith faith, List<Title> heartland, List<Title> counties,
+    /// <param name="keep">
+    /// Seats of sees standing on another date. Each outranks any other county of its duchy, so a see
+    /// whose seat is still in the heartland stays where it was; only the head of faith's seat comes first.
+    /// </param>
+    /// <returns>Each see's seat and its region, the seat first.</returns>
+    private static List<(Title Seat, List<Title> Region)> Grow(Faith faith, List<Title> heartland, List<Title> counties,
         Dictionary<Title, int> index, RegionGrowth.Graph graph, Dictionary<Title, int> development,
-        WorldCenterMap? worldCenters, ref int seeNumber)
+        WorldCenterMap? worldCenters, HashSet<Title> keep)
     {
         // Units: the faith's heartland counties grouped by de jure duchy.
         var units = heartland.GroupBy(c => c.Parent is { Tier: "d" } d ? d : c)
@@ -207,7 +332,7 @@ public static class Sees
         Title? primateSeat = faith.Head is { Temporal: false } head && unitOf.ContainsKey(head.Seat) ? head.Seat : null;
 
         double CountyScore(Title c)
-            => (c == primateSeat ? 1e6 : 0) + (holySites.Contains(c) ? 60 : 0)
+            => (c == primateSeat ? 1e6 : 0) + (keep.Contains(c) ? 1e5 : 0) + (holySites.Contains(c) ? 60 : 0)
              + (worldCenters?.IsCenter(c) == true ? 40 : 0) + development.GetValueOrDefault(c);
 
         double UnitScore(int u) => units[u].Sum(CountyScore) / Math.Sqrt(units[u].Count);
@@ -271,19 +396,16 @@ public static class Sees
                 .OrderBy(s => Distance(p, graph.Position[index[seatOfSeed[s]]])).First();
         }
 
-        var sees = new List<See>();
+        var sees = new List<(Title Seat, List<Title> Region)>();
         for (int s = 0; s < seeds.Count; s++)
         {
-            var see = new See { Key = $"d_et_gen_{seeNumber++}", Faith = faith, Seat = seatOfSeed[s] };
-            see.Counties.Add(see.Seat);
+            var seat = seatOfSeed[s];
+            var region = new List<Title> { seat };
             for (int u = 0; u < units.Count; u++)
                 if (owner[u] == s)
-                    see.Counties.AddRange(units[u].Where(c => c != see.Seat));
-            sees.Add(see);
+                    region.AddRange(units[u].Where(c => c != seat));
+            sees.Add((seat, region));
         }
-
-        if (primateSeat is not null && sees.FirstOrDefault(s => s.Seat == primateSeat) is { } primate)
-            primate.Rank = SeeRank.Primate;
 
         return sees;
     }
@@ -409,6 +531,17 @@ public static class Sees
             var rite = seeOf.TryGetValue(county, out var see) ? see.Rite : Nearest(county);
             rite?.Counties.Add(county);
         }
+    }
+
+    /// <summary>The rite of the founding seat nearest <paramref name="county"/>, null for the main rite's (the primate's).</summary>
+    private static Rite? NearestRite(Faith faith, Title county, Dictionary<Title, int> index, RegionGrowth.Graph graph)
+    {
+        if (faith.Rites.Count == 0 || faith.Sees.FirstOrDefault(s => s.Rank == SeeRank.Primate) is not { } primate) return null;
+
+        var p = graph.Position[index[county]];
+        var seats = new List<(Title Seat, Rite? Rite)> { (primate.Seat, null) };
+        seats.AddRange(faith.Rites.Select(r => (r.Founder.Seat, (Rite?)r)));
+        return seats.OrderBy(s => Distance(p, graph.Position[index[s.Seat]])).First().Rite;
     }
 
     /// <summary>A given name as a saint's stem: "Kelo" gives "Kel", so "Kelian" rather than "Keloian".</summary>

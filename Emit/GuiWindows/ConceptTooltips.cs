@@ -23,6 +23,13 @@ internal sealed class ConceptTooltips
     private readonly SortedDictionary<string, (string Name, string Description)> _concepts =
         new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Words with an apostrophe in them ("Groo'ubuq"), each under a loc key of its own; see
+    /// <see cref="Linked"/>. Written beside the concepts' own localisation.
+    /// </summary>
+    private readonly SortedDictionary<string, string> _words = new(StringComparer.Ordinal);
+    private readonly Dictionary<(string Concept, string Word), string> _wordKeys = [];
+
     public int Count => _concepts.Count;
 
     /// <summary>
@@ -36,12 +43,28 @@ internal sealed class ConceptTooltips
     }
 
     /// <summary>
-    /// The word as a link to its concept: shown as written, glossed on hover. A word with a quote in
-    /// it would end the argument early, so it is left plain — callers that need a possessive link
-    /// the bare word and append the "'s" outside the link.
+    /// The word as a link to its concept: shown as written, glossed on hover. Callers that need a
+    /// possessive link the bare word and append the "'s" outside the link.
+    ///
+    /// A word with an apostrophe would end the quoted argument early, so it goes in a loc key of
+    /// its own and the link reads it back with <c>Localize</c>, as vanilla does
+    /// (<c>Concept('artifact_claim', Localize('game_concept_claimants'))</c>). Until 2026-09-30
+    /// such words were left plain, so every coined word with an apostrophe had no tooltip.
     /// </summary>
-    public static string Linked(string concept, string word)
-        => word.Contains('\'') ? word : $"[Concept('{concept}','{word}')|E]";
+    public string Linked(string concept, string word)
+    {
+        if (!word.Contains('\'')) return $"[Concept('{concept}','{word}')|E]";
+
+        if (!_wordKeys.TryGetValue((concept, word), out var wordKey))
+        {
+            // Numbered within the concept: a word and its plural share one, so need two keys.
+            wordKey = $"{concept}_word{_wordKeys.Keys.Count(k => k.Concept == concept)}";
+            _wordKeys[(concept, word)] = wordKey;
+            _words[wordKey] = word;
+        }
+
+        return $"[Concept('{concept}',Localize('{wordKey}'))|E]";
+    }
 
     /// <summary>
     /// Writes the concepts — each hidden from the encyclopedia, since they are glosses, not rules —
@@ -60,6 +83,10 @@ internal sealed class ConceptTooltips
             loc.AddBuilt($"game_concept_{key}", name);
             loc.AddBuilt($"game_concept_{key}_desc", description);
         }
+
+        // The apostrophe words Linked read back with Localize. Through Add, not AddBuilt: they are
+        // plain text, and nothing in them is markup.
+        foreach (var (key, word) in _words) loc.Add(key, word);
 
         Directory.CreateDirectory(Path.GetDirectoryName(conceptsPath)!);
         ParadoxText.WriteBom(conceptsPath, b.ToString());

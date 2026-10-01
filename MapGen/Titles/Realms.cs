@@ -25,6 +25,9 @@ public enum LiegeOrigin
 
     /// <summary>Sworn to a hegemon crowned at the start date. See <see cref="Realms.ExpandHegemonRealm"/>.</summary>
     Hegemony,
+
+    /// <summary>A prince-bishop carved out of a lord's demesne, sworn to the realm's top liege. See <see cref="PrinceBishops"/>.</summary>
+    Church,
 }
 
 public sealed class RealmMap

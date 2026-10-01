@@ -1,0 +1,52 @@
+﻿l_english:
+ # The College of Cardinals, re-worded for a generated faith whose archbishops elect its head of
+ # faith (common/scripted_effects/zz_gen_see_electors_effects.txt, the see-electors plan).
+ #
+ # Vanilla's College is reused whole: theocratic_elective, its law, its window and its scoring. Only
+ # the words were Christian. Here the electors are the faith's Hierarchs (zz_gen_hierarchical_l_english.yml
+ # renames Archbishop to Hierarch and Archdiocese to See), so:
+ #   Cardinal -> Synod Hierarch, Cardinalate -> Synod Seat, College of Cardinals -> Synod,
+ #   Papabile Score -> Candidacy Score, the Pope / Papacy -> the head of faith.
+ #
+ # Procedural set only, beside the hierarchical renames and for the same reason: a generated world
+ # has no Christianity, and a VanillaWorld map, which has the real College, never ships this file.
+ # Under replace/ so a copy of a vanilla key is not logged as a duplicate.
+
+ # ---- Concepts ----
+ game_concept_cardinal: "Synod Hierarch"
+ game_concept_cardinals: "Synod Hierarchs"
+ game_concept_cardinal_possessive: "Synod Hierarch's"
+ game_concept_cardinals_possessive: "Synod Hierarchs'"
+ game_concept_cardinalate: "Synod Seat"
+ game_concept_cardinalates: "Synod Seats"
+ game_concept_cardinal_desc: "A [clergy|e] member who holds a [archdiocese|E] of a faith whose head is elected. All members of the [college_of_cardinals|E] are both candidates and electors when the [head_of_faith|E] dies, and have a [papabile_score|E]."
+ game_concept_college_of_cardinals: "Synod"
+ game_concept_college_of_cardinals_desc: "The $game_concept_college_of_cardinals$ is the body of [cardinals|E] who elect the next [head_of_faith|E] of their faith: every Hierarch who holds one of its Sees.\n\nEvery [cardinal|E] is both a candidate and an elector."
+ game_concept_papabile_score: "Candidacy Score"
+ game_concept_papabile_scores: "Candidacy Scores"
+ game_concept_papabile_score_desc: "All members of the [college_of_cardinals|E] have a $game_concept_papabile_score$ that takes into account their [traits|E], [piety_level|E], [rite|E] and the [opinion|E] of the other Hierarchs.\n\n[cardinals|E] with the highest $game_concept_papabile_score$ are likely to receive more votes when the next [head_of_faith|E] is elected.\n\nThe $game_concept_papabile_score$ can be increased via the #high $increase_papabile_score_interaction$#! [character_interaction|E] and the [GetDecisionWithKey('pam_promulgate_word_of_pious_deeds_decision').GetName] [decision|E]."
+
+ # ---- The window ----
+ CARDINALS_VIEW_POPE_PREDICTION: "Likelihood of being the next [head_of_faith|E]: [CardinalItem.GetPrediction|V0%]"
+ CARDINALS_VIEW_WILL_VOTE_FOR: "[cardinals|E] voting for [Character.GetShortUINameNoTooltip|U] in the election"
+ CARDINALS_VIEW_TAB_COLLEGE: "Synod"
+
+ # ---- The three kinds of candidate ----
+ theocratic_elective_pious_desc: "#flavor The Synod must put forward a name no one can call unworthy, a Hierarch whose life already reads like a saint's.#!\n\nTo become #EMP $theocratic_elective_pious$#!, stand above every other [cardinal|E] in holiness. [piety_level|E] weighs heaviest by far, followed by [learning|E] and how far you have advanced as a [GetTrait('lifestyle_scholar').GetName( GetPlayer )], a [GetTrait('pilgrim').GetName( GetPlayer )], or a [GetTrait('lifestyle_mystic').GetName( GetPlayer )]. A single [sin|E] on your name costs more than a [virtue|E] earns.[GetPlayer.Custom('GetPamPapabileOwnScorePious')]"
+ theocratic_elective_populist_desc: "#flavor A head of faith the faithful will not follow leads no one, so the Synod puts forward a name already cheered in the streets.#!\n\nTo become #EMP $theocratic_elective_populist$#!, stand above every other [cardinal|E] in fame. Raise your [prestige_level|E] and [diplomacy|E], keep [friends|E] within the [college_of_cardinals|E], have [personal_tenets|E] with high [tenet_popularity|E], and use the [GetDecision('pam_promulgate_word_of_pious_deeds_decision').GetName] [decision|E].[GetPlayer.Custom('GetPamPapabileOwnScorePopulist')]"
+ theocratic_elective_powerful_desc: "#flavor The faith has enemies as well as followers, so the Synod puts forward a prelate with the means to hold its throne.#!\n\nTo become #EMP $theocratic_elective_powerful$#!, stand above every other [cardinal|E] in worldly weight. See your [rite|E] spread across more [counties|E], hold [holy_sites|E], raise your [dynasty_prestige_level|E] — or use the #V #TOOLTIP:tt_increase_papabile_score_interaction [GetPlayer.GetPlayerInteractionName('increase_papabile_score_interaction')|L]#!#! [character_interaction|E] to buy your way to the front.[GetPlayer.Custom('GetPamPapabileOwnScorePowerful')]"
+
+ # ---- The succession law ----
+ theocratic_elective_succession_law_subname: "Synod"
+ theocratic_elective_succession_law_effects: "\nThe [cardinals|E] of the [college_of_cardinals|E] elect a [title_heir|E] from among their own number; every Hierarch who holds a See is both an [elector|E] and a candidate. Those with the highest [papabile_score|E] are likely to receive more votes."
+ theocratic_elective_candidates: "Synod Hierarchs"
+ theocratic_elective_electors: "The Synod"
+
+ # ---- Influencing a vote ----
+ influence_papal_vote_interaction: "Influence Synod Vote"
+ influence_papal_vote_interaction_notification: "When the Synod next gathers, let your vote fall to [secondary_recipient.GetTitledFirstNameNoTooltip]. [secondary_recipient.GetSheHe|U] alone can steer the faith as it must be steered — and those who help [secondary_recipient.GetHerHim] to the throne will not be forgotten."
+ influence_papal_vote_interaction_toast: "Influenced Synod Vote"
+ influence_papal_vote_interaction_decline_toast: "Synod Vote Influence Refused"
+
+ # ---- Vote reasons ----
+ tooltip_pam_elector_vote_learned_candidate: "[candidate.GetSheHe|U] is a learned administrator of the faith: $VALUE|=+0$"

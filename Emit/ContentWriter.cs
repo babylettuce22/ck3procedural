@@ -236,6 +236,9 @@ public static partial class ContentWriter
         Core.Stage.Time("landmarks", () => PassWriter.WriteLandmarks(modDir, world.Landmarks, provinceTerrain));
 
         Core.Stage.Time("religion files", () => ReligionWriter.WriteAll(modDir, generatedFaiths.Declared(), cfg.Seed, cfg.ReligionTooltips));
+        // Ecclesiastical government without Christianity: the generated half of the Procedural set.
+        Core.Stage.Time("hierarchical clergy", () => HierarchyFlavourWriter.WriteAll(modDir, gameDir, cfg));
+        Core.Stage.Time("chaplain titles", () => ChaplainTitleWriter.WriteAll(modDir, gameDir, generatedFaiths.Declared()));
 
         // After the religion files rather than with the faiths: a generated faith's icon is drawn
         // by the writer above, and this is the first moment it exists to be shown. Their map
@@ -497,6 +500,7 @@ public static partial class ContentWriter
             sets.Add(StaticFileWriter.Fantasy);
         if (cfg.EnableSocieties) sets.Add(StaticFileWriter.Societies);
         else if (cfg.EnableSocietyPrototype) sets.Add(StaticFileWriter.SocietyPrototype);
+        if (cfg.ContentSource != MapConfig.ContentSourceMode.VanillaWorld) sets.Add(StaticFileWriter.Procedural);
         Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir, sets, runStarted));
 
         // DEAD LAST, and both halves of that matter.
@@ -644,6 +648,16 @@ public static partial class ContentWriter
                     jb.Inline("color", F(r), F(g), F(bl));
                     jb.Field("capital", faith.Head.Seat.Key);
                     jb.Field("landless", "yes");
+                    // Vanilla's head-of-faith shape (d_coptic_papacy, k_papal_state). Without it the
+                    // title carried a domicile and the engine computed no heir for it, so a Synod
+                    // faith's theocratic_elective never formed an election and the College buttons
+                    // (Faith.GetCollegeElectionTitle.HasElectionType) stayed hidden (qw 2026-09-30).
+                    jb.Field("allow_domicile", "no");
+                    jb.Field("no_automatic_claims", "yes");
+                    jb.Field("always_follows_primary_heir", "yes");
+                    jb.Field("destroy_if_invalid_heir", "yes");
+                    if (!faith.Head.Temporal)
+                        using (jb.Block("ai_primary_priority")) jb.Field("add", "1000");
                 }
             }
 

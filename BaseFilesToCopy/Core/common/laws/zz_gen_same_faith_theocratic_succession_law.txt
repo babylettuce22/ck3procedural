@@ -1,0 +1,33 @@
+﻿# Vanilla's same_faith_theocratic_succession_law (common/laws/00_succession_laws.txt, 1.20.0.2),
+# copied whole, with one change in can_keep: a faith whose clergy elect its head
+# (has_clerical_electors) does not keep it.
+#
+# Why: a spiritual head of faith is given this law (00_religion_effects.txt re-adds it for every new
+# head), and its succession block sets order_of_succession = theocratic. Laws override succession
+# rules in definition order, and this one is defined after theocratic_elective_succession_law, so it
+# replaced the election: the head-of-faith title formed no succession_election, the Synod found no
+# candidates, and the College buttons (Faith.GetCollegeElectionTitle.HasElectionType) stayed hidden
+# for generated Synod faiths (qw 2026-09-30). Vanilla's Pope escapes only through the Christianity
+# exclusion below. For every faith without electors this is vanilla unchanged.
+#
+# Re-copy on a patch that changes the vanilla law.
+
+same_faith_theocratic_succession_law = {
+	law_group_type = succession_rel_head
+	index = 0
+
+	shown_in_encyclopedia = no
+	can_keep = {
+		religion != religion:christianity_religion
+		faith = {
+			religious_head = root
+			has_doctrine = doctrine_spiritual_head
+			NOT = { has_doctrine_parameter = has_clerical_electors }
+		}
+	}
+	succession = {
+		order_of_succession = theocratic
+		faith = same_faith
+		pool_character_config = pool_theocratic_succession
+	}
+}

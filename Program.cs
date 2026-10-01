@@ -884,6 +884,10 @@ public static class Program
             {
                 sets.Add(Ck3MapGen.Emit.StaticFileWriter.SocietyPrototype);
             }
+            if (cfg.ContentSource != MapConfig.ContentSourceMode.VanillaWorld)
+            {
+                sets.Add(Ck3MapGen.Emit.StaticFileWriter.Procedural);
+            }
 
             // Using UtcNow as runStarted ensures all previously existing files in the target
             // folder are considered older than this run and will be overwritten/refreshed.
@@ -920,7 +924,12 @@ public static class Program
             Console.WriteLine($"  Mod folder:  {modDir}");
 
             // 1. Write/patch frontend_main.gui (disabling cold-boot portrait crash & injecting watermark)
-            FrontendWriter.WriteFrontend(modDir, options.GameDir);
+            // The main-menu portrait trial as the world was written with it (its proctool.txt keeps the
+            // settings), or as asked here: a GUI-only rewrite must not quietly undo the world's choice.
+            string record = Path.Combine(modDir, Core.RunLog.FileName);
+            bool keepPortraits = cfg.MenuPortraits
+                || (File.Exists(record) && File.ReadAllText(record).Contains("\"MenuPortraits\": true", StringComparison.Ordinal));
+            FrontendWriter.WriteFrontend(modDir, options.GameDir, keepPortraits);
 
             // 2. Write/patch in-game views (county view, character view, title view)
             //

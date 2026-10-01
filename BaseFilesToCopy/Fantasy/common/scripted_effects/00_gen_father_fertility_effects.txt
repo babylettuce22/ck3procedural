@@ -1,0 +1,122 @@
+﻿# Long-lived fathers: the male fertility curve stretched to the race's span, and a per-child brake.
+# Why, and the numbers: 00_gen_father_fertility_modifiers.txt. Run yearly from gen_aging_yearly_on_action
+# (00_gen_aging_on_actions.txt) on every living character; the opening limit keeps it cheap.
+
+gen_father_fertility_pulse_effect = {
+	if = {
+		limit = {
+			is_male = yes
+			age >= 16
+			OR = {
+				gen_is_elf_phenotype_trigger = yes
+				has_trait = phenotype_stocky
+			}
+		}
+		gen_father_fertility_clear_effect = yes
+		if = {
+			limit = { gen_is_elf_phenotype_trigger = yes }
+			if = {
+				limit = { age >= 90 }
+				add_character_modifier = gen_ff_elf_age_3_modifier
+			}
+			else_if = {
+				limit = { age >= 75 }
+				add_character_modifier = gen_ff_elf_age_2_modifier
+			}
+			else_if = {
+				limit = { age >= 60 }
+				add_character_modifier = gen_ff_elf_age_1_modifier
+			}
+			if = {
+				limit = { any_child = { count >= 8 } }
+				add_character_modifier = gen_ff_elf_brood_3_modifier
+			}
+			else_if = {
+				limit = { any_child = { count >= 6 } }
+				add_character_modifier = gen_ff_elf_brood_2_modifier
+			}
+			else_if = {
+				limit = { any_child = { count >= 4 } }
+				add_character_modifier = gen_ff_elf_brood_1_modifier
+			}
+		}
+		else = {
+			if = {
+				limit = { age >= 90 }
+				add_character_modifier = gen_ff_dwarf_age_3_modifier
+			}
+			else_if = {
+				limit = { age >= 80 }
+				add_character_modifier = gen_ff_dwarf_age_2_modifier
+			}
+			else_if = {
+				limit = { age >= 70 }
+				add_character_modifier = gen_ff_dwarf_age_1_modifier
+			}
+			if = {
+				limit = { any_child = { count >= 8 } }
+				add_character_modifier = gen_ff_dwarf_brood_3_modifier
+			}
+			else_if = {
+				limit = { any_child = { count >= 6 } }
+				add_character_modifier = gen_ff_dwarf_brood_2_modifier
+			}
+			else_if = {
+				limit = { any_child = { count >= 4 } }
+				add_character_modifier = gen_ff_dwarf_brood_1_modifier
+			}
+		}
+	}
+}
+
+# Every tier off, before this year's go on. Guarded, so nothing draws a bare "You lose" line.
+gen_father_fertility_clear_effect = {
+	if = {
+		limit = { has_character_modifier = gen_ff_elf_age_1_modifier }
+		remove_character_modifier = gen_ff_elf_age_1_modifier
+	}
+	if = {
+		limit = { has_character_modifier = gen_ff_elf_age_2_modifier }
+		remove_character_modifier = gen_ff_elf_age_2_modifier
+	}
+	if = {
+		limit = { has_character_modifier = gen_ff_elf_age_3_modifier }
+		remove_character_modifier = gen_ff_elf_age_3_modifier
+	}
+	if = {
+		limit = { has_character_modifier = gen_ff_elf_brood_1_modifier }
+		remove_character_modifier = gen_ff_elf_brood_1_modifier
+	}
+	if = {
+		limit = { has_character_modifier = gen_ff_elf_brood_2_modifier }
+		remove_character_modifier = gen_ff_elf_brood_2_modifier
+	}
+	if = {
+		limit = { has_character_modifier = gen_ff_elf_brood_3_modifier }
+		remove_character_modifier = gen_ff_elf_brood_3_modifier
+	}
+	if = {
+		limit = { has_character_modifier = gen_ff_dwarf_age_1_modifier }
+		remove_character_modifier = gen_ff_dwarf_age_1_modifier
+	}
+	if = {
+		limit = { has_character_modifier = gen_ff_dwarf_age_2_modifier }
+		remove_character_modifier = gen_ff_dwarf_age_2_modifier
+	}
+	if = {
+		limit = { has_character_modifier = gen_ff_dwarf_age_3_modifier }
+		remove_character_modifier = gen_ff_dwarf_age_3_modifier
+	}
+	if = {
+		limit = { has_character_modifier = gen_ff_dwarf_brood_1_modifier }
+		remove_character_modifier = gen_ff_dwarf_brood_1_modifier
+	}
+	if = {
+		limit = { has_character_modifier = gen_ff_dwarf_brood_2_modifier }
+		remove_character_modifier = gen_ff_dwarf_brood_2_modifier
+	}
+	if = {
+		limit = { has_character_modifier = gen_ff_dwarf_brood_3_modifier }
+		remove_character_modifier = gen_ff_dwarf_brood_3_modifier
+	}
+}

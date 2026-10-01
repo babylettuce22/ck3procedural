@@ -1,0 +1,18 @@
+﻿# The rank word on a generated Synod Seat (d_cd_gen_N, see Emit/Culture/SeeWriter.cs).
+#
+# Like vanilla's cardinalates, a seat's own name is its place ("Khigukai"), and the rank word comes
+# from flavorization. Vanilla's clerical_elector_duchy_cardinalate ("Cardinalate", priority 75,
+# 20_pam_flavorization.txt) is for Christianity and Dualism only, so a generated seat had no word
+# and read exactly like its see (qw 2026-09-30). Below vanilla's priority and with no religion list,
+# this only ever reaches elector titles vanilla leaves unworded: in practice, generated Synods.
+
+gen_synod_seat_title = {
+	type = title
+	tier = duchy
+	priority = 74
+	flavourization_rules = {
+		only_holder = yes
+		top_liege = no
+	}
+	special_title = clerical_elector
+}

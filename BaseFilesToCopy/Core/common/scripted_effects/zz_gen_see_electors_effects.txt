@@ -1,0 +1,188 @@
+﻿# A generated faith's archbishops elect its head of faith (the see-electors plan, 2026-09-30).
+#
+# ---- How it works ----
+#
+# Vanilla 1.20 elects the Pope with theocratic_elective (common/succession_election/
+# 00_pam_clerical_elective.txt): electors and candidates are the holders of the faith's elector
+# titles (same_faith_clerical_electors). Its law, theocratic_elective_succession_law, asks only that
+# the faith has has_clerical_electors and the character is its religious head
+# (should_use_theocratic_elective_succession_law_trigger). Nothing in it is Christian, and the
+# College window opens on the same two facts.
+#
+# A faith that elects (Faith.HasElectors: a spiritual head and 3+ sees) is written with vanilla's
+# special_doctrine_has_clerical_electors, and every see gets a Synod Seat (d_cd_gen_N, shaped like
+# vanilla's cardinalates) that its archbishop holds beside it and that is made an elector in its title
+# history (HistoryWriter.WriteSees). The see itself cannot be the elector: the engine refuses an
+# elector on a clerical-region title ("already has incompatible special data", qw 2026-09-30).
+# Vanilla's own cardinal titles are not used: making new ones is gated on k_papal_state. The seat
+# follows its see (zz_gen_see_electors_on_actions.txt), so an archbishop's successor inherits the vote.
+#
+# The law is granted at game start (the generated zz_gen_see_electors_start_on_actions.txt) and again
+# whenever the head-of-faith title changes hands (zz_gen_see_electors_on_actions.txt), as vanilla
+# does for k_papal_state.
+
+# Root: a character holding an electing faith's head-of-faith title. Only while the faith has electors:
+# an election with none leaves no valid heir, and head-of-faith titles are destroy_if_invalid_heir
+# (qw 2026-09-30 lost its head of faith that way when the elector marks failed to load).
+gen_see_electors_grant_law_effect = {
+	if = {
+		limit = {
+			NOT = { has_realm_law = theocratic_elective_succession_law }
+			faith = { any_clerical_elector_title = { count >= 1 } }
+		}
+		add_realm_law_skip_effects = theocratic_elective_succession_law
+	}
+	# Vanilla gives every spiritual head same_faith_theocratic_succession_law, whose order_of_succession
+	# = theocratic overrides the election (laws override in definition order), so the Synod had no
+	# candidates and the College stayed hidden. The Pope has no law in that group either; its
+	# can_keep now also refuses electing faiths (zz_gen_same_faith_theocratic_succession_law.txt),
+	# and this drops it at once instead of at the next validation.
+	if = {
+		limit = {
+			has_realm_law = same_faith_theocratic_succession_law
+			faith = { any_clerical_elector_title = { count >= 1 } }
+		}
+		remove_realm_law = same_faith_theocratic_succession_law
+	}
+}
+
+# Root: anything. Hands $SEAT$ (a Synod Seat) to $HOLDER$, the holder of its see.
+gen_synod_seat_transfer_effect = {
+	create_title_and_vassal_change = {
+		type = granted
+		save_scope_as = gen_seat_change
+		add_claim_on_loss = no
+	}
+	$SEAT$ = {
+		change_title_holder = {
+			holder = $HOLDER$
+			change = scope:gen_seat_change
+		}
+	}
+	resolve_title_and_vassal_change = scope:gen_seat_change
+}
+
+# Root: anything. Creates a new archbishop of $FAITH$ and the people of $COUNTY$, saved as
+# scope:gen_new_hierarch. The clergy's sex follows the faith's main rite, as the generator's do.
+gen_synod_create_archbishop_effect = {
+	create_character = {
+		location = $COUNTY$.title_province
+		age = { 35 60 }
+		gender_female_chance = {
+			if = {
+				limit = { $FAITH$.main_rite = { rite_has_parameter = clergy_must_be_male } }
+				add = 0
+			}
+			else_if = {
+				limit = { $FAITH$.main_rite = { rite_has_parameter = clergy_must_be_female } }
+				add = 100
+			}
+			else = {
+				add = 50
+			}
+		}
+		trait = education_learning_3
+		faith = $FAITH$
+		culture = $COUNTY$.culture
+		learning = { 10 18 }
+		save_scope_as = gen_new_hierarch
+	}
+}
+
+# Root: anything. $SEAT$ (a Synod Seat carrying var:gen_synod_faith) has no rightful holder of its
+# faith: its see went to, or it fell to, someone of another faith (a revocation, a conversion, an
+# inheritance). It goes to a new archbishop of its own faith instead, so the electorate keeps its size
+# and no foreign ruler votes (the user's choice, 2026-09-30). He serves under the realm the see's seat
+# lies in when a king or better of the same faith rules it (the seat is duchy tier, and a liege must
+# outrank it); otherwise he stands alone.
+gen_synod_seat_fresh_holder_effect = {
+	$SEAT$ = { save_scope_as = gen_orphan_seat }
+	scope:gen_orphan_seat.title_capital_county = { save_scope_as = gen_orphan_seat_county }
+	gen_synod_create_archbishop_effect = {
+		FAITH = scope:gen_orphan_seat.var:gen_synod_faith
+		COUNTY = scope:gen_orphan_seat_county
+	}
+	create_title_and_vassal_change = {
+		type = granted
+		save_scope_as = gen_orphan_seat_change
+		add_claim_on_loss = no
+	}
+	scope:gen_orphan_seat = {
+		change_title_holder = {
+			holder = scope:gen_new_hierarch
+			change = scope:gen_orphan_seat_change
+		}
+	}
+	if = {
+		limit = {
+			scope:gen_orphan_seat_county.holder.top_liege ?= {
+				highest_held_title_tier >= tier_kingdom
+				faith = scope:gen_orphan_seat.var:gen_synod_faith
+			}
+		}
+		scope:gen_new_hierarch = {
+			change_liege = {
+				liege = scope:gen_orphan_seat_county.holder.top_liege
+				change = scope:gen_orphan_seat_change
+			}
+		}
+	}
+	resolve_title_and_vassal_change = scope:gen_orphan_seat_change
+	scope:gen_new_hierarch = {
+		if = {
+			limit = { NOT = { government_has_flag = government_is_ecclesiastical } }
+			change_government = ecclesiastical_government
+		}
+	}
+}
+
+# Root: an elected head of faith. This: one of his sees other than the primate see, which follows the
+# head-of-faith title. He was elected out of it; it goes to a new archbishop of the see's people and
+# his faith, under the realm the see's seat lies in, so the electorate keeps its size (the user's
+# choice: the old see passes on rather than staying with the new head).
+gen_see_electors_release_see_effect = {
+	save_scope_as = gen_released_see
+	title_capital_county = { save_scope_as = gen_released_see_county }
+	gen_synod_create_archbishop_effect = { FAITH = root.faith COUNTY = scope:gen_released_see_county }
+	create_title_and_vassal_change = {
+		type = granted
+		save_scope_as = gen_see_change
+		add_claim_on_loss = no
+	}
+	scope:gen_released_see = {
+		change_title_holder = {
+			holder = scope:gen_new_hierarch
+			change = scope:gen_see_change
+		}
+	}
+	# Its Synod Seat goes with it, so the new archbishop votes.
+	scope:gen_released_see.var:gen_synod_seat ?= {
+		change_title_holder = {
+			holder = scope:gen_new_hierarch
+			change = scope:gen_see_change
+		}
+	}
+	# Under the seat's realm when a king or better rules it, as the generator seats archbishops; the
+	# see is duchy tier, and a liege must outrank it.
+	if = {
+		limit = {
+			scope:gen_released_see_county.holder.top_liege ?= {
+				highest_held_title_tier >= tier_kingdom
+				this != root
+			}
+		}
+		scope:gen_new_hierarch = {
+			change_liege = {
+				liege = scope:gen_released_see_county.holder.top_liege
+				change = scope:gen_see_change
+			}
+		}
+	}
+	resolve_title_and_vassal_change = scope:gen_see_change
+	scope:gen_new_hierarch = {
+		if = {
+			limit = { NOT = { government_has_flag = government_is_ecclesiastical } }
+			change_government = ecclesiastical_government
+		}
+	}
+}

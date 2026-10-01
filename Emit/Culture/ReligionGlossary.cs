@@ -126,7 +126,7 @@ internal static class ReligionGlossary
                 // The plural shares the concept: "Dwotes" glosses as Priest.
                 if (byTag.TryGetValue(term.Tag + "Plural", out var pluralKey)
                     && religion.LocalizationText.TryGetValue(pluralKey, out var plural))
-                    linked[pluralKey] = ConceptTooltips.Linked(concept, plural);
+                    linked[pluralKey] = concepts.Linked(concept, plural);
 
                 // The possessive links the name and keeps the "'s" outside the link, where the
                 // quote cannot end the concept's argument early. A possessive that is not the name
@@ -134,7 +134,7 @@ internal static class ReligionGlossary
                 if (byTag.TryGetValue(term.Tag + "Possessive", out var possKey)
                     && religion.LocalizationText.TryGetValue(possKey, out var possessive)
                     && possessive.StartsWith(word, StringComparison.Ordinal))
-                    linked[possKey] = ConceptTooltips.Linked(concept, word) + possessive[word.Length..];
+                    linked[possKey] = concepts.Linked(concept, word) + possessive[word.Length..];
             }
         }
 

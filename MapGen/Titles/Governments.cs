@@ -44,6 +44,13 @@ public sealed class GovernmentMap
     /// not marry (<see cref="HistoryWriter.AsClergy"/>, <see cref="HistoryWriter.IsCelibateTheocrat"/>).
     /// </summary>
     public const string Theocracy = "theocracy_government";
+
+    /// <summary>
+    /// Never assigned here: the map keeps <see cref="Theocracy"/>, and HistoryWriter writes this
+    /// instead for a theocrat whose faith has sees. Anything styling theocrats by government
+    /// (flavorization) has to name both, as vanilla does.
+    /// </summary>
+    public const string Ecclesiastical = "ecclesiastical_government";
     public const string Administrative = "administrative_government";
     public const string Nomad = "nomad_government";
 

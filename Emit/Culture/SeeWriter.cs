@@ -44,12 +44,13 @@ public static class SeeWriter
         string flavorPath = Path.Combine(modDir, "common", "flavorization", FlavorFile);
         string riteNamesPath = Path.Combine(modDir, "common", "religion", "rite_names", RiteNamesFile);
         string locPath = Path.Combine(modDir, "localization", "english", LocFileName);
+        string electorsPath = Path.Combine(modDir, "common", "on_action", ElectorsFile);
 
-        var sees = faiths.Faiths.SelectMany(f => f.Sees).ToList();
+        var sees = faiths.Faiths.SelectMany(f => f.Sees).Concat(faiths.Faiths.SelectMany(f => f.EraSees)).ToList();
         if (sees.Count == 0)
         {
             if (!removeWhenNone) return;
-            foreach (string path in new[] { titlesPath, regionsPath, flavorPath, riteNamesPath, locPath })
+            foreach (string path in new[] { titlesPath, regionsPath, flavorPath, riteNamesPath, locPath, electorsPath })
                 if (File.Exists(path)) File.Delete(path);
             return;
         }
@@ -59,6 +60,7 @@ public static class SeeWriter
         WriteRegions(regionsPath, sees);
         WriteFlavor(flavorPath, faiths, loc);
         WriteRiteNames(riteNamesPath);
+        WriteElectorLaw(electorsPath, faiths);
         Directory.CreateDirectory(Path.GetDirectoryName(locPath)!);
         loc.Write(locPath);
     }
@@ -89,7 +91,60 @@ public static class SeeWriter
             // Named for the seat, as vanilla's are (d_et_milano: "Milano"); the rank word is flavorization's.
             loc.Add(see.Key, see.Seat.Name);
             loc.Add($"{see.Key}_adj", see.Seat.Name);
+
+            // The see's Synod Seat, when its faith elects: shaped like vanilla's cardinalates
+            // (07_pam_ecclesiastical_titles.txt d_cd_*), but never destroyed on succession, since it
+            // passes with the see (zz_gen_see_electors_on_actions.txt) rather than by appointment.
+            if (!see.Faith.HasElectors) continue;
+            using (b.Block(see.SynodSeatKey))
+            {
+                b.Inline("color", r.ToString(), g.ToString(), bl.ToString());
+                b.Field("capital", see.Seat.Key);
+                b.Blank();
+                b.Field("landless", "yes");
+                b.Field("allow_domicile", "no");
+                b.Field("no_automatic_claims", "yes");
+                b.Blank();
+                using (b.Block("ai_primary_priority")) b.Field("add", "-1000");
+            }
+            b.Blank();
+
+            loc.Add(see.SynodSeatKey, see.Seat.Name);
+            loc.Add($"{see.SynodSeatKey}_adj", see.Seat.Name);
         }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        ParadoxText.WriteBom(path, b.ToString());
+    }
+
+    private const string ElectorsFile = "zz_gen_see_electors_start_on_actions.txt";
+
+    /// <summary>
+    /// Vanilla's theocratic_elective law on the holder of each electing faith's head-of-faith title at
+    /// game start, as game_start.txt gives it to the Pope; the on_title_gain re-grant and the rest of
+    /// the election are static (BaseFilesToCopy/Core zz_gen_see_electors_on_actions.txt). Named titles,
+    /// because script has no iterator over every faith. Removed when no faith elects.
+    /// </summary>
+    private static void WriteElectorLaw(string path, FaithMap faiths)
+    {
+        var heads = faiths.Faiths.Where(f => f.HasElectors && f.Head is { Temporal: false }).Select(f => f.Head!.TitleKey).ToList();
+        if (heads.Count == 0)
+        {
+            if (File.Exists(path)) File.Delete(path);
+            return;
+        }
+
+        var b = new JominiBuilder();
+        b.Comment("The election law for the heads of faith whose archbishops elect them. See Emit/Culture/SeeWriter.cs.");
+        b.Blank();
+        using (b.Block("on_game_start_after_lobby"))
+            b.Inline("on_actions", "gen_see_electors_game_start");
+        b.Blank();
+        using (b.Block("gen_see_electors_game_start"))
+        using (b.Block("effect"))
+            // Token, not Block: a block key is written with " = ", which would make "?= =".
+            foreach (string head in heads)
+                b.Token($"title:{head}.holder ?= {{ gen_see_electors_grant_law_effect = yes }}");
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         ParadoxText.WriteBom(path, b.ToString());
@@ -101,11 +156,23 @@ public static class SeeWriter
         b.Comment("Generated clerical regions, bound to their sees by clerical_region in history/titles/01_generated_sees.txt.");
         b.Blank();
 
+        // The start date's region, then one per other bookmark the see stands on, as vanilla keeps
+        // et_867_* and et_1066_* side by side.
         foreach (var see in sees)
         {
-            using (b.Block(see.RegionKey))
-                b.Inline("counties", [.. see.Counties.Select(c => c.Key)]);
-            b.Blank();
+            if (see.Counties.Count > 0)
+            {
+                using (b.Block(see.RegionKey))
+                    b.Inline("counties", [.. see.Counties.Select(c => c.Key)]);
+                b.Blank();
+            }
+
+            foreach (var (year, counties) in see.Eras.OrderBy(kv => kv.Key))
+            {
+                using (b.Block(see.RegionKeyAt(year)))
+                    b.Inline("counties", [.. counties.Select(c => c.Key)]);
+                b.Blank();
+            }
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -125,7 +192,7 @@ public static class SeeWriter
 
         foreach (var religion in faiths.Religions.Where(r => r.HasSees))
         {
-            var sees = religion.Faiths.SelectMany(f => f.Sees).ToList();
+            var sees = religion.Faiths.SelectMany(f => f.AllSees).ToList();
             var words = religion.SeeWords;
             string stem = $"gen_see_{religion.Key}";
 
@@ -161,7 +228,24 @@ public static class SeeWriter
                     b.Field("special_title", "clerical_region");
                 }
                 b.Blank();
-                loc.Add(key, text);
+
+                // A coined word ("Haligre") is glossed by vanilla's archdiocese concept, as the
+                // native rank words are by theirs: the word as written, the concept's header and
+                // text on hover. Procedural worlds relabel that concept "See" in neutral wording
+                // (HierarchyFlavourWriter), so the gloss reads See there. English needs no gloss.
+                // A word with an apostrophe ("Groo'ubuq") would end the quoted argument, so it
+                // goes in its own key and the link reads it back with Localize, vanilla's pattern
+                // (Concept('artifact_claim', Localize('game_concept_claimants'))), as
+                // ConceptTooltips does for the rank and religion words.
+                if (words is null)
+                    loc.Add(key, text);
+                else if (text.Contains('\''))
+                {
+                    loc.Add($"{key}_word", text);
+                    loc.AddBuilt(key, $"[Concept('archdiocese',Localize('{key}_word'))|E]");
+                }
+                else
+                    loc.AddBuilt(key, $"[Concept('archdiocese','{text}')|E]");
             }
 
             void Holder(string key, string gender, string text)

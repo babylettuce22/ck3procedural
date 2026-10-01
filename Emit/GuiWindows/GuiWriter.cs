@@ -1421,6 +1421,19 @@ public static class GuiWriter
             placeholder.Children.First(c => c.Key == "size")
                 .InsertAfter(GuiNode.Leaf("alwaystransparent", "no"));
             inserts.Add(placeholder);
+
+            // A clerical region's "independent rulers with capitals in region" grid lists the
+            // wilderness and ruins dummies too: a see founded in play (create_clerical_region) is
+            // filled from its seat's whole de jure kingdom, wild counties included, and a dummy's
+            // capital is one of them. Hidden by government, the flag every dummy carries (Seen 2026-09-30).
+            var grid = doc.Unique("rulers in region grid", n => n.IsBlock && n.Key == "fixedgridbox"
+                && n.Children.Any(c => !c.IsBlock && c.Key == "datamodel"
+                    && (c.Value ?? "").Contains("GetRealmsInRegion", StringComparison.Ordinal)));
+            var portrait = grid.Node?.Children.FirstOrDefault(c => c.IsBlock && c.Key == "item")
+                ?.Children.FirstOrDefault(c => c.IsBlock && c.Key == "portrait_head_small");
+            doc.At("rulers in region portrait", portrait)
+               .Append(GuiNode.Leaf("visible",
+                   GuiExpr.Not(GuiExpr.Raw("Character.GetGovernment.IsType('wilderness_government')")).Quoted));
         }
         if (chronicle) inserts.Add(TitleLorePanel(unclaimed));
 
@@ -1468,7 +1481,7 @@ public static class GuiWriter
             // Either half of the book is enough for a button: a title with no prehistory can
             // still have had something happen to it since.
             .Gap().Visible(GuiExpr.Or(
-                GuiExpr.Not(GuiExpr.StringIsEmpty(GuiExpr.Localize(LoreKey))),
+                HasStaticLore,
                 GuiExpr.Not(GuiExpr.StringIsEmpty(RuntimeLine(0)))))
             .OnClick(GuiExpr.VariableToggle("gen_title_lore"))
             .Tooltip("GEN_TITLE_LORE_TOOLTIP")
@@ -1479,6 +1492,17 @@ public static class GuiWriter
     /// <summary>The localisation key ChronicleWriter files this title's lore under.</summary>
     private static GuiExpr LoreKey
         => GuiExpr.Concatenate(GuiExpr.Literal("gen_lore_"), GuiExpr.Raw("Title.GetKey"));
+
+    /// <summary>
+    /// Whether this title has generated lore. Not only "non-empty": a missing key localises to the
+    /// key itself, so a title made in play (1.20's create_clerical_region names its see
+    /// <c>x_script_674</c>; created kingdoms and empires likewise) showed "gen_lore_x_script_674" as
+    /// its lore. Seen 2026-09-30 on a runtime see.
+    /// </summary>
+    private static GuiExpr HasStaticLore
+        => GuiExpr.And(
+            GuiExpr.Not(GuiExpr.StringIsEmpty(GuiExpr.Localize(LoreKey))),
+            GuiExpr.Not(GuiExpr.StringEquals(GuiExpr.Localize(LoreKey), LoreKey)));
 
     /// <summary>One runtime slot's sentence, or the empty string. Needs <c>Title</c> in context.</summary>
     private static GuiExpr RuntimeLine(int slot)
@@ -1504,13 +1528,13 @@ public static class GuiWriter
                     .ExpandingH()
                     .AutoResize()
                     .MaxWidth(370)
-                    .Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(staticLore)))
+                    .Visible(HasStaticLore)
                     .Text(staticLore),
                 GuiBuilder.TextSingle()
                     .ExpandingH()
                     .Format("#weak")
                     .Visible(GuiExpr.And(
-                        GuiExpr.Not(GuiExpr.StringIsEmpty(staticLore)),
+                        HasStaticLore,
                         GuiExpr.Not(GuiExpr.StringIsEmpty(newest))))
                     .Text("GEN_CHRONICLE_SINCE"));
 

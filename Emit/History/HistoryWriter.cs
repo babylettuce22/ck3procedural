@@ -58,7 +58,7 @@ public static class HistoryWriter
         WriteHouseRelationsOnAction(modDir, cfg, prehistory);
         ContentWriter.WriteNobleFamilyTitles(modDir, prehistory);
         WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wilderness, wild, prehistory);
-        WriteSees(modDir, cfg, faiths, cultures, ethnicities, realms, wilderness);
+        WriteSees(modDir, cfg, faiths, cultures, ethnicities, realms, governments, wilderness, prehistory.Eras);
         WriteDynastyLocalisation(modDir, prehistory, calendar);
         // Removed when there are none: a re-emit without them would otherwise keep the file an
         // earlier write left, naming rulers the character file no longer has.
@@ -1195,7 +1195,7 @@ public static class HistoryWriter
             .ToDictionary(g => g.Key, g => g.OrderBy(p => ReignOrder(p.ReignDate!)).ToList());
 
         if (eras is not null)
-            WriteEraTitleHistory(b, cfg, all, development, realms, governments, wilderness, eras, titleGrantDate, pastByTitle);
+            WriteEraTitleHistory(b, cfg, all, development, realms, governments, faiths, wilderness, eras, titleGrantDate, pastByTitle);
         else
         foreach (var title in all)
         {
@@ -1205,7 +1205,7 @@ public static class HistoryWriter
 
             int level = title.Tier == "c" ? development.GetValueOrDefault(title) : 0;
             realms.Liege.TryGetValue(title, out var liege);
-            string government = governments.For(holder);
+            string government = TitleGovernment(governments.For(holder), holder, faiths);
 
             using (b.Block(title.Key))
             {
@@ -1363,6 +1363,18 @@ public static class HistoryWriter
     private static string HeadGovernment(Faith faith)
         => faith.Sees.Count > 0 ? "ecclesiastical_government" : "theocracy_government";
 
+    private const string EcclesiasticalGovernment = "ecclesiastical_government";
+
+    /// <summary>
+    /// The government a title history line names for a holder: a theocrat of a faith with an
+    /// ecclesiastical hierarchy (<see cref="Faith.HasClericalRegions"/>) is ecclesiastical, as
+    /// vanilla's prince-bishops of Mainz and Salzburg are, rather than plain theocracy, which has no
+    /// treasury or church domicile and which that faith's own grants would never hand out. The
+    /// government map keeps <see cref="GovernmentMap.Theocracy"/>, which everything else reads.
+    /// </summary>
+    private static string TitleGovernment(string government, Title holder, FaithMap faiths)
+        => government == GovernmentMap.Theocracy && faiths.For(holder).HasClericalRegions ? EcclesiasticalGovernment : government;
+
     private const string SeeFile = "01_generated_sees.txt";
 
     /// <summary>
@@ -1372,16 +1384,23 @@ public static class HistoryWriter
     /// top liege of its seat's county. The primate see goes to the faith's head of faith when it has
     /// a spiritual one, as vanilla's Pope holds Rome's see; that holder answers to no one.
     ///
-    /// Held from the start date only: an earlier bookmark starts before the sees were founded, which
-    /// is the plan's "sees grow over time" at its simplest.
+    /// Across the bookmarks (<see cref="See.Eras"/>), one block per date in date order, as vanilla's
+    /// 00_ecclesiastical_titles.txt writes its own: the date's holder bound to the date's region, and
+    /// <c>holder = 0</c> with <c>clerical_region = none</c> on the first date it no longer stands. Each
+    /// date has an archbishop of its own, dead before the next bookmark as its rulers are.
+    ///
+    /// A see whose seat is a prince-bishopric on a date (<see cref="PrinceBishops"/>) goes to that
+    /// county's theocrat, as vanilla's archbishop of Mainz holds both d_et_mainz and c_mainz, under the
+    /// county's own liege so the one man never answers to two.
     /// </summary>
     private static void WriteSees(string modDir, MapConfig cfg, FaithMap faiths, CultureMap cultures,
-        EthnicityMap ethnicities, RealmMap realms, WildernessMap wilderness)
+        EthnicityMap ethnicities, RealmMap realms, GovernmentMap governments, WildernessMap wilderness,
+        BookmarkEras? eras)
     {
         string charPath = Path.Combine(modDir, "history", "characters", SeeFile);
         string titlePath = Path.Combine(modDir, "history", "titles", SeeFile);
 
-        var sees = faiths.Faiths.SelectMany(f => f.Sees).ToList();
+        var sees = faiths.Faiths.SelectMany(f => f.Sees).Concat(faiths.Faiths.SelectMany(f => f.EraSees)).ToList();
         if (sees.Count == 0)
         {
             if (File.Exists(charPath)) File.Delete(charPath);
@@ -1398,7 +1417,13 @@ public static class HistoryWriter
             hofIds[faith] = $"gen_hof_{hofIndex++}";
         }
 
-        string grantDate = $"{Math.Max(1, cfg.StartYear - 5)}.1.1";
+        // Every bookmark, the start date's among them, oldest first.
+        var dates = (eras?.Eras ?? [])
+            .Select(e => new SeeDateView(e.Year, e.GrantDate, e, e.Realms, e.Governments, e.Realms.Wilderness ?? wilderness))
+            .Append(new SeeDateView(cfg.StartYear, $"{Math.Max(1, cfg.StartYear - 5)}.1.1", null, realms, governments, wilderness))
+            .OrderBy(d => d.Year)
+            .ToList();
+
         var characters = new JominiBuilder();
         var titles = new JominiBuilder();
         characters.Comment("Archbishops of the generated sees. See MapGen/Peoples/Sees.cs.");
@@ -1406,68 +1431,162 @@ public static class HistoryWriter
         titles.Comment("Generated sees: clerical regions bound to et_gen_N_region. See MapGen/Peoples/Sees.cs.");
         titles.Blank();
 
-        int dissolved = 0;
+        int dissolved = 0, princely = 0;
         foreach (var see in sees)
         {
             var faith = see.Faith;
-            string holder;
+            bool held = false;
+            string? liegeWritten = null;
 
-            // A seat an applied history left wild or in ruins: the see dissolves, as the plan has it
-            // for now (titular sees later). Its title and region are still declared, unheld and
-            // unbound; without this the archbishop was seated as the wilderness dummy's vassal.
-            if (wilderness.Contains(see.Seat))
-            {
-                dissolved++;
-                continue;
-            }
-
-            if (see.Rank == SeeRank.Primate && hofIds.TryGetValue(faith, out var hof))
-            {
-                holder = hof;
-            }
-            else
-            {
-                holder = $"gen_see_{see.Key["d_et_gen_".Length..]}";
-                var culture = cultures.For(see.Seat);
-                bool female = SeeHolderIsFemale(see, cfg.Seed);
-                var (firstName, _) = RulerNames(see.Seat, culture, female, cfg.Seed, SeeHolderSalt);
-                var rng = Rng.For(cfg.Seed, 0x5EE4, Rng.StableHash(see.Key));
-
-                using (characters.Block(holder))
-                {
-                    characters.Quoted("name", NameTokens(cultures)(firstName));
-                    if (female) characters.Field("female", "yes");
-                    characters.Field("trait", GetPhenotypeTrait(culture, ethnicities, cfg));
-                    // Vanilla's clergy are nearly all learned (1,516 of 1,559 in ecclesiastical.txt).
-                    characters.Field("trait", rng.Chance(0.5) ? "education_learning_3" : "education_learning_4");
-
-                    // A regional rite's archbishop keeps it; history accepts `rite =` on characters.
-                    if (see.Rite is { } rite) characters.Field("rite", rite.Key);
-                    else characters.Field("religion", faith.Key);
-                    characters.Field("culture", culture.Key);
-                    characters.Inline($"{cfg.StartYear - rng.Int(35, 62)}.1.1", "birth = yes");
-
-                    using (characters.Block(cfg.StartDate))
-                    using (characters.Block("effect"))
-                        characters.Field("add_piety", see.Rank == SeeRank.Ordinary ? "150" : "300");
-                }
-
-                characters.Blank();
-            }
+            // The see's Synod Seat follows it date by date (holder, liege; null holder = unheld).
+            var seatDates = new List<(string Grant, string? Holder, string? Liege)>();
 
             using (titles.Block(see.Key))
-            using (titles.Block(grantDate))
             {
-                titles.Field("holder", holder);
-                titles.Field("government", "ecclesiastical_government");
-                titles.Field("clerical_region", see.RegionKey);
+                for (int d = 0; d < dates.Count; d++)
+                {
+                    var date = dates[d];
+                    var region = date.Era is null ? (see.Counties.Count > 0 ? see.Counties : null) : see.Eras.GetValueOrDefault(date.Year);
 
-                // Under the seat's top liege, as a realm's archbishops are; the head of faith is no one's.
-                if (holder.StartsWith("gen_see_", StringComparison.Ordinal) && SeeLiege(see.Seat, realms) is { } liege)
-                    titles.Field("liege", liege.Key);
+                    // A seat an applied history left wild or in ruins: the see dissolves, as the plan
+                    // has it for now (titular sees later). Without this the archbishop was seated as
+                    // the wilderness dummy's vassal.
+                    if (region is not null && date.Wild.Contains(see.Seat))
+                    {
+                        if (date.Era is null) dissolved++;
+                        region = null;
+                    }
+
+                    if (region is null)
+                    {
+                        if (held)
+                        {
+                            using (titles.Block(date.Grant))
+                            {
+                                titles.Field("holder", "0");
+                                titles.Field("clerical_region", "none");
+                            }
+                            seatDates.Add((date.Grant, null, null));
+                        }
+                        held = false;
+                        continue;
+                    }
+
+                    string holder;
+                    Title? liege = null;
+                    bool isPrimate = faith.Head is { Temporal: false } head && see.Seat == head.Seat;
+
+                    if (date.Era is null && see.Rank == SeeRank.Primate && hofIds.TryGetValue(faith, out var hof))
+                    {
+                        holder = hof;
+                    }
+                    else if (date.Era is { } era && isPrimate && era.FaithHeads.GetValueOrDefault(faith.Head!.TitleKey) is { } priest
+                             && era.Priests.Any(p => p.Id == priest))
+                    {
+                        holder = priest;
+                    }
+                    else if (date.Realms.HolderCounty.GetValueOrDefault(see.Seat) == see.Seat
+                             && date.Governments.For(see.Seat) == GovernmentMap.Theocracy && faiths.For(see.Seat) == faith
+                             && date.Realms.Liege.GetValueOrDefault(see.Seat) is { } bishopLiege
+                             && Title.TierRank(bishopLiege.Tier) > Title.TierRank("d"))
+                    {
+                        // A prince-archbishop: the seat county's own theocrat. Only under a king or
+                        // better, since the see makes him a duke and a liege must outrank him.
+                        holder = date.Era is { } era2 ? era2.Rulers.For(see.Seat).Id : CharacterId(see.Seat);
+                        liege = date.Realms.Liege.GetValueOrDefault(see.Seat);
+                        if (date.Era is null) princely++;
+                    }
+                    else
+                    {
+                        holder = date.Era is { } era3 ? $"gen_see_{see.Key["d_et_gen_".Length..]}_{era3.Tag}" : $"gen_see_{see.Key["d_et_gen_".Length..]}";
+                        liege = SeeLiege(see.Seat, date.Realms);
+                        int? next = d + 1 < dates.Count ? dates[d + 1].Year : null;
+                        WriteArchbishop(characters, holder, see, date.Year, next, date.Era is null ? eras : null,
+                            cfg, cultures, ethnicities);
+                    }
+
+                    using (titles.Block(date.Grant))
+                    {
+                        titles.Field("holder", holder);
+                        titles.Field("government", EcclesiasticalGovernment);
+                        titles.Field("clerical_region", date.Era is null ? see.RegionKey : see.RegionKeyAt(date.Year));
+
+                        // Under the seat's top liege, as a realm's archbishops are; the head of faith is
+                        // no one's. Said whenever it differs from the date before's, and on a title
+                        // destroyed in between, which lost it.
+                        if (liege is not null) titles.Field("liege", liege.Key);
+                        else if (liegeWritten is not null) titles.Field("liege", "0");
+
+                        // Its Synod Seat, named on the see so the hand-over script can find it, from
+                        // the date it is first held and again when it comes back after being destroyed.
+                        if (!held && faith.HasElectors)
+                            using (titles.Block("effect"))
+                            using (titles.Block("set_variable"))
+                            {
+                                titles.Field("name", "gen_synod_seat");
+                                titles.Field("value", $"title:{see.SynodSeatKey}");
+                            }
+                    }
+                    seatDates.Add((date.Grant, holder, liege?.Key));
+                    liegeWritten = liege?.Key;
+                    held = true;
+                }
             }
 
             titles.Blank();
+
+            // The Synod Seat: the same holder on the same dates, an elector title of the faith from
+            // the first, as vanilla's cardinalates are made electors in their own title history
+            // (00_ecclesiastical_titles.txt). The see itself cannot be one: the engine refuses an
+            // elector on a clerical-region title.
+            if (faith.HasElectors && seatDates.Count > 0)
+            {
+                using (titles.Block(see.SynodSeatKey))
+                {
+                    bool seatHeld = false;
+                    string? seatLiege = null;
+                    foreach (var (grant, seatHolder, liegeKey) in seatDates)
+                    {
+                        using (titles.Block(grant))
+                        {
+                            if (seatHolder is null)
+                            {
+                                titles.Field("holder", "0");
+                                seatHeld = false;
+                                continue;
+                            }
+
+                            titles.Field("holder", seatHolder);
+                            titles.Field("government", EcclesiasticalGovernment);
+                            if (liegeKey is not null) titles.Field("liege", liegeKey);
+                            else if (seatLiege is not null) titles.Field("liege", "0");
+
+                            if (!seatHeld)
+                                using (titles.Block("effect"))
+                                {
+                                    titles.Field("add_clerical_elector", $"faith:{faith.Key}");
+                                    using (titles.Block("set_variable"))
+                                    {
+                                        titles.Field("name", "gen_synod_see");
+                                        titles.Field("value", $"title:{see.Key}");
+                                    }
+                                    // The faith it votes in: script has no link from a title to its
+                                    // elector faith, and a seat never follows its see to a holder of
+                                    // another faith (zz_gen_see_electors_on_actions.txt).
+                                    using (titles.Block("set_variable"))
+                                    {
+                                        titles.Field("name", "gen_synod_faith");
+                                        titles.Field("value", $"faith:{faith.Key}");
+                                    }
+                                }
+                        }
+                        seatLiege = liegeKey;
+                        seatHeld = true;
+                    }
+                }
+
+                titles.Blank();
+            }
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(charPath)!);
@@ -1475,12 +1594,70 @@ public static class HistoryWriter
         ParadoxText.WriteBom(charPath, characters.ToString());
         ParadoxText.WriteBom(titlePath, titles.ToString());
         if (dissolved > 0) Console.WriteLine($"  sees: {dissolved} dissolved, their seats wild or in ruins on the start date");
+        if (princely > 0) Console.WriteLine($"  sees: {princely} held by the prince-bishop of their seat on the start date");
+    }
+
+    /// <summary>One bookmark as the see writer reads it; <see cref="Era"/> is null for the start date.</summary>
+    private sealed record SeeDateView(int Year, string Grant, BookmarkEra? Era, RealmMap Realms,
+        GovernmentMap Governments, WildernessMap Wild);
+
+    /// <summary>
+    /// An archbishop of a see on one bookmark: a learned cleric of the see's rite and its seat's
+    /// culture, in his prime on the date, and dead before <paramref name="nextYear"/>'s holders take
+    /// their titles, as every bookmark's rulers are. The start date's die as its other people do
+    /// (<see cref="BookmarkEras.MainDeath"/>); the ids keep their pre-bookmark form on the start date,
+    /// so a world with one bookmark writes what it always did.
+    /// </summary>
+    private static void WriteArchbishop(JominiBuilder characters, string id, See see, int year, int? nextYear,
+        BookmarkEras? startEras, MapConfig cfg, CultureMap cultures, EthnicityMap ethnicities)
+    {
+        bool start = year == cfg.StartYear;
+        int salt = start ? SeeHolderSalt : SeeHolderSalt ^ year;
+        var culture = cultures.For(see.Seat);
+        bool female = SeeHolderIsFemale(see, cfg.Seed, start ? 0 : year);
+        var (firstName, _) = RulerNames(see.Seat, culture, female, cfg.Seed, salt);
+        var rng = start ? Rng.For(cfg.Seed, 0x5EE4, Rng.StableHash(see.Key)) : Rng.For(cfg.Seed, 0x5EE4, Rng.StableHash(see.Key), year);
+
+        using (characters.Block(id))
+        {
+            characters.Quoted("name", NameTokens(cultures)(firstName));
+            if (female) characters.Field("female", "yes");
+            characters.Field("trait", GetPhenotypeTrait(culture, ethnicities, cfg));
+            // Vanilla's clergy are nearly all learned (1,516 of 1,559 in ecclesiastical.txt).
+            characters.Field("trait", rng.Chance(0.5) ? "education_learning_3" : "education_learning_4");
+
+            // A regional rite's archbishop keeps it; history accepts `rite =` on characters.
+            if (see.Rite is { } rite) characters.Field("rite", rite.Key);
+            else characters.Field("religion", see.Faith.Key);
+            characters.Field("culture", culture.Key);
+
+            int birthYear = year - rng.Int(35, 62);
+            characters.Inline($"{birthYear}.1.1", "birth = yes");
+
+            using (characters.Block(start ? cfg.StartDate : $"{year}.1.1"))
+            using (characters.Block("effect"))
+                characters.Field("add_piety", see.Rank == SeeRank.Ordinary ? "150" : "300");
+
+            // Gone before the next bookmark's archbishop is seated.
+            if (start)
+            {
+                if (startEras?.MainDeath(id, birthYear) is { } death) characters.Inline(death, "death = yes");
+            }
+            else if (nextYear is { } next)
+            {
+                int latest = Math.Max(year + 2, Math.Min(next - 3, birthYear + 85));
+                int deathYear = rng.Int(year + 2, latest);
+                characters.Inline($"{deathYear}.{rng.Int(1, 12)}.{rng.Int(1, 28)}", "death = yes");
+            }
+        }
+
+        characters.Blank();
     }
 
     private const int SeeHolderSalt = 0x5EE5;
 
-    /// <summary>The clergy's sex by <c>doctrine_clerical_gender</c>; an open clergy leans as the faith does, per see.</summary>
-    private static bool SeeHolderIsFemale(See see, int seed)
+    /// <summary>The clergy's sex by <c>doctrine_clerical_gender</c>; an open clergy leans as the faith does, per see and date.</summary>
+    private static bool SeeHolderIsFemale(See see, int seed, int year)
     {
         string clerical = see.Faith.DoctrineOf("doctrine_clerical_gender");
         if (clerical == "doctrine_clerical_gender_female_only") return true;
@@ -1492,7 +1669,8 @@ public static class HistoryWriter
             "doctrine_gender_equal" => 0.45,
             _ => 0.10,
         };
-        return Rng.For(seed, 0x5EE3, Rng.StableHash(see.Key)).Chance(share);
+        var rng = year == 0 ? Rng.For(seed, 0x5EE3, Rng.StableHash(see.Key)) : Rng.For(seed, 0x5EE3, Rng.StableHash(see.Key), year);
+        return rng.Chance(share);
     }
 
     /// <summary>The primary title of the top liege of the ruler whose realm holds <paramref name="seat"/>.</summary>
@@ -1531,7 +1709,7 @@ public static class HistoryWriter
     /// somebody held it once. A county wild on every date is left to the wilderness block.
     /// </summary>
     private static void WriteEraTitleHistory(JominiBuilder b, MapConfig cfg, List<Title> all,
-        Dictionary<Title, int> development, RealmMap realms, GovernmentMap governments,
+        Dictionary<Title, int> development, RealmMap realms, GovernmentMap governments, FaithMap faiths,
         WildernessMap wilderness, BookmarkEras eras, string titleGrantDate,
         Dictionary<string, List<MapGen.PastRuler>> pastByTitle)
     {
@@ -1596,7 +1774,7 @@ public static class HistoryWriter
                         continue;
                     }
 
-                    string government = eraGovernments.For(holder);
+                    string government = TitleGovernment(eraGovernments.For(holder), holder, faiths);
                     string? liege = map.Liege.GetValueOrDefault(title)?.Key;
                     int eraLevel = BookmarkEras.EraDevelopment(level, cfg, year);
 

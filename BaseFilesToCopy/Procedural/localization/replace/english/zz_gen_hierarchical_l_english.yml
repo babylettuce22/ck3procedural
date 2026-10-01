@@ -1,0 +1,87 @@
+﻿l_english:
+ # Vanilla's ecclesiastical government, its sees and its clergy, re-worded for a world with no
+ # Christianity in it. Generated faiths with sees use ecclesiastical_government (ReligionWriter,
+ # HistoryWriter.SpiritualHeadGovernment), and vanilla describes that government, and the
+ # archbishops and archdioceses under it, as Christian throughout.
+ #
+ # The renames, all to the English words the generated sees already use (SeeWriter):
+ #   Ecclesiastical -> Hierarchical, Archdiocese -> See, Archbishop -> Hierarch, Bishop -> Prelate.
+ #
+ # Only the Procedural set ships this. A VanillaWorld map keeps the real Christian faiths, and
+ # there vanilla's text is right.
+ #
+ # Under localization/replace/ for the same reason as zz_gen_dynastic_cycle_l_english.yml: a
+ # mod's copy of a vanilla key anywhere else is logged as "Duplicate localization key".
+ #
+ # Written by hand: the names and the strings that said Christian. Vanilla strings that are only
+ # wrong because of the rename ("an [archbishop|E]" now reads "an Hierarch") are rewritten from the
+ # installed game by Emit/Culture/HierarchyFlavourWriter.cs, which skips every key in this file.
+ #
+ # Left Christian on purpose: everything behind a Christianity or Papacy check (the Christian
+ # Church situation, bulls, the ecumenical council, grand cathedrals, spiritual fulfilment).
+ # A generated world never reaches it. Tenets are out of scope too.
+ #
+ # The College of Cardinals is the exception: a generated faith with a spiritual head and 3+ sees
+ # elects that head through it, so it does run. Its words are in zz_gen_see_electors_l_english.yml
+ # (Cardinal -> Synod Hierarch, College of Cardinals -> Synod); only the tutorial step that
+ # points at it is here.
+
+ # ---- The government ----
+ ecclesiastical_government:0 "Hierarchical"
+ ecclesiastical_government_adjective:0 "Hierarchical"
+ ecclesiastical_government_realm:0 "Hierarchical"
+ ecclesiastical_government_desc:0 "\n$game_concept_ecclesiastical_desc$\n\n$theocratic_government_war_restriction_desc$\n\n#F In a hierarchical government, all authority belongs to an ordered priesthood, each rank answering to the one above it. It is ruled by a priest or priestess who carries out the will of the divine on Earth.#!"
+ ecclesiastical_government_vassals_label:0 "Hierarchical [obligations|E] are based on [piety_level|E] of [liege|E]"
+ ecclesiastical_government_obligations:0 "Hierarchical [obligations|E]"
+ ecclesiastical_lease:0 "Hierarchical Lease"
+
+ game_concept_ecclesiastical:0 "Hierarchical"
+ game_concept_ecclesiastical_government:0 "Hierarchical Government"
+ game_concept_ecclesiastical_desc:0 "$game_concept_ecclesiastical$ is a [theocratic|E] [government_form|E] held by the [clergy|E] of a [faith|E] that divides its lands into [clerical_regions|E], such as [bishops|E] and [archbishops|E].\n\nMost $game_concept_ecclesiastical$ rulers are theocratic [vassals|E] who [lease|E] their [temple_holdings|E] from a secular [liege|E] and answer to the [head_of_faith|E], although a [bishop|E] who possesses [landed|E] [titles|E] that are not [leased|E] may rule as an [independent|E] $game_concept_ecclesiastical$ [ruler|E] in their own right. The power such a ruler holds over their own [vassals|E] is determined by their [church_authority|E]."
+
+ # ---- The estate ----
+ # Spiritual fulfilment dropped from both descriptions: only Christianity has it.
+ game_concept_ecclesiastical_estate:0 "Hierarchical Estate"
+ game_concept_ecclesiastical_estates:0 "Hierarchical Estates"
+ game_concept_ecclesiastical_estate_building:0 "Hierarchical Estate Building"
+ game_concept_ecclesiastical_estate_buildings:0 "Hierarchical Estate Buildings"
+ ecclesiastical_domicile_domicile_type_possessive:0 "Hierarchical Estate's"
+ game_concept_ecclesiastical_estate_desc:0 "A $game_concept_ecclesiastical_estate$ is a type of [domicile|E] attached to a [clerical_title|E], representing the intimate landholdings of a [archbishop|E] and their [archdiocese|E]. Lesser [clergy|E] in a [ecclesiastical_government|E] must rise to such a [title|E] before they are granted one.\n\n[ecclesiastical_estate_buildings|E] may be constructed here to expand the holder's wealth and [piety|E]. The $game_concept_ecclesiastical_estate$ does not change location and will be inherited by the next title [holder|E]."
+ game_concept_ecclesiastical_estate_building_desc:0 "$game_concept_ecclesiastical_estate_buildings$ are unique and persistent improvements to a [ecclesiastical_estate|E].\n\nA large variety of structures are available for construction and may be built by the holder to generate private income and [piety|E], and gain access to a number of [decisions|E], [interactions|E], and more."
+
+ # ---- Sees, hierarchs and prelates ----
+ game_concept_archdiocese:0 "See"
+ game_concept_archdioceses:0 "Sees"
+ game_concept_archdiocese_desc:0 "A $game_concept_archdiocese$ is a [clerical_region|E] of a [faith|E] with an ordered hierarchy: a domain held by a [archbishop|E] through its [clerical_title|E] and seated in a capital [county|E].\n\nA [ruler|E] answers in spiritual matters to the [archbishop|E] of the $game_concept_archdiocese$ that contains their [capital|E] [county|E]."
+
+ game_concept_archbishop:0 "Hierarch"
+ game_concept_archbishops:0 "Hierarchs"
+ game_concept_archbishop_possessive:0 "Hierarch's"
+ game_concept_archbishops_possessive:0 "Hierarchs'"
+ game_concept_archbishop_desc:0 "A $game_concept_archbishop$ is the holder of a [archdiocese|E], a duchy-tier [clerical_title|E] whose [clerical_region|E] may span several [realms|E].\n\nAs the [religious_superior|E] of the [bishops|E] and lesser [clergy|E] within that region, a $game_concept_archbishop$ ranks above an ordinary [bishop|E] and answers in turn to the [head_of_faith|E]."
+
+ game_concept_bishop:0 "Prelate"
+ game_concept_bishops:0 "Prelates"
+ game_concept_bishop_possessive:0 "Prelate's"
+ game_concept_bishops_possessive:0 "Prelates'"
+ game_concept_bishop_desc:0 "A $game_concept_bishop$ belongs to the [clergy|E] of a [faith|E] with an ordered hierarchy, and holds or leases [temple_holdings|E].\n\nA $game_concept_bishop$ resides within a [archdiocese|E] and answers to the [archbishop|E] there as [religious_superior|E]. An unlanded $game_concept_bishop$ with [leased|E] titles serves under a secular [liege|E]; a $game_concept_bishop$ with unleased [landed|E] [titles|E] may rule as a [ecclesiastical|E] [ruler|E]."
+
+ game_concept_clerical_title_desc:0 "A $game_concept_clerical_title$ is a [title|E] of the [clergy|E] governing a [clerical_region|E] within a [faith|E]. In a faith with an ordered hierarchy this is a [archdiocese|E].\n\nThe holder is the [religious_superior|E] of the [clergy|E] in that region, and is usually appointed by the [head_of_faith|E]."
+
+ # ---- Tutorials ----
+ # The clerical-regions lesson fires when the map mode is opened; the ruler lesson fires for any
+ # ruler under this government (common/important_actions/00_reactive_advice.txt).
+ action_reactive_advice_clerical_regions_desc:0 "You have land inside of a [clerical_region|e]! You may have a [archbishop|e] presiding over ecclesiastical affairs in your [realm|e]. Let's take a moment to talk about what that means."
+ reactive_advice_clerical_regions_3_desc:0 "From here, you can see all the [clerical_regions|e] present in the world. These are administrative divisions within your [faith|e]. In a $game_concept_faith$ with an ordered hierarchy, these regions are called [archdioceses|e].\n\nIf you would like to switch back and forth between administrative layers, you can use #V E#! to view Realms on the map, and #V SHIFT+R#! to view $game_concept_clerical_regions$."
+ # The white peace clause is gone: that interaction is for Christians only.
+ reactive_advice_clerical_regions_4_desc:0 "A [clerical_region|e] is a geographic area held by a member of [clergy|e]. In a $game_concept_faith$ with an ordered hierarchy, these regions are called [archdioceses|e] and their [holders|e] are called [archbishops|e]. $game_concept_archbishops$ have access to a [domicile|e], which is inherited along with the $game_concept_clerical_region$ [title|e].\n\nAs a [secular_ruler|e], you want to keep an eye on the $game_concept_archbishop$ who presides over the $game_concept_clerical_region$ in which your [capital|e] is located.\n\nA $game_concept_archbishop$ can, for instance, increase your [legitimacy|e] through the #TUT_KW $request_legitimacy_interaction$#! [interaction|e], or make neighboring [titles|e] [de_jure|e] through #TUT_KW $ecclesiastical_de_jure_shifting_interaction$#!."
+ action_reactive_advice_ecclesiastical_ruler_desc:0 "You are a [ecclesiastical|e] [ruler|e]. This is a special kind of playable [theocracy|e] for [faiths|e] with an ordered hierarchy. Let's take a moment to go over what you can do."
+
+ # The College of Cardinals step shows only where the faith elects its head (a generated Synod
+ # does); otherwise it skips itself straight to the two after it. Vanilla's are about the Pope.
+ reactive_advice_ecclesiastical_ruler_open_cardinals:0 "Becoming the Head of Faith"
+ reactive_advice_ecclesiastical_ruler_open_cardinals_desc:0 "That's all well and good, but what if you want to become the [head_of_faith|e] yourself? Your [faith|e] elects its head, so we should take a look at the [college_of_cardinals|e]."
+ reactive_advice_ecclesiastical_ruler_2:0 "The Head of Faith"
+ reactive_advice_ecclesiastical_ruler_2_desc:0 "Above the [archbishops|e] stands the [head_of_faith|e], if your [faith|e] has one, and every $game_concept_archbishop$ answers to them as [religious_superior|e].\n\n[clerical_titles|e] are usually granted by the $game_concept_head_of_faith$, so their regard for you matters as you rise. Where the $game_concept_head_of_faith$ is elected, they are chosen from among the [cardinals|e], so a seat there comes first."
+ reactive_advice_ecclesiastical_ruler_3:0 "Leading Your Faith"
+ reactive_advice_ecclesiastical_ruler_3_desc:0 "If you'd rather your own [rite|e] led your [faith|e], you can make your own branched $game_concept_rite$ the new Mainline. There's a couple of ways to do this, depending on whether or not your $game_concept_faith$ has a [head_of_faith|e].\n\nWhen there is no $game_concept_head_of_faith$, your $game_concept_rite$ must have more [counties|e] following it, and it must control as many or more [holy_sites|e] as the current Mainline to overtake it.\n\nIf there #EMP is#! a $game_concept_head_of_faith$, the Mainline follows the $game_concept_rite$ of whoever holds that seat.\n\nAlternatively, if you're [heretical|e] enough, you can simply branch off and become the Head of your own brand-new $game_concept_faith$."

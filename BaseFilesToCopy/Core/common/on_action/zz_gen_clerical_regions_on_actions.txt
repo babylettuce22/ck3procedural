@@ -1,0 +1,45 @@
+﻿# Sees for a generated faith that reforms in play.
+#
+# ---- What this is ----
+#
+# A generated faith gets the clerical-regions doctrine (special_doctrine_gen_clerical_regions, which
+# carries has_clerical_regions) when the generator writes it organised and of a religion with an
+# institutional clergy (MapGen/Peoples/Sees.cs, Eligible). Every vanilla see interaction -- Request
+# Ecclesiastical Title Creation, grant, split, merge -- tests that parameter, so such a faith can found
+# sees in play once its lords hold duchies.
+#
+# An unreformed faith has no doctrine, rightly: it has no hierarchy yet. Reforming it creates a new
+# faith (on_faith_created, root the new faith), which copies the old one's doctrines and so arrives
+# without the doctrine too. This hands the doctrine to that new faith when it is a generated one
+# (gen_settled_doctrine, on every generated religion) of a religion whose clergy is not lay, led by a
+# spiritual head of faith, which is the same test the generator applies (Sees.Eligible): in vanilla
+# only the churches with a Pope or a patriarch have sees. A lay-clergy religion stays without, as
+# Islam does in vanilla, and so does a faith with no head or a temporal one.
+#
+# Its religion already names ecclesiastical government for its theocrats (religion_details, written by
+# ReligionWriter for every institutional religion while generated sees are on), so the archbishops it
+# creates are ecclesiastical.
+#
+# add_doctrine reaches only the main rite (vanilla's own note in pam_investiture_council_effects.txt),
+# so every other rite is given it with change_rite_doctrine, as vanilla resolves the investiture crisis.
+
+on_faith_created = {
+	on_actions = { gen_faith_created_clerical_regions }
+}
+
+gen_faith_created_clerical_regions = {
+	trigger = {
+		has_doctrine = gen_settled_doctrine
+		NOT = { has_doctrine = unreformed_faith_doctrine }
+		NOT = { has_doctrine = special_doctrine_gen_clerical_regions }
+		NOT = { main_rite = { rite_has_doctrine = doctrine_theocracy_lay_clergy } }
+		has_doctrine = doctrine_spiritual_head
+	}
+	effect = {
+		add_doctrine = special_doctrine_gen_clerical_regions
+		every_faith_rite = {
+			limit = { NOT = { rite_has_doctrine = special_doctrine_gen_clerical_regions } }
+			change_rite_doctrine = special_doctrine_gen_clerical_regions
+		}
+	}
+}

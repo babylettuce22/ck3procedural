@@ -18,6 +18,8 @@ a file's path below the set folder is its path in the mod.
             gfx/interface/icons/traits/
             gfx/portraits/portrait_modifiers/
             localization/english/...
+        Procedural/                                 copied unless Content Source is VanillaWorld
+            localization/replace/english/...
 
 Two rules:
   - A file the pipeline generated always wins. The copy never overwrites, so putting a file here
@@ -99,3 +101,11 @@ What the generator emits alongside it, and which these files therefore assume ex
     the showing-horns triggers from this set's scripted triggers
 
 The same no-generated-keys rule as Wilderness applies: this set ships identically for every seed.
+
+--- Procedural ---
+
+Overrides that are only right when the world has no vanilla peoples in it. Today that is the
+ecclesiastical government re-worded without Christianity: Hierarchical government, See, Hierarch,
+Prelate, and the tutorials and concept tooltips that said Christian. Emit/Culture/
+HierarchyFlavourWriter.cs writes the generated half under the same condition. VanillaWorld keeps
+the real Christian faiths, so vanilla's text is right there and this set is withheld.

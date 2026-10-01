@@ -1,0 +1,139 @@
+﻿# A generated faith's archbishops elect its head of faith. See
+# common/scripted_effects/zz_gen_see_electors_effects.txt for how the election works.
+#
+# On every title gain by a character of an electing generated faith:
+#  - the head-of-faith title: the election law again (vanilla re-grants it for k_papal_state in
+#    title_on_actions.txt), and any see the new head held besides the primate see goes, with its
+#    Synod Seat, to a new archbishop. The primate see is the one seated where the head-of-faith title
+#    is, and it follows the head-of-faith title (always_follows_primary_heir).
+#  - a see (it names its seat in var:gen_synod_seat): its Synod Seat follows it to the same holder,
+#    but only to one of the seat's own faith (var:gen_synod_faith). A see revoked, granted or
+#    inherited into another faith leaves the seat with its current holder when he is of that faith,
+#    and otherwise gives it to a new archbishop of that faith (gen_synod_seat_fresh_holder_effect):
+#    no foreign ruler ever votes, and the electorate keeps its size (the user's choice, 2026-09-30;
+#    qw's d_et_gen_2 was revoked to a rival faith's courtier in 1068 and took its vote along).
+#  - a Synod Seat (it names its see in var:gen_synod_see) gained by anyone but the see's holder, as
+#    its own succession may hand it to a dead archbishop's heir: it goes back to the see's holder when
+#    he is of the seat's faith, and to a new archbishop when its new holder is not.
+#
+# A seat with no var:gen_synod_faith (a world generated before it existed) follows its see as before.
+#
+# Sees founded in play have no seat, so they do not vote; only the generated sees do.
+#
+# The head-of-faith branch is only for faiths carrying gen_settled_doctrine (every generated
+# religion's) and the clerical-regions doctrine; the seat branches only touch our own titles. Vanilla's
+# Papacy is never touched.
+#
+# A seat holder who converts away gains no title, so on_faith_conversion catches him: any seat he holds
+# in a faith he has left goes to a new archbishop of its faith. (A yearly sweep cannot stand in for it:
+# every_clerical_elector_title only walks active seats, and a foreign-held one may not be.)
+
+on_title_gain = {
+	on_actions = { gen_see_electors_title_gain }
+}
+
+on_faith_conversion = {
+	on_actions = { gen_see_electors_faith_conversion }
+}
+
+# Root: the character who converted.
+gen_see_electors_faith_conversion = {
+	trigger = {
+		any_held_title = {
+			has_variable = gen_synod_faith
+			NOT = { var:gen_synod_faith = root.faith }
+		}
+	}
+	effect = {
+		every_held_title = {
+			limit = {
+				has_variable = gen_synod_faith
+				NOT = { var:gen_synod_faith = root.faith }
+			}
+			save_scope_as = gen_converted_seat
+			gen_synod_seat_fresh_holder_effect = { SEAT = scope:gen_converted_seat }
+		}
+	}
+}
+
+gen_see_electors_title_gain = {
+	trigger = {
+		exists = scope:title
+		OR = {
+			faith = {
+				has_doctrine = gen_settled_doctrine
+				has_doctrine = special_doctrine_gen_clerical_regions
+				has_doctrine_parameter = has_clerical_electors
+			}
+			scope:title = { has_variable = gen_synod_seat }
+			scope:title = { has_variable = gen_synod_see }
+		}
+	}
+	effect = {
+		if = {
+			limit = {
+				scope:title = { is_head_of_faith = yes }
+				faith = {
+					has_doctrine = gen_settled_doctrine
+					has_doctrine = special_doctrine_gen_clerical_regions
+					has_doctrine_parameter = has_clerical_electors
+				}
+			}
+			gen_see_electors_grant_law_effect = yes
+			every_held_title = {
+				limit = {
+					has_clerical_region = yes
+					title_capital_county != scope:title.title_capital_county
+				}
+				gen_see_electors_release_see_effect = yes
+			}
+		}
+		# A see changed hands: its seat follows, if the new holder may vote in the seat's faith.
+		if = {
+			limit = {
+				scope:title = { has_variable = gen_synod_seat }
+				scope:title.var:gen_synod_seat = { NOT = { holder ?= root } }
+			}
+			scope:title.var:gen_synod_seat = { save_scope_as = gen_moving_seat }
+			if = {
+				limit = {
+					OR = {
+						NOT = { scope:gen_moving_seat = { has_variable = gen_synod_faith } }
+						faith = scope:gen_moving_seat.var:gen_synod_faith
+					}
+				}
+				gen_synod_seat_transfer_effect = { SEAT = scope:gen_moving_seat HOLDER = root }
+			}
+			else_if = {
+				limit = {
+					NOT = {
+						scope:gen_moving_seat.holder ?= { faith = scope:gen_moving_seat.var:gen_synod_faith }
+					}
+				}
+				gen_synod_seat_fresh_holder_effect = { SEAT = scope:gen_moving_seat }
+			}
+		}
+		# A seat changed hands apart from its see.
+		if = {
+			limit = { scope:title = { has_variable = gen_synod_see } }
+			if = {
+				limit = {
+					exists = scope:title.var:gen_synod_see.holder
+					NOT = { scope:title.var:gen_synod_see.holder = root }
+					OR = {
+						NOT = { scope:title = { has_variable = gen_synod_faith } }
+						scope:title.var:gen_synod_see.holder = { faith = scope:title.var:gen_synod_faith }
+					}
+				}
+				gen_synod_seat_transfer_effect = { SEAT = scope:title HOLDER = scope:title.var:gen_synod_see.holder }
+			}
+			else_if = {
+				limit = {
+					scope:title = { has_variable = gen_synod_faith }
+					NOT = { faith = scope:title.var:gen_synod_faith }
+				}
+				gen_synod_seat_fresh_holder_effect = { SEAT = scope:title }
+			}
+		}
+	}
+}

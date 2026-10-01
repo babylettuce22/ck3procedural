@@ -1,0 +1,25 @@
+﻿# Vanilla's portrait_is_cardinal_trigger (common/scripted_triggers/00_clothing_triggers.txt, 1.20.0.2),
+# copied whole, with one addition: only a Christian holds the cardinal look.
+#
+# Vanilla dresses anyone holding a clerical elector title in the Catholic cardinal's robes and hat
+# (03_clothes_religious.txt, 03_headgear_religious.txt, 06_cloaks_special.txt and the portrait
+# animations all key on this trigger), with no faith check, because only the Catholic Church has
+# electors there. Generated Synod faiths make their archbishops electors (the see-electors plan), so
+# their clergy came out as Roman cardinals (qw 2026-09-30, "not very thematic"). Vanilla's own
+# Christian archbishop outfits already require portrait_religious_christian_trigger; this matches them.
+#
+# scripted_triggers has no subfolders in vanilla, so this top-level zz_ file wins the override.
+# Re-copy on a patch that changes the vanilla trigger.
+
+portrait_is_cardinal_trigger = {
+	exists = this
+	has_pam_dlc_trigger = yes
+	exists = clerical_elector_title
+	religion = religion:christianity_religion
+	portrait_religious_head_no_poverty_trigger = no
+	NOT = {
+		rite = {
+			rite_has_parameter = vows_of_poverty_active
+		}
+	}
+}

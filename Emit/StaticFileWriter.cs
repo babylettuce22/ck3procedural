@@ -71,6 +71,14 @@ public static class StaticFileWriter
     public const string SocietyPrototype = "SocietyPrototype";
 
     /// <summary>
+    /// Overrides that are right only for a world with no vanilla peoples in it: today, the
+    /// ecclesiastical government and its clergy re-worded without Christianity. Shipped unless
+    /// Content Source is VanillaWorld, whose real Christian faiths need vanilla's text.
+    /// <see cref="HierarchyFlavourWriter"/> writes the generated half under the same condition.
+    /// </summary>
+    public const string Procedural = "Procedural";
+
+    /// <summary>
     /// Files that document or configure a set rather than belong in a mod.
     /// </summary>
     private static readonly string[] NotModContent = ["README.txt", "ignore.txt", ".ignore.txt"];

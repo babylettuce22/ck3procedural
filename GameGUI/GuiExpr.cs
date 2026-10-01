@@ -63,6 +63,9 @@ public sealed class GuiExpr
 
     public static GuiExpr StringIsEmpty(GuiExpr value) => new($"StringIsEmpty( {value.Inner} )");
 
+    /// <summary>String equality, vanilla's <c>EqualTo_string</c> (used 142 times in its own GUI).</summary>
+    public static GuiExpr StringEquals(GuiExpr a, GuiExpr b) => new($"EqualTo_string( {a.Inner}, {b.Inner} )");
+
     /// <summary>A single-quoted literal, which is how the engine takes string arguments.</summary>
     public static GuiExpr Literal(string text) => new($"'{text}'");
 

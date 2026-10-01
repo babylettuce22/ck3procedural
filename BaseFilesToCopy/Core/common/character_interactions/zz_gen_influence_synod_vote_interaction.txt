@@ -1,0 +1,475 @@
+﻿# Influence Synod Vote: vanilla's influence_papal_vote_interaction (common/character_interactions/
+# pam_interactions.txt, 1.20.0.2), copied whole as a single-object override, with one change in
+# is_available, marked below.
+#
+# A generated faith whose archbishops elect its head (zz_gen_see_electors_effects.txt) runs vanilla's
+# College, but vanilla lets a voter be lobbied only when title:k_papal_state's holder heads the faith
+# or rite (pam_pope_is_head_of_faith_or_rite_trigger). Only this interaction is opened: that trigger
+# has 16 call sites (cardinal appointment, the papal seed effects), and widening it is the open
+# follow-up the user asked for, not done here. The Legation Office (chancery_legation_01), which
+# cheapens these votes, is gated to match by Emit/Culture/HierarchyFlavourWriter.cs: change the two
+# together.
+#
+# If a patch changes the vanilla interaction, re-copy it and redo the marked change.
+
+influence_papal_vote_interaction = {
+	category = interaction_category_religion
+	icon = influence_papal_vote_interaction
+	common_interaction = no
+	interface_priority = 74
+
+	filter_tags = { papabile }
+
+	use_diplomatic_range = yes
+	ai_maybe = yes
+	ai_min_reply_days = 1
+	ai_max_reply_days = 5
+	popup_on_receive = yes
+
+	cooldown_against_recipient = { years = 10 }
+
+	desc = influence_papal_vote_interaction_desc
+	notification_text = influence_papal_vote_interaction_notification
+
+	is_available = {
+		faith = { has_doctrine_parameter = has_clerical_electors }
+		# Changed from vanilla: a generated faith whose archbishops elect its head may lobby its
+		# Synod too. Vanilla asks for the Papacy here, which no generated world has.
+		OR = {
+			pam_pope_is_head_of_faith_or_rite_trigger = yes
+			faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+		}
+		is_adult = yes
+		NOR = {
+			government_has_flag = government_is_mercenary
+			government_has_flag = government_is_herder
+		}
+		has_pam_dlc_trigger = yes
+	}
+
+	is_shown = {
+		scope:recipient = {
+			faith ?= scope:actor.faith
+			exists = clerical_elector_title
+			is_ruler = yes
+			is_adult = yes
+			this != scope:actor
+		}
+	}
+
+	populate_recipient_list = {
+		scope:actor.faith = {
+			every_clerical_elector_title = {
+				holder ?= {
+					if = {
+						limit = {
+							this != scope:recipient
+							this != scope:actor
+							NOT = { scope:actor.faith.religious_head ?= this }
+							is_alive = yes
+							is_papabile = yes
+						}
+						add_to_list = characters
+					}
+				}
+			}
+		}
+	}
+
+	is_valid_showing_failures_only = {
+		scope:actor = {
+			is_imprisoned = no
+			is_at_war = no
+			is_incapable = no
+			piety_level >= high_piety_level
+		}
+		scope:recipient = {
+			is_imprisoned = no
+			is_at_war = no
+			is_incapable = no
+			NOT = { has_trait = excommunicated }
+		}
+	}
+
+	send_option = {
+		is_valid = {
+			scope:actor = {
+				has_usable_hook = scope:recipient
+			}
+			scope:recipient = {
+				NOT = { is_imprisoned_by = scope:actor }
+			}
+		}
+		flag = hook
+		localization = SCHEME_HOOK
+	}
+	should_use_extra_icon = {
+		scope:actor = { has_usable_hook = scope:recipient }
+	}
+	extra_icon = "gfx/interface/icons/character_interactions/hook_icon.dds"
+
+	send_option = {
+		flag = pam_papal_vote_bribe
+		localization = influence_papal_vote_bribe_option_desc
+		is_valid = {
+			scope:actor = { gold >= major_gold_value }
+		}
+	}
+	send_options_exclusive = no
+
+	cost = {
+		piety = {
+			value = major_piety_value
+			if = {
+				limit = {
+					scope:actor = {
+						domicile ?= { has_domicile_parameter = estate_cheaper_papal_vote }
+					}
+				}
+				multiply = ecclesiastical_domicile_cheaper_papal_vote_mult
+			}
+		}
+	}
+
+	auto_accept = {
+		custom_tooltip = {
+			text = influence_papal_vote_autoaccept_tt
+			OR = {
+				custom_description = {
+					text = "spending_hook"
+					subject = scope:actor
+					object = scope:recipient
+					scope:hook = yes
+					scope:actor = { has_strong_hook = scope:recipient }
+				}
+				custom_description = {
+					text = "influence_papal_vote_is_puppet_tt"
+					scope:recipient.puppeteer ?= scope:actor
+				}
+			}
+		}
+	}
+
+	on_accept = {
+		scope:actor = {
+			if = {
+				limit = {
+					scope:hook = yes
+					has_usable_hook = scope:recipient
+				}
+				use_hook = scope:recipient
+			}
+			send_interface_toast = {
+				type = event_toast_effect_good
+				title = influence_papal_vote_interaction_toast
+				left_icon = scope:actor
+				right_icon = scope:recipient
+				custom_tooltip = influence_papal_vote_interaction_tt
+				scope:recipient = {
+					set_variable = {
+						name = pam_forced_papal_vote_target
+						value = scope:secondary_recipient
+						years = 20
+					}
+					# Rather than waiting for the next AI tick, force update views immediately
+					hidden_effect = {
+						recalculate_succession_election_vote = yes
+					}
+				}
+				if = {
+					limit = { scope:pam_papal_vote_bribe = yes }
+					pay_short_term_gold = {
+						target = scope:recipient
+						gold = major_gold_value
+					}
+				}
+			}
+		}
+		if = {
+			limit = {
+				exists = scope:actor.top_participant_group:the_christian_church
+				scope:actor = {
+					NOT = { government_has_flag = government_is_theocracy }
+				}
+				situation:the_christian_church ?= {
+					situation_top_has_catalyst = catalyst_secular_interference_in_papal_election
+				}
+			}
+			situation:the_christian_church = {
+				trigger_situation_catalyst = catalyst_secular_interference_in_papal_election
+			}
+		}
+	}
+
+	on_decline = {
+		scope:actor = {
+			send_interface_toast = {
+				type = event_toast_effect_bad
+				title = influence_papal_vote_interaction_decline_toast
+				right_icon = scope:recipient
+				scope:recipient = {
+					add_opinion = {
+						target = scope:actor
+						modifier = annoyed_opinion
+						opinion = -10
+					}
+				}
+			}
+		}
+	}
+
+	ai_accept = {
+		base = -80
+
+		opinion_modifier = {
+			who = scope:recipient
+			opinion_target = scope:actor
+			multiplier = 0.5
+			desc = AI_OPINION_REASON
+		}
+
+		modifier = { # Your Intrigue
+			add = {
+				value = scope:actor.intrigue
+				multiply = 1.5
+			}
+			desc = INTERACTION_ACTOR_INTRIGUE
+		}
+
+		modifier = { # Court of Shadows
+			add = 20
+			scope:actor = { has_perk = court_of_shadows_perk }
+			desc = COURT_OF_SHADOWS_PAPAL_VOTE_REASON
+		}
+
+		modifier = {
+			add = ecclesiastical_domicile_acceptance_value_1
+			desc = ESTATE_PAPAL_VOTE_REASON
+			scope:actor = {
+				domicile ?= {
+					has_domicile_parameter = estate_easier_papal_vote_1
+				}
+			}
+		}
+		modifier = {
+			add = ecclesiastical_domicile_acceptance_value_2
+			desc = ESTATE_PAPAL_VOTE_REASON
+			scope:actor = {
+				domicile ?= {
+					has_domicile_parameter = estate_easier_papal_vote_2
+				}
+			}
+		}
+		modifier = {
+			add = ecclesiastical_domicile_acceptance_value_3
+			desc = ESTATE_PAPAL_VOTE_REASON
+			scope:actor = {
+				domicile ?= {
+					has_domicile_parameter = estate_easier_papal_vote_3
+				}
+			}
+		}
+		modifier = {
+			add = ecclesiastical_domicile_acceptance_minor_value_1
+			desc = ESTATE_ELECTION_COFFERS_REASON
+			scope:actor = {
+				domicile ?= {
+					has_domicile_parameter = estate_papal_vote_coffers_1
+				}
+			}
+		}
+		modifier = {
+			add = ecclesiastical_domicile_acceptance_minor_value_2
+			desc = ESTATE_ELECTION_COFFERS_REASON
+			scope:actor = {
+				domicile ?= {
+					has_domicile_parameter = estate_papal_vote_coffers_2
+				}
+			}
+		}
+		modifier = {
+			add = ecclesiastical_domicile_acceptance_minor_value_3
+			desc = ESTATE_ELECTION_COFFERS_REASON
+			scope:actor = {
+				domicile ?= {
+					has_domicile_parameter = estate_papal_vote_coffers_3
+				}
+			}
+		}
+		ecclesiastical_domicile_cathedral_awe_modifier = yes
+
+		modifier = { # Used a hook
+			scope:hook = yes
+			add = 50
+			scope:actor = { NOT = { has_strong_hook = scope:recipient } }
+			desc = SCHEME_WEAK_HOOK_USED
+		}
+
+		modifier = { # Bribe + they're greedy
+			add = 80
+			scope:pam_papal_vote_bribe = yes
+			scope:recipient = { ai_greed >= 20 }
+			desc = AI_GREED_REASON
+		}
+
+		modifier = { # Bribe
+			add = 40
+			scope:pam_papal_vote_bribe = yes
+			scope:recipient = {
+				ai_greed < 20
+			}
+			desc = AI_BRIBE_REASON
+		}
+
+		modifier = { # Dread
+			add = 50
+			scope:recipient = {
+				has_dread_level_towards = {
+					target = scope:actor
+					level = 2
+				}
+			}
+			desc = COWED_REASON
+		}
+
+		modifier = { # Dread
+			add = 25
+			scope:recipient = {
+				has_dread_level_towards = {
+					target = scope:actor
+					level = 1
+				}
+			}
+			desc = INTIMIDATED_REASON
+		}
+
+		modifier = { # Friends
+			add = 80
+			scope:recipient = {
+				OR = {
+					has_relation_friend = scope:actor
+					has_relation_lover = scope:actor
+				}
+			}
+			desc = WE_ARE_FRIENDS
+		}
+
+		modifier = { # BFFs
+			add = 40
+			scope:recipient = { has_relation_best_friend = scope:actor }
+			desc = WE_ARE_BEST_FRIENDS
+		}
+		
+		modifier = { # Dynasty
+			add = 80
+			scope:recipient.dynasty ?= scope:actor.dynasty
+			desc = AI_SAME_DYNASTY_REASON
+		}
+		
+		modifier = { # Close Family
+			add = 100
+			scope:recipient = {
+				is_close_family_of = scope:actor
+			}
+			desc = AI_FAMILY_REASON
+		}
+
+		modifier = { # They like who you're asking them to vote for
+			add = 25
+			exists = scope:secondary_recipient
+			scope:recipient = {
+				opinion = {
+					target = scope:secondary_recipient
+					value >= 50
+				}
+			}
+			desc = INFLUENCE_PAPAL_VOTE_LIKES_CANDIDATE_REASON
+		}
+
+		modifier = { # They're just
+			add = -30
+			scope:recipient = { has_trait = just }
+			desc = INFLUENCE_PAPAL_VOTE_JUST_REASON
+		}
+
+		modifier = { # They're pious
+			add = {
+				value = scope:recipient.piety_level
+				multiply = -15
+			}
+			scope:recipient.piety_level > 0
+			desc = RECIPIENT_IS_PIOUS
+		}
+
+		modifier = { # They're rivals with the candidate
+			add = -50
+			exists = scope:secondary_recipient
+			scope:recipient = { has_relation_rival = scope:secondary_recipient }
+			desc = INFLUENCE_PAPAL_VOTE_RIVAL_CANDIDATE_REASON
+		}
+
+		modifier = { # You're sinful
+			add = {
+				value = scope:actor.num_sinful_traits
+				multiply = -10
+			}
+			scope:actor.num_sinful_traits > 0
+			desc = I_AM_SINFUL
+		}
+	}
+
+	ai_targets = {
+		ai_recipients = rulers_in_clerical_region
+		max = 5
+	}
+	
+	ai_targets = {
+		ai_recipients = clerical_region_rulers_in_realm
+		ai_recipients = puppets
+	}
+
+	ai_target_quick_trigger = {
+		adult = yes
+	}
+
+	ai_frequency_by_tier = {
+		barony = 0
+		county = 0
+		duchy = 72
+		kingdom = 48
+		empire = 36
+		hegemony = 36
+	}
+
+	ai_will_do = {
+		base = 0
+
+		modifier = {
+			add = 20
+			OR = {
+				has_usable_hook = scope:recipient
+				scope:recipient.puppeteer ?= this
+			}
+			OR = {
+				has_trait = ambitious
+				has_trait = deceitful
+				has_trait = cynical
+			}
+		}
+
+		modifier = {
+			factor = 0
+			piety_level < high_piety_level
+		}
+
+		modifier = {
+			factor = 0
+			exists = clerical_elector_title
+		}
+
+		modifier = {
+			factor = 0
+			piety < major_piety_value
+		}
+	}
+}

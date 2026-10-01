@@ -1,0 +1,173 @@
+﻿# What founding, splitting and merging sees costs, for generated faiths as for Christian ones.
+#
+# Single-object overrides of six script values from common/script_values/pam_values.txt (1.20.0.2).
+# Script values are last-wins and this directory has no subfolders, so a zz_ file here replaces them
+# without touching the vanilla file. Each is vanilla's own, word for word, but for its county filter.
+#
+# ---- Why ----
+#
+# Vanilla prices every see interaction in piety per county of the region concerned, counting only
+# counties whose faith is of religion:christianity_religion, the one religion it gives sees. A
+# generated faith with sees (special_doctrine_gen_clerical_regions, see MapGen/Peoples/Sees.cs) gets
+# the same interactions, but none of its counties is Christian, so every price came to 0 and a duke
+# could found, split and merge sees for nothing -- the AI included, which values them highly. The
+# filter now also counts a county of a faith with that doctrine. A world with no such faith prices
+# exactly as vanilla does.
+#
+# If a patch changes one of these values, re-copy it from pam_values.txt and widen its filter again.
+
+pam_request_ecclesiastical_title_split_cost_value = {
+	value = 0
+
+	# We charge piety per Christian de jure county
+	# A secular duke or above uses their own primary title, otherwise the liege's
+	if = {
+		limit = {
+			scope:puppet_or_actor ?= {
+				NOT = { pam_government_is_religious_playable_trigger = yes }
+				is_landed = yes
+				highest_held_title_tier >= tier_duchy
+			}
+		}
+		add = {
+			scope:puppet_or_actor.primary_title = {
+				every_de_jure_county = {
+					limit = {
+						OR = {
+							faith.religion = religion:christianity_religion
+							faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+						}
+					}
+					add = minor_piety_value
+				}
+			}
+		}
+	}
+	else = {
+		add = {
+			scope:puppet_or_actor.liege.primary_title = {
+				every_de_jure_county = {
+					limit = {
+						OR = {
+							faith.religion = religion:christianity_religion
+							faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+						}
+					}
+					add = minor_piety_value
+				}
+			}
+		}
+	}
+}
+
+pam_new_clerical_region_cost_value = {
+	value = 0
+
+	# create_clerical_region always uses the de jure kingdom of the title you pick, whatever its tier
+	if = {
+		limit = {
+			exists = scope:target
+			exists = scope:target.title_capital_county
+			exists = scope:target.title_capital_county.kingdom
+		}
+		add = {
+			scope:target.title_capital_county.kingdom = {
+				every_de_jure_county = {
+					limit = {
+						OR = {
+							faith.religion = religion:christianity_religion
+							faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+						}
+						NOT = { exists = clerical_region_title }
+					}
+					add = minor_piety_value
+				}
+			}
+		}
+	}
+}
+
+pam_split_ecclesiastical_title_cost_value = {
+	value = 0
+
+	# Piety cost for each Christian de jure county in the chosen secular ruler's primary title
+	add = {
+		scope:secondary_actor.primary_title ?= {
+			every_de_jure_county = {
+				limit = {
+					OR = {
+						faith.religion = religion:christianity_religion
+						faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+					}
+				}
+				add = minor_piety_value
+			}
+		}
+	}
+}
+
+pam_new_ecclesiastical_title_cost_value = {
+	value = 0
+
+	# * piety cost for each Christian county in the title
+	if = {
+		limit = { exists = scope:target }
+		add = {
+			scope:target = {
+				every_de_jure_county = {
+					limit = {
+						OR = {
+							faith.religion = religion:christianity_religion
+							faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+						}
+					}
+					add = minor_piety_value
+				}
+			}
+		}
+	}
+}
+
+pam_request_ecclesiastical_title_merger_cost_value = {
+	value = 0
+
+	# Exact piety cost per Christian county in the selected absorbed clerical region; guarded for when scope:target is not yet set (pre-selection tooltip)
+	if = {
+		limit = { exists = scope:target }
+		add = {
+			scope:target = {
+				every_county_in_clerical_region = {
+					limit = {
+						OR = {
+							faith.religion = religion:christianity_religion
+							faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+						}
+					}
+					add = medium_piety_value
+				}
+			}
+		}
+	}
+}
+
+pam_merge_new_ecclesiastical_title_cost_value = {
+	value = 0
+
+	# Piety cost for each Christian county in the absorbed clerical region
+	if = {
+		limit = { exists = scope:target }
+		add = {
+			scope:target = {
+				every_county_in_clerical_region = {
+					limit = {
+						OR = {
+							faith.religion = religion:christianity_religion
+							faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+						}
+					}
+					add = minor_piety_value
+				}
+			}
+		}
+	}
+}

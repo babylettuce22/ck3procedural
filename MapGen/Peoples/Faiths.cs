@@ -57,8 +57,34 @@ public sealed class Faith
 
     public HeadOfFaith? Head { get; set; }
 
-    /// <summary>This faith's clerical regions, empty for most. Built by <see cref="MapGen.Sees"/>.</summary>
+    /// <summary>
+    /// This faith's clerical regions on the start date, empty for most. Built by <see cref="MapGen.Sees"/>,
+    /// which also records where each stands on the additional bookmarks (<see cref="See.Eras"/>).
+    /// </summary>
     public List<See> Sees { get; } = [];
+
+    /// <summary>
+    /// Sees that stand on an additional bookmark but not on the start date: founded later, or gone by
+    /// then. Their <see cref="See.Counties"/> is empty and <see cref="See.Eras"/> says where they stand.
+    /// </summary>
+    public List<See> EraSees { get; } = [];
+
+    /// <summary>Every see this faith has on any date: the start date's, then the other bookmarks' own.</summary>
+    public IEnumerable<See> AllSees => Sees.Concat(EraSees);
+
+    /// <summary>
+    /// The faith has an ecclesiastical hierarchy: it carries the clerical-regions doctrine, so it may
+    /// found sees in play whether or not it holds any yet, and its theocrats are ecclesiastical. Set
+    /// by <see cref="MapGen.Sees.Build"/> for every eligible faith while generated sees are on.
+    /// </summary>
+    public bool HasClericalRegions { get; set; }
+
+    /// <summary>
+    /// Its archbishops elect its head of faith, through vanilla's College (theocratic_elective): every
+    /// see is an elector title. A faith with clerical regions, a spiritual head and at least
+    /// <see cref="MapGen.Sees.MinElectorSees"/> sees on the start date. Set by <see cref="MapGen.Sees.Build"/>.
+    /// </summary>
+    public bool HasElectors { get; set; }
 
     /// <summary>
     /// Regional rites founded by this faith's great sees. The main rite, keyed like the faith, is not
@@ -194,10 +220,16 @@ public sealed class Religion
     public SeeWords? SeeWords { get; set; }
 
     /// <summary>
-    /// True when one of its faiths has clerical regions. Such a religion names ecclesiastical
-    /// government as its theocracy (see ReligionWriter), as vanilla's Christianity does.
+    /// True when one of its faiths has clerical regions on any bookmark.
     /// </summary>
-    public bool HasSees => Faiths.Any(f => f.Sees.Count > 0);
+    public bool HasSees => Faiths.Any(f => f.Sees.Count > 0 || f.EraSees.Count > 0);
+
+    /// <summary>
+    /// Its theocrats are ecclesiastical, as Christianity's are: an institutional clergy while generated
+    /// sees are on, whether or not a faith of it holds sees yet, since an unreformed one that reforms in
+    /// play founds them. Set by <see cref="MapGen.Sees.Build"/>.
+    /// </summary>
+    public bool Ecclesiastical { get; set; }
 }
 
 public sealed class FaithMap
@@ -609,8 +641,17 @@ public static class Faiths
                 // An Abrahamic-shaped religion organises every faith: it has no pagan roots for the
                 // unreformed doctrine's reform flow to stand on, and it was only given the shape
                 // because its land as a whole is settled enough that this rarely overrides anything.
+                //
+                // A faith with a real stake in theocratic land is organised too, however tribal the
+                // rest of it is: a realm run by its priests is an institutional church, and an
+                // unreformed one left the Azgaar "See of Putumn" (Ondrerol, 2026-09-30) a theocracy
+                // whose own faith had no hierarchy, so it got no sees while two minority faiths in
+                // its borders did. Vanilla never pairs theocracy with an unreformed faith. Three
+                // counties, so a stray county inside another faith's theocracy does not reform a
+                // whole faith. Generated worlds never assign theocracy, so they are unchanged.
                 faith.IsOrganized = religion.Abrahamic
-                    || TribalShare(faith.Counties) < cfg.UnreformedTribalShare;
+                    || TribalShare(faith.Counties) < cfg.UnreformedTribalShare
+                    || faith.Counties.Count(c => governments.For(c) == GovernmentMap.Theocracy) >= 3;
                 religion.Faiths.Add(faith);
                 faiths.Add(faith);
             }

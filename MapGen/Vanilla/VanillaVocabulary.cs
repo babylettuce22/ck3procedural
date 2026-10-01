@@ -54,6 +54,15 @@ public sealed class VanillaVocabulary
     /// </summary>
     public Dictionary<string, HouseFrame> HouseFrames { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// Vanilla culture key to its heritage pillar, and heritage pillar to its
+    /// <c>audio_parameter</c> (european, mena, byzantine, indian, sea). Together they let a
+    /// generated heritage take the court/lobby ambience of the vanilla culture its look was
+    /// borrowed from. Side tables for the same reason as <see cref="HouseFrames"/>.
+    /// </summary>
+    public Dictionary<string, string> CultureHeritages { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> HeritageAudio { get; } = new(StringComparer.Ordinal);
+
     public List<string> FaithIcons { get; } = [];
 
     /// <summary>
@@ -387,6 +396,10 @@ public sealed class VanillaVocabulary
                     case "martial_custom": MartialCustoms.Add(key); break;
                     case "head_determination": HeadDeterminations.Add(key); break;
 
+                    case "heritage":
+                        if (Line(body, "audio_parameter") is { } audio) HeritageAudio[key] = audio;
+                        break;
+
                     case "language":
                         var color = Regex.Match(body, @"^\s*color\s*=\s*(\w+)\s*$",
                             RegexOptions.Multiline);
@@ -423,6 +436,8 @@ public sealed class VanillaVocabulary
                 if (traditionBlock is not null)
                     foreach (Match m in Regex.Matches(traditionBlock, @"\btradition_\w+"))
                         traditions.Add(m.Value);
+
+                if (Line(body, "heritage") is { } heritage) CultureHeritages[key] = heritage;
 
                 string? coa = Line(body, "coa_gfx");
                 string? building = Line(body, "building_gfx");

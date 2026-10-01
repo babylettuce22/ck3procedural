@@ -3,3 +3,5 @@
  special_doctrine_gen_clerical_regions_name:0 "Ordered Hierarchy"
  special_doctrine_gen_clerical_regions_desc:0 "The faith's clergy answer to archbishops, each holding a see over the lands around it."
  gen_clerical_regions_name:0 "Ecclesiastical Hierarchy"
+ # A generated Synod Seat's rank word, common/flavorization/zz_gen_synod_seat_flavorization.txt.
+ gen_synod_seat_title:0 "Synod Seat"

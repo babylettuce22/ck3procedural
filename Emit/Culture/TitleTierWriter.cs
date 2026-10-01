@@ -110,6 +110,17 @@ public static class TitleTierWriter
         .. AdminLike, FeudalLike, TribalLike, Token(GovernmentMap.Mandala),
     ];
 
+    /// <summary>
+    /// The CK3 governments an entry keyed on <paramref name="token"/> styles. A theocracy's words
+    /// also go to ecclesiastical government, which HistoryWriter writes for a theocrat whose faith
+    /// has sees; otherwise those fall through to vanilla's English "Grand Theocracy".
+    /// </summary>
+    private static IEnumerable<string> GovernmentsFor(string token)
+    {
+        yield return $"{token}_government";
+        if (token == Theocracy) yield return GovernmentMap.Ecclesiastical;
+    }
+
     /// <summary>Strips the <c>_government</c> suffix CK3's localisation keys leave off.</summary>
     public static string Token(string government)
         => government.EndsWith("_government", StringComparison.Ordinal)
@@ -519,7 +530,7 @@ public static class TitleTierWriter
                 b.Field("priority", entry.Priority);
 
                 if (entry.Governments is { Count: > 0 })
-                    b.Inline("governments", string.Join(' ', entry.Governments.Select(g => $"{g}_government")));
+                    b.Inline("governments", string.Join(' ', entry.Governments.SelectMany(GovernmentsFor)));
 
                 if (entry.NameList is not null)
                     b.Inline("name_lists", entry.NameList);

@@ -274,7 +274,8 @@ public static class NativeTitles
         new("tribal", [GovernmentMap.Tribal, GovernmentMap.Wanua, GovernmentMap.Nomad],
             ["headman", "chieftain", "high_chieftain", "king", "high_king", "hegemon"],
             ["tribe", "chiefdom", "high_chiefdom", "kingdom", "high_kingdom", "hegemony"]),
-        new("theocracy", [GovernmentMap.Theocracy],
+        // Ecclesiastical is what a theocrat of a faith with sees is written as; see GovernmentMap.
+        new("theocracy", [GovernmentMap.Theocracy, GovernmentMap.Ecclesiastical],
             ["priest", "high_priest", "archpriest", "grand_priest", "divine_emperor", "hegemon"],
             ["temple", "great_temple", "theocracy", "grand_theocracy", "holy_empire", "hegemony"]),
         new("republic", [GovernmentMap.Republic],
