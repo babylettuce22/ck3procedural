@@ -57,11 +57,17 @@ jobs:
         working-directory: ck3procedural
         run: dotnet restore Ck3MapGen.csproj -r win-x64
 
+      # sixlabors.lic is gitignored, so CI has no licence file and ImageSharp's build-time check
+      # fails. Its targets take the key as the SixLaborsLicenseKey property instead (they skip
+      # the file search when it is set), and MSBuild reads environment variables as properties,
+      # so the secret goes in through env and never appears on a command line.
       # PublishSingleFile is deliberately OFF. A single-file self-contained bundle appends the
       # whole runtime as a blob and self-extracts native DLLs to %TEMP% on first run, which is
       # the shape generic antivirus heuristics flag. A plain folder publish avoids that entirely.
       - name: Publish
         working-directory: ck3procedural
+        env:
+          SixLaborsLicenseKey: ${{ secrets.SIXLABORS_LICENSE_KEY }}
         run: >
           dotnet publish Ck3MapGen.csproj
           -c Release
@@ -118,4 +124,7 @@ jobs:
             ck3procedural/signed/*.zip
             ck3procedural/Ck3MapGen-${{ steps.version.outputs.version }}-win-x64.zip
           fail_on_unmatched_files: false
-          generate_release_notes: true
+          # Off: releases are written by hand on GitHub before the tag exists, and on an existing
+          # release this action APPENDS the generated notes to that body (which nexus.yml then
+          # sends to Nexus as the changelog).
+          generate_release_notes: false
