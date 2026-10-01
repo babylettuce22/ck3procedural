@@ -2,7 +2,7 @@
 
 Generate and edit Crusader Kings III worlds from a heightmap. The tool builds provinces,
 rivers, climate, terrain, titles, cultures, faiths, rulers and history, then exports a
-playable total-conversion mod. It has a Windows desktop interface and a command-line interface.
+playable total-conversion mod, all from a Windows desktop app.
 
 <img width="1790" height="935" alt="CK3 Procedural Tool desktop interface and map preview" src="https://github.com/user-attachments/assets/bece6c17-74fb-4f13-a539-60a07c044c55" />
 
@@ -49,55 +49,11 @@ The start page offers three ways in:
 Then enable the generated mod in a playset in the CK3 launcher. **Help ▸ Getting started…**
 walks through a first world.
 
-## Command line
-
-Replace `dotnet run --` with `.\Ck3MapGen.exe` when using a release.
-
-```powershell
-# Open the desktop interface.
-dotnet run -- --gui
-
-# Preview a map and write debug images, without exporting a mod.
-dotnet run -- --heightmap "C:\Maps\heightmap.png" --seed 4242 --out "C:\Maps\preview"
-
-# Export a mod into the launcher's mod directory.
-dotnet run -- --heightmap "C:\Maps\heightmap.png" --seed 4242 --mod "My World"
-
-# Use Azgaar data, or a Heightmap Forge preset.
-dotnet run -- --heightmap "C:\Maps\heightmap.png" --azgaar "C:\Maps\world.json" --mod "Azgaar World"
-dotnet run -- --forge "C:\Maps\terrain.json" --seed 4242 --mod "Forge World"
-
-# Generate with saved settings.
-dotnet run -- --settings "C:\Maps\preset.json" --heightmap "C:\Maps\heightmap.png" --mod "My World"
-
-# Open an existing generated mod for editing.
-dotnet run -- --edit-world "C:\Maps\My World"
-```
-
-| Option | Purpose |
-| --- | --- |
-| `--heightmap <png>` / `--forge <json>` | Terrain source. |
-| `--azgaar <json>` | Optional Azgaar Full JSON world data. |
-| `--mod [name-or-directory]` | Export a mod. A bare name goes into the launcher's mod folder. |
-| `--game <directory>` | CK3's `game` directory, if detection picks the wrong one. |
-| `--seed <integer>` | World-generation seed. |
-| `--settings <preset>` | Load a saved settings preset. |
-| `--out <directory>` | Write debug images here. |
-| `--content procedural\|vanilla` | Generated cultures and faiths, or CK3's own. |
-| `--county-scale <number>` | Barony size relative to vanilla; larger means fewer provinces. |
-| `--start-year <year>` | Start date. |
-| `--additional-bookmarks` | Add two more start dates. |
-| `--races off\|low\|high\|exotic` | Fantasy-race preset. |
-| `--no-history` | Skip characters and history for faster iteration. |
-
-The desktop settings cover far more than the CLI. See `Program.cs` for every flag and
-`Config/MapConfig.cs` for settings and defaults.
-
 ### Map size
 
 CK3 renders terrain reliably only at certain sizes: **4096×2048, 5120×2560, 6144×3072,
-8192×4096, 9216×4608 and 18432×9216**. Use `--fit-heightmap` to resample a PNG to one of
-these, or `--allow-unverified-size` to try another size anyway.
+8192×4096, 9216×4608 and 18432×9216**. Heightmaps at other sizes may show missing terrain
+in game.
 
 ## Building from source
 
