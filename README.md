@@ -40,7 +40,8 @@ source tree.
 
 The start page offers three ways in:
 
-- **Quick:** a few guided choices about map, world and people, then a generated mod.
+- **Quick (recommended):** a few guided choices about map, world and people, then a generated
+  mod. This path tends to give the most complete and best-looking worlds.
 - **Complex:** the full settings. Choose a heightmap, **Preview** (F5), adjust settings,
   then **Write mod** (Ctrl+S).
 - **Azgaar:** import an Azgaar export with its matching heightmap.
