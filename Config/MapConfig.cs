@@ -3475,7 +3475,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// </summary>
     /// HIDING FOR THIS BUILD
     [Category("12 Wilderness")]
-    [Description("HEAVILY WIP: Let settled counties collapse back into wilderness when they are dying — repeated sacking, plague, lost control — leaving ruins that have to be cleared before the land can be settled again. Requires the wilderness system. Off by default: it can take a county away from a player.")]
+    [Description("HEAVILY WIP: Let settled counties collapse back into wilderness when they are dying — repeated sacking, plague, lost control — leaving ruins that have to be cleared before the land can be settled again. Requires the wilderness system. Note that it can take a county away from a player. No county starts ruined unless Ruins share is above 0.")]
     public bool EnableRuins { get; set; } = true;
 
     /// <summary>
