@@ -1,0 +1,103 @@
+name: Nexus Mods
+
+# Mirrors a published GitHub release to the Nexus Mods page. The release archive is the one
+# attached to the GitHub release by hand (proctoolvNNN.7z), not a CI build: release.yml cannot
+# build here because sixlabors.lic is private and gitignored. So whatever players download from
+# GitHub is byte for byte what Nexus gets.
+#
+# Setup, once (Settings -> Secrets and variables -> Actions):
+#   secret   NEXUSMODS_API_KEY     personal key from https://www.nexusmods.com/settings/api-keys
+#   variable NEXUS_MOD_ID          the number in the mod page URL (.../mods/402)
+#   variable NEXUS_FILE_ID         the number of any version of the main file, as the Files tab
+#                                  shows it (file_id=2589 in its download link)
+#   variable NEXUS_GAME            optional; game domain in the URL (default crusaderkings3)
+#   variable NEXUS_ASSET_PATTERN   optional; which release asset to send (default proctool*)
+# Until NEXUS_FILE_ID is set the job is skipped, not failed.
+#
+# The site shows game-scoped numbers, but the v3 upload endpoints want the internal ids, so the
+# first step looks those up. Any version of the file resolves to the same file, so the variable
+# never needs bumping.
+#
+# The Upload API only adds versions to a file that already exists on Nexus, so the mod page
+# and its first file are created by hand on the site.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to send to Nexus again (e.g. v0.94)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    if: vars.NEXUS_FILE_ID != ''
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve Nexus ids
+        id: nexus
+        env:
+          NEXUS_KEY: ${{ secrets.NEXUSMODS_API_KEY }}
+          GAME: ${{ vars.NEXUS_GAME || 'crusaderkings3' }}
+        run: |
+          api() { curl -sSf -H "apikey: $NEXUS_KEY" "https://api.nexusmods.com/v3/games/$GAME/$1"; }
+          file_id=$(api "mod-file-versions/${{ vars.NEXUS_FILE_ID }}" | jq -er .data.file.id)
+          mod_id=$(api "mods/${{ vars.NEXUS_MOD_ID }}" | jq -er .data.id)
+          echo "Nexus file ${{ vars.NEXUS_FILE_ID }} -> $file_id, mod ${{ vars.NEXUS_MOD_ID }} -> $mod_id"
+          echo "file_id=$file_id" >> "$GITHUB_OUTPUT"
+          echo "mod_id=$mod_id" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve release
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+        run: |
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json name,body > release.json
+          # Nexus rejects anything outside these patterns: version ^[a-zA-Z0-9.-]+$, name
+          # ^[a-zA-Z0-9 _'().-]+$ at most 50 chars ("&" in a release title is enough to fail).
+          version=$(printf '%s' "${TAG#v}" | tr -cd 'a-zA-Z0-9.-')
+          name=$(jq -r .name release.json | tr -cd "a-zA-Z0-9 _'().-" | tr -s ' ' | cut -c1-50 | sed 's/ *$//')
+          [ -n "$name" ] || name="v$version"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          {
+            echo "body<<NEXUS_EOF"
+            jq -r .body release.json | head -c 65000
+            echo
+            echo "NEXUS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download release archive
+        id: asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PATTERN: ${{ vars.NEXUS_ASSET_PATTERN || 'proctool*' }}
+        run: |
+          mkdir dl
+          gh release download "${{ steps.rel.outputs.tag }}" -R "$GITHUB_REPOSITORY" -p "$PATTERN" -D dl
+          count=$(ls dl | wc -l)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Expected exactly one asset matching '$PATTERN', found $count:"
+            ls dl
+            exit 1
+          fi
+          echo "file=dl/$(ls dl)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to Nexus Mods
+        uses: Nexus-Mods/upload-action@v1.0.0-beta.10
+        with:
+          api_key: ${{ secrets.NEXUSMODS_API_KEY }}
+          file_id: ${{ steps.nexus.outputs.file_id }}
+          mod_id: ${{ steps.nexus.outputs.mod_id }}
+          filename: ${{ steps.asset.outputs.file }}
+          version: ${{ steps.rel.outputs.version }}
+          display_name: ${{ steps.rel.outputs.name }}
+          changelog: ${{ steps.rel.outputs.body }}
+          archive_existing_version: 'true'
+          update_mod_version: 'true'
