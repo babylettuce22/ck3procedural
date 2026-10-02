@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The release zip keeps the real app and its ~200 runtime DLLs in app\, because a
+       self-contained .NET exe must sit beside them. This launcher is the only exe at the top
+       level and just starts app\Ck3MapGen.exe.
+
+       net472 on purpose: .NET Framework 4.7.2+ ships with every supported Windows 10/11, so the
+       launcher needs no runtime of its own and stays a few KB, with no self-extracting bundle
+       for antivirus heuristics to dislike. The reference-assemblies package lets the .NET SDK
+       build it without a Framework targeting pack installed. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>CK3 Procedural Generator</AssemblyName>
+    <RootNamespace>Ck3MapGenLauncher</RootNamespace>
+    <ApplicationIcon>..\app.ico</ApplicationIcon>
+
+    <Product>CK3 Procedural Map Generator</Product>
+    <AssemblyTitle>CK3 Procedural Map Generator</AssemblyTitle>
+    <Company>babylettuce22</Company>
+    <Authors>babylettuce22</Authors>
+    <Copyright>Copyright (c) 2026 babylettuce22</Copyright>
+    <Description>Starts the CK3 Procedural Map Generator from its app folder.</Description>
+    <Version Condition="'$(Version)' == ''">0.9</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

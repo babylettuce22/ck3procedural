@@ -17,6 +17,9 @@
 	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	<ServerGarbageCollection>true</ServerGarbageCollection>
 	<InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Launcher\ is its own small project (the release zip's top-level exe); keep its sources
+         and build output out of this one. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);Launcher\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <PropertyGroup>

@@ -79,15 +79,29 @@ jobs:
           -p:DebugType=none
           -p:DebugSymbols=false
           -p:Version=${{ steps.version.outputs.version }}
-          -o publish
+          -o publish/app
+
+      # The zip's top level holds only the launcher, README and LICENSE; the app and its runtime
+      # DLLs sit in app\ (see Launcher/Launcher.csproj). The .exe.config is dropped: the launcher
+      # runs on the Framework that ships with Windows without it.
+      - name: Build launcher
+        working-directory: ck3procedural
+        run: >
+          dotnet build Launcher/Launcher.csproj
+          -c Release
+          -p:DebugType=none
+          -p:Version=${{ steps.version.outputs.version }}
+          -o launcher-out
 
       - name: Package
         working-directory: ck3procedural
         shell: pwsh
         run: |
           Get-ChildItem publish -Recurse -Include *.pdb | Remove-Item -Force
+          Copy-Item "launcher-out/CK3 Procedural Generator.exe" publish/ -Force
           Copy-Item LICENSE publish/ -Force
           Copy-Item README.md publish/ -Force
+          Get-ChildItem publish | Format-Table Name, Length
           Compress-Archive -Path publish/* -DestinationPath "Ck3MapGen-${{ steps.version.outputs.version }}-win-x64.zip" -Force
 
       # SignPath reads the artifact straight out of the workflow run, so it must be uploaded
@@ -116,9 +130,12 @@ jobs:
           wait-for-completion: true
           output-artifact-directory: ck3procedural/signed
 
+      # Attaching is opt-in while the CI layout is being tried out: set the repository variable
+      # ATTACH_CI_BUILD to 'true' to add this zip to each tagged release. Until then the zip is
+      # only kept as the run's artifact, and releases are left exactly as written by hand.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && vars.ATTACH_CI_BUILD == 'true'
         with:
           files: |
             ck3procedural/signed/*.zip
