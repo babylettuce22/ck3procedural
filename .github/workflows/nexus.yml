@@ -1,9 +1,9 @@
 name: Nexus Mods
 
-# Mirrors a published GitHub release to the Nexus Mods page. The release archive is the one
-# attached to the GitHub release by hand (proctoolvNNN.7z), not a CI build: release.yml cannot
-# build here because sixlabors.lic is private and gitignored. So whatever players download from
-# GitHub is byte for byte what Nexus gets.
+# Mirrors a GitHub release's archive to the Nexus Mods page, byte for byte. That is either the
+# hand-attached proctoolvNNN.7z or, with ATTACH_CI_BUILD on, release.yml's folder-layout zip.
+# With ATTACH_CI_BUILD on, the release event is skipped (the zip is not attached yet when the
+# release is published); dispatch this once release.yml has finished.
 #
 # Setup, once (Settings -> Secrets and variables -> Actions):
 #   secret   NEXUSMODS_API_KEY     personal key from https://www.nexusmods.com/settings/api-keys
@@ -11,7 +11,8 @@ name: Nexus Mods
 #   variable NEXUS_FILE_ID         the number of any version of the main file, as the Files tab
 #                                  shows it (file_id=2589 in its download link)
 #   variable NEXUS_GAME            optional; game domain in the URL (default crusaderkings3)
-#   variable NEXUS_ASSET_PATTERN   optional; which release asset to send (default proctool*)
+#   variable NEXUS_ASSET_PATTERN   optional; which release asset to send (default proctool*, or
+#                                  Ck3MapGen-*-win-x64.zip with ATTACH_CI_BUILD on)
 # Until NEXUS_FILE_ID is set the job is skipped, not failed.
 #
 # The site shows game-scoped numbers, but the v3 upload endpoints want the internal ids, so the
@@ -28,13 +29,17 @@ on:
       tag:
         description: 'Release tag to send to Nexus again (e.g. v0.94)'
         required: true
+      archive_existing:
+        description: 'Archive the version currently on Nexus (off keeps both listed)'
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
 jobs:
   upload:
-    if: vars.NEXUS_FILE_ID != ''
+    if: vars.NEXUS_FILE_ID != '' && !(github.event_name == 'release' && vars.ATTACH_CI_BUILD == 'true')
     runs-on: ubuntu-latest
 
     steps:
@@ -77,7 +82,7 @@ jobs:
         id: asset
         env:
           GH_TOKEN: ${{ github.token }}
-          PATTERN: ${{ vars.NEXUS_ASSET_PATTERN || 'proctool*' }}
+          PATTERN: ${{ vars.NEXUS_ASSET_PATTERN || (vars.ATTACH_CI_BUILD == 'true' && 'Ck3MapGen-*-win-x64.zip' || 'proctool*') }}
         run: |
           mkdir dl
           gh release download "${{ steps.rel.outputs.tag }}" -R "$GITHUB_REPOSITORY" -p "$PATTERN" -D dl
@@ -99,5 +104,6 @@ jobs:
           version: ${{ steps.rel.outputs.version }}
           display_name: ${{ steps.rel.outputs.name }}
           changelog: ${{ steps.rel.outputs.body }}
-          archive_existing_version: 'true'
+          # The release event has no inputs, so it always archives.
+          archive_existing_version: ${{ github.event_name == 'release' && 'true' || (inputs.archive_existing && 'true' || 'false') }}
           update_mod_version: 'true'
