@@ -13,6 +13,9 @@ name: Nexus Mods
 #   variable NEXUS_GAME            optional; game domain in the URL (default crusaderkings3)
 #   variable NEXUS_ASSET_PATTERN   optional; which release asset to send (default proctool*, or
 #                                  Ck3MapGen-*-win-x64.zip with ATTACH_CI_BUILD on)
+#   secret   VIRUSTOTAL_API_KEY    optional; free key from virustotal.com. Without it the
+#                                  pre-upload VirusTotal check only warns.
+#   variable VT_MAX_FLAGGED        optional; most engines allowed to flag a file (default 2)
 # Until NEXUS_FILE_ID is set the job is skipped, not failed.
 #
 # The site shows game-scoped numbers, but the v3 upload endpoints want the internal ids, so the
@@ -33,6 +36,10 @@ on:
         description: 'Archive the version currently on Nexus (off keeps both listed)'
         type: boolean
         default: true
+      skip_virustotal:
+        description: 'Upload even if VirusTotal flags it (after checking it is a false positive)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -43,6 +50,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check out scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
       - name: Resolve Nexus ids
         id: nexus
         env:
@@ -73,7 +85,8 @@ jobs:
           echo "name=$name" >> "$GITHUB_OUTPUT"
           {
             echo "body<<NEXUS_EOF"
-            jq -r .body release.json | head -c 65000
+            # release.yml appends VirusTotal links under this marker; they stay on GitHub.
+            jq -r .body release.json | awk '/^<!-- virustotal -->/ { exit } { print }' | head -c 65000
             echo
             echo "NEXUS_EOF"
           } >> "$GITHUB_OUTPUT"
@@ -93,6 +106,27 @@ jobs:
             exit 1
           fi
           echo "file=dl/$(ls dl)" >> "$GITHUB_OUTPUT"
+
+      # Stops a build that several engines flag from reaching Nexus. Checks the archive and the
+      # binaries inside it (release.yml has usually scanned them already, so these are lookups).
+      # One or two generic hits are normal for a new unsigned exe; the limit is the repo variable
+      # VT_MAX_FLAGGED (default 2). If VirusTotal can't finish, it warns and lets the upload go.
+      - name: Check with VirusTotal
+        if: ${{ !inputs.skip_virustotal }}
+        env:
+          VT_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+          LIMIT: ${{ vars.VT_MAX_FLAGGED || '2' }}
+        run: |
+          mkdir x
+          7z x -y -ox "${{ steps.asset.outputs.file }}" > /dev/null
+          mapfile -t bins < <(find x -type f \( -iname '*.exe' ! -iname createdump.exe -o -iname Ck3MapGen.dll \))
+          VT_TIMEOUT=600 bash .github/scripts/virustotal.sh "${{ steps.asset.outputs.file }}" "${bins[@]}"
+          cat virustotal.md >> "$GITHUB_STEP_SUMMARY"
+          flagged=$(grep '^flagged=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)
+          if [ "$flagged" -gt "$LIMIT" ]; then
+            echo "::error::$flagged engines flag one of these files (limit $LIMIT). Not uploading to Nexus. Look at the links in the summary; if it's a false positive, rerun with skip_virustotal."
+            exit 1
+          fi
 
       - name: Upload to Nexus Mods
         uses: Nexus-Mods/upload-action@v1.0.0-beta.10
