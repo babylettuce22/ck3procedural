@@ -375,17 +375,11 @@ gen_tinker.0450 = {
 			}
 			if = {
 				limit = { exists = var:gen_tk_commission_project }
-				save_scope_value_as = {
-					name = gen_tk_c_project
-					value = var:gen_tk_commission_project
-				}
+				gen_tk_commission_save_project_effect = { VAR = gen_tk_commission_project }
 			}
 			else_if = {
 				limit = { exists = var:gen_tk_project }
-				save_scope_value_as = {
-					name = gen_tk_c_project
-					value = var:gen_tk_project
-				}
+				gen_tk_commission_save_project_effect = { VAR = gen_tk_project }
 			}
 			gen_tk_commission_clear_effect = yes
 		}

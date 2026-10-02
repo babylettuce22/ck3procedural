@@ -325,6 +325,24 @@ gen_aging.0010 = {
 	}
 }
 
+# The late child's conception, a day after gen_late_child_conceive_effect added the fertility
+# modifier (see there for why it waits). On the mother; scope:father came with the event.
+gen_aging.0011 = {
+	type = character_event
+	hidden = yes
+
+	trigger = {
+		is_alive = yes
+		is_pregnant = no
+		exists = scope:father
+		scope:father = { is_alive = yes }
+	}
+
+	immediate = {
+		make_pregnant = { father = scope:father }
+	}
+}
+
 # =====================================================================================
 #  Core debug inspector — console only: `event gen_aging.0090` (optionally with a character id)
 # =====================================================================================

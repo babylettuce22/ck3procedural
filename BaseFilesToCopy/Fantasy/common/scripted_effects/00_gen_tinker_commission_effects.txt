@@ -97,3 +97,28 @@ gen_tk_commission_lost_effect = {
 		remove_variable = gen_tk_patron
 	}
 }
+
+# On the TINKERER: saves scope:gen_tk_c_project for the delivery event's text. The project is a
+# flag, and save_scope_value_as cannot take a flag-valued variable ("Value of wrong type"), so
+# each project is copied across as a literal. VAR names the variable to read.
+gen_tk_commission_save_project_effect = {
+	if = {
+		limit = { var:$VAR$ ?= flag:mill }
+		save_scope_value_as = { name = gen_tk_c_project value = flag:mill }
+	}
+	else_if = {
+		limit = { var:$VAR$ ?= flag:engine }
+		save_scope_value_as = { name = gen_tk_c_project value = flag:engine }
+	}
+	else_if = {
+		limit = { var:$VAR$ ?= flag:limb }
+		save_scope_value_as = { name = gen_tk_c_project value = flag:limb }
+	}
+	else_if = {
+		limit = { var:$VAR$ ?= flag:invention }
+		save_scope_value_as = { name = gen_tk_c_project value = flag:invention }
+	}
+	else = {
+		save_scope_value_as = { name = gen_tk_c_project value = flag:curio }
+	}
+}

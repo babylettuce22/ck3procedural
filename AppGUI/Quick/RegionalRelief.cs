@@ -166,25 +166,34 @@ public static class RegionalRelief
 /// what a Quick world is actually built from. Using the workspace's pipeline again (its Use for
 /// generation) replaces it.
 /// </summary>
+/// <param name="upscale">Enlarges the finished field this many times, after erosion: the Forge runs at
+/// width x height and the world is built at the product. See <see cref="QuickChoices.ForgeUpscale"/>.</param>
 public sealed class QuickReliefProvider(string presetPath, int seed, int width, int height,
-    QuickFeature feature, QuickRelief relief, string name) : MapGen.HeightmapProvider
+    QuickFeature feature, QuickRelief relief, string name, int upscale = 1) : MapGen.HeightmapProvider
 {
     public override string Label => $"Forge · {name} (regional relief)";
 
     public override string Detail =>
-        $"The {name} preset, {width}×{height}, seed {seed}, with {relief} relief applied region by region: "
+        $"The {name} preset, {width}×{height}{(upscale > 1 ? $" upscaled ×{upscale}" : "")}, seed {seed}, with {relief} relief applied region by region: "
         + $"about {RegionalRelief.RuggedShare(relief):P0} of the map rugged, the rest plains.";
 
     public override string PhaseName => "heightmap forge";
 
     public override string Stamp =>
         $"quick-regional|{presetPath}|{File.GetLastWriteTimeUtc(presetPath).Ticks}|{width}x{height}"
-        + $"|seed={seed}|{relief}|{feature}";
+        + $"|seed={seed}|{relief}|{feature}" + (upscale > 1 ? $"|x{upscale}" : "");
 
     public override MapGen.HeightmapImage Produce(Config.MapConfig cfg, CancellationToken ct, IProgress<string>? status)
     {
         var field = RegionalRelief.Run(() => RegionalRelief.Preset(presetPath, seed, width, height, feature),
             relief, width, height, isPreview: false, ct, status);
+        if (upscale > 1)
+        {
+            // As the Forge's own Upscale stage does it: Catmull-Rom, then clamped.
+            status?.Report($"upscaling to {width * upscale} x {height * upscale}");
+            field = field.ResampleCubic(width * upscale, height * upscale);
+            field.Clamp01();
+        }
         var raw = field.ToUInt16();
         return MapGen.HeightmapSource.FromRaw(raw, field.Width, field.Height, Label, cfg);
     }

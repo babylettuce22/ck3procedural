@@ -700,13 +700,22 @@ public sealed class ForgePanel : UserControl
     /// switched off rather than left to fail the run halfway through. Returns what was switched
     /// off, for the caller to say so.
     /// </summary>
-    public IReadOnlyList<string> AdoptPreset(string path, int seed, int width, int height)
+    public IReadOnlyList<string> AdoptPreset(string path, int seed, int width, int height, int upscale = 1)
     {
         EnsureStarted();
         Session.LoadPreset(path);
         Session.History.Clear();
         Session.SetSeed(seed);
         Session.SetBaseSize(width, height);
+
+        // A closing Upscale reaches an export size too big to erode directly; see QuickChoices.ForgeUpscale.
+        if (upscale > 1)
+        {
+            var stage = new UpscaleStage();
+            stage.Params.Set("mode", 0);
+            stage.Params.Set("factor", upscale);
+            Session.Pipeline.Add(stage);
+        }
 
         var disabled = new List<string>();
         if (!HydraulicErosionStage.GpuAvailable)

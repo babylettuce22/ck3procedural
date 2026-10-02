@@ -275,8 +275,9 @@ public sealed partial class MainForm
         var type = QuickCatalogue.All().FirstOrDefault(t => t.Key == choices.MapType)
                    ?? throw new InvalidOperationException($"No map type called '{choices.MapType}' is installed.");
 
-        var (width, height) = choices.Pixels;
-        var switchedOff = _forge.AdoptPreset(type.PresetPathFor(choices.Mountains), choices.Seed, width, height);
+        var (width, height) = choices.ForgePixels;
+        int upscale = choices.ForgeUpscale;
+        var switchedOff = _forge.AdoptPreset(type.PresetPathFor(choices.Mountains), choices.Seed, width, height, upscale);
 
         // A set-piece map type draws its crater (or whatever it is built around) for this seed
         // over the guide the preset shipped with; the Terrain workspace shows it as paint.
@@ -309,7 +310,7 @@ public sealed partial class MainForm
         // is built with it region by region. See RegionalRelief.
         if (choices.RegionalRelief)
             SetSource(new QuickReliefProvider(type.PresetPathFor(choices.Mountains), choices.Seed, width, height,
-                type.Feature, choices.Relief, type.Key));
+                type.Feature, choices.Relief, type.Key, upscale));
         return switchedOff;
     }
 

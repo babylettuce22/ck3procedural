@@ -154,6 +154,18 @@ public sealed class QuickChoices
         _ => (8192, 4096),
     };
 
+    /// <summary>
+    /// How many times the Forge's heightfield is enlarged, after erosion, to reach <see cref="Pixels"/>.
+    /// Vanilla is forged at half size and doubled: erosion holds about 56 bytes a cell on the GPU,
+    /// 9.5 GB at 18432x9216, which overflows a 10 GB card into shared memory and crawls; and its
+    /// step count grows with the height too, so full size would be about 8x Large's erosion work.
+    /// Half size is Large's own load. The rest of the generator still builds at full size.
+    /// </summary>
+    public int ForgeUpscale => Size == QuickSize.Vanilla ? 2 : 1;
+
+    /// <summary>The size the Forge preset itself runs at; <see cref="Pixels"/> over <see cref="ForgeUpscale"/>.</summary>
+    public (int Width, int Height) ForgePixels => (Pixels.Width / ForgeUpscale, Pixels.Height / ForgeUpscale);
+
     public int StartYear => Era switch
     {
         QuickEra.Early => 867,
