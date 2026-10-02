@@ -187,20 +187,22 @@ public sealed class GovernmentMap
 
     /// <summary>
     /// What to call a government on screen — the editor's dropdown, the map legend and both hover
-    /// readouts, so all four agree on the name beside a colour instead of one saying "Ritsuryō"
+    /// readouts, so all four agree on the name beside a colour instead of one saying "Courtly"
     /// and the next <c>japan_administrative_government</c>.
     ///
     /// Only the names the game's own text uses and a mechanical key would lose are spelled out:
-    /// the two Japanese governments, which vanilla calls Ritsuryō and Sōryō rather than anything
-    /// containing "Japan", and the wilderness, which is not a government anyone plays. Everything
+    /// the culturally named governments, generalized by the Procedural set's localization
+    /// overrides, and the wilderness, which is not a government anyone plays. Everything
     /// else reads correctly straight from its key, so it is de-suffixed and de-underscored rather
     /// than listed — which also means a government added later gets a serviceable name here
     /// without this switch being the thing that has to remember it.
     /// </summary>
     public static string DisplayName(string government) => government switch
     {
-        JapanAdministrative => "Ritsuryō",
-        JapanFeudal => "Sōryō",
+        JapanAdministrative => "Courtly",
+        JapanFeudal => "Martial",
+        Mandala => "Sacral",
+        Wanua => "Maritime",
         Wilderness => "Wilderness",
         "" => "—",
         _ => Sentence(government.Replace("_government", "").Replace('_', ' ')),

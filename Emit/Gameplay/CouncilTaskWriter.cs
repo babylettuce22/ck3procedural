@@ -91,6 +91,11 @@ public static class CouncilTaskWriter
     /// and the crash came back (1155), so this one names nothing but the liege's own titles: any title
     /// he holds with a clerical region whose capital is this county. Every other county, in his sees
     /// or not, converts as in vanilla.
+    ///
+    /// Tried and dropped the same day: returning a see that falls to another faith to an archbishop of
+    /// its own (an on_action). It destroyed sees during succession (a dying archbishop's see handed back
+    /// to himself; five sees lost in ten years against none without it), and it overrode the engine,
+    /// which counts a see as its holder's faith's. This guard alone ran three ten-year runs clean.
     /// </summary>
     private const string SeeGuard =
         "\n\t\tNOT = {\n"

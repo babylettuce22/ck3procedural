@@ -104,8 +104,13 @@ The same no-generated-keys rule as Wilderness applies: this set ships identicall
 
 --- Procedural ---
 
-Overrides that are only right when the world has no vanilla peoples in it. Today that is the
+Overrides that are only right when the world has no vanilla peoples in it. These include the
 ecclesiastical government re-worded without Christianity: Hierarchical government, See, Hierarch,
 Prelate, and the tutorials and concept tooltips that said Christian. Emit/Culture/
 HierarchyFlavourWriter.cs writes the generated half under the same condition. VanillaWorld keeps
 the real Christian faiths, so vanilla's text is right there and this set is withheld.
+Ritsuryo and Soryo are also generalized as Courtly and Martial, with descriptions retaining
+vanilla concept tooltips and without the Japanese historical framing.
+Mandala and Wanua are generalized as Sacral and Maritime. Government and related concept
+descriptions retain their mechanical tooltips; Sacral emphasizes divine kingship and tributaries,
+and Maritime emphasizes seafaring tribal communities, barter and raiding.

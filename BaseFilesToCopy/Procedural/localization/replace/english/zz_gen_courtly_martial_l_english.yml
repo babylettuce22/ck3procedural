@@ -1,0 +1,10 @@
+﻿l_english:
+ # General names for vanilla's Ritsuryo / Soryo governments on generated maps.
+ # Keep the government IDs and concept links: only the displayed names and text change.
+ # Procedural only, like zz_gen_hierarchical_l_english.yml; VanillaWorld keeps vanilla text.
+ japan_administrative_government:0 "Courtly"
+ japan_feudal_government:0 "Martial"
+
+ japan_administrative_government_desc:0 "\n$japan_administrative_government$ is a centralized [government_bureaucratic_type|E] [government|E] in which [governors|E] administer [provinces|E] on behalf of their [liege|E]. [noble_families|E] compete for [appointments|E] through [influence|E], maintain [family_manors|E], and pursue [house_aspirations|E].\n\n$game_concept_governors$ generally administer a single [county|E]. Those who abandon appointed office to rule their lands as hereditary fiefs become [soryo|E] [rulers|E], though this transition may be considered a [criminal|E] act. [house_head_heads|E] may form [house_blocs|E] to advance their family's interests.\n\n$japan_government_domain_limit_help$\n\n#F Power rests in the court, where great houses vie for office, favor, and influence.#!"
+ japan_feudal_government_desc:0 "\n$japan_feudal_government$ [government|E] is a form of [feudal|E] rule organized around warrior houses. Lords hold [provinces|E] as their own fiefs, with [obligations|E] determined by their [vassal_contracts|E].\n\n$japan_feudal_government$ [rulers|E] do not use [influence|E], but [noble_families|E] retain their [family_manors|E] and [house_aspirations|E]. [house_head_heads|E] may form [house_blocs|E] to advance their family's interests.\n\n$japan_government_domain_limit_help$\n\n#F Power rests with the warrior houses, whose lands, loyalties, and rivalries shape the realm.#!"
+ japan_government_domain_limit_help:0 "@alert_icon! #HELP [ritsuryo|E] and [soryo|E] [rulers|E] have a lower [domain_limit|E] than others, which may be increased by upgrading the [family_manor|E].#!"

@@ -116,8 +116,8 @@ public sealed class TitleInspector : InspectorForm
     /// <remarks>
     /// The property holds the game's key and the grid shows the name, which is what the map legend
     /// shows too. Fourteen raw keys was a list nobody could read at a glance — the choice between
-    /// <c>japan_administrative_government</c> and <c>japan_feudal_government</c> is Ritsuryō or
-    /// Sōryō, which is how the game itself names them and nothing in the keys says.
+    /// <c>japan_administrative_government</c> and <c>japan_feudal_government</c> is Courtly or
+    /// Martial, matching the Procedural set's localization overrides.
     /// </remarks>
     public sealed class GovernmentConverter : StringConverter
     {

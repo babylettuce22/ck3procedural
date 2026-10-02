@@ -3323,15 +3323,18 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double SteppeAdminShare { get; set; } = 0.2;
 
     [Category("11 Rulers")]
-    [Description("Share of feudal and tribal realms seated in the jungle that start as Mandalas: tributary overlordship and radiance, with temple citadels for capitals. Eligible means a jungle capital or a realm a third or more jungle. Requires All Under Heaven; becomes Feudal without it.")]
+    [Description("Share of feudal and tribal realms seated in the jungle that start as Sacral: tributary overlordship and radiance, with temple citadels for capitals. Eligible means a jungle capital or a realm a third or more jungle. Requires All Under Heaven; becomes Feudal without it.")]
+    [DisplayName("Sacral share")]
     public double MandalaShare { get; set; } = 0.2;
 
     [Category("11 Rulers")]
-    [Description("Share of seafaring tribal realms that start as Wanua: barter, cheap embarkation and safer seas. Eligible means a coastal capital and at least half the realm's counties on the coast. Requires All Under Heaven; becomes Tribal without it.")]
+    [Description("Share of seafaring tribal realms that start as Maritime: barter, cheap embarkation and safer seas. Eligible means a coastal capital and at least half the realm's counties on the coast. Requires All Under Heaven; becomes Tribal without it.")]
+    [DisplayName("Maritime share")]
     public double WanuaShare { get; set; } = 0.2;
 
     [Category("11 Rulers")]
-    [Description("Share of feudal realms of a martial people (Bellicose ethos), duchy rank or above, that start as Sōryō: the warrior houses' feudalism, with house aspirations, county noble families, knights and cheaper archer cavalry and heavy infantry. Requires All Under Heaven; becomes Feudal without it.")]
+    [Description("Share of feudal realms of a martial people (Bellicose ethos), duchy rank or above, that start as Martial: the warrior houses' feudalism, with house aspirations, county noble families, knights and cheaper archer cavalry and heavy infantry. Requires All Under Heaven; becomes Feudal without it.")]
+    [DisplayName("Martial share")]
     public double SoryoShare { get; set; } = 0.3;
 
 

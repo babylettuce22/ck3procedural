@@ -368,16 +368,16 @@ public sealed class CultureInspector : InspectorForm
         [Category("Realm titles")] [TypeConverter(typeof(RealmWordsConverter))]
         public string Celestial { get => Summary("celestial"); set => SetWords("celestial", value); }
 
-        [Category("Realm titles")] [DisplayName("Ritsuryō")] [TypeConverter(typeof(RealmWordsConverter))]
+        [Category("Realm titles")] [DisplayName("Courtly")] [TypeConverter(typeof(RealmWordsConverter))]
         public string JapanAdministrative { get => Summary("japan_administrative"); set => SetWords("japan_administrative", value); }
 
-        [Category("Realm titles")] [DisplayName("Sōryō")] [TypeConverter(typeof(RealmWordsConverter))]
+        [Category("Realm titles")] [DisplayName("Martial")] [TypeConverter(typeof(RealmWordsConverter))]
         public string JapanFeudal { get => Summary("japan_feudal"); set => SetWords("japan_feudal", value); }
 
-        [Category("Realm titles")] [TypeConverter(typeof(RealmWordsConverter))]
+        [Category("Realm titles")] [DisplayName("Sacral")] [TypeConverter(typeof(RealmWordsConverter))]
         public string Mandala { get => Summary("mandala"); set => SetWords("mandala", value); }
 
-        [Category("Realm titles")] [TypeConverter(typeof(RealmWordsConverter))]
+        [Category("Realm titles")] [DisplayName("Maritime")] [TypeConverter(typeof(RealmWordsConverter))]
         public string Wanua { get => Summary("wanua"); set => SetWords("wanua", value); }
 
         /// <summary>The one vocabulary every government with a word shares, or null if they differ or none has one.</summary>

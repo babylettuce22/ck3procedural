@@ -1,0 +1,18 @@
+﻿# A smaller savings floor for Heads of Faith, so a generated head who has been handed his faith's
+# council fund actually spends it on the council.
+#
+# Why: vanilla's AI will not actively spend a spiritual Head of Faith's gold or treasury below 750
+# (MIN_RESERVED_GOLD/TREASURY_SPIRITUAL_HEAD_OF_FAITH, common/defines/ai/00_ai.txt), a floor made for
+# the Pope's income. A generated head lives on one county or none, plus the faith's council fund
+# (common/on_action/zz_gen_head_tithe_on_actions.txt), which hands him about a council's cost (~600 in
+# the high medieval era). Measured on seed 303 (2026-10-02): handed ~1,000, none of four heads called
+# a council; handed 2,000, the first did at once. With the floor at 750 a head would need the cost
+# plus 750 before the AI would call one, about thirty years of tithe.
+#
+# Procedural set only: it ships for generated worlds, where every Head of Faith is generated.
+# A vanilla-content world (a vanilla Pope) keeps vanilla's 750. Defines merge key by key.
+
+NAI = {
+	MIN_RESERVED_GOLD_SPIRITUAL_HEAD_OF_FAITH = 100
+	MIN_RESERVED_TREASURY_SPIRITUAL_HEAD_OF_FAITH = 100
+}

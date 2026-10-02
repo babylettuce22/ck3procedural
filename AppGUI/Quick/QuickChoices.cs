@@ -2,8 +2,11 @@ using Ck3MapGen.Config;
 
 namespace Ck3MapGen.AppGUI;
 
-/// <summary>How big the map is. Each is a size CK3 is known to render; see MapGen.TileFit.</summary>
-public enum QuickSize { Small, Standard, Large }
+/// <summary>
+/// How big the map is. Each is a size CK3 is known to render; see MapGen.TileFit. Vanilla comes
+/// last only because the choice is remembered as a number in <see cref="GuiState.Quick"/>.
+/// </summary>
+public enum QuickSize { Small, Standard, Large, Vanilla }
 
 /// <summary>When the game starts. Sets the World Year; advancement follows it.</summary>
 public enum QuickEra { Early, High, Late }
@@ -147,6 +150,7 @@ public sealed class QuickChoices
     {
         QuickSize.Small => (4096, 2048),
         QuickSize.Large => (9216, 4608),
+        QuickSize.Vanilla => (18432, 9216),
         _ => (8192, 4096),
     };
 

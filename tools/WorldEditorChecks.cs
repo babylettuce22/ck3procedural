@@ -70,7 +70,10 @@ internal static class WorldEditorChecks
                   "Display order holds every assignable government, once");
             Check(MapGen.GovernmentMap.Assignable.All(g => Emit.TitleTierWriter.Governments.Contains(Emit.TitleTierWriter.Token(g))),
                   "Every assignable government can be given realm words");
-            Check(MapGen.GovernmentMap.DisplayName(MapGen.GovernmentMap.JapanAdministrative) == "Ritsuryō"
+            Check(MapGen.GovernmentMap.DisplayName(MapGen.GovernmentMap.JapanAdministrative) == "Courtly"
+                  && MapGen.GovernmentMap.DisplayName(MapGen.GovernmentMap.JapanFeudal) == "Martial"
+                  && MapGen.GovernmentMap.DisplayName(MapGen.GovernmentMap.Mandala) == "Sacral"
+                  && MapGen.GovernmentMap.DisplayName(MapGen.GovernmentMap.Wanua) == "Maritime"
                   && MapGen.GovernmentMap.DisplayName(MapGen.GovernmentMap.SteppeAdmin) == "Steppe admin",
                   "Government display names");
 

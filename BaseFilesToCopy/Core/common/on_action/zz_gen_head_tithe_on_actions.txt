@@ -21,10 +21,12 @@
 #
 # When the fund covers a council (ecumenical_council_scaled_cost for this head) and the head may hold
 # one now (can_host_activity: the see quorum, no council going, the faith's own and the head's
-# cooldown), the whole fund goes to him at once (add_treasury_or_gold: the pool the council charges)
-# and the AI is asked to host straight away (ai_attempt_to_host_activity), before the budget can
-# spend it. Tested 2026-10-02: given the money that way, 3 of 4 heads called a council within days.
-# The fund stops growing at twice the council's cost (never under 1000).
+# cooldown), the council's cost and two fifths goes to him at once (add_treasury_or_gold: the pool the
+# council charges) and the AI is asked to host straight away (ai_attempt_to_host_activity), before
+# the budget can spend it. The rest stays in the fund. For the AI to spend it, the Procedural set
+# lowers vanilla's 750 savings floor for Heads of Faith (common/defines/zz_gen_head_of_faith_reserve_
+# defines.txt): handed ~1,000, no head called a council; handed 2,000, one did at once (seed 303,
+# 2026-10-02). The fund stops growing at twice the council's cost (never under 1000).
 #
 # Who: the religious head of every faith carrying gen_settled_doctrine (every generated religion,
 # never a vanilla one, so a vanilla-content world's vanilla heads are untouched), only for a
@@ -83,8 +85,21 @@ gen_head_tithe_pulse = {
 									NOT = { has_variable = ecumenical_council_ongoing }
 								}
 							}
-							add_treasury_or_gold = scope:gen_tithe_faith.var:gen_council_fund
-							scope:gen_tithe_faith = { set_variable = { name = gen_council_fund value = 0 } }
+							# The cost and two fifths over: the AI pays an activity from its short-term budget, 80% of what it
+							# holds (BUDGET_CATEGORY, defines/ai/00_ai.txt), so 1.1x the cost left it short (seed 303: no head
+							# hosted on 1.1x; one did on 2,000). The rest stays in the fund.
+							save_scope_value_as = {
+								name = gen_council_grant
+								value = {
+									value = scope:gen_council_cost
+									multiply = 1.4
+									max = scope:gen_tithe_faith.var:gen_council_fund
+								}
+							}
+							add_treasury_or_gold = scope:gen_council_grant
+							scope:gen_tithe_faith = {
+								change_variable = { name = gen_council_fund subtract = scope:gen_council_grant }
+							}
 							if = {
 								limit = { is_ai = yes }
 								ai_attempt_to_host_activity = activity_ecumenical_council

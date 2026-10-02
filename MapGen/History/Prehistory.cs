@@ -360,6 +360,18 @@ public sealed partial class PrehistoryMap
             }
         }
 
+        // An applied history supplies external territorial grievances.
+        // Keep generated succession claims within the same realm.
+        if (diplomacy is not null)
+        {
+            foreach (var (claimant, claims) in map.Claims)
+            {
+                var claimantRealm = TopLiegeCounty(claimant, realms);
+                claims.RemoveAll(c =>
+                    TopLiegeCounty(c.TargetTitle, realms) != claimantRealm);
+            }
+        }
+
         // 8. Active Starting Wars — or, under an applied history, the wars, truces and claims it
         // left, in place of the invented ones: the start date opens on the history's own quarrels.
         if (diplomacy is { CarriesWars: true })
@@ -1652,8 +1664,10 @@ public sealed partial class PrehistoryMap
                 && !(map.Truces.TryGetValue(a, out var had) && had.Any(t => t.TargetCounty == b)))
                 AddTruce(map, a, b, days);
 
-        foreach (var (claimant, target) in diplomacy.Claims)
-            if (rulers.Contains(claimant) && TopLiegeCounty(target, realms) != TopLiegeCounty(claimant, realms))
+        // Claims in their final 25 simulated years are too old to seed a fresh opening dispute.
+        foreach (var (claimant, target, remainingYears) in diplomacy.Claims)
+            if (remainingYears > 25 && rulers.Contains(claimant)
+                && TopLiegeCounty(target, realms) != TopLiegeCounty(claimant, realms))
                 AddClaim(map, claimant, target, pressed: true);
 
         if (!cfg.EnableStartingWars) return;

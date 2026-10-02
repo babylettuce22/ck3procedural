@@ -1172,11 +1172,13 @@ public static class ChronicleRuntimeWriter
         string Var(string part) => $"ROOT.Title.MakeScope.Var('{p}_{slot}_{part}')";
         return text
             .Replace("{year}", $"#weak [{Var("year")}.GetValue|0]#!")
-            .Replace("{actor}", $"[{Var("actor")}.Char.GetTitledFirstName]")
-            .Replace("{other}", $"[{Var("other")}.Title.GetName]")
+            // Keep the native scope link (never a NoTooltip name). L is vanilla's
+            // game_link format: underline the interactive words so readers can find them.
+            .Replace("{actor}", $"[{Var("actor")}.Char.GetShortUIName|L]")
+            .Replace("{other}", $"[{Var("other")}.Title.GetName|L]")
             // The same `other` slot, cast differently: a faith or a culture where the template
             // says so. Both casts are vanilla's (`.Faith.GetName` 18 uses, `.Culture.GetName` 8).
-            .Replace("{faith}", $"[{Var("other")}.Faith.GetName]")
-            .Replace("{culture}", $"[{Var("other")}.Culture.GetName]");
+            .Replace("{faith}", $"[{Var("other")}.Faith.GetName|L]")
+            .Replace("{culture}", $"[{Var("other")}.Culture.GetName|L]");
     }
 }

@@ -1542,6 +1542,8 @@ public static class GuiWriter
         {
             var line = RuntimeLine(slot);
             box.Add(GuiBuilder.TextMulti()
+                // Match the world chronicle: hover/click belongs to each native name link.
+                .AlwaysTransparent(false)
                 .ExpandingH()
                 .AutoResize()
                 .MaxWidth(370)

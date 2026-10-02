@@ -11,7 +11,7 @@ namespace Ck3MapGen.MapGen;
 public sealed record SimDiplomacy(
     List<SimDiplomacy.OngoingWar> Wars,
     List<(Title A, Title B, int Days)> Truces,
-    List<(Title Claimant, Title Target)> Claims,
+    List<(Title Claimant, Title Target, int RemainingYears)> Claims,
     List<SimDiplomacy.HouseFeud>? Feuds = null)
 {
     /// <summary>A war under way on the start date, by the seats of its two sides and the county fought from.</summary>
@@ -581,7 +581,7 @@ public sealed class AppliedHistory
 
         var claims = Claims
             .Where(c => c.Until > Year && capitals.ContainsKey(c.Claimant) && byIndex.ContainsKey(c.County))
-            .Select(c => (capitals[c.Claimant], byIndex[c.County]))
+            .Select(c => (capitals[c.Claimant], byIndex[c.County], c.Until - Year))
             .ToList();
 
         // A house whose head's realm titling folded away takes its grudges with it, as a war's side does.

@@ -160,7 +160,8 @@ internal sealed class QuickPage : Panel
         _size = new ChoiceGroup<QuickSize>("Size", "How big the map is. Bigger worlds take longer to make.", QuickSize.Standard)
             .Add(QuickSize.Small, "Small", "4096 × 2048 · quickest to make", "quickSizeSmall")
             .Add(QuickSize.Standard, "Standard", "8192 × 4096 · recommended", "quickSizeStandard")
-            .Add(QuickSize.Large, "Large", "9216 × 4608 · half of vanilla", "quickSizeLarge");
+            .Add(QuickSize.Large, "Large", "9216 × 4608 · half of vanilla", "quickSizeLarge")
+            .Add(QuickSize.Vanilla, "Vanilla", "18432 × 9216 · full vanilla size, slowest to make", "quickSizeVanilla");
         _era = new ChoiceGroup<QuickEra>("Era", "When the game begins, and how advanced its cultures are.", QuickEra.High)
             .Add(QuickEra.Early, "Early medieval", "867 · tribes and young kingdoms", "quickEraEarly")
             .Add(QuickEra.High, "High medieval", "1066 · feudal realms at their height", "quickEraHigh")
@@ -966,7 +967,7 @@ internal sealed class QuickPage : Panel
     // ================================================================ review
 
     private static readonly Dictionary<QuickSize, string> SizeNames = new()
-        { [QuickSize.Small] = "Small", [QuickSize.Standard] = "Standard", [QuickSize.Large] = "Large" };
+        { [QuickSize.Small] = "Small", [QuickSize.Standard] = "Standard", [QuickSize.Large] = "Large", [QuickSize.Vanilla] = "Vanilla" };
     private static readonly Dictionary<QuickEra, string> EraNames = new()
         { [QuickEra.Early] = "Early medieval", [QuickEra.High] = "High medieval", [QuickEra.Late] = "Late medieval" };
     private static readonly Dictionary<QuickClimate, string> ClimateNames = new()

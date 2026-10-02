@@ -1,4 +1,4 @@
-﻿# Nobody of a generated faith makes war on its own landed spiritual Head of Faith (AI only).
+﻿# The AI of a generated faith rarely makes war on its own landed spiritual Head of Faith.
 #
 # Why: generated heads are seated on a county (MapGen/Peoples/HeadSeats.cs), and a head who loses his
 # last county loses the head title with it (the title is not landless once landed). Over three
@@ -14,8 +14,10 @@
 # invasion, subjugation, tributary and vassalisation war (casus_belli_types, 19 uses in 1.20.0.3), so
 # extending it is the one place that covers them all. For a generated faith with a spiritual head
 # (gen_settled_doctrine, spiritual_head_of_faith), any AI ruler of that faith scores a war on the head
-# at 0. A head sworn to a protector is not the defender in a war over his land (the protector is),
-# so this changes nothing for protected heads or for the protector's own wars. Rulers of other
+# at a tenth (a zealous one, vanilla's 0.15 on top, at 0.015): rare, as vanilla makes it for the
+# zealous, but still possible (the user's choice, 2026-10-02, over a flat 0). A head sworn to a
+# protector is not the defender in a war over his land (the protector is), so this changes nothing
+# for protected heads or for the protector's own wars. Rulers of other
 # faiths are untouched: HeadSeats keeps independent heads off land another faith's ruler has a de
 # jure claim on. Players can still declare.
 #
@@ -45,6 +47,6 @@ zealous_war_on_head_of_faith_ai_score_value = {
 				}
 			}
 		}
-		multiply = 0
+		multiply = 0.1
 	}
 }

@@ -235,6 +235,8 @@ public static class ChronicleWindow
         {
             var line = Line(slot);
             box.Add(GuiBuilder.TextMulti()
+                // Native links inside the localized sentence need the text to take mouse input.
+                .AlwaysTransparent(false)
                 .ExpandingH()
                 .AutoResize()
                 .MaxWidth(RowWidth)
