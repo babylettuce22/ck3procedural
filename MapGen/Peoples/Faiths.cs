@@ -1177,6 +1177,9 @@ public static class Faiths
                 // Clergy of the sex the faith already favours, most of the time. An open
                 // priesthood is the interesting exception rather than the rule, so it is what the
                 // remaining fifth gets.
+                // A world asked to be equal everywhere has no closed priesthoods either.
+                "doctrine_clerical_gender" when cfg.Gender == GenderPreference.Equal
+                    => Prefer(members, ["doctrine_clerical_gender_either"], rng),
                 "doctrine_clerical_gender" => Prefer(members, gender switch
                 {
                     "doctrine_gender_female_dominated" => rng.Chance(0.8)
@@ -1543,6 +1546,9 @@ public static class Faiths
     /// single faith answers the question the same way has nothing to notice about any of them: the
     /// two percent that lean the other way are what make the other ninety-eight legible as a
     /// choice. Equal is the middle rung on CK3's own scale and is never rare.
+    ///
+    /// <see cref="GenderPreference.Equal"/> is the one absolute: it is asked for by name as a world
+    /// with no exceptions, so it gets none.
     /// </summary>
     private static string GenderDoctrine(GenderPreference preference, Rng rng)
     {
@@ -1550,6 +1556,7 @@ public static class Faiths
 
         return preference switch
         {
+            GenderPreference.Equal => "doctrine_gender_equal",
             GenderPreference.FemaleDominated => roll switch
             {
                 < 0.86 => "doctrine_gender_female_dominated",

@@ -80,8 +80,8 @@ internal sealed class ModListDialog : ChromeForm
         BackColor = Theme.Background;
         ForeColor = Theme.Text;
         Font = Theme.Ui;
-        ClientSize = new Size(560, 470);
-        MinimumSize = new Size(440, 340);
+        ClientSize = Dpi.S(560, 470);
+        MinimumSize = Dpi.S(440, 340);
         AcceptButton = _ok;
         CancelButton = _cancel;
 
@@ -90,14 +90,14 @@ internal sealed class ModListDialog : ChromeForm
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 5,
-            Padding = new Padding(14, 12, 14, 10),
+            Padding = Dpi.Pad(14, 12, 14, 10),
             BackColor = Theme.Background,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));      // caption
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // the list, and the slack
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // the count
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));  // the warning
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, Dpi.S(24)));  // the count
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, Dpi.S(58)));  // the warning
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));      // buttons
 
         var caption = new Label
@@ -105,7 +105,7 @@ internal sealed class ModListDialog : ChromeForm
             Text = "What Crusader Kings III loads on the next start, top to bottom.",
             AutoSize = true,
             ForeColor = Theme.TextDim,
-            Margin = new Padding(0, 0, 0, 6),
+            Margin = Dpi.Pad(0, 0, 0, 6),
         };
 
         var buttons = new FlowLayoutPanel

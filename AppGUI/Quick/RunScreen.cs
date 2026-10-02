@@ -314,11 +314,13 @@ internal sealed class RunScreen : Panel
         Show(_donePanel);
     }
 
-    public void SetDoneImage(Bitmap bitmap, string chip)
+    /// <param name="probe">What a hover over this picture shows; see <see cref="MapPreview.Probe"/>.</param>
+    public void SetDoneImage(Bitmap bitmap, string chip, Func<PointF, MapHover?>? probe = null)
     {
         if (_mode != Mode.Done) { bitmap.Dispose(); return; }
         _doneMap.Image = bitmap;
         _doneMap.Chip = chip;
+        _doneMap.Probe = probe;
     }
 
     /// <summary>The run stopped short: cancelled, or failed.</summary>

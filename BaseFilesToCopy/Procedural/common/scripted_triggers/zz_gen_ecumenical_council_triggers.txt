@@ -15,9 +15,9 @@
 # localization/replace/english/zz_gen_ecumenical_council_l_english.yml.
 #
 # Who may host is still vanilla's activity rule: a Head of Faith, an ecclesiastical ruler, or a
-# theological-agent puppet; a faith with clerical regions also needs 5 region holders
-# (ecumenical_council_min_clerical_region_holders), kept at vanilla's value on purpose (the user,
-# 2026-10-01). The activity is By God Alone's (has_pam_dlc_trigger) and stays so.
+# theological-agent puppet; a faith with clerical regions also needs a quorum of region holders
+# (ecumenical_council_min_clerical_region_holders: vanilla's 5, scaled to a generated faith's sees in
+# zz_gen_ecumenical_council_values.txt). The activity is By God Alone's (has_pam_dlc_trigger) and stays so.
 #
 # Which faiths: any with a Head of Faith title, held or not (the user's choice, 2026-10-01).
 

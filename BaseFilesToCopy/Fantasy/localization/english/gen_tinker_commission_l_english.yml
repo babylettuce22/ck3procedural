@@ -53,7 +53,7 @@
  gen_tk_commission_lost_prison.tt: "[gen_tk_c_lost_maker.GetFirstName] has been thrown in a cell, and your contraption will not be finished. Half of what you paid is returned from [gen_tk_c_lost_maker.GetHerHis] workshop."
 
  # ============ 0401: the hurry letter ============
- gen_tinker.0401.t: "A Letter from Your Patron"
+ gen_tinker.0401.t: "Tinkerer: A Letter from Your Patron"
  gen_tinker.0401.desc: "A letter from [gen_tk_c_patron.GetTitledFirstName] has arrived, and it is not about the weather. [gen_tk_c_patron.GetSheHe|U] would like to know where [gen_tk_c_patron.GetHerHis] contraption is, why it is not finished, and whether you have been sleeping.\n\nYou have, a little."
  gen_tinker.0401.a: "I'll work through the nights."
  gen_tinker.0401.b: "Tell [gen_tk_c_patron.GetHerHim] genius cannot be hurried."
@@ -65,7 +65,7 @@
  gen_tinker.0401.b.toast.tt: "[gen_tk_c_root.GetFirstName] writes back that the contraption will be done when it is done, and not a day sooner."
 
  # ============ 0402: better parts ============
- gen_tinker.0402.t: "Faster Parts Cost Gold"
+ gen_tinker.0402.t: "Tinkerer: Faster Parts Cost Gold"
  gen_tinker.0402.desc: "[gen_tk_c_maker.GetFirstName] has answered your letter. The work would go faster, [gen_tk_c_maker.GetSheHe] writes, with better springs and harder brass, and those do not come cheap. The letter ends with a sum, underlined twice."
  gen_tinker.0402.a: "Fine. Buy the good springs."
  gen_tinker.0402.b: "I have paid enough already."
@@ -77,10 +77,10 @@
  gen_tinker.0402.b.toast.tt: "[gen_tk_c_root.GetFirstName] will not pay for better parts. The work goes on as before."
 
  # ============ 0450: the delivery ============
- gen_tinker.0450.t.masterwork: "A Masterwork Delivered"
- gen_tinker.0450.t.works: "The Contraption Arrives"
- gen_tinker.0450.t.dud: "A Dud Delivered"
- gen_tinker.0450.t.explodes: "Up in Smoke"
+ gen_tinker.0450.t.masterwork: "Tinkerer: A Masterwork Delivered"
+ gen_tinker.0450.t.works: "Tinkerer: The Contraption Arrives"
+ gen_tinker.0450.t.dud: "Tinkerer: A Dud Delivered"
+ gen_tinker.0450.t.explodes: "Tinkerer: Up in Smoke"
  gen_tinker.0450.desc.curio: "[gen_tk_tinkerer.GetFirstNamePossessive] cart rolls into your courtyard with the clockwork curio you paid for, wrapped in three blankets and a great deal of string. "
  gen_tinker.0450.desc.mill: "[gen_tk_tinkerer.GetFirstName] arrives with the plans, the brass and the wheels for the waterworks you paid for, and a crew already ankle-deep in your river. "
  gen_tinker.0450.desc.engine: "Eleven crates arrive from [gen_tk_tinkerer.GetFirstNamePossessive] workshop: the war engine you paid for, and a note asking you not to stand in front of it. "

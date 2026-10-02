@@ -1522,6 +1522,7 @@ public static class GuiWriter
 
         var box = GuiBuilder.VBox()
             .ExpandingH()
+            .IgnoreInvisible()
             .Spacing(8)
             .Gap().Add(
                 GuiBuilder.TextMulti()
@@ -1541,6 +1542,12 @@ public static class GuiWriter
         for (int slot = ChronicleRuntimeWriter.TitleSlots - 1; slot >= 0; slot--)
         {
             var line = RuntimeLine(slot);
+            var year = GuiExpr.Raw($"Title.Custom('{ChronicleRuntimeWriter.TitleYear(slot)}')");
+            box.Add(GuiBuilder.TextSingle()
+                .ExpandingH()
+                .Format("#high")
+                .Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(year)))
+                .Text(year));
             box.Add(GuiBuilder.TextMulti()
                 // Match the world chronicle: hover/click belongs to each native name link.
                 .AlwaysTransparent(false)

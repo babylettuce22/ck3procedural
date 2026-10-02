@@ -1,0 +1,33 @@
+﻿namespace = gen_synod
+
+# A Synod Seat vanilla wanted to destroy, a day later (zz_gen_pam_cardinal_title_effects.txt).
+# Root: the character it was stripped from; scope:gen_stripped_seat came with the event.
+# It goes to a new archbishop of its faith unless, by now, it sits with someone who may hold it
+# (its see's holder may have taken it back in the meantime).
+#
+# A head of faith counts as one, so he keeps the seat of the primate see: vanilla's "a Head of Faith
+# must not sit in the College" (pam_vacate_head_of_faith_cardinalate_effect, every title gain) would
+# otherwise strip it from each new head, and the seat follows its see, so a new archbishop would hand
+# it straight back to him. He cannot vote in his own succession, so the seat costs nothing.
+gen_synod.0001 = {
+	type = character_event
+	hidden = yes
+
+	trigger = {
+		exists = scope:gen_stripped_seat
+		scope:gen_stripped_seat = { has_variable = gen_synod_faith }
+	}
+
+	immediate = {
+		if = {
+			limit = {
+				NOT = {
+					scope:gen_stripped_seat.holder ?= {
+						gen_synod_rightful_holder_trigger = { FAITH = scope:gen_stripped_seat.var:gen_synod_faith }
+					}
+				}
+			}
+			gen_synod_seat_fresh_holder_effect = { SEAT = scope:gen_stripped_seat }
+		}
+	}
+}

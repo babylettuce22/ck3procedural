@@ -40,12 +40,12 @@ public sealed class TitleEditor : UserControl
 
     private readonly TextBox _search = new()
     {
-        Width = 160,
+        Width = Dpi.S(160),
         BorderStyle = BorderStyle.FixedSingle,
         BackColor = Theme.SurfaceHigh,
         ForeColor = Theme.Text,
         Font = Theme.Ui,
-        Margin = new Padding(6, 5, 3, 3),
+        Margin = Dpi.Pad(6, 5, 3, 3),
     };
 
     private readonly Label _count = new()
@@ -53,7 +53,7 @@ public sealed class TitleEditor : UserControl
         AutoSize = true,
         ForeColor = Theme.TextDim,
         Font = Theme.Ui,
-        Margin = new Padding(10, 8, 0, 0),
+        Margin = Dpi.Pad(10, 8, 0, 0),
     };
 
     private readonly Label _empty = new()
@@ -130,8 +130,8 @@ public sealed class TitleEditor : UserControl
         var header = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 32,
-            Padding = new Padding(4, 3, 4, 0),
+            Height = Dpi.S(32),
+            Padding = Dpi.Pad(4, 3, 4, 0),
             BackColor = Theme.Surface,
         };
 
@@ -152,7 +152,7 @@ public sealed class TitleEditor : UserControl
             AutoSize = true,
             ForeColor = Theme.TextDim,
             Font = Theme.Ui,
-            Margin = new Padding(4, 9, 2, 0),
+            Margin = Dpi.Pad(4, 9, 2, 0),
         };
 
     // --- Loading ------------------------------------------------------------------------------

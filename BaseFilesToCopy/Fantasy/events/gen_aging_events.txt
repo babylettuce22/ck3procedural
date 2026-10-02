@@ -334,8 +334,12 @@ gen_aging.0011 = {
 	trigger = {
 		is_alive = yes
 		is_pregnant = no
+		fertility > 0
 		exists = scope:father
-		scope:father = { is_alive = yes }
+		scope:father = {
+			is_alive = yes
+			fertility > 0
+		}
 	}
 
 	immediate = {

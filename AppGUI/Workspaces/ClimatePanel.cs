@@ -69,18 +69,18 @@ public sealed class ClimatePanel : UserControl
     private readonly FlowLayoutPanel _palette = new()
     {
         Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, WrapContents = false,
-        AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(6, 2, 6, 2),
+        AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = Dpi.Pad(6, 2, 6, 2),
     };
     private readonly List<Button> _swatches = [];
     private readonly Button _more = Theme.MakeButton("More climates ▾", 200);
     private readonly Button _erase = Theme.MakeButton("Restore automatic", 200);
-    private readonly TrackBar _size = new() { Minimum = 4, Maximum = 300, Value = 40, TickStyle = TickStyle.None, Width = 190, AutoSize = false, Height = 26 };
-    private readonly TrackBar _strength = new() { Minimum = 5, Maximum = 100, Value = 100, TickStyle = TickStyle.None, Width = 190, AutoSize = false, Height = 26 };
-    private readonly TrackBar _softness = new() { Minimum = 0, Maximum = 100, Value = 75, TickStyle = TickStyle.None, Width = 190, AutoSize = false, Height = 26 };
+    private readonly TrackBar _size = new() { Minimum = 4, Maximum = 300, Value = 40, TickStyle = TickStyle.None, Width = Dpi.S(190), AutoSize = false, Height = Dpi.S(26) };
+    private readonly TrackBar _strength = new() { Minimum = 5, Maximum = 100, Value = 100, TickStyle = TickStyle.None, Width = Dpi.S(190), AutoSize = false, Height = Dpi.S(26) };
+    private readonly TrackBar _softness = new() { Minimum = 0, Maximum = 100, Value = 75, TickStyle = TickStyle.None, Width = Dpi.S(190), AutoSize = false, Height = Dpi.S(26) };
     private readonly Button _undo = Theme.MakeButton("Undo", 62);
     private readonly Button _redo = Theme.MakeButton("Redo", 62);
     private readonly Button _clear = Theme.MakeButton("Clear all", 70);
-    private readonly CheckBox _automatic = new() { Text = "Use automatic climate", AutoSize = true, Margin = new Padding(8, 8, 0, 4) };
+    private readonly CheckBox _automatic = new() { Text = "Use automatic climate", AutoSize = true, Margin = Dpi.Pad(8, 8, 0, 4) };
     private readonly Button _import = Theme.MakeButton("Import…", 96);
     private readonly Button _export = Theme.MakeButton("Export…", 96);
     private readonly Label _hint;
@@ -93,7 +93,7 @@ public sealed class ClimatePanel : UserControl
     private bool _splitPlaced;
 
     /// <summary>The palette column, in pixels. Wide enough for the longest brush name and the sliders.</summary>
-    private const int LeftWidth = 236;
+    private static int LeftWidth => Dpi.S(236);
 
     /// <summary>
     /// The splitter is placed here, not in the constructor: a SplitContainer clamps its distance
@@ -125,8 +125,8 @@ public sealed class ClimatePanel : UserControl
         {
             Dock = DockStyle.Top,
             AutoSize = false,
-            Height = 66,
-            Padding = new Padding(8, 6, 8, 0),
+            Height = Dpi.S(66),
+            Padding = Dpi.Pad(8, 6, 8, 0),
             ForeColor = Theme.TextDim,
             Text = "Choose a climate and paint a region. Climate follows your paint; elevation adds local variation.",
         };
@@ -134,9 +134,9 @@ public sealed class ClimatePanel : UserControl
         _status = new Label
         {
             Dock = DockStyle.Bottom,
-            Height = 24,
+            Height = Dpi.S(24),
             TextAlign = ContentAlignment.MiddleLeft,
-            Padding = new Padding(8, 0, 8, 0),
+            Padding = Dpi.Pad(8, 0, 8, 0),
             BackColor = Theme.Surface,
             ForeColor = Theme.TextDim,
             AutoEllipsis = true,
@@ -146,9 +146,9 @@ public sealed class ClimatePanel : UserControl
         _readout = new Label
         {
             Dock = DockStyle.Bottom,
-            Height = 22,
+            Height = Dpi.S(22),
             TextAlign = ContentAlignment.MiddleLeft,
-            Padding = new Padding(8, 0, 8, 0),
+            Padding = Dpi.Pad(8, 0, 8, 0),
             BackColor = Theme.Surface,
             ForeColor = Theme.Text,
             AutoEllipsis = true,
@@ -158,7 +158,7 @@ public sealed class ClimatePanel : UserControl
         {
             AutoSize = true,
             ForeColor = Theme.TextDim,
-            Margin = new Padding(12, 8, 0, 0),
+            Margin = Dpi.Pad(12, 8, 0, 0),
         };
 
         var split = _split = new SplitContainer
@@ -191,7 +191,7 @@ public sealed class ClimatePanel : UserControl
         var column = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Theme.Surface };
 
         // Docked Top controls stack in reverse order of addition; build bottom-up.
-        var file = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(4, 2, 4, 6) };
+        var file = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = Dpi.Pad(4, 2, 4, 6) };
         file.Controls.Add(_import);
         file.Controls.Add(_export);
         _tips.SetToolTip(_import, "Load a climate paint PNG saved from here or beside a preset");
@@ -204,7 +204,7 @@ public sealed class ClimatePanel : UserControl
         _tips.SetToolTip(_automatic, "Generate with the model's own climate everywhere, keeping the paint for later. For comparing the two.");
         _automatic.CheckedChanged += (_, _) => OnAutomaticChanged();
 
-        var history = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(4, 4, 4, 2) };
+        var history = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = Dpi.Pad(4, 4, 4, 2) };
         history.Controls.Add(_undo);
         history.Controls.Add(_redo);
         history.Controls.Add(_clear);
@@ -217,7 +217,7 @@ public sealed class ClimatePanel : UserControl
 
         var brush = new TableLayoutPanel
         {
-            Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(6, 4, 6, 0),
+            Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = Dpi.Pad(6, 4, 6, 0),
         };
         brush.Controls.Add(Section("Brush"));
         brush.Controls.Add(Caption("Size"));
@@ -232,7 +232,7 @@ public sealed class ClimatePanel : UserControl
         foreach (var bar in new[] { _size, _strength, _softness })
             bar.ValueChanged += (_, _) => _canvas.Invalidate();
 
-        var tools = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = new Padding(4, 2, 4, 0) };
+        var tools = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = Dpi.Pad(4, 2, 4, 0) };
         tools.Controls.Add(_erase);
         _erase.Click += (_, _) => SelectBrush(-1);
         _tips.SetToolTip(_erase, "Erase climate paint, letting the model's own climate come back through");
@@ -259,8 +259,8 @@ public sealed class ClimatePanel : UserControl
         var strip = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 34,
-            Padding = new Padding(6, 4, 4, 0),
+            Height = Dpi.S(34),
+            Padding = Dpi.Pad(6, 4, 4, 0),
             BackColor = Theme.Surface,
             WrapContents = false,
         };
@@ -302,12 +302,12 @@ public sealed class ClimatePanel : UserControl
             var swatch = new Button
             {
                 Text = brush.Name,
-                Width = 200,
-                Height = 26,
-                Margin = new Padding(0, 1, 0, 1),
+                Width = Dpi.S(200),
+                Height = Dpi.S(26),
+                Margin = Dpi.Pad(0, 1, 0, 1),
                 FlatStyle = FlatStyle.Flat,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(30, 0, 0, 0),
+                Padding = Dpi.Pad(30, 0, 0, 0),
                 BackColor = Theme.Surface,
                 ForeColor = Theme.Text,
                 Font = Theme.Ui,
@@ -333,7 +333,7 @@ public sealed class ClimatePanel : UserControl
     private static void PaintSwatch(Button button, Graphics g, (byte R, byte G, byte B) colour)
     {
         using var fill = new SolidBrush(Color.FromArgb(colour.R, colour.G, colour.B));
-        var square = new Rectangle(6, (button.Height - 16) / 2, 18, 16);
+        var square = new Rectangle(Dpi.S(6), (button.Height - Dpi.S(16)) / 2, Dpi.S(18), Dpi.S(16));
         g.FillRectangle(fill, square);
         using var pen = new Pen(Color.FromArgb(90, 0, 0, 0));
         g.DrawRectangle(pen, square);
@@ -345,8 +345,8 @@ public sealed class ClimatePanel : UserControl
         AutoSize = true,
         Font = Theme.UiBold,
         ForeColor = Theme.Accent,
-        Margin = new Padding(0, 6, 0, 2),
-        Padding = new Padding(2, 0, 0, 0),
+        Margin = Dpi.Pad(0, 6, 0, 2),
+        Padding = Dpi.Pad(2, 0, 0, 0),
         Dock = DockStyle.Top,
     };
 
@@ -355,7 +355,7 @@ public sealed class ClimatePanel : UserControl
         Text = text,
         AutoSize = true,
         ForeColor = Theme.TextDim,
-        Margin = new Padding(4, 7, 3, 0),
+        Margin = Dpi.Pad(4, 7, 3, 0),
     };
 
     // ------------------------------------------------------------------ host API

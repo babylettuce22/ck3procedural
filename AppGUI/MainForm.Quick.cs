@@ -326,13 +326,58 @@ public sealed partial class MainForm
 
         try
         {
-            var image = await Task.Run(() => mode.Render(result, written));
-            run.SetDoneImage(ToBitmap(image), mode.Name == "Realms" ? "Realms at the start" : mode.Name);
+            var (image, probe) = await Task.Run(() => (mode.Render(result, written), RealmProbe(result, written)));
+            run.SetDoneImage(ToBitmap(image), mode.Name == "Realms" ? "Realms at the start" : mode.Name, probe);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Could not draw the finished world's map: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// The done picture's hover card: the independent realm under the cursor, its ruler and its
+    /// size. Read-only by construction, since the mod is already written. Built off the UI thread
+    /// with the picture, over the same world, so the two cannot disagree. Null when the world has
+    /// no realm structure to read.
+    /// </summary>
+    private static Func<PointF, LaunchUi.MapHover?>? RealmProbe(GenerationResult result, Emit.WrittenContent written)
+    {
+        if (RealmGraph.Build(written, result) is not { } graph) return null;
+
+        var baronies = new MapGen.Title?[result.BaronyCount + 1];
+        foreach (var title in MapGen.Titles.Flatten(result.Titles))
+            if (title.Tier == "b" && title.ProvinceId >= 1 && title.ProvinceId <= result.BaronyCount)
+                baronies[title.ProvinceId] = title;
+
+        var map = result.Provinces;
+        var cards = new Dictionary<MapGen.Title, LaunchUi.MapHover>();
+
+        return at =>
+        {
+            int mx = Math.Clamp((int)(at.X * map.Width), 0, map.Width - 1);
+            int my = Math.Clamp((int)(at.Y * map.Height), 0, map.Height - 1);
+            int id = result.ProvinceOrder[map.Label[my * map.Width + mx]];
+            if (id < 1 || id > result.BaronyCount) return null;   // sea and impassable
+
+            var county = baronies[id];
+            while (county is not null && county.Tier != "c") county = county.Parent;
+            if (county is null) return null;
+
+            var top = graph.PathFromTop(graph.SeatOfCounty(county))[0];
+            if (cards.TryGetValue(top, out var known)) return known;
+
+            var primary = graph.Primary(top);
+            int counties = graph.RealmSize(top);
+            var lines = new List<string>
+            {
+                $"{TitleInspector.TierName(primary)} · {counties} {(counties == 1 ? "county" : "counties")}",
+            };
+            if (written.Rulers is { } rulers && rulers.TryGet(top, out var ruler))
+                lines.Add($"Ruled by {ruler.Name}");
+
+            return cards[top] = new LaunchUi.MapHover(primary.Name, lines);
+        };
     }
 
     // --- History: the Quick world lived on until the player accepts it ---------------------------

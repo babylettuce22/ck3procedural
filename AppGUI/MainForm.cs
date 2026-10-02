@@ -25,11 +25,11 @@ public sealed partial class MainForm : ChromeForm
     {
         Minimum = 0,
         Maximum = int.MaxValue,
-        Width = 92,
+        Width = Dpi.S(92),
         BorderStyle = BorderStyle.FixedSingle,
         BackColor = Theme.SurfaceHigh,
         ForeColor = Theme.Text,
-        Margin = new Padding(3, 5, 3, 3),
+        Margin = Dpi.Pad(3, 5, 3, 3),
     };
 
     private readonly Button _browse = Theme.MakeButton("Heightmap…", 100);
@@ -44,7 +44,7 @@ public sealed partial class MainForm : ChromeForm
     // than controls. Their .Text/.Checked/.Enabled read the same from the calling code either way.
     private readonly ToolStripTextBox _launchArgs = new()
     {
-        Size = new Size(200, 23),
+        Size = Dpi.S(200, 23),
         BorderStyle = BorderStyle.FixedSingle,
         BackColor = Theme.SurfaceHigh,
         ForeColor = Theme.Text,
@@ -68,7 +68,7 @@ public sealed partial class MainForm : ChromeForm
     private readonly ListBox _sections = new()
     {
         Dock = DockStyle.Left,
-        Width = 118,
+        Width = Dpi.S(118),
         BorderStyle = BorderStyle.None,
         BackColor = Theme.Surface,
         ForeColor = Theme.Text,
@@ -78,11 +78,11 @@ public sealed partial class MainForm : ChromeForm
 
     private readonly TextBox _settingsSearch = new()
     {
-        Width = 170,
+        Width = Dpi.S(170),
         BorderStyle = BorderStyle.FixedSingle,
         BackColor = Theme.SurfaceHigh,
         ForeColor = Theme.Text,
-        Margin = new Padding(3, 5, 3, 3),
+        Margin = Dpi.Pad(3, 5, 3, 3),
     };
 
     private readonly CheckBox _advanced = new()
@@ -91,13 +91,13 @@ public sealed partial class MainForm : ChromeForm
         AutoSize = true,
         ForeColor = Theme.Text,
         Font = Theme.Ui,
-        Margin = new Padding(10, 6, 0, 0),
+        Margin = Dpi.Pad(10, 6, 0, 0),
     };
 
     private readonly ComboBox _drape = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
-        Width = 132,
+        Width = Dpi.S(132),
         Font = Theme.Ui,
         FlatStyle = FlatStyle.Flat,
         Enabled = false,
@@ -153,16 +153,16 @@ public sealed partial class MainForm : ChromeForm
     private readonly FlowLayoutPanel _categoryStrip = new()
     {
         Dock = DockStyle.Top,
-        Height = 30,
-        Padding = new Padding(4, 3, 4, 0),
+        Height = Dpi.S(30),
+        Padding = Dpi.Pad(4, 3, 4, 0),
         BackColor = Theme.Surface,
     };
 
     private readonly FlowLayoutPanel _modeStrip = new()
     {
         Dock = DockStyle.Top,
-        Height = 30,
-        Padding = new Padding(4, 2, 4, 0),
+        Height = Dpi.S(30),
+        Padding = Dpi.Pad(4, 2, 4, 0),
         BackColor = Theme.Surface,
     };
 
@@ -173,7 +173,7 @@ public sealed partial class MainForm : ChromeForm
         Dock = DockStyle.Top,
         AutoSize = true,
         WrapContents = true,
-        Padding = new Padding(6, 2, 4, 2),
+        Padding = Dpi.Pad(6, 2, 4, 2),
         BackColor = Theme.Surface,
         Visible = false,
     };
@@ -193,11 +193,11 @@ public sealed partial class MainForm : ChromeForm
 
     private readonly TextBox _logSearch = new()
     {
-        Width = 120,
+        Width = Dpi.S(120),
         BorderStyle = BorderStyle.FixedSingle,
         BackColor = Theme.SurfaceHigh,
         ForeColor = Theme.Text,
-        Margin = new Padding(8, 5, 3, 3),
+        Margin = Dpi.Pad(8, 5, 3, 3),
     };
 
     private readonly Label _status = new()
@@ -206,24 +206,24 @@ public sealed partial class MainForm : ChromeForm
         TextAlign = ContentAlignment.MiddleLeft,
         ForeColor = Theme.Text,
         Font = Theme.Ui,
-        Padding = new Padding(8, 0, 0, 0),
+        Padding = Dpi.Pad(8, 0, 0, 0),
         Text = "Ready",
     };
 
     private readonly Label _readout = new()
     {
         Dock = DockStyle.Right,
-        Width = 560,
+        Width = Dpi.S(560),
         TextAlign = ContentAlignment.MiddleRight,
         ForeColor = Theme.TextDim,
         Font = Theme.Ui,
-        Padding = new Padding(0, 0, 8, 0),
+        Padding = Dpi.Pad(0, 0, 8, 0),
     };
 
     private readonly ProgressBar _progress = new()
     {
         Dock = DockStyle.Right,
-        Width = 150,
+        Width = Dpi.S(150),
         Style = ProgressBarStyle.Marquee,
         MarqueeAnimationSpeed = 25,
         Maximum = 1000,
@@ -234,11 +234,11 @@ public sealed partial class MainForm : ChromeForm
     private readonly Label _eta = new()
     {
         Dock = DockStyle.Right,
-        Width = 170,
+        Width = Dpi.S(170),
         TextAlign = ContentAlignment.MiddleRight,
         ForeColor = Theme.TextDim,
         Font = Theme.Ui,
-        Padding = new Padding(0, 0, 8, 0),
+        Padding = Dpi.Pad(0, 0, 8, 0),
         Visible = false,
     };
 
@@ -257,7 +257,7 @@ public sealed partial class MainForm : ChromeForm
     private bool _logOpen;
 
     /// <summary>The log's height while open, kept across collapses and sessions.</summary>
-    private int _logHeight = 200;
+    private int _logHeight = Dpi.S(200);
 
     private readonly Dictionary<string, Button> _viewButtons = [];
     private readonly Dictionary<string, Button> _categoryButtons = [];
@@ -273,7 +273,7 @@ public sealed partial class MainForm : ChromeForm
     private readonly Panel _pendingBar = new()
     {
         Dock = DockStyle.Top,
-        Height = 34,
+        Height = Dpi.S(34),
         BackColor = Theme.Notice,
         Visible = false,
     };
@@ -287,7 +287,7 @@ public sealed partial class MainForm : ChromeForm
         TextAlign = ContentAlignment.MiddleLeft,
         ForeColor = Theme.NoticeText,
         Font = Theme.Ui,
-        Padding = new Padding(8, 0, 0, 0),
+        Padding = Dpi.Pad(8, 0, 0, 0),
     };
 
     /// <summary>
@@ -317,7 +317,7 @@ public sealed partial class MainForm : ChromeForm
     private readonly ComboBox _sourceMode = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
-        Width = 158,
+        Width = Dpi.S(158),
         Font = Theme.Ui,
         FlatStyle = FlatStyle.Flat,
     };
@@ -328,8 +328,8 @@ public sealed partial class MainForm : ChromeForm
         Maximum = 400,
         Value = 100,
         TickStyle = TickStyle.None,
-        Width = 110,
-        Height = 24,
+        Width = Dpi.S(110),
+        Height = Dpi.S(24),
     };
 
     private readonly Label _sourceReadout = new()
@@ -337,7 +337,7 @@ public sealed partial class MainForm : ChromeForm
         AutoSize = true,
         ForeColor = Theme.TextDim,
         Font = Theme.Ui,
-        Padding = new Padding(0, 5, 0, 0),
+        Padding = Dpi.Pad(0, 5, 0, 0),
     };
 
     private MapGen.HeightmapImage? _loaded;
@@ -384,7 +384,7 @@ public sealed partial class MainForm : ChromeForm
 
         Text = "CK3 Procedural Map";
         StartPosition = FormStartPosition.Manual;
-        MinimumSize = new Size(1000, 640);
+        MinimumSize = Dpi.Fit(1000, 640, Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1000, 640));
         BackColor = Theme.Background;
         ForeColor = Theme.Text;
         Font = Theme.Ui;
@@ -466,7 +466,7 @@ public sealed partial class MainForm : ChromeForm
         _recent.Click += (_, _) => ShowRecentHeightmaps();
         _tips.SetToolTip(_recent, "Recent heightmaps");
         _azgaar.AutoSize = true;
-        _azgaar.MaximumSize = new Size(130, 0);
+        _azgaar.MaximumSize = Dpi.S(130, 0);
         _azgaar.AutoEllipsis = true;
         _azgaar.Click += (_, _) => ShowAzgaarMenu();
         ApplyAzgaarChip();
@@ -490,7 +490,7 @@ public sealed partial class MainForm : ChromeForm
         // on a narrow window; capped, the name is what gets an ellipsis and the buttons stay put.
         // The full path is on the tooltip either way.
         _browse.AutoSize = true;
-        _browse.MaximumSize = new Size(190, 0);
+        _browse.MaximumSize = Dpi.S(190, 0);
         _browse.AutoEllipsis = true;
         _tips.SetToolTip(_preview, "Generate and preview without writing anything (F5)");
         _tips.SetToolTip(_writeMod, "Generate and write the mod to disk (Ctrl+S)");
@@ -778,14 +778,14 @@ public sealed partial class MainForm : ChromeForm
         var bar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 40,
+            Height = Dpi.S(40),
             BackColor = Theme.Surface,
         };
 
         var build = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(6, 5, 0, 5),
+            Padding = Dpi.Pad(6, 5, 0, 5),
             BackColor = Color.Transparent,
             // Same reason the group opposite sets it: wrapping in a 40 px bar does not wrap, it
             // hides. Clipping at the window edge at least leaves the row's own order intact.
@@ -812,7 +812,7 @@ public sealed partial class MainForm : ChromeForm
             // Without this the docked panel settles at one button wide and quietly wraps the
             // rest below the 40 px bar, where they render as nothing at all.
             WrapContents = false,
-            Padding = new Padding(0, 3, 8, 3),
+            Padding = Dpi.Pad(0, 3, 8, 3),
             BackColor = Color.Transparent,
         };
 
@@ -825,7 +825,7 @@ public sealed partial class MainForm : ChromeForm
 
         foreach (var (view, text, tip) in options)
         {
-            var button = new Theme.SegmentButton { Text = text, Width = 64, Name = $"view{view}" };
+            var button = new Theme.SegmentButton { Text = text, Width = Dpi.S(64), Name = $"view{view}" };
             button.Click += (_, _) => SelectWorldView(view);
             button.EnabledChanged += (_, _) => Theme.StyleSegment(button, view == _worldView);
             _tips.SetToolTip(button, tip);
@@ -850,7 +850,7 @@ public sealed partial class MainForm : ChromeForm
         {
             Dock = DockStyle.Left,
             AutoSize = true,
-            Padding = new Padding(6, 3, 0, 0),
+            Padding = Dpi.Pad(6, 3, 0, 0),
             BackColor = Color.Transparent,
         };
         buttons.Controls.Add(_overwrite);
@@ -920,8 +920,8 @@ public sealed partial class MainForm : ChromeForm
         var presets = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
-            Height = 34,
-            Padding = new Padding(3, 3, 3, 3),
+            Height = Dpi.S(34),
+            Padding = Dpi.Pad(3, 3, 3, 3),
             BackColor = Theme.Surface,
         };
         presets.Controls.Add(_savePreset);
@@ -930,8 +930,8 @@ public sealed partial class MainForm : ChromeForm
         var settingsHeader = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 32,
-            Padding = new Padding(4, 3, 4, 0),
+            Height = Dpi.S(32),
+            Padding = Dpi.Pad(4, 3, 4, 0),
             BackColor = Theme.Surface,
         };
         settingsHeader.Controls.Add(Caption("Search"));
@@ -957,7 +957,7 @@ public sealed partial class MainForm : ChromeForm
         }
 
         var exportMap = Theme.MakeButton("Export…", 74);
-        exportMap.Margin = new Padding(18, 1, 1, 1);
+        exportMap.Margin = Dpi.Pad(18, 1, 1, 1);
         _tips.SetToolTip(exportMap, "Save the current view as a PNG (Ctrl+E)");
         exportMap.Click += (_, _) => ExportView();
         _categoryStrip.Controls.Add(exportMap);
@@ -1128,7 +1128,7 @@ public sealed partial class MainForm : ChromeForm
         {
             _right.Panel2Collapsed = false;
             _logPane.Controls.Add(_logBar);      // added last, so it docks first: above the text
-            Place(_right, 120, 80, _right.Height - _right.SplitterWidth - _logHeight);
+            Place(_right, Dpi.S(120), Dpi.S(80), _right.Height - _right.SplitterWidth - _logHeight);
         }
         else
         {
@@ -1155,8 +1155,8 @@ public sealed partial class MainForm : ChromeForm
         var strip = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 32,
-            Padding = new Padding(4, 3, 4, 0),
+            Height = Dpi.S(32),
+            Padding = Dpi.Pad(4, 3, 4, 0),
             BackColor = Theme.Surface,
         };
 
@@ -1199,8 +1199,8 @@ public sealed partial class MainForm : ChromeForm
         {
             Text = "Surface",
             AutoSize = false,
-            Width = 50,
-            Height = 24,
+            Width = Dpi.S(50),
+            Height = Dpi.S(24),
             TextAlign = ContentAlignment.MiddleRight,
             ForeColor = Theme.TextDim,
             Font = Theme.Ui,
@@ -1210,8 +1210,8 @@ public sealed partial class MainForm : ChromeForm
         {
             Text = "Relief",
             AutoSize = false,
-            Width = 40,
-            Height = 24,
+            Width = Dpi.S(40),
+            Height = Dpi.S(24),
             TextAlign = ContentAlignment.MiddleRight,
             ForeColor = Theme.TextDim,
             Font = Theme.Ui,
@@ -1438,7 +1438,7 @@ public sealed partial class MainForm : ChromeForm
         {
             Dock = DockStyle.Fill,
             WrapContents = false,
-            Padding = new Padding(4, 2, 4, 0),
+            Padding = Dpi.Pad(4, 2, 4, 0),
             BackColor = Theme.Surface,
         };
         row.Controls.Add(_logToggle);
@@ -1448,7 +1448,7 @@ public sealed partial class MainForm : ChromeForm
         row.Controls.Add(Caption("Search"));
         row.Controls.Add(_logSearch);
 
-        var header = new Panel { Dock = DockStyle.Top, Height = 33, BackColor = Theme.Surface };
+        var header = new Panel { Dock = DockStyle.Top, Height = Dpi.S(33), BackColor = Theme.Surface };
         header.Controls.Add(row);
         header.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.Border });
         return header;
@@ -1485,7 +1485,7 @@ public sealed partial class MainForm : ChromeForm
 
     private Control BuildStatusBar()
     {
-        var bar = new Panel { Dock = DockStyle.Bottom, Height = 26, BackColor = Theme.Surface };
+        var bar = new Panel { Dock = DockStyle.Bottom, Height = Dpi.S(26), BackColor = Theme.Surface };
         bar.Controls.Add(_status);
         bar.Controls.Add(_readout);
         bar.Controls.Add(_eta);
@@ -1500,11 +1500,11 @@ public sealed partial class MainForm : ChromeForm
             AutoSize = true,
             ForeColor = Theme.TextDim,
             Font = Theme.Ui,
-            Margin = new Padding(6, 9, 4, 0),
+            Margin = Dpi.Pad(6, 9, 4, 0),
         };
 
     private static Control Separator()
-        => new Panel { Width = 1, Height = 22, BackColor = Theme.Border, Margin = new Padding(8, 4, 8, 0) };
+        => new Panel { Width = 1, Height = Dpi.S(22), BackColor = Theme.Border, Margin = Dpi.Pad(8, 4, 8, 0) };
 
     private static Button StripButton(string text, bool bold)
     {
@@ -1512,14 +1512,14 @@ public sealed partial class MainForm : ChromeForm
         {
             Text = text,
             AutoSize = true,
-            Height = 24,
-            Padding = new Padding(6, 0, 6, 0),
+            Height = Dpi.S(24),
+            Padding = Dpi.Pad(6, 0, 6, 0),
             FlatStyle = FlatStyle.Flat,
             Font = bold ? Theme.UiBold : Theme.Ui,
             BackColor = Theme.SurfaceHigh,
             ForeColor = Theme.Text,
             UseVisualStyleBackColor = false,
-            Margin = new Padding(1, 1, 1, 1),
+            Margin = Dpi.Pad(1, 1, 1, 1),
         };
         button.FlatAppearance.BorderSize = 0;
         button.FlatAppearance.MouseOverBackColor = Theme.Border;
@@ -1560,9 +1560,9 @@ public sealed partial class MainForm : ChromeForm
         // Every page is still visible here (see BuildWorkspaces), so each splitter is placed
         // against its real size before the pages that are not current are hidden.
         PerformLayout();
-        Place(_body, 300, 400, _state.SettingsWidth);
+        Place(_body, Dpi.S(300), Dpi.S(400), _state.SettingsWidth);
         if (_state.LogHeight > 0) _logHeight = _state.LogHeight;
-        Place(_right, 120, 80, _right.Height - _right.SplitterWidth - _logHeight);
+        Place(_right, Dpi.S(120), Dpi.S(80), _right.Height - _right.SplitterWidth - _logHeight);
         if (_state.ForgeLeftWidth > 0) _forge.LeftWidth = _state.ForgeLeftWidth;
 
         _logOpen = !_state.LogOpen;          // so the call below always applies, either way
@@ -1691,8 +1691,8 @@ public sealed partial class MainForm : ChromeForm
         }
         else
         {
-            Size = new Size(1500, 950);
             var work = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1500, 950);
+            Size = Dpi.Fit(1500, 950, work);
             Location = new Point(work.X + (work.Width - Width) / 2, work.Y + (work.Height - Height) / 2);
         }
 
@@ -2567,8 +2567,8 @@ public sealed partial class MainForm : ChromeForm
     private void StyleSections()
     {
         _sections.DrawMode = DrawMode.OwnerDrawFixed;
-        _sections.ItemHeight = 24;
-        _sections.Width = 132;
+        _sections.ItemHeight = Dpi.S(24);
+        _sections.Width = Dpi.S(132);
         _sections.EnabledChanged += (_, _) => _sections.Invalidate();
 
         _sections.DrawItem += (_, e) =>
@@ -2582,10 +2582,10 @@ public sealed partial class MainForm : ChromeForm
             if (on)
             {
                 using var edge = new SolidBrush(Theme.Accent);
-                e.Graphics.FillRectangle(edge, e.Bounds.X, e.Bounds.Y, 3, e.Bounds.Height);
+                e.Graphics.FillRectangle(edge, e.Bounds.X, e.Bounds.Y, Dpi.S(3), e.Bounds.Height);
             }
 
-            var area = Rectangle.FromLTRB(e.Bounds.X + 12, e.Bounds.Y, e.Bounds.Right - 4, e.Bounds.Bottom);
+            var area = Rectangle.FromLTRB(e.Bounds.X + Dpi.S(12), e.Bounds.Y, e.Bounds.Right - Dpi.S(4), e.Bounds.Bottom);
             TextRenderer.DrawText(e.Graphics, text, on ? Theme.UiBold : Theme.Ui, area,
                 !_sections.Enabled ? Theme.TextDim : on ? Theme.Accent : Theme.Text,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
@@ -3937,10 +3937,10 @@ public sealed partial class MainForm : ChromeForm
             {
                 _legendBar.Controls.Add(new Panel
                 {
-                    Width = 10,
-                    Height = 10,
+                    Width = Dpi.S(10),
+                    Height = Dpi.S(10),
                     BackColor = Color.FromArgb(r, g, b),
-                    Margin = new Padding(8, 5, 3, 0),
+                    Margin = Dpi.Pad(8, 5, 3, 0),
                 });
                 _legendBar.Controls.Add(new Label
                 {
@@ -3948,7 +3948,7 @@ public sealed partial class MainForm : ChromeForm
                     AutoSize = true,
                     Font = Theme.Ui,
                     ForeColor = Theme.TextDim,
-                    Margin = new Padding(0, 3, 0, 0),
+                    Margin = Dpi.Pad(0, 3, 0, 0),
                 });
             }
         }
@@ -3965,7 +3965,7 @@ public sealed partial class MainForm : ChromeForm
                 AutoSize = true,
                 Font = Theme.Ui,
                 ForeColor = Theme.NoticeText,
-                Margin = new Padding(12, 3, 0, 0),
+                Margin = Dpi.Pad(12, 3, 0, 0),
             });
         }
 
@@ -3984,7 +3984,7 @@ public sealed partial class MainForm : ChromeForm
                     AutoSize = true,
                     Font = Theme.Ui,
                     ForeColor = Theme.TextDim,
-                    Margin = new Padding(2, 3, 2, 0),
+                    Margin = Dpi.Pad(2, 3, 2, 0),
                 });
 
                 var primary = Realm!.Primary(_realmFocus[i]);
@@ -3997,7 +3997,7 @@ public sealed partial class MainForm : ChromeForm
                 AutoSize = true,
                 Font = Theme.Ui,
                 ForeColor = Theme.TextDim,
-                Margin = new Padding(12, 3, 0, 0),
+                Margin = Dpi.Pad(12, 3, 0, 0),
             });
         }
 
@@ -4013,7 +4013,7 @@ public sealed partial class MainForm : ChromeForm
                 Font = keep == _realmFocus.Count ? Theme.UiBold : Theme.Ui,
                 ForeColor = Theme.Text,
                 Cursor = Cursors.Hand,
-                Margin = new Padding(2, 3, 2, 0),
+                Margin = Dpi.Pad(2, 3, 2, 0),
             };
             link.Click += (_, _) => SetRealmFocusDepth(keep);
             _legendBar.Controls.Add(link);
@@ -4333,11 +4333,11 @@ public sealed partial class MainForm : ChromeForm
     private void PlaceInspector(Form inspector)
     {
         var screen = Screen.FromControl(this).WorkingArea;
-        int right = Bounds.Right + 8;
+        int right = Bounds.Right + Dpi.S(8);
 
         inspector.Location = right + inspector.Width <= screen.Right
-            ? new Point(right, Bounds.Top + 80)
-            : new Point(Math.Max(screen.Left, Bounds.Right - inspector.Width - 24), Bounds.Top + 80);
+            ? new Point(right, Bounds.Top + Dpi.S(80))
+            : new Point(Math.Max(screen.Left, Bounds.Right - inspector.Width - Dpi.S(24)), Bounds.Top + Dpi.S(80));
     }
 
     private void OnEditsChanged(Emit.WorldAspect touched)

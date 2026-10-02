@@ -50,8 +50,8 @@ public abstract class VocabularyListEditor(
         using var dialog = new Form
         {
             Text = $"Pick {noun}",
-            Size = new Size(420, 560),
-            MinimumSize = new Size(340, 400),
+            Size = Dpi.S(420, 560),
+            MinimumSize = Dpi.S(340, 400),
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.Sizable,
             MinimizeBox = false,
@@ -64,9 +64,9 @@ public abstract class VocabularyListEditor(
         var count = new Label
         {
             Dock = DockStyle.Top,
-            Height = 26,
+            Height = Dpi.S(26),
             TextAlign = ContentAlignment.MiddleLeft,
-            Padding = new Padding(8, 0, 8, 0),
+            Padding = Dpi.Pad(8, 0, 8, 0),
             ForeColor = Theme.TextDim,
         };
 
@@ -85,10 +85,10 @@ public abstract class VocabularyListEditor(
         var customLabel = new Label
         {
             Dock = DockStyle.Bottom,
-            Height = 22,
+            Height = Dpi.S(22),
             Text = "Custom keys (one per line — for keys this install's harvest missed):",
             TextAlign = ContentAlignment.BottomLeft,
-            Padding = new Padding(8, 0, 8, 2),
+            Padding = Dpi.Pad(8, 0, 8, 2),
             ForeColor = Theme.TextDim,
         };
 
@@ -96,7 +96,7 @@ public abstract class VocabularyListEditor(
         {
             Dock = DockStyle.Bottom,
             Multiline = true,
-            Height = 64,
+            Height = Dpi.S(64),
             ScrollBars = ScrollBars.Vertical,
             BackColor = Theme.Surface,
             ForeColor = Theme.Text,
@@ -107,8 +107,8 @@ public abstract class VocabularyListEditor(
         {
             Dock = DockStyle.Bottom,
             FlowDirection = FlowDirection.RightToLeft,
-            Height = 40,
-            Padding = new Padding(4),
+            Height = Dpi.S(40),
+            Padding = Dpi.Pad(4),
         };
         var ok = Theme.MakeButton("OK", 80);
         var cancel = Theme.MakeButton("Cancel", 80);

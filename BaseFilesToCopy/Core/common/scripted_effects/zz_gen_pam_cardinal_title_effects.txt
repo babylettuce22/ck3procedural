@@ -1,0 +1,56 @@
+﻿# A generated faith's Synod Seats are never destroyed: a seat vanilla would destroy goes to a new
+# archbishop of its faith instead, so the synod keeps the size the generator gave it (the user's
+# choice, 2026-10-02).
+#
+# Single-object override of pam_destroy_cardinal_title_effect from
+# common/scripted_effects/11_dlc_pam_scripted_effects.txt (1.20.0.3). scripted_effects has no
+# subfolders, so this zz_ file loads after it and wins. Every elector title vanilla removes passes
+# through this effect: pam_strip_illegal_cardinalate_effect (a non-theocrat holding one, on government
+# change, title gain and yearly), a head of faith's own cardinalate, a cardinal converting, antipopes
+# and the schism. The else branch is vanilla's body unchanged, so vanilla's cardinalates are untouched.
+#
+# Why: on seed 213124 (2026-10-02) most seats were gone by 1194 (faith 33: 2 of 8 left, faith 4: 0 of
+# 3). Each time, a see's capital came to differ in faith from its archbishop, vanilla's
+# pam_clergy_events.0052 destroyed the see and made him a landless adventurer, and the government
+# change destroyed his seat here. Vanilla's College is appointed cardinals, so losing a see costs it no
+# vote; our votes sit on the sees.
+#
+# The seat passes a day later (gen_synod.0001), not inside the effect: this runs from on_title_gain
+# among other places, and handing titles around inside a title change destroyed sees before (the
+# 2026-10-02 handoff). The stripped holder keeps it for that day.
+
+pam_destroy_cardinal_title_effect = {
+	if = {
+		limit = { $CARDINALATE$ = { has_variable = gen_synod_faith } }
+		$CARDINALATE$ = { save_scope_as = gen_stripped_seat }
+		trigger_event = {
+			id = gen_synod.0001
+			days = 1
+		}
+	}
+	else = {
+		if = { # A dynamic cardinalate is deleted outright, so it has to leave the reuse pool with it
+			limit = { $CARDINALATE$ = { exists = var:pam_dynamic_cardinalate } }
+			remove_list_global_variable = {
+				name = roma_cardinalates
+				target = $CARDINALATE$
+			}
+		}
+		remove_character_flag = cardinal_flag
+		destroy_title = $CARDINALATE$
+		if = {
+			limit = {
+				NOR = {
+					exists = clerical_elector_title
+					any_held_title = { has_clerical_region = yes }
+				}
+			}
+			situation:the_christian_church ?= {
+				if = {
+					limit = { is_manual_participant = prev }
+					remove_manual_participant = prev
+				}
+			}
+		}
+	}
+}

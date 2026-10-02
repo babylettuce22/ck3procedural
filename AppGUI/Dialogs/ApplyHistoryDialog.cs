@@ -17,19 +17,19 @@ namespace Ck3MapGen.AppGUI;
 /// </summary>
 internal sealed class ApplyHistoryDialog : ChromeForm
 {
-    private const int Inner = 492;
+    private static readonly int Inner = Dpi.S(492);
 
     private readonly TextBox _year = new()
     {
-        Width = 90,
+        Width = Dpi.S(90),
         BorderStyle = BorderStyle.FixedSingle,
         BackColor = Theme.Surface,
         ForeColor = Theme.Text,
         Font = Theme.Ui,
     };
 
-    private readonly Label _preview = new() { AutoSize = true, ForeColor = Theme.TextDim, Font = Theme.Ui, Margin = new Padding(10, 5, 0, 0) };
-    private readonly Label _range = new() { AutoSize = true, MaximumSize = new Size(Inner, 0), Font = Theme.Ui, Margin = new Padding(0, 4, 0, 8) };
+    private readonly Label _preview = new() { AutoSize = true, ForeColor = Theme.TextDim, Font = Theme.Ui, Margin = Dpi.Pad(10, 5, 0, 0) };
+    private readonly Label _range = new() { AutoSize = true, MaximumSize = new Size(Inner, 0), Font = Theme.Ui, Margin = Dpi.Pad(0, 4, 0, 8) };
     private readonly Button _ok = Theme.MakeButton("Apply", 90, primary: true);
     private readonly Button _cancel = Theme.MakeButton("Cancel", 76);
 
@@ -68,7 +68,7 @@ internal sealed class ApplyHistoryDialog : ChromeForm
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            Padding = new Padding(14, 12, 14, 10),
+            Padding = Dpi.Pad(14, 12, 14, 10),
             BackColor = Theme.Background,
         };
 
@@ -77,7 +77,7 @@ internal sealed class ApplyHistoryDialog : ChromeForm
             Text = text, AutoSize = true, MaximumSize = new Size(Inner, 0), ForeColor = colour, Font = Theme.Ui, Margin = margin,
         };
 
-        list.Controls.Add(Para("Start the world in", Theme.TextDim, new Padding(0, 0, 0, 2)));
+        list.Controls.Add(Para("Start the world in", Theme.TextDim, Dpi.Pad(0, 0, 0, 2)));
 
         var yearRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0), BackColor = Theme.Background };
         yearRow.Controls.Add(_year);
@@ -90,17 +90,17 @@ internal sealed class ApplyHistoryDialog : ChromeForm
               + "claims. Nothing is simulated again: the realms, rulers and families stay as they are."
             : $"The history stopped in {stopped}. Written as another year, every date in it moves with it — "
               + "births, reigns, wars, truces — and nothing is simulated again.",
-            Theme.Text, new Padding(0, 0, 0, 8)));
-        list.Controls.Add(Para(what, Theme.TextDim, new Padding(0, 0, 0, 8)));
+            Theme.Text, Dpi.Pad(0, 0, 0, 8)));
+        list.Controls.Add(Para(what, Theme.TextDim, Dpi.Pad(0, 0, 0, 8)));
         list.Controls.Add(Para($"Advancement stays at {advancement}: innovations, development and the era "
-            + "the world is judged against do not move with the year.", Theme.TextDim, new Padding(0, 0, 0, 8)));
+            + "the world is judged against do not move with the year.", Theme.TextDim, Dpi.Pad(0, 0, 0, 8)));
 
         var buttons = new FlowLayoutPanel
         {
             FlowDirection = FlowDirection.RightToLeft,
             AutoSize = true,
             Width = Inner,
-            Margin = new Padding(0, 4, 0, 0),
+            Margin = Dpi.Pad(0, 4, 0, 0),
             BackColor = Theme.Background,
         };
         buttons.Controls.Add(_ok);

@@ -395,7 +395,7 @@ public sealed class ChronicleMap
             Year = year,
             Subject = county,
             Culture = culture,
-            Text = Fill(rng.Pick(bank), county, culture.Name, year),
+            Text = Fill(rng.Pick(bank), county, CultureLink(culture), year),
         });
     }
 
@@ -446,7 +446,7 @@ public sealed class ChronicleMap
             Faith = faiths.For(county),
             CounterpartFaith = faiths.For(rival.County),
             Tension = 2,
-            Text = Fill(rng.Pick(Frontiers), county, mine.Name, year, rival.Culture.Name),
+            Text = Fill(rng.Pick(Frontiers), county, CultureLink(mine), year, CultureLink(rival.Culture)),
         });
     }
 
@@ -477,8 +477,8 @@ public sealed class ChronicleMap
             CounterpartFaith = dissenter,
             Tension = contested ? 2 : 0,
             Text = contested
-                ? Fill(rng.Pick(FaithsContested), county, faith.Name, year, dissenter!.Name)
-                : Fill(rng.Pick(FaithsQuiet), county, faith.Name, year),
+                ? Fill(rng.Pick(FaithsContested), county, FaithLink(faith), year, FaithLink(dissenter!))
+                : Fill(rng.Pick(FaithsQuiet), county, FaithLink(faith), year),
         });
     }
 
@@ -573,7 +573,7 @@ public sealed class ChronicleMap
                 Faith = faiths.For(county),
                 CounterpartFaith = faiths.For(other),
                 Tension = 3,
-                Text = Fill(attacking ? WarAttack : WarDefend, county, string.Empty, year, other.Name),
+            Text = Fill(attacking ? WarAttack : WarDefend, county, string.Empty, year, TitleLink(other)),
             });
         }
     }
@@ -589,7 +589,7 @@ public sealed class ChronicleMap
             Year = year,
             Subject = county,
             Faith = faith,
-            Text = Fill(rng.Pick(Sanctities), county, faith.Name, year),
+            Text = Fill(rng.Pick(Sanctities), county, FaithLink(faith), year),
         });
     }
 
@@ -690,10 +690,14 @@ public sealed class ChronicleMap
     /// </summary>
     private static string Fill(string template, Title subject, string who, int year, string? other = null)
         => Io.ParadoxText.Loc(template
-            .Replace("{PLACE}", subject.Name)
+            .Replace("{PLACE}", TitleLink(subject))
             .Replace("{WHO}", who)
             .Replace("{OTHER}", other ?? string.Empty)
             .Replace("{YEAR}", year.ToString()));
+
+    internal static string TitleLink(Title title) => $"[GetTitleByKey('{title.Key}').GetNameNoTier|L]";
+    internal static string CultureLink(Culture culture) => $"[GetCultureByKey('{culture.Key}').GetName|L]";
+    internal static string FaithLink(Faith faith) => $"[GetFaithByKey('{faith.Key}').GetName|L]";
 
     // ---------------------------------------------------------------------------------------
     // Prose banks. Several per event so a kingdom's worth of counties does not read as one

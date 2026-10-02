@@ -16,6 +16,13 @@
 #    its own succession may hand it to a dead archbishop's heir: it goes back to the see's holder when
 #    he is of the seat's faith, and to a new archbishop when its new holder is not.
 #
+# "Of the seat's own faith" also means a theocrat (gen_synod_rightful_holder_trigger): vanilla destroys
+# an elector title held by a lay ruler, so a see that passes to a same-faith ruler who is not a
+# theocrat leaves its seat with a new archbishop instead.
+#
+# A seat vanilla would destroy (its holder lost his see and became an adventurer, converted, or was
+# elected head) is passed on instead: zz_gen_pam_cardinal_title_effects.txt.
+#
 # A seat with no var:gen_synod_faith (a world generated before it existed) follows its see as before.
 #
 # Sees founded in play have no seat, so they do not vote; only the generated sees do.
@@ -99,7 +106,7 @@ gen_see_electors_title_gain = {
 				limit = {
 					OR = {
 						NOT = { scope:gen_moving_seat = { has_variable = gen_synod_faith } }
-						faith = scope:gen_moving_seat.var:gen_synod_faith
+						gen_synod_rightful_holder_trigger = { FAITH = scope:gen_moving_seat.var:gen_synod_faith }
 					}
 				}
 				gen_synod_seat_transfer_effect = { SEAT = scope:gen_moving_seat HOLDER = root }
@@ -107,7 +114,9 @@ gen_see_electors_title_gain = {
 			else_if = {
 				limit = {
 					NOT = {
-						scope:gen_moving_seat.holder ?= { faith = scope:gen_moving_seat.var:gen_synod_faith }
+						scope:gen_moving_seat.holder ?= {
+							gen_synod_rightful_holder_trigger = { FAITH = scope:gen_moving_seat.var:gen_synod_faith }
+						}
 					}
 				}
 				gen_synod_seat_fresh_holder_effect = { SEAT = scope:gen_moving_seat }
@@ -122,7 +131,9 @@ gen_see_electors_title_gain = {
 					NOT = { scope:title.var:gen_synod_see.holder = root }
 					OR = {
 						NOT = { scope:title = { has_variable = gen_synod_faith } }
-						scope:title.var:gen_synod_see.holder = { faith = scope:title.var:gen_synod_faith }
+						scope:title.var:gen_synod_see.holder = {
+							gen_synod_rightful_holder_trigger = { FAITH = scope:title.var:gen_synod_faith }
+						}
 					}
 				}
 				gen_synod_seat_transfer_effect = { SEAT = scope:title HOLDER = scope:title.var:gen_synod_see.holder }
@@ -130,7 +141,7 @@ gen_see_electors_title_gain = {
 			else_if = {
 				limit = {
 					scope:title = { has_variable = gen_synod_faith }
-					NOT = { faith = scope:title.var:gen_synod_faith }
+					NOT = { gen_synod_rightful_holder_trigger = { FAITH = scope:title.var:gen_synod_faith } }
 				}
 				gen_synod_seat_fresh_holder_effect = { SEAT = scope:title }
 			}

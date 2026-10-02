@@ -64,7 +64,27 @@ gen_synod_seat_transfer_effect = {
 
 # Root: anything. Creates a new archbishop of $FAITH$ and the people of $COUNTY$, saved as
 # scope:gen_new_hierarch. The clergy's sex follows the faith's main rite, as the generator's do.
+#
+# Also saves scope:gen_hierarch_government_base, a theocrat of $FAITH$ when one exists, for
+# gen_synod_hand_to_hierarch_effect. A created character is no ruler, so the engine picks his
+# government during the handover itself; without a theocratic base it picked a lay one, vanilla's
+# pam_strip_illegal_cardinalate_effect (on_government_change) saw a non-theocrat holding an elector
+# title and destroyed the seat the same day (seed 213124, 2026-10-02: d_cd_gen_2, 3, 5, 20, 27, 29
+# all "granted, destroyed"). Vanilla's grant_cardinal_title_effect passes the same kind of base.
 gen_synod_create_archbishop_effect = {
+	if = {
+		limit = { $FAITH$.religious_head ?= { government_has_flag = government_is_theocracy } }
+		$FAITH$.religious_head = { save_scope_as = gen_hierarch_government_base }
+	}
+	else_if = {
+		limit = { $FAITH$ = { any_faith_ruler = { government_has_flag = government_is_theocracy } } }
+		$FAITH$ = {
+			random_faith_ruler = {
+				limit = { government_has_flag = government_is_theocracy }
+				save_scope_as = gen_hierarch_government_base
+			}
+		}
+	}
 	create_character = {
 		location = $COUNTY$.title_province
 		age = { 35 60 }
@@ -89,6 +109,27 @@ gen_synod_create_archbishop_effect = {
 	}
 }
 
+# Root: anything. Hands $TITLE$ to scope:gen_new_hierarch (from gen_synod_create_archbishop_effect)
+# within $CHANGE$, as a theocrat when the faith has one to model him on (see there for why).
+gen_synod_hand_to_hierarch_effect = {
+	$TITLE$ = {
+		if = {
+			limit = { exists = scope:gen_hierarch_government_base }
+			change_title_holder = {
+				holder = scope:gen_new_hierarch
+				change = $CHANGE$
+				government_base = scope:gen_hierarch_government_base
+			}
+		}
+		else = {
+			change_title_holder = {
+				holder = scope:gen_new_hierarch
+				change = $CHANGE$
+			}
+		}
+	}
+}
+
 # Root: anything. $SEAT$ (a Synod Seat carrying var:gen_synod_faith) has no rightful holder of its
 # faith: its see went to, or it fell to, someone of another faith (a revocation, a conversion, an
 # inheritance). It goes to a new archbishop of its own faith instead, so the electorate keeps its size
@@ -107,12 +148,7 @@ gen_synod_seat_fresh_holder_effect = {
 		save_scope_as = gen_orphan_seat_change
 		add_claim_on_loss = no
 	}
-	scope:gen_orphan_seat = {
-		change_title_holder = {
-			holder = scope:gen_new_hierarch
-			change = scope:gen_orphan_seat_change
-		}
-	}
+	gen_synod_hand_to_hierarch_effect = { TITLE = scope:gen_orphan_seat CHANGE = scope:gen_orphan_seat_change }
 	if = {
 		limit = {
 			scope:gen_orphan_seat_county.holder.top_liege ?= {
@@ -149,18 +185,11 @@ gen_see_electors_release_see_effect = {
 		save_scope_as = gen_see_change
 		add_claim_on_loss = no
 	}
-	scope:gen_released_see = {
-		change_title_holder = {
-			holder = scope:gen_new_hierarch
-			change = scope:gen_see_change
-		}
-	}
+	gen_synod_hand_to_hierarch_effect = { TITLE = scope:gen_released_see CHANGE = scope:gen_see_change }
 	# Its Synod Seat goes with it, so the new archbishop votes.
-	scope:gen_released_see.var:gen_synod_seat ?= {
-		change_title_holder = {
-			holder = scope:gen_new_hierarch
-			change = scope:gen_see_change
-		}
+	if = {
+		limit = { exists = scope:gen_released_see.var:gen_synod_seat }
+		gen_synod_hand_to_hierarch_effect = { TITLE = scope:gen_released_see.var:gen_synod_seat CHANGE = scope:gen_see_change }
 	}
 	# Under the seat's realm when a king or better rules it, as the generator seats archbishops; the
 	# see is duchy tier, and a liege must outrank it.

@@ -14,12 +14,12 @@ namespace Ck3MapGen.AppGUI.Forge;
 /// </summary>
 public sealed class PaintToolStrip : Panel
 {
-    private readonly ComboBox _channel = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 132 };
+    private readonly ComboBox _channel = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = Dpi.S(132) };
     private readonly FlowLayoutPanel _tools = new() { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
-    private readonly TrackBar _radius = new() { Minimum = 2, Maximum = 300, Value = 30, TickStyle = TickStyle.None, Width = 104, AutoSize = false, Height = 26 };
-    private readonly TrackBar _strength = new() { Minimum = 5, Maximum = 100, Value = 60, TickStyle = TickStyle.None, Width = 84, AutoSize = false, Height = 26 };
-    private readonly TrackBar _hardness = new() { Minimum = 0, Maximum = 100, Value = 50, TickStyle = TickStyle.None, Width = 84, AutoSize = false, Height = 26 };
-    private readonly Label _hint = new() { AutoSize = false, Dock = DockStyle.Bottom, Height = 18, ForeColor = Theme.TextDim, Padding = new Padding(6, 0, 0, 0) };
+    private readonly TrackBar _radius = new() { Minimum = 2, Maximum = 300, Value = 30, TickStyle = TickStyle.None, Width = Dpi.S(104), AutoSize = false, Height = Dpi.S(26) };
+    private readonly TrackBar _strength = new() { Minimum = 5, Maximum = 100, Value = 60, TickStyle = TickStyle.None, Width = Dpi.S(84), AutoSize = false, Height = Dpi.S(26) };
+    private readonly TrackBar _hardness = new() { Minimum = 0, Maximum = 100, Value = 50, TickStyle = TickStyle.None, Width = Dpi.S(84), AutoSize = false, Height = Dpi.S(26) };
+    private readonly Label _hint = new() { AutoSize = false, Dock = DockStyle.Bottom, Height = Dpi.S(18), ForeColor = Theme.TextDim, Padding = Dpi.Pad(6, 0, 0, 0) };
     private readonly Button _undo = Theme.MakeButton("Undo", 54);
     private readonly Button _redo = Theme.MakeButton("Redo", 54);
     private readonly Button _clear = Theme.MakeButton("Clear layer", 82);
@@ -29,9 +29,9 @@ public sealed class PaintToolStrip : Panel
     private readonly Label _idle = new()
     {
         Dock = DockStyle.Top,
-        Height = 24,
+        Height = Dpi.S(24),
         TextAlign = ContentAlignment.MiddleLeft,
-        Padding = new Padding(8, 0, 0, 0),
+        Padding = Dpi.Pad(8, 0, 0, 0),
         ForeColor = Theme.TextDim,
         Visible = false,
     };
@@ -51,7 +51,7 @@ public sealed class PaintToolStrip : Panel
     public PaintToolStrip()
     {
         BackColor = Theme.Surface;
-        Height = 84;
+        Height = Dpi.S(84);
         Dock = DockStyle.Top;
         Visible = false;
 
@@ -79,9 +79,9 @@ public sealed class PaintToolStrip : Panel
         var row1 = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 32,
+            Height = Dpi.S(32),
             WrapContents = false,
-            Padding = new Padding(4, 3, 4, 0),
+            Padding = Dpi.Pad(4, 3, 4, 0),
         };
         row1.Controls.Add(Caption("Paint"));
         row1.Controls.Add(_channel);
@@ -90,9 +90,9 @@ public sealed class PaintToolStrip : Panel
         var row2 = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 32,
+            Height = Dpi.S(32),
             WrapContents = false,
-            Padding = new Padding(4, 2, 4, 0),
+            Padding = Dpi.Pad(4, 2, 4, 0),
         };
         row2.Controls.Add(Caption("Size"));
         row2.Controls.Add(_radius);
@@ -136,7 +136,7 @@ public sealed class PaintToolStrip : Panel
 
         bool paintable = _channels.Count > 0;
         Visible = true;
-        Height = paintable ? 84 : 26;
+        Height = Dpi.S(paintable ? 84 : 26);
 
         _controls.Visible = paintable;
         _idle.Visible = !paintable;
@@ -217,7 +217,7 @@ public sealed class PaintToolStrip : Panel
         Text = text,
         AutoSize = true,
         ForeColor = Theme.TextDim,
-        Margin = new Padding(6, 7, 3, 0),
+        Margin = Dpi.Pad(6, 7, 3, 0),
     };
 
     protected override void Dispose(bool disposing)

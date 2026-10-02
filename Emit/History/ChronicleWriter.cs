@@ -125,7 +125,7 @@ public static class ChronicleWriter
         if (chronicle.WorldPast.Count > 0)
         {
             loc.Blank();
-            loc.AddBuilt(WorldPastKey, string.Join("\\n\\n", chronicle.WorldPast.Select(e => e.Text)));
+            loc.AddBuilt(WorldPastKey, FormatPast(chronicle.WorldPast));
         }
 
         loc.Write(Path.Combine(modDir, "localization", "english", "gen_title_lore_l_english.yml"));
@@ -134,4 +134,26 @@ public static class ChronicleWriter
                         + (noted > 0 ? $", {noted} of them inside a struggle" : "")
                         + $"; the world's past, {chronicle.WorldPast.Count} lines");
     }
+
+    /// <summary>
+    /// The same visual language as living memory, in the past's oldest-first order.
+    /// Keep dates in the prose: "since" and "around" describe enduring or approximate history,
+    /// and stripping those phrases would change what the remembered event says.
+    /// </summary>
+    private static string FormatPast(IEnumerable<ChronicleEvent> events)
+        => string.Join("\\n\\n", events.OrderBy(e => e.Year).GroupBy(e => e.Year)
+            .SelectMany(year => new[] { $"#high {year.Key}#!" }
+                .Concat(year.Select(e => $"@{PastIcon(e.Kind)}! {e.Text}"))));
+
+    private static string PastIcon(ChronicleKind kind) => kind switch
+    {
+        ChronicleKind.Settlement or ChronicleKind.Frontier => "county_icon",
+        ChronicleKind.Faith or ChronicleKind.Sanctity => "religious_icon",
+        ChronicleKind.Seat or ChronicleKind.Realm => "titles_icon",
+        ChronicleKind.Feud => "dynasty_icon",
+        ChronicleKind.War => "war_icon",
+        ChronicleKind.Relic => "artifact_icon",
+        ChronicleKind.Wonder => "building_icon",
+        _ => "county_icon",
+    };
 }

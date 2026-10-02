@@ -61,7 +61,7 @@
  gen_gw_word_fallback_12: "Faelindor"
 
  # ============ The Passing of the Work (0520) ============
- gen_great_work.0520.t: "The Passing of the Work"
+ gen_great_work.0520.t: "Great Work: The Passing of the Work"
  gen_great_work.0520.desc: "You are tired in a way you have never been before, and you know what it means. The work is not finished. At the pace your hands move now, you may not live to finish it.\n\nMakers of our people have handed their work to another before, while they could still teach them. Others have refused and gone on alone."
  gen_great_work.0520.desc_pupil: "\n\n[gw_pupil_ok.GetFirstName] has worked beside you for years and knows the work almost as well as you do."
  gen_great_work.0520.desc_no_pupil: "\n\nYou never took a pupil. Whoever takes it now will have to learn it from you in whatever time you have left."

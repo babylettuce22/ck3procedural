@@ -118,20 +118,23 @@ internal static class Theme
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
 
-    /// <summary>A flat button that reads as part of the toolbar rather than as a Windows 95 relic.</summary>
+    /// <summary>
+    /// A flat button that reads as part of the toolbar rather than as a Windows 95 relic.
+    /// <paramref name="width"/> is in 96-DPI pixels, like every size in the GUI code; see <see cref="Dpi"/>.
+    /// </summary>
     public static Button MakeButton(string text, int width, bool primary = false)
     {
         var button = new Button
         {
             Text = text,
-            Width = width,
-            Height = 26,
+            Width = Dpi.S(width),
+            Height = Dpi.S(26),
             FlatStyle = FlatStyle.Flat,
             Font = Ui,
             BackColor = primary ? Accent : Surface,
             ForeColor = primary ? AccentText : Text,
             UseVisualStyleBackColor = false,
-            Margin = new Padding(3, 3, 3, 3),
+            Margin = Dpi.Pad(3, 3, 3, 3),
         };
 
         button.FlatAppearance.BorderColor = primary ? Accent : Border;
@@ -200,7 +203,7 @@ internal static class Theme
             BackColor = Surface,
             ForeColor = Text,
             Font = Ui,
-            Padding = new Padding(6, 2, 0, 2),
+            Padding = Dpi.Pad(6, 2, 0, 2),
         };
 
     /// <summary>
@@ -215,15 +218,15 @@ internal static class Theme
         {
             AutoSize = true,
             WrapContents = false,
-            Padding = new Padding(2),
-            Margin = new Padding(3, 4, 3, 3),
+            Padding = Dpi.Pad(2),
+            Margin = Dpi.Pad(3, 4, 3, 3),
             BackColor = SurfaceHigh,
         };
 
         foreach (var option in options)
         {
             option.AutoSize = false;
-            option.Height = 24;
+            option.Height = Dpi.S(24);
             option.FlatStyle = FlatStyle.Flat;
             option.FlatAppearance.BorderSize = 0;
             option.UseVisualStyleBackColor = false;

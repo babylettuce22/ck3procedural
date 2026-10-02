@@ -205,6 +205,9 @@ public static class RaceMorphWriter
         // ---- Group 7: tusks --------------------------------------------------------------
         TuskGroup(b, f);
 
+        // ---- Group 8: ageless elves --------------------------------------------------------
+        AgelessElfGroup(b);
+
         ParadoxText.WriteBom(path, b.ToString());
         Console.WriteLine($"  race morphs written: {Races.Length + 3} shape (incl. half-elf, half-orc, mixed-human), " +
                           $"{Races.Length + 1} skin{(horns ? $", {HornEntries} horn, {ornamentEntries} horn-ornament" : "")}, {maleEntries} per-sex face and 3 weight/muscle " +
@@ -354,6 +357,46 @@ public static class RaceMorphWriter
                 }
 
                 Weight(b, raced, weight: 100);
+            }
+        }
+    }
+
+    /// <summary>The elves' age past which the face stops changing.</summary>
+    public const int AgelessFromAge = 30;
+
+    /// <summary>
+    /// Elves stop aging in the face from <see cref="AgelessFromAge"/>: gene_age replaced with vanilla's
+    /// empty <c>no_aging</c> template, so no wrinkles, old-age decals, sagging or stoop.
+    ///
+    /// Render-time and age-gated on purpose, NOT the ethnicity's template. gene_age also carries the
+    /// CHILD shapes (infant proportions, child blendshapes), and an ethnicity that rolled no_aging gave a
+    /// third of elf children adult bodies from birth (2026-10-02). Children keep their DNA's
+    /// old_beauty_1 and its child block; from 30 the empty template takes over, by which point the
+    /// child curves are long finished, so nothing visible switches off at the boundary.
+    ///
+    /// Covers every elf already in a save too, including those whose DNA came from human parents.
+    /// Hair greying is NOT here: no gene or define drives it, so the engine greys hair on its own.
+    /// </summary>
+    private static void AgelessElfGroup(JominiBuilder b)
+    {
+        string elves = string.Join(" ", new[] { "phenotype_gracile", "phenotype_sylvan", "phenotype_dusk_adapted" }
+            .Select(t => $"has_trait = {t}"));
+
+        b.Blank();
+        using (b.Block("gen_race_ageless_elves"))
+        {
+            b.Blank();
+            b.Field("usage", "game");
+            b.Field("selection_behavior", "max");
+            b.Field("priority", "97");
+            b.Blank();
+
+            using (b.Block("gen_race_ageless_elf"))
+            {
+                b.Field("ignore_outfit_tags", "yes");
+                using (b.Block("dna_modifiers"))
+                    b.Inline("morph", "mode = replace  gene = gene_age  template = no_aging  value = 1");
+                Weight(b, $"OR = {{ {elves} }}", weight: 100, $"age >= {AgelessFromAge}");
             }
         }
     }

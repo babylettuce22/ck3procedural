@@ -3,7 +3,7 @@
  # Events: events/gen_tinker_test_events.txt. Effects: common/scripted_effects/00_gen_tinker_outcome_effects.txt.
 
  # ============ 0010 The Workbench ============
- gen_tinker.0010.t: "The Workbench"
+ gen_tinker.0010.t: "Tinkerer: The Workbench"
  gen_tinker.0010.desc: "The workbench has been cleared, mostly. The lamps are trimmed, the tools laid out in the order only you understand, and a stack of fresh paper waits for the first drawing.\n\nAll that is left is to decide what to build. Every choice costs good gold before the first gear is cut, and none of them is certain to work."
  gen_tinker.0010.a: "A clockwork curio. Something beautiful and completely unnecessary."
  gen_tinker.0010.a.tt: "If it works: a clockwork curio for your treasury, a brass songbird trinket (or, for a ruler with a royal court and the Fate of Iberia art, an orrery for the throne room) that raises #V Learning#!. The songbird adds #V Prestige#!, calmer nerves and a charming air; the orrery adds #V Court Grandeur#! and faster learning. A masterwork is rarer and stronger"
@@ -40,27 +40,27 @@
  gen_tk_test_tweak.tt: "You will come back to the test afterwards, with the new odds"
 
  # ============ 0310 Test Day ============
- gen_tinker.0310.t: "Test Day"
+ gen_tinker.0310.t: "Tinkerer: Test Day"
  gen_tinker.0310.desc: "Months of work come down to this morning. Every bolt has been checked twice, every spring wound and every gear greased. You have run out of things to check."
 
  # ============ 0311 A Cracked Part ============
- gen_tinker.0311.t: "A Cracked Part"
+ gen_tinker.0311.t: "Tinkerer: A Cracked Part"
  gen_tinker.0311.desc: "Something went "ping" in the workshop last night. This morning you found it: a hairline crack in a part that is very much load-bearing. It might hold. It might not. You can go ahead as it is, or take the day to mend it."
  gen_tinker.0311.desc.mended: "The cracked part has been taken out, recast and fitted again. It took the whole day and most of your temper, but it is sound now."
  gen_tinker.0311.fix: "Stop everything. We mend it properly."
 
  # ============ 0312 Word Has Got Out ============
- gen_tinker.0312.t: "Word Has Got Out"
+ gen_tinker.0312.t: "Tinkerer: Word Has Got Out"
  gen_tinker.0312.desc: "You meant to test it quietly. Somebody talked. By mid-morning half the court has found a reason to be standing near your workshop, and the other half has brought a picnic."
  gen_tinker.0312.self: "Well, since you're all here. Stand back!"
  gen_tinker.0312.apprentice: "[gen_tk_apprentice_char.GetFirstName], take a bow and pull the lever."
  gen_tinker.0312.night: "Go home, all of you. There is nothing to see. (Until tonight.)"
 
  # ============ 0350 The outcome ============
- gen_tinker.0350.t.masterwork: "A Masterwork!"
- gen_tinker.0350.t.works: "It Works!"
- gen_tinker.0350.t.dud: "A Dud"
- gen_tinker.0350.t.explodes: "It Blew Up"
+ gen_tinker.0350.t.masterwork: "Tinkerer: A Masterwork!"
+ gen_tinker.0350.t.works: "Tinkerer: It Works!"
+ gen_tinker.0350.t.dud: "Tinkerer: A Dud"
+ gen_tinker.0350.t.explodes: "Tinkerer: It Blew Up"
 
  gen_tinker.0350.curio.masterwork: "The key turns, the cloth comes off, and the curio comes to life. It sings, it turns, it opens its little brass wings, and then it does a thing you did not build it to do and cannot quite explain, which is even better. Grown knights gasp. Somebody asks if it is alive. You say no, probably."
  gen_tinker.0350.curio.works: "The key turns and the curio does exactly what it was built to do: it ticks, it whirrs, it sings its three notes. Not always in the right order, but nobody who is not a gnome notices."

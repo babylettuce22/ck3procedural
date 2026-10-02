@@ -2208,11 +2208,13 @@ public static class Ethnicities
                 // hawk variants — so the straight elven nose is a *weak* _pos rather than a template
                 // of its own. On a bs gene the neutral end is 0, not 0.5, so this range is correct.
                 Shape(def, rng, f, "gene_bs_nose_profile", "nose_profile_pos", 0.05f, 0.20f);
-                // Ages slowly rather than not at all. `no_aging` is literally an empty template, so
-                // at high weight a high elf who reigns for sixty years never changes face, which
-                // costs the player a cue they actually read.
-                AddGene(def, "gene_age", "old_beauty_1", 0.0f, 0.6f, weight: 65);
-                AddGene(def, "gene_age", "no_aging", 0.0f, 1.0f, weight: 35);
+                // Ages slowly rather than not at all: old_beauty_1 only, never `no_aging`. gene_age
+                // also carries the CHILD shapes (infant head and body proportions, child blendshapes),
+                // and `no_aging` is an empty template, so it took those too: a third of elf children
+                // rendered as adults from birth (user, in game, 2026-10-02). old_beauty_1 keeps the
+                // full children block and its old-age shapes only begin at 38 and finish at 85.
+                // Its strength is irrelevant (every setting is a fixed min = max), so no range to tune.
+                AddGene(def, "gene_age", "old_beauty_1", 0.0f, 0.6f);
                 AddGene(def, "gene_eyebrows_shape", "close_spacing_low_thickness", 0.0f, 1.0f);
                 AddGene(def, "gene_eyebrows_fullness", "layer_2_low_thickness", 0.0f, 1.0f);
                 AddGene(def, "complexion", "complexion_beauty_1", 0.55f, 0.90f);
@@ -2241,8 +2243,8 @@ public static class Ethnicities
                 Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.15f, 0.35f);
                 Shape(def, rng, f, "gene_bs_nose_size", "nose_size_neg", 0.10f, 0.28f);
                 Shape(def, rng, f, "gene_bs_nose_ridge_angle", "nose_ridge_angle_pos", 0.10f, 0.30f);
-                AddGene(def, "gene_age", "old_beauty_1", 0.0f, 0.7f, weight: 70);
-                AddGene(def, "gene_age", "no_aging", 0.0f, 1.0f, weight: 30);
+                // old_beauty_1 only; see the high elf for why `no_aging` (no child shapes) is gone.
+                AddGene(def, "gene_age", "old_beauty_1", 0.0f, 0.7f);
                 AddGene(def, "gene_eyebrows_fullness", "layer_2_avg_thickness", 0.0f, 1.0f);
                 // The lightest and blotchiest of the numbered head textures: +2.4 lightness and
                 // +1.2 unevenness against the base, which is as close to freckled as stock gets.
@@ -2407,8 +2409,8 @@ public static class Ethnicities
                 Shape(def, rng, f, "gene_bs_cheek_height", "cheek_height_pos", 0.12f, 0.32f);
                 Shape(def, rng, f, "gene_chin_width", "chin_width_neg", 0.34f, 0.44f);
                 Shape(def, rng, f, "gene_bs_nose_length", "nose_length_neg", 0.10f, 0.26f);
-                AddGene(def, "gene_age", "old_beauty_1", 0.0f, 0.6f, weight: 65);
-                AddGene(def, "gene_age", "no_aging", 0.0f, 1.0f, weight: 35);
+                // old_beauty_1 only; see the high elf for why `no_aging` (no child shapes) is gone.
+                AddGene(def, "gene_age", "old_beauty_1", 0.0f, 0.6f);
                 AddGene(def, "gene_eyebrows_fullness", "layer_2_low_thickness", 0.0f, 1.0f);
                 AddGene(def, "complexion", "complexion_beauty_1", 0.50f, 0.85f);
                 AddGene(def, "gene_body_hair", "body_hair_sparse", 0.15f, 0.40f);

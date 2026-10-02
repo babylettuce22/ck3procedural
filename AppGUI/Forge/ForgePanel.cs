@@ -39,15 +39,15 @@ public sealed class ForgePanel : UserControl
     private readonly Label _banner;
     private readonly WrappingToolTip _tips = new() { AutoPopDelay = 15000, InitialDelay = 400 };
 
-    private readonly ComboBox _resPreset = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 190 };
+    private readonly ComboBox _resPreset = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = Dpi.S(190) };
     private readonly NumericUpDown _baseWidth = new();
     private readonly NumericUpDown _baseHeight = new();
-    private readonly NumericUpDown _seed = new() { Minimum = int.MinValue, Maximum = int.MaxValue, Width = 110 };
-    private readonly Label _resInfo = new() { AutoSize = true, MaximumSize = new Size(320, 0), ForeColor = Theme.TextDim };
+    private readonly NumericUpDown _seed = new() { Minimum = int.MinValue, Maximum = int.MaxValue, Width = Dpi.S(110) };
+    private readonly Label _resInfo = new() { AutoSize = true, MaximumSize = Dpi.S(320, 0), ForeColor = Theme.TextDim };
 
-    private readonly ComboBox _view = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150 };
-    private readonly ComboBox _previewRes = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 86 };
-    private readonly CheckBox _auto = new() { Text = "Auto", Checked = true, AutoSize = true, Margin = new Padding(6, 6, 6, 0) };
+    private readonly ComboBox _view = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = Dpi.S(150) };
+    private readonly ComboBox _previewRes = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = Dpi.S(86) };
+    private readonly CheckBox _auto = new() { Text = "Auto", Checked = true, AutoSize = true, Margin = Dpi.Pad(6, 6, 6, 0) };
     private readonly Button _generate = Theme.MakeButton("Generate", 80);
     private readonly Button _bake = Theme.MakeButton("Bake", 64);
     private readonly Button _use = Theme.MakeButton("Use for generation", 140, primary: true);
@@ -121,9 +121,9 @@ public sealed class ForgePanel : UserControl
         _statusLine = new Label
         {
             Dock = DockStyle.Bottom,
-            Height = 24,
+            Height = Dpi.S(24),
             TextAlign = ContentAlignment.MiddleLeft,
-            Padding = new Padding(8, 0, 8, 0),
+            Padding = Dpi.Pad(8, 0, 8, 0),
             BackColor = Theme.Surface,
             ForeColor = Theme.TextDim,
             AutoEllipsis = true,
@@ -133,7 +133,7 @@ public sealed class ForgePanel : UserControl
         _banner = new Label
         {
             Dock = DockStyle.Top,
-            Height = 24,
+            Height = Dpi.S(24),
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Theme.Notice,
             ForeColor = Theme.NoticeText,
@@ -145,7 +145,7 @@ public sealed class ForgePanel : UserControl
             Dock = DockStyle.Fill,
             FixedPanel = FixedPanel.Panel1,
             BackColor = Theme.Border,
-            SplitterWidth = 4,
+            SplitterWidth = Dpi.S(4),
         };
         _split.Panel1.BackColor = Theme.Surface;
         _split.Panel2.BackColor = Theme.Background;
@@ -163,7 +163,7 @@ public sealed class ForgePanel : UserControl
         WirePainting();
 
         Controls.Add(_split);
-        _split.HandleCreated += (_, _) => _split.SplitterDistance = 372;
+        _split.HandleCreated += (_, _) => _split.SplitterDistance = Dpi.S(372);
 
         _canvas.EmptyText = "The pipeline's preview appears here.";
 
@@ -179,7 +179,7 @@ public sealed class ForgePanel : UserControl
     public int LeftWidth
     {
         get => _split.SplitterDistance;
-        set { if (value > 100) _split.SplitterDistance = value; }
+        set { if (value > Dpi.S(100)) _split.SplitterDistance = value; }
     }
 
     /// <summary>
@@ -207,11 +207,11 @@ public sealed class ForgePanel : UserControl
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 3,
-            Padding = new Padding(6, 6, 4, 6),
+            Padding = Dpi.Pad(6, 6, 4, 6),
             BackColor = Theme.Surface,
         };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 214f));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, Dpi.S(214f)));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
         layout.Controls.Add(BuildProjectBox());
@@ -221,7 +221,7 @@ public sealed class ForgePanel : UserControl
         {
             Text = "Stage settings",
             Dock = DockStyle.Fill,
-            Padding = new Padding(4),
+            Padding = Dpi.Pad(4),
             ForeColor = Theme.Text,
         };
         _params.Dock = DockStyle.Fill;
@@ -238,7 +238,7 @@ public sealed class ForgePanel : UserControl
         {
             Text = "Project",
             Dock = DockStyle.Top,
-            Padding = new Padding(8, 4, 8, 8),
+            Padding = Dpi.Pad(8, 4, 8, 8),
             ForeColor = Theme.Text,
         };
 
@@ -249,7 +249,7 @@ public sealed class ForgePanel : UserControl
             ColumnCount = 2,
             GrowStyle = TableLayoutPanelGrowStyle.AddRows,
         };
-        t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78f));
+        t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Dpi.S(78f)));
         t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
         _resPreset.Items.AddRange(Presets.Select(p => (object)p.Label).ToArray());
@@ -271,10 +271,10 @@ public sealed class ForgePanel : UserControl
         _baseHeight.ValueChanged += (_, _) => ApplySize();
 
         var size = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = new Padding(0) };
-        _baseWidth.Width = 76;
-        _baseHeight.Width = 76;
+        _baseWidth.Width = Dpi.S(76);
+        _baseHeight.Width = Dpi.S(76);
         size.Controls.Add(_baseWidth);
-        size.Controls.Add(new Label { Text = "×", AutoSize = true, Margin = new Padding(4, 6, 4, 0) });
+        size.Controls.Add(new Label { Text = "×", AutoSize = true, Margin = Dpi.Pad(4, 6, 4, 0) });
         size.Controls.Add(_baseHeight);
 
         _seed.ValueChanged += (_, _) => { if (!_loading) Session.SetSeed((int)_seed.Value); };
@@ -300,8 +300,8 @@ public sealed class ForgePanel : UserControl
         // A GroupBox's AutoSize ignores a docked child and clipped the last row; size it by hand
         // and follow the table, which grows when the Output readout wraps to another line.
         box.Controls.Add(t);
-        t.SizeChanged += (_, _) => box.Height = t.Height + 32;
-        box.Height = t.PreferredSize.Height + 32;
+        t.SizeChanged += (_, _) => box.Height = t.Height + Dpi.S(32);
+        box.Height = t.PreferredSize.Height + Dpi.S(32);
         return box;
     }
 
@@ -324,7 +324,7 @@ public sealed class ForgePanel : UserControl
         {
             Text = "Pipeline",
             Dock = DockStyle.Fill,
-            Padding = new Padding(6, 4, 6, 6),
+            Padding = Dpi.Pad(6, 4, 6, 6),
             ForeColor = Theme.Text,
         };
 
@@ -353,9 +353,9 @@ public sealed class ForgePanel : UserControl
         var buttons = new FlowLayoutPanel
         {
             Dock = DockStyle.Bottom,
-            Height = 32,
+            Height = Dpi.S(32),
             WrapContents = false,
-            Padding = new Padding(0, 3, 0, 0),
+            Padding = Dpi.Pad(0, 3, 0, 0),
         };
 
         var add = Theme.MakeButton("Add ▾", 62);
@@ -514,7 +514,7 @@ public sealed class ForgePanel : UserControl
             Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding = new Padding(4, 3, 4, 3),
+            Padding = Dpi.Pad(4, 3, 4, 3),
             WrapContents = true,
             BackColor = Theme.Surface,
         };
@@ -1063,10 +1063,10 @@ public sealed class ForgePanel : UserControl
             Text = label,
             AutoSize = true,
             Anchor = AnchorStyles.Left,
-            Margin = new Padding(2, 7, 4, 4),
+            Margin = Dpi.Pad(2, 7, 4, 4),
             ForeColor = Theme.Text,
         });
-        editor.Margin = new Padding(2, 3, 2, 3);
+        editor.Margin = Dpi.Pad(2, 3, 2, 3);
         t.Controls.Add(editor);
     }
 
@@ -1075,15 +1075,15 @@ public sealed class ForgePanel : UserControl
         Text = text,
         AutoSize = true,
         ForeColor = Theme.TextDim,
-        Margin = new Padding(6, 7, 3, 0),
+        Margin = Dpi.Pad(6, 7, 3, 0),
     };
 
     private static Control Separator() => new Panel
     {
         Width = 1,
-        Height = 22,
+        Height = Dpi.S(22),
         BackColor = Theme.Border,
-        Margin = new Padding(6, 3, 6, 0),
+        Margin = Dpi.Pad(6, 3, 6, 0),
     };
 
     protected override void Dispose(bool disposing)

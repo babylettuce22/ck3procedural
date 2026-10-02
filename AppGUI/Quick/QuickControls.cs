@@ -704,6 +704,9 @@ internal static class LaunchUi
     /// A map picture in a rounded frame, with a label chip in the bottom-left corner and an optional
     /// busy chip in the top-right. Shows the whole picture, letterboxed if the aspect differs.
     /// </summary>
+    /// <summary>What a <see cref="MapPreview.Probe"/> shows: a bold first line and plainer ones under it.</summary>
+    internal sealed record MapHover(string Title, IReadOnlyList<string> Lines);
+
     internal sealed class MapPreview : Control
     {
         private static readonly Font ChipFont = new("Segoe UI Semibold", 9f);
@@ -739,6 +742,11 @@ internal static class LaunchUi
                 _image = value;
                 _scaled?.Dispose();
                 _scaled = null;
+
+                // A probe answers for one picture; a new one (a live frame, a history year) has
+                // to be handed its own, or the card would describe a world no longer shown.
+                _probe = null;
+                _card = null;
                 Invalidate();
                 old?.Dispose();
             }
@@ -756,6 +764,46 @@ internal static class LaunchUi
         /// </summary>
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Action<Graphics, RectangleF>? Overlay { get; set; }
+
+        private Func<PointF, MapHover?>? _probe;
+        private MapHover? _card;
+        private Point _cardAt;
+
+        /// <summary>
+        /// What is under the cursor, asked with the position as a fraction of the picture (0..1 on
+        /// each axis) and shown as a small card beside it. Null answers show nothing. Cleared
+        /// whenever <see cref="Image"/> changes, so set it after the picture it belongs to.
+        /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Func<PointF, MapHover?>? Probe
+        {
+            get => _probe;
+            set { _probe = value; _card = null; Invalidate(); }
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            if (_probe is null || _image is null) return;
+
+            var picture = PictureBounds(_image.Size);
+            MapHover? card = null;
+            if (picture.Contains(e.Location))
+                card = _probe(new PointF((e.X - picture.X) / picture.Width, (e.Y - picture.Y) / picture.Height));
+
+            if (card is null && _card is null) return;
+            _card = card;
+            _cardAt = e.Location;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            if (_card is null) return;
+            _card = null;
+            Invalidate();
+        }
 
         /// <summary>Where a picture of this size is drawn: whole, centred, letterboxed.</summary>
         public RectangleF PictureBounds(Size picture)
@@ -802,6 +850,47 @@ internal static class LaunchUi
 
             if (!string.IsNullOrEmpty(_chip)) DrawChip(g, _chip, S(12), Height - S(12), false);
             if (!string.IsNullOrEmpty(_busy)) DrawChip(g, _busy, Width - S(12), S(12) + ChipHeight, true);
+            if (_card is { } card) DrawCard(g, card);
+        }
+
+        private static readonly Font CardTitleFont = new("Segoe UI Semibold", 10f);
+        private static readonly Font CardLineFont = new("Segoe UI", 9f);
+
+        /// <summary>The hover card: below and right of the cursor, flipped to stay inside the frame.</summary>
+        private void DrawCard(Graphics g, MapHover card)
+        {
+            const TextFormatFlags flags = TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
+            int pad = S(10), gap = S(3);
+            var title = TextRenderer.MeasureText(card.Title, CardTitleFont, Size.Empty, flags);
+            var lines = card.Lines.Select(l => TextRenderer.MeasureText(l, CardLineFont, Size.Empty, flags)).ToList();
+
+            int w = Math.Max(title.Width, lines.Count == 0 ? 0 : lines.Max(l => l.Width)) + pad * 2;
+            int h = title.Height + lines.Sum(l => l.Height + gap) + pad * 2;
+
+            int x = _cardAt.X + S(16), y = _cardAt.Y + S(18);
+            if (x + w > Width - S(6)) x = _cardAt.X - S(12) - w;
+            if (y + h > Height - S(6)) y = _cardAt.Y - S(12) - h;
+            x = Math.Max(S(6), x);
+            y = Math.Max(S(6), y);
+
+            var box = new Rectangle(x, y, w, h);
+            using (var path = Rounded(box, S(8)))
+            {
+                using var back = new SolidBrush(Color.FromArgb(235, Theme.Surface));
+                using var edge = new Pen(Color.FromArgb(60, 0, 0, 0));
+                g.FillPath(back, path);
+                g.DrawPath(edge, path);
+            }
+
+            int ty = y + pad;
+            TextRenderer.DrawText(g, card.Title, CardTitleFont, new Point(x + pad, ty), Theme.Text, flags);
+            ty += title.Height;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                ty += gap;
+                TextRenderer.DrawText(g, card.Lines[i], CardLineFont, new Point(x + pad, ty), Theme.TextDim, flags);
+                ty += lines[i].Height;
+            }
         }
 
         private Bitmap? Scaled(Size size)

@@ -40,19 +40,19 @@ public abstract class InspectorForm : ChromeForm
         Dock = DockStyle.Bottom,
         AutoSize = true,
         AutoSizeMode = AutoSizeMode.GrowAndShrink,
-        MinimumSize = new Size(0, 36),
-        Padding = new Padding(4, 4, 4, 4),
+        MinimumSize = Dpi.S(0, 36),
+        Padding = Dpi.Pad(4, 4, 4, 4),
         BackColor = Theme.Surface,
     };
 
     private readonly Label _heading = new()
     {
         Dock = DockStyle.Top,
-        Height = 26,
+        Height = Dpi.S(26),
         TextAlign = ContentAlignment.MiddleLeft,
         ForeColor = Theme.Text,
         Font = Theme.Ui,
-        Padding = new Padding(8, 0, 0, 0),
+        Padding = Dpi.Pad(8, 0, 0, 0),
         BackColor = Theme.Surface,
     };
 
@@ -78,14 +78,15 @@ public abstract class InspectorForm : ChromeForm
     /// <summary>Whether there is a world to edit at all — generated and written, or opened from disk.</summary>
     protected bool Live => Edits.IsLoaded || Loaded is not null;
 
+    /// <param name="size">In 96-DPI pixels; scaled here for the screen, see <see cref="Dpi"/>.</param>
     protected InspectorForm(WorldEdits edits, string title, Size size)
     {
         Edits = edits;
 
         Text = title;
         StartPosition = FormStartPosition.Manual;
-        MinimumSize = new Size(300, 320);
-        Size = size;
+        MinimumSize = Dpi.S(300, 320);
+        Size = Dpi.S(size.Width, size.Height);
         BackColor = Theme.Background;
         ForeColor = Theme.Text;
         Font = Theme.Ui;

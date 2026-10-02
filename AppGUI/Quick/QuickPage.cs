@@ -190,7 +190,8 @@ internal sealed class QuickPage : Panel
         _rulers = new ChoiceGroup<GenderPreference>("Rulers", "Who tends to hold land and titles.", GenderPreference.Historical)
             .Add(GenderPreference.Historical, "Historical", "Mostly men, as in vanilla", "quickRulersHistorical")
             .Add(GenderPreference.Mixed, "Mixed", "Varies from faith to faith", "quickRulersMixed")
-            .Add(GenderPreference.FemaleDominated, "Women rule", "Women hold the land and titles", "quickRulersWomen");
+            .Add(GenderPreference.FemaleDominated, "Women rule", "Women hold the land and titles", "quickRulersWomen")
+            .Add(GenderPreference.Equal, "Equal", "Men and women alike, everywhere", "quickRulersEqual");
 
         _size.Changed += v => _choices.Size = v;
         _era.Changed += v => _choices.Era = v;
@@ -981,7 +982,7 @@ internal sealed class QuickPage : Panel
     private static readonly Dictionary<QuickPolitics, string> PoliticsNames = new()
         { [QuickPolitics.Fragmented] = "Fragmented", [QuickPolitics.Kingdoms] = "Kingdoms", [QuickPolitics.Hegemony] = "Hegemony" };
     private static readonly Dictionary<GenderPreference, string> RulerNames = new()
-        { [GenderPreference.Historical] = "Historical", [GenderPreference.Mixed] = "Mixed", [GenderPreference.FemaleDominated] = "Women rule" };
+        { [GenderPreference.Historical] = "Historical", [GenderPreference.Mixed] = "Mixed", [GenderPreference.FemaleDominated] = "Women rule", [GenderPreference.Equal] = "Equal everywhere" };
 
     private (string Key, int Step)[] SummaryRows =>
     [

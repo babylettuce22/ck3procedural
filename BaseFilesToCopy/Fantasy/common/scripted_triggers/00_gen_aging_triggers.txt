@@ -86,9 +86,11 @@ gen_dwarf_ailment_eligible_trigger = {
 #     years after onset at ~85). The fading is the end of the fertile life too.
 #   - Dwarves: from 45 to 61. life_expectancy = 20 moves their ailments to 65, and the window
 #     closes just ahead of that.
-# Explicit trait exclusions rather than a `fertility` threshold: that trigger's relation to the
-# engine's age multiplier is unmeasured, and one that folds age in would read zero past 45 and
-# silently switch the whole feature off.
+# Fertility must be above zero, for her and for the father: make_pregnant refuses a parent at 0 or
+# below ("has 0 or lower fertility", 14 times in the 2026-10-02 session), and the stack reaches it on
+# old elves (race -0.35, chaste, world_weary, the father brake). Only `> 0`, never a threshold: the
+# engine's age multiplier past 45 is 0.1 (FEMALE_FERTILITY_MULTIPLIER), so whether or not the trigger
+# folds it in, the sign is the same, but any higher bar would shut out every woman past 45.
 gen_late_child_mother_trigger = {
 	is_female = yes
 	age >= 45
@@ -107,6 +109,7 @@ gen_late_child_mother_trigger = {
 	is_incapable = no
 	NOT = { has_trait = infertile }
 	NOT = { has_trait = celibate }
+	fertility > 0
 	NOT = { has_character_flag = gen_late_child_cooldown }
 	is_married = yes
 	primary_spouse = { gen_late_child_father_trigger = yes }
@@ -124,6 +127,7 @@ gen_late_child_father_trigger = {
 	NOT = { has_trait = infertile }
 	NOT = { has_trait = eunuch }
 	NOT = { has_trait = celibate }
+	fertility > 0 # make_pregnant refuses either parent at 0 or below (see the mother's trigger)
 	# A fading elf father is past it too, the same rule as the mother's.
 	gen_late_child_not_fading_trigger = yes
 	OR = {

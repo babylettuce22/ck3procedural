@@ -92,7 +92,7 @@ public static class HistoryChronicle
         foreach (var t in all) byKey.TryAdd(t.Key, t);
         var byIndex = all.Where(t => t.Tier == "c").GroupBy(t => t.Index).ToDictionary(g => g.Key, g => g.First());
         var cultureByKey = cultures.Cultures.GroupBy(c => c.Key).ToDictionary(g => g.Key, g => g.First());
-        var faithByKey = faiths?.Faiths.GroupBy(f => f.Key).ToDictionary(g => g.Key, g => g.First().Name) ?? [];
+        var faithByKey = faiths?.Faiths.GroupBy(f => f.Key).ToDictionary(g => g.Key, g => ChronicleMap.FaithLink(g.First())) ?? [];
 
         var events = new List<ChronicleEvent>();
         foreach (var r in remembered)
@@ -128,17 +128,17 @@ public static class HistoryChronicle
         Dictionary<int, Title> byIndex, Dictionary<string, Culture> cultures, WildernessMap wilderness,
         Dictionary<string, string> faiths)
     {
-        string Lords(int seat) => byIndex.TryGetValue(seat, out var c) ? $"the lords of {c.Name}" : "a realm long gone";
+        string Lords(int seat) => byIndex.TryGetValue(seat, out var c) ? $"the lords of {ChronicleMap.TitleLink(c)}" : "a realm long gone";
         string Named(Title t) => t.Tier switch
         {
-            "d" => $"the duchy of {t.Name}",
-            "k" => $"the kingdom of {t.Name}",
-            "e" => $"the empire of {t.Name}",
-            _ => t.Name,
+            "d" => $"the duchy of {ChronicleMap.TitleLink(t)}",
+            "k" => $"the kingdom of {ChronicleMap.TitleLink(t)}",
+            "e" => $"the empire of {ChronicleMap.TitleLink(t)}",
+            _ => ChronicleMap.TitleLink(t),
         };
         string Counties(int[] indices)
         {
-            var names = indices.Where(byIndex.ContainsKey).Select(i => byIndex[i].Name).ToList();
+            var names = indices.Where(byIndex.ContainsKey).Select(i => ChronicleMap.TitleLink(byIndex[i])).ToList();
             return names.Count switch
             {
                 0 => Named(subject),
@@ -157,7 +157,7 @@ public static class HistoryChronicle
             return taken.Length >= whole ? Named(subject) : $"{Counties(taken)} in {Named(subject)}";
         }
 
-        string PeopleOf(Title t) => t.Tier == "c" ? $"the people of {t.Name}" : $"most of {Named(t)}";
+        string PeopleOf(Title t) => t.Tier == "c" ? $"the people of {ChronicleMap.TitleLink(t)}" : $"most of {Named(t)}";
 
         string pronoun = r.Female ? "her" : "his";
         string? text = r.What switch
@@ -168,15 +168,15 @@ public static class HistoryChronicle
             "held" => $"In {r.Year} {Lords(r.Actor)} held {Ground()} against {Lords(r.Counterpart)}.",
             "divided" when r.Person is { } heir => $"When {r.Other ?? "the old ruler"} died in {r.Year}, {heir} took "
                                                   + $"{Named(subject)} as {pronoun} share of the realm.",
-            "seized" when r.Person is { } who => $"In {r.Year}, after {r.Other ?? "the old ruler"} died, {who} seized the seat at {subject.Name}.",
-            "chosen" when r.Person is { } who => $"In {r.Year}, after {r.Other ?? "the old ruler"} died, {who} was chosen to rule from {subject.Name}.",
+            "seized" when r.Person is { } who => $"In {r.Year}, after {r.Other ?? "the old ruler"} died, {who} seized the seat at {ChronicleMap.TitleLink(subject)}.",
+            "chosen" when r.Person is { } who => $"In {r.Year}, after {r.Other ?? "the old ruler"} died, {who} was chosen to rule from {ChronicleMap.TitleLink(subject)}.",
             "drifted" when r.Into is { } into && byKey.TryGetValue(into, out var parent)
                 => $"{Named(subject)} has answered to {Named(parent)} since {r.Year}.",
-            "settled" => $"{Settlers(r.ActorCulture, cultures)} from {Lords(r.Actor)} cleared {subject.Name} in {r.Year}.",
-            "resettled" => $"{Settlers(r.ActorCulture, cultures)} from {Lords(r.Actor)} rebuilt the ruins of {subject.Name} in {r.Year}.",
+            "settled" => $"{Settlers(r.ActorCulture, cultures)} from {Lords(r.Actor)} cleared {ChronicleMap.TitleLink(subject)} in {r.Year}.",
+            "resettled" => $"{Settlers(r.ActorCulture, cultures)} from {Lords(r.Actor)} rebuilt the ruins of {ChronicleMap.TitleLink(subject)} in {r.Year}.",
             "ruined" when r.Counties is { Length: > 0 } lost => $"{Counties(lost)} was abandoned in {r.Year} and left to ruin.",
             "assimilated" when r.Other is { } key && cultures.TryGetValue(key, out var people)
-                => $"By {r.Year} {PeopleOf(subject)} had taken up {people.Name} ways under {Lords(r.Actor)}.",
+                => $"By {r.Year} {PeopleOf(subject)} had taken up {ChronicleMap.CultureLink(people)} ways under {Lords(r.Actor)}.",
             "converted" when r.Other is { } key && faiths.TryGetValue(key, out var faith)
                 => $"By {r.Year} {PeopleOf(subject)} had turned to {faith} under {Lords(r.Actor)}.",
             "swore" => $"In {r.Year} {Lords(r.Actor)} swore fealty to {Lords(r.Counterpart)}.",
@@ -184,16 +184,16 @@ public static class HistoryChronicle
             "collapsed" => $"In {r.Year} the vassals of {Lords(r.Actor)} walked out, and the realm came apart.",
             "brokeaway" => $"In {r.Year} {Lords(r.Actor)} broke away from {Lords(r.Counterpart)}, which had grown too wide to hold them.",
             "fell" => $"In {r.Year} {Lords(r.Counterpart)} took the last lands of {Lords(r.Actor)}, and their realm was no more.",
-            "feud" when r.Person is { } a && r.Other is { } b => $"In {r.Year} the houses of {a} and {b} fell into open feud over {subject.Name}.",
-            "rivals" when r.Person is { } a && r.Other is { } b => $"In {r.Year} the houses of {a} and {b} became rivals over {subject.Name}.",
-            "greatest" when r.Person is { } house => $"By {r.Year} the house of {house}, ruling from {subject.Name}, was the greatest in the world.",
+            "feud" when r.Person is { } a && r.Other is { } b => $"In {r.Year} the houses of {a} and {b} fell into open feud over {ChronicleMap.TitleLink(subject)}.",
+            "rivals" when r.Person is { } a && r.Other is { } b => $"In {r.Year} the houses of {a} and {b} became rivals over {ChronicleMap.TitleLink(subject)}.",
+            "greatest" when r.Person is { } house => $"By {r.Year} the house of {house}, ruling from {ChronicleMap.TitleLink(subject)}, was the greatest in the world.",
             "fallen" when r.Person is { } house => $"In {r.Year} the house of {house}, once among the greatest, ruled nowhere any more. "
-                                                  + $"Its last seat had been {subject.Name}.",
+                                                  + $"Its last seat had been {ChronicleMap.TitleLink(subject)}.",
             _ => null,
         };
         return text is null ? null : char.ToUpperInvariant(text[0]) + text[1..];
     }
 
     private static string Settlers(string? culture, Dictionary<string, Culture> cultures)
-        => culture is not null && cultures.TryGetValue(culture, out var c) ? $"{c.Name} settlers" : "Settlers";
+        => culture is not null && cultures.TryGetValue(culture, out var c) ? $"{ChronicleMap.CultureLink(c)} settlers" : "Settlers";
 }

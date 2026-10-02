@@ -29,7 +29,7 @@
  gen_tk_chiming_nights_modifier_desc: "This character spent weeks sleeping beside a clockwork curio that chimes whenever it likes."
 
  # ============ 0101 The Blueprint ============
- gen_tinker.0101.t: "The Blueprint"
+ gen_tinker.0101.t: "Tinkerer: The Blueprint"
  gen_tinker.0101.desc: "So far the [ROOT.Char.Custom('GenTkProject')] exists as a heap of drawings on the workbench, weighed down at the corners with a teacup, two spanners and a cold sausage. Before the first gear is cut, you have to settle on a plan.\n\n"
  gen_tinker.0101.desc.curio: "The drawings disagree about how many gears will fit in something small enough to hold. The later drawings have more gears, and smaller handwriting."
  gen_tinker.0101.desc.mill: "The drawings show wheels, sluices, pumps and a great many arrows showing where the water ought to go. The river has not seen the drawings."
@@ -44,7 +44,7 @@
  gen_tinker.0101.e: "Sit down and do all the sums properly, even the hard ones."
 
  # ============ 0102 Brass and Bolts ============
- gen_tinker.0102.t: "Brass and Bolts"
+ gen_tinker.0102.t: "Tinkerer: Brass and Bolts"
  gen_tinker.0102.desc: "The plan is settled. Now you need the metal for it: brass for the gears, steel for the springs, and a great many bolts, because there are never enough bolts.\n\n"
  gen_tinker.0102.desc.steward: "[gen_tk_d_steward.GetFirstName] has come with the accounts under [gen_tk_d_steward.GetHerHis] arm and a pained look. Fine brass is dear this year. The midden behind the smithy, [gen_tk_d_steward.GetSheHe] points out, is full of old pots, and costs nothing."
  gen_tinker.0102.desc.alone: "Fine brass is dear this year. The midden behind the smithy is full of old pots and bent nails, and costs nothing. There is also the household silver, which nobody really uses except at feasts."
@@ -58,7 +58,7 @@
  gen_tinker.0102.d.lost.t: "The Steward Finds Nothing"
 
  # ============ 0103 An Apprentice ============
- gen_tinker.0103.t: "An Apprentice"
+ gen_tinker.0103.t: "Tinkerer: An Apprentice"
  gen_tinker.0103.desc: "A project this size wants a second pair of hands: someone to hold the other end, fetch the right spanner, and notice when your sleeve is caught in something."
  gen_tinker.0103.desc.young: "\n\n[gen_tk_d_young.GetFirstName] has been hanging about the workshop door for weeks, pretending not to watch. Yesterday [gen_tk_d_young.GetSheHe] put a dropped gear back in exactly the right place without being asked."
  gen_tinker.0103.desc.clever: "\n\n[gen_tk_d_clever.GetFirstName], who is sharper than most of your court and knows it, has let it be known that [gen_tk_d_clever.GetSheHe] would not say no to a place at the bench."
@@ -67,7 +67,7 @@
  gen_tinker.0103.c: "I work alone."
 
  # ============ 0104 A Letter from a Rival ============
- gen_tinker.0104.t: "A Letter from a Rival"
+ gen_tinker.0104.t: "Tinkerer: A Letter from a Rival"
  gen_tinker.0104.desc: "A letter has come from [gen_tk_d_rival.GetTitledFirstName]. Somebody told [gen_tk_d_rival.GetHerHim] about your [ROOT.Char.Custom('GenTkProject')], and [gen_tk_d_rival.GetSheHe] has a great deal to say about it.\n\n"
  gen_tinker.0104.desc.tinker: "The first page explains that [gen_tk_d_rival.GetSheHe] built the same thing years ago, only better. The second page is a drawing of it, with arrows. Some of the arrows are rude. Some of them, annoyingly, are right."
  gen_tinker.0104.desc.meddler: "[gen_tk_d_rival.GetFirstName] has never built anything in [gen_tk_d_rival.GetHerHis] life, but has somehow found a scholar who has, and has enclosed the scholar's notes on everything wrong with your idea. There are eleven pages. Some of the notes are right."
@@ -85,7 +85,7 @@
  gen_tinker.0104.d.lose.rival.tt: "[gen_tk_d_rival.GetFirstName] spotted the mistakes in the drawings [gen_tk_maker.GetFirstName] sent, and is telling everyone about them"
 
  # ============ 0105 The Patron's Letter ============
- gen_tinker.0105.t: "The Patron's Letter"
+ gen_tinker.0105.t: "Tinkerer: The Patron's Letter"
  gen_tinker.0105.desc: "A rider has brought a letter from [gen_tk_d_patron.GetTitledFirstName], who is paying for the [ROOT.Char.Custom('GenTkProject')] and has been thinking about it. [gen_tk_d_patron.GetSheHe|U] has had ideas.\n\n"
  gen_tinker.0105.desc.bigger: "[gen_tk_d_patron.GetSheHe|U] wants it bigger. Much bigger. [gen_tk_d_patron.GetSheHe|U] has heard that a neighbour's is bigger, and will not have it."
  gen_tinker.0105.desc.faster: "[gen_tk_d_patron.GetSheHe|U] wants it sooner. There is a feast coming, and [gen_tk_d_patron.GetSheHe] would like to show it off, and could it not simply be built more quickly?"
@@ -99,7 +99,7 @@
  gen_tinker.0105.c: "Agree to everything, then build it my own way."
 
  # ============ 0106 An Idea in the Night ============
- gen_tinker.0106.t: "An Idea in the Night"
+ gen_tinker.0106.t: "Tinkerer: An Idea in the Night"
  gen_tinker.0106.desc: "You wake in the small hours with the whole [ROOT.Char.Custom('GenTkProject')] turning in your head, clear as glass: every gear, every spring, and one part you have never thought of before, which solves everything.\n\nIt might be genius. It might be the cheese you had at supper. Either way, it is fading fast."
  gen_tinker.0106.a: "Up! Light the lamp! Where is my pencil?"
  gen_tinker.0106.a.good: "The idea is good"
@@ -114,7 +114,7 @@
  gen_tinker.0106.c: "Go back to sleep. It will still be there in the morning."
 
  # ============ 0107 The Noise ============
- gen_tinker.0107.t: "The Noise"
+ gen_tinker.0107.t: "Tinkerer: The Noise"
  gen_tinker.0107.desc.spouse: "[gen_tk_d_spouse.GetFirstName] finds you at the workbench before breakfast, which is unusual, because [gen_tk_d_spouse.GetSheHe] has not been getting up for breakfast. [gen_tk_d_spouse.GetSheHe|U] has not been sleeping either.\n\n"The hammering starts at dawn," [gen_tk_d_spouse.GetSheHe] says. "The grinding starts at noon. And I don't know what the whistling is, but it goes on all night, and it smells.""
  gen_tinker.0107.desc.steward: "[gen_tk_d_steward.GetFirstName], your steward, has come with a list. It is a list of complaints about the workshop, from the kitchens, the stables, the chapel and the neighbours, and at the bottom, in [gen_tk_d_steward.GetHerHis] own hand, what the whole business has cost so far."
  gen_tinker.0107.desc.end: "\n\n[gen_tk_d_complainer.GetSheHe|U] would like it to stop, or at least to be somewhere else."
@@ -128,7 +128,7 @@
  gen_tinker.0107.d.appalled.t: "Not Won Over"
 
  # ============ 0201 The Woodshed (war engine) ============
- gen_tinker.0201.t: "The Woodshed"
+ gen_tinker.0201.t: "Tinkerer: The Woodshed"
  gen_tinker.0201.desc: "The first proper test of the throwing arm went well, in the sense that it threw. The log went up, over the wall, across the yard and straight through the roof of the woodshed, which is now mostly a woodpile.\n\nNobody was hurt. The woodcutter is very upset, and the whole castle came out to look at the hole."
  gen_tinker.0201.a: "Pay for the shed, and test outside the walls from now on."
  gen_tinker.0201.b: "More counterweight. It should have gone further."
@@ -140,7 +140,7 @@
  gen_tinker.0201.d: "[gen_tk_s_appr.GetFirstName], go and measure how far it went."
 
  # ============ 0202 The Lower Town Floods (waterworks) ============
- gen_tinker.0202.t: "The Lower Town Floods"
+ gen_tinker.0202.t: "Tinkerer: The Lower Town Floods"
  gen_tinker.0202.desc: "The new sluice gate held for three days. On the fourth it opened by itself, all at once, and the millpond went down the hill to visit the lower town.\n\nThe water is knee-deep in the market square. There is a goose on the baker's roof that nobody can get down. The townsfolk know exactly whose waterworks it was."
  gen_tinker.0202.a: "Pay the townsfolk for the damage."
  gen_tinker.0202.b: "Spend the money on a proper sluice gate instead. They'll dry out."
@@ -148,7 +148,7 @@
  gen_tinker.0202.a.tt: "The lower town is spared two years of #N Flooded Lower Town#!"
 
  # ============ 0203 It Will Not Stop Chiming (curio) ============
- gen_tinker.0203.t: "It Will Not Stop Chiming"
+ gen_tinker.0203.t: "Tinkerer: It Will Not Stop Chiming"
  gen_tinker.0203.desc: "The curio's little bell now chimes on the hour. It also chimes on the half hour, at odd moments in between, and all through last night, for no reason you can find. Nobody knows how to stop it. Taking the key out made it chime faster."
  gen_tinker.0203.desc.spouse: "\n\n[gen_tk_s_spouse.GetFirstName] has not slept for three nights and has started looking at the curio the way cooks look at chickens."
  gen_tinker.0203.desc.court: "\n\nThe whole court can hear it. Someone has started leaving pillows outside the workshop door, pointedly."
@@ -162,7 +162,7 @@
  gen_tinker.0203.d.furious.t: "An Unwelcome Present"
 
  # ============ 0204 It Pinches (clockwork limb) ============
- gen_tinker.0204.t: "It Pinches"
+ gen_tinker.0204.t: "Tinkerer: It Pinches"
  gen_tinker.0204.desc.self: "You strapped on the [ROOT.Char.Custom('GenTkProject')] this morning for a first fitting. The joints move beautifully. They also snap shut without warning, and the first time they did, they caught a fold of your own skin and would not let go."
  gen_tinker.0204.desc.patron: "[gen_tk_s_wearer.GetTitledFirstName] came for a first fitting of the [ROOT.Char.Custom('GenTkProject')]. The joints move beautifully. They also snap shut without warning, and the first time they did, they caught a fold of [gen_tk_s_wearer.GetHerHis] skin and would not let go."
  gen_tinker.0204.desc.end: "\n\nIt took a screwdriver and two grown men to open it again. Everyone who laughed has been noted."
@@ -177,7 +177,7 @@
  gen_tinker.0204.d.fine.tt: "[gen_tk_s_appr.GetFirstName] comes away unpinched, and the joints close only when told to"
 
  # ============ 0205 The Notes Are Gone (grand invention) ============
- gen_tinker.0205.t: "The Notes Are Gone"
+ gen_tinker.0205.t: "Tinkerer: The Notes Are Gone"
  gen_tinker.0205.desc: "The notebook for the [ROOT.Char.Custom('GenTkProject')] is not where you left it. It is three hundred pages long, it is the only copy, and it holds every measurement you have taken since the spring.\n\nIt is not under the bench. It is not in the other workshop. It is not, the cook swears, in the kitchen fire."
  gen_tinker.0205.desc.stirred: "\n\n[gen_tk_s_rival.GetFirstName] has been taking a great interest in your work lately."
  gen_tinker.0205.a: "Turn the whole castle upside down until it turns up."
@@ -204,7 +204,7 @@
  gen_tinker.0205.d.nothing.t: "Nobody Claims the Reward"
 
  # ============ 0210 The Dwarf-Made Part ============
- gen_tinker.0210.t: "The Dwarf-Made Part"
+ gen_tinker.0210.t: "Tinkerer: The Dwarf-Made Part"
  gen_tinker.0210.desc: "The [ROOT.Char.Custom('GenTkProject')] needs a gear cut finer than your smith has ever cut anything. The smith has tried three times and now calls the job witchcraft."
  gen_tinker.0210.desc.plan: "The dwarvish plan called for a gear cut finer than your smith has ever cut anything. The measurements are in dwarf inches, which turn out not to be the same as ordinary inches. Your smith has tried three times and now calls the job witchcraft."
  gen_tinker.0210.desc.end: "\n\nThere is a dwarf smith three valleys over who could make it with one eye shut, and who knows it, and charges for it."
@@ -217,7 +217,7 @@
  gen_tinker.0210.c: "Use a gear that nearly fits. Nearly is close."
 
  # ============ 0211 Fire in the Workshop ============
- gen_tinker.0211.t: "Fire in the Workshop"
+ gen_tinker.0211.t: "Tinkerer: Fire in the Workshop"
  gen_tinker.0211.desc: "Someone is shouting "fire!", and it is your workshop. Smoke is coming out of the window in a thick yellow column, and there are small pops from inside where things that should not get hot are getting hot.\n\nThe [ROOT.Char.Custom('GenTkProject')] is in there."
  gen_tinker.0211.desc.cheap: " So is a great deal of scrap from the midden, which, it turns out, was not all metal."
  gen_tinker.0211.a: "Run in and get it out!"
@@ -230,7 +230,7 @@
  gen_tinker.0211.c: "Let it burn. I'll start again, and properly this time."
 
  # ============ 0212 Tampered With ============
- gen_tinker.0212.t: "Tampered With"
+ gen_tinker.0212.t: "Tinkerer: Tampered With"
  gen_tinker.0212.desc: "Someone has been at the [ROOT.Char.Custom('GenTkProject')]. A spring has been let off, two bolts are missing, and a gear has been put back upside down, which is not a mistake anyone makes by accident.\n\nIn the dust by the bench there are footprints: a grown person's, in good indoor shoes. Somebody at your own court did this."
  gen_tinker.0212.a: "Find out who did this."
  gen_tinker.0212.a.win: "You find out who"
@@ -242,7 +242,7 @@
  gen_tinker.0212.d: "Mend it and say nothing. It was probably nothing."
 
  # ============ 0213 Caught ============
- gen_tinker.0213.t: "Caught"
+ gen_tinker.0213.t: "Tinkerer: Caught"
  gen_tinker.0213.desc: "The shoes gave it away. [gen_tk_s_culprit.GetFirstName] was the only one at court with oil on [gen_tk_s_culprit.GetHerHis] good indoor shoes, and when you asked about the missing bolts, [gen_tk_s_culprit.GetSheHe] went very red and took them out of [gen_tk_s_culprit.GetHerHis] pocket."
  gen_tinker.0213.desc.grudge: "\n\nIt was about being brushed aside, of course. [gen_tk_s_culprit.GetSheHe|U] has been sore about it for months."
  gen_tinker.0213.a: "Get out of my court."
@@ -251,8 +251,8 @@
  gen_tinker.0213.d: "I forgive you. Don't do it again."
 
  # ============ 0215 The Apprentice ============
- gen_tinker.0215.t.mistake: "The Apprentice's Mistake"
- gen_tinker.0215.t.breakthrough: "The Apprentice's Idea"
+ gen_tinker.0215.t.mistake: "Tinkerer: The Apprentice's Mistake"
+ gen_tinker.0215.t.breakthrough: "Tinkerer: The Apprentice's Idea"
  gen_tinker.0215.desc.mistake: "[gen_tk_s_appr.GetFirstName] has fitted the mainspring of the [ROOT.Char.Custom('GenTkProject')] backwards, and then, finding it would not turn, forced it.\n\n[gen_tk_s_appr.GetSheHe|U] is standing by the bench looking at [gen_tk_s_appr.GetHerHis] shoes. The spring is looking at nothing, because it is now in three pieces."
  gen_tinker.0215.desc.breakthrough: "You have been stuck on the same linkage in the [ROOT.Char.Custom('GenTkProject')] for three weeks. This morning you came in and found it done.\n\n[gen_tk_s_appr.GetFirstName] stayed up all night with it. The solution is odd, and not how you would have done it, and it works."
  gen_tinker.0215.a: "Let [gen_tk_s_appr.GetFirstName] fix it. That's how you learn."
@@ -268,7 +268,7 @@
  gen_tinker.0215.f: "Not like that. Like this."
 
  # ============ 0216 The Money Runs Out ============
- gen_tinker.0216.t: "The Money Runs Out"
+ gen_tinker.0216.t: "Tinkerer: The Money Runs Out"
  gen_tinker.0216.desc: "The [ROOT.Char.Custom('GenTkProject')] is two-thirds built and the money is all spent. The brass merchant wants paying before he brings any more, the smith has gone home, and the smith's boys are eating their lunch very slowly in case it is the last one."
  gen_tinker.0216.desc.brass: "\n\nGood brass, it turns out, costs what good brass costs."
  gen_tinker.0216.a: "Find the money. It has to be finished."
@@ -282,7 +282,7 @@
  gen_tinker.0216.d.refused.t: "The Patron Refuses"
 
  # ============ 0217 A Visitor in the Workshop ============
- gen_tinker.0217.t: "A Visitor in the Workshop"
+ gen_tinker.0217.t: "Tinkerer: A Visitor in the Workshop"
  gen_tinker.0217.desc: "You look up from the [ROOT.Char.Custom('GenTkProject')] and find [gen_tk_s_kid.GetFirstName] sitting under the bench, watching you. [gen_tk_s_kid.GetSheHe|U] is holding a small brass gear which was, until recently, inside the [ROOT.Char.Custom('GenTkProject')].\n\n"What does this one do?" [gen_tk_s_kid.GetSheHe] asks."
  gen_tinker.0217.a: "Out! And give me that."
  gen_tinker.0217.a.tt: "The gear goes back in, and the work is left as it was"
@@ -294,7 +294,7 @@
  gen_tinker.0217.c: "Sit down. I'll show you how the whole thing works."
 
  # ============ 0218 The Inspection ============
- gen_tinker.0218.t: "The Inspection"
+ gen_tinker.0218.t: "Tinkerer: The Inspection"
  gen_tinker.0218.desc: "An envoy from [gen_tk_s_patron.GetTitledFirstName] has arrived to see how the [ROOT.Char.Custom('GenTkProject')] is coming along. [gen_tk_s_patron.GetSheHe|U] is paying for it, after all, and would like to know what for.\n\nThe envoy has a notebook, a very clean coat, and the look of someone who will write down everything."
  gen_tinker.0218.desc.fooled: "\n\nThe trouble is that what is on the bench is not quite what you promised [gen_tk_s_patron.GetFirstName]. It is better, you are sure of it. The envoy may not see it that way."
  gen_tinker.0218.a: "Show everything, warts and all."

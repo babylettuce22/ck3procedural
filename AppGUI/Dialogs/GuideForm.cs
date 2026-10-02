@@ -10,7 +10,7 @@ namespace Ck3MapGen.AppGUI;
 /// </summary>
 public abstract class GuideForm : ChromeForm
 {
-    protected const int Body = 520;
+    protected static readonly int Body = Dpi.S(520);
 
     private readonly FlowLayoutPanel _steps = new()
     {
@@ -18,24 +18,26 @@ public abstract class GuideForm : ChromeForm
         FlowDirection = FlowDirection.TopDown,
         WrapContents = false,
         AutoScroll = true,
-        Padding = new Padding(16, 10, 16, 10),
+        Padding = Dpi.Pad(16, 10, 16, 10),
         BackColor = Theme.Background,
     };
 
     private readonly FlowLayoutPanel _bar = new()
     {
         Dock = DockStyle.Bottom,
-        Height = 38,
-        Padding = new Padding(12, 5, 4, 4),
+        Height = Dpi.S(38),
+        Padding = Dpi.Pad(12, 5, 4, 4),
         BackColor = Theme.Surface,
     };
 
+    /// <param name="height">In 96-DPI pixels, like <see cref="Body"/> was written.</param>
     protected GuideForm(string title, int height)
     {
         Text = title;
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedSingle;
-        ClientSize = new Size(Body + 60, height);
+        var work = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 4096, 4096);
+        ClientSize = new Size(Body + Dpi.S(60), Math.Min(Dpi.S(height), work.Height - Dpi.S(40)));
         BackColor = Theme.Background;
         ForeColor = Theme.Text;
         Font = Theme.Ui;
@@ -77,7 +79,7 @@ public abstract class GuideForm : ChromeForm
             AutoSize = true,
             Font = Theme.UiBold,
             ForeColor = Theme.Text,
-            Margin = new Padding(0, 12, 0, 4),
+            Margin = Dpi.Pad(0, 12, 0, 4),
         });
 
     protected void Step(int number, string text)
@@ -86,7 +88,7 @@ public abstract class GuideForm : ChromeForm
         {
             AutoSize = true,
             WrapContents = false,
-            Margin = new Padding(0, 2, 0, 2),
+            Margin = Dpi.Pad(0, 2, 0, 2),
             BackColor = Color.Transparent,
         };
 
@@ -94,17 +96,17 @@ public abstract class GuideForm : ChromeForm
         {
             Text = $"{number}.",
             AutoSize = true,
-            Width = 22,
+            Width = Dpi.S(22),
             Font = Theme.UiBold,
             ForeColor = Theme.TextDim,
-            Margin = new Padding(0, 0, 4, 0),
+            Margin = Dpi.Pad(0, 0, 4, 0),
         });
 
         row.Controls.Add(new Label
         {
             Text = text,
             AutoSize = true,
-            MaximumSize = new Size(Body - 30, 0),
+            MaximumSize = new Size(Body - Dpi.S(30), 0),
             ForeColor = Theme.Text,
             Margin = new Padding(0),
         });
@@ -119,7 +121,7 @@ public abstract class GuideForm : ChromeForm
         {
             AutoSize = true,
             WrapContents = false,
-            Margin = new Padding(0, 1, 0, 1),
+            Margin = Dpi.Pad(0, 1, 0, 1),
             BackColor = Color.Transparent,
         };
 
@@ -127,17 +129,18 @@ public abstract class GuideForm : ChromeForm
         {
             Text = keys,
             AutoSize = false,
-            Width = 110,
+            Width = Dpi.S(110),
+            Height = Dpi.S(23),
             Font = Theme.UiBold,
             ForeColor = Theme.TextDim,
-            Margin = new Padding(0, 0, 4, 0),
+            Margin = Dpi.Pad(0, 0, 4, 0),
         });
 
         row.Controls.Add(new Label
         {
             Text = what,
             AutoSize = true,
-            MaximumSize = new Size(Body - 120, 0),
+            MaximumSize = new Size(Body - Dpi.S(120), 0),
             ForeColor = Theme.Text,
             Margin = new Padding(0),
         });
@@ -152,6 +155,6 @@ public abstract class GuideForm : ChromeForm
             AutoSize = true,
             MaximumSize = new Size(Body, 0),
             ForeColor = Theme.TextDim,
-            Margin = new Padding(0, 14, 0, 6),
+            Margin = Dpi.Pad(0, 14, 0, 6),
         });
 }

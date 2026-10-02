@@ -21,6 +21,13 @@ public sealed class GuiState
     public int Height { get; set; } = 950;
     public bool Maximized { get; set; }
 
+    /// <summary>
+    /// The screen DPI the splitter sizes below were measured at; 0 in a file from before it was
+    /// recorded, which is read as 96. <see cref="Load"/> rescales them to this screen, so a file
+    /// carried to a scaled display — or the 96-DPI defaults on one — doesn't open with a cramped pane.
+    /// </summary>
+    public int LayoutDpi { get; set; }
+
     public int SettingsWidth { get; set; } = 430;
     /// <summary>The log's height while open; it folds to its header row when <see cref="LogOpen"/> is off.</summary>
     public int LogHeight { get; set; } = 200;
@@ -170,16 +177,36 @@ public sealed class GuiState
     /// </summary>
     public static GuiState Load()
     {
+        GuiState state;
         try
         {
-            return File.Exists(Path_)
+            state = File.Exists(Path_)
                 ? JsonSerializer.Deserialize<GuiState>(File.ReadAllText(Path_)) ?? new GuiState()
                 : new GuiState();
         }
         catch (Exception)
         {
-            return new GuiState();
+            state = new GuiState();
         }
+
+        state.RescaleLayout();
+        return state;
+    }
+
+    /// <summary>
+    /// Brings the splitter sizes to this screen's DPI; see <see cref="LayoutDpi"/>. The window's own
+    /// bounds are left alone: they are checked against the scaled minimum size on the way back in.
+    /// </summary>
+    private void RescaleLayout()
+    {
+        int from = LayoutDpi > 0 ? LayoutDpi : 96;
+        if (from != Dpi.System)
+        {
+            SettingsWidth = SettingsWidth * Dpi.System / from;
+            LogHeight = LogHeight * Dpi.System / from;
+            ForgeLeftWidth = ForgeLeftWidth * Dpi.System / from;
+        }
+        LayoutDpi = Dpi.System;
     }
 
     /// <inheritdoc cref="Load"/>

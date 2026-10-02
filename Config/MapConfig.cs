@@ -167,6 +167,14 @@ public enum GenderPreference
 
     /// <summary>The mirror of <see cref="Historical"/>: women hold the land and the titles.</summary>
     FemaleDominated,
+
+    /// <summary>
+    /// Equal everywhere, without exception: every faith is <c>doctrine_gender_equal</c> with an
+    /// open priesthood, and every culture's martial custom is equal, so land, councils, clergy and
+    /// knighthood are open to both. Rulers follow the doctrine as always, which makes them a little
+    /// under half women. Last in the list because presets store the value as a number.
+    /// </summary>
+    Equal,
 }
 
 /// <summary>
@@ -184,6 +192,7 @@ public sealed class GenderPreferenceConverter() : EnumConverter(typeof(GenderPre
         (GenderPreference.Historical, "Historical"),
         (GenderPreference.Mixed, "Mixed"),
         (GenderPreference.FemaleDominated, "Female-dominated"),
+        (GenderPreference.Equal, "Equal everywhere"),
     ];
 
     public override object? ConvertTo(ITypeDescriptorContext? context, CultureInfo? culture,
@@ -792,7 +801,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("02 World State")]
     [DisplayName("Gender Preference")]
     [TypeConverter(typeof(GenderPreferenceConverter))]
-    [Description("Which way the world leans on inheritance, titles, councils and knighthood. Sets the faiths' gender doctrine, and the cultures' martial custom, inheritance traditions and the sex of the rulers written into history all follow from it, so a matriarchy is ruled by women rather than only legislated by them.")]
+    [Description("Which way the world leans on inheritance, titles, councils and knighthood. Sets the faiths' gender doctrine, and the cultures' martial custom, inheritance traditions and the sex of the rulers written into history all follow from it, so a matriarchy is ruled by women rather than only legislated by them. Equal everywhere makes every faith gender-equal with open clergy and every culture's martial custom equal, with no exceptions.")]
     public GenderPreference Gender { get; set; } = GenderPreference.Historical;
 
     [Category("02 World State")]

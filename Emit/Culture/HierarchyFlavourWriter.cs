@@ -39,6 +39,11 @@ namespace Ck3MapGen.Emit;
 /// other See's estate would pay treasury for nothing, so it does not see the building. If the
 /// interaction's gate changes, change this with it.
 ///
+/// ---- The Legatine Mission ----
+///
+/// A decision vanilla shows to every clergy ruler but that needs the Christian Church situation,
+/// which never starts here. Hidden unless that situation exists. See WriteLegatineMissionGate.
+///
 /// Only for <see cref="MapConfig.ContentSourceMode.Procedural"/>, like the set it completes. A
 /// VanillaWorld map has the real Christian faiths, and vanilla's text and building are right there.
 /// </summary>
@@ -76,6 +81,7 @@ public static class HierarchyFlavourWriter
 
         WriteArticles(modDir, gameDir);
         WriteLegationGate(modDir, gameDir);
+        WriteLegatineMissionGate(modDir, gameDir);
     }
 
     private static void WriteArticles(string modDir, string gameDir)
@@ -151,6 +157,30 @@ public static class HierarchyFlavourWriter
             "\t\t}\n" +
             "\t}\n",
             "chancery_legation_01 = {", "previous_building = chancery_01\n");
+
+        patch.Ship(modDir);
+    }
+
+    /// <summary>
+    /// Vanilla shows Send Legatine Mission to any clergy ruler, but it can only be taken while the
+    /// Christian Church situation is in its Reform chapter. Generated worlds never start that
+    /// situation, so every Hierarch and theocrat saw a decision they could never take. A scan of
+    /// every vanilla decision and interaction that mentions the situation found this to be the only
+    /// one shown without a Christianity gate; the rest only read the situation as an optional
+    /// <c>?=</c> branch. The gate is the same <c>exists = situation:the_christian_church</c>
+    /// vanilla's own <c>pam_kingdom_of_heaven_decision</c> uses.
+    /// </summary>
+    private static void WriteLegatineMissionGate(string modDir, string gameDir)
+    {
+        var patch = VanillaPatch.Open(gameDir, "legatine mission",
+            "common", "decisions", "dlc_decisions", "pam", "pam_decisions.txt");
+        if (patch is null) return;
+
+        patch.InsertAfter("pam_send_legatine_mission_decision is_shown",
+            "\n\t\t# Needs the Christian Church situation, which generated worlds never start.\n" +
+            "\t\t# See Emit/Culture/HierarchyFlavourWriter.cs.\n" +
+            "\t\texists = situation:the_christian_church",
+            "pam_send_legatine_mission_decision = {", "is_shown = {");
 
         patch.Ship(modDir);
     }

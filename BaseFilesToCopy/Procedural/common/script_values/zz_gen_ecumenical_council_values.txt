@@ -4,16 +4,24 @@
 # council can be called, and as many at the table (the host's own see counts towards it). Generated
 # faiths with sees have about three each (seed 303: 13 clerical regions for 4 faiths), so with
 # vanilla's number no generated faith could ever hold one (measured 2026-10-02: can_host_activity
-# was false for every see-faith head, all their life). The user chose (2026-10-02): the faith's own
-# sees, but at least 2 people, and never above vanilla's 5.
+# was false for every see-faith head, all their life). So the quorum follows the faith's own sees.
 #
 # Counted at run time as PEOPLE: the faith's rulers who hold a see (pam_is_clerical_region_holder_trigger,
 # the very test vanilla counts against the quorum). Counting see titles instead failed twice on seed
 # 303 (2026-10-02): the generator ships empty see titles for sees standing only on other bookmarks
 # (6 of 19), and one archbishop holding two sees left a four-see faith one short forever. Counting the
-# holders follows sees founded, split, merged, vacated or lost in play, on every bookmark, so a
-# council is held by whoever wears the faith's mitres now: at least two of them, all of them up to five.
-# A faith with a single see holder cannot hold one: a council of one is no council.
+# holders follows sees founded, split, merged, vacated or lost in play, on every bookmark.
+#
+# How many must come: the host and HALF of the faith's other see holders, rounded up, never fewer
+# than one guest and never more than vanilla's 5 (the user's choice, 2026-10-02). The first rule (all
+# of them, up to five) left a three-see faith needing every archbishop at the table, and councils
+# almost always failed for want of guests. Vanilla reads this one value two ways
+# (pam_ecumenical_council_has_quorum_trigger): a host who holds a see needs this minus one guests who
+# do, any other host needs this many. So it is worked out for the host, with N see holders in all:
+#  - host holds a see: 1 + ceil((N - 1) / 2), at least 2 (N = 3 needs 1 guest of 2; N = 6, 3 of 5);
+#  - host holds none (a landless head of faith): ceil(N / 2), at least 1 (N = 3 needs 2 of 3).
+# Either way it never exceeds N, which the activity's can_start also asks for. A see-holding host
+# alone in his faith cannot hold one: a council of one is no council.
 #
 # Who: only faiths carrying gen_settled_doctrine (every generated religion). Christianity and every
 # other vanilla faith keep 5.
@@ -42,7 +50,19 @@ ecumenical_council_min_clerical_region_holders = {
 				add = 1
 			}
 		}
-		min = 2
+		if = {
+			limit = { scope:host = { pam_is_clerical_region_holder_trigger = yes } }
+			subtract = 1
+			divide = 2
+			ceiling = yes
+			add = 1
+			min = 2
+		}
+		else = {
+			divide = 2
+			ceiling = yes
+			min = 1
+		}
 		max = 5
 	}
 	else_if = {
@@ -58,7 +78,19 @@ ecumenical_council_min_clerical_region_holders = {
 				add = 1
 			}
 		}
-		min = 2
+		if = {
+			limit = { root = { pam_is_clerical_region_holder_trigger = yes } }
+			subtract = 1
+			divide = 2
+			ceiling = yes
+			add = 1
+			min = 2
+		}
+		else = {
+			divide = 2
+			ceiling = yes
+			min = 1
+		}
 		max = 5
 	}
 }

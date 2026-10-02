@@ -16,8 +16,8 @@ namespace Ck3MapGen.Emit;
 /// the way vanilla fills those slots with saints and angels.
 ///
 /// The faith's things are glossed the same way: its house of worship, scripture, symbol, divine realm
-/// and afterlives, each in the template's three variants, plus the witch god and the head of faith's
-/// office. HouseOfWorshipPlural links through its singular's concept.
+/// and afterlives, each in the template's three variants, plus the witch god, the head of faith's
+/// office and its name for a Great Holy War. HouseOfWorshipPlural links through its singular's concept.
 /// </summary>
 internal static class ReligionGlossary
 {
@@ -73,6 +73,9 @@ internal static class ReligionGlossary
         new("DevoteeNeuter", null, (g, m) => "Devotee", "A title of {0}."),
         new("WitchGodName", "WitchGodSheHe", (g, m) => Deity(g, false, "Witchcraft"), "Worshipped in secret by witches, in {0}."),
         new("ReligiousHeadTitleName", null, (g, m) => "Office of the Head of Faith", "The office held by the head of {0}."),
+        // Vanilla prints this bare (Faith.GHWName, in every Great Holy War event and window), so the
+        // gloss is the only hover it gets; the line links on to vanilla's own concept for the rules.
+        new("GHWName", null, (g, m) => "Great Holy War", "What {0} calls a [great_holy_war|E]."),
 
         // The things a faith has rather than the figures it reveres. Each comes in three words (the
         // template's 2 and 3 are synonyms vanilla picks between), so each gets three rows.

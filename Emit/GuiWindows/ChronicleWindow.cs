@@ -200,6 +200,7 @@ public static class ChronicleWindow
         => GuiBuilder.VBox()
             .ExpandingH()
             .Gap().Add(GuiBuilder.TextMulti()
+                .AlwaysTransparent(false)
                 .ExpandingH()
                 .AutoResize()
                 .MaxWidth(RowWidth)
@@ -221,6 +222,7 @@ public static class ChronicleWindow
         var box = GuiBuilder.VBox()
             .DataContext(world)
             .ExpandingH()
+            .IgnoreInvisible()
             .Spacing(10)
             .Gap().Add(
                 GuiBuilder.TextMulti()
@@ -234,6 +236,12 @@ public static class ChronicleWindow
         for (int slot = 0; slot < ChronicleRuntimeWriter.WorldSlots; slot++)
         {
             var line = Line(slot);
+            var year = GuiExpr.Raw($"Title.Custom('{ChronicleRuntimeWriter.WorldYear(slot)}')");
+            box.Add(GuiBuilder.TextSingle()
+                .ExpandingH()
+                .Format("#high")
+                .Visible(GuiExpr.Not(GuiExpr.StringIsEmpty(year)))
+                .Text(year));
             box.Add(GuiBuilder.TextMulti()
                 // Native links inside the localized sentence need the text to take mouse input.
                 .AlwaysTransparent(false)

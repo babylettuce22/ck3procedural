@@ -130,6 +130,13 @@ public static class ReligionWriter
                     b.Field("family", religion.Abrahamic ? MapGen.Faiths.AbrahamicFamily : MapGen.Faiths.Family);
                     b.Field("graphical_faith", religion.GraphicalFaith);
 
+                    // rf_abrahamic is the one vanilla family with no piety_icon_group: each of its
+                    // religions names its own. Without one the piety tooltip shows the raw key
+                    // PIETY_LEVEL_LABEL_5_ (seen in game 2026-10-02). The pagan family's "pagan"
+                    // already covers the rest. The set follows the temple art the religion borrows.
+                    if (religion.Abrahamic)
+                        b.Field("piety_icon_group", PietyIconGroup(religion.GraphicalFaith));
+
                     // A religion with an institutional clergy names ecclesiastical government for its
                     // theocrats, as vanilla's Christianity does: grants and Adopt Theocratic Rule hand
                     // out whatever this names, and without it a see's successor falls back to plain
@@ -414,6 +421,17 @@ public static class ReligionWriter
 
     /// <summary>The loc key a faith's main rite is named by once the faith has regional rites.</summary>
     private static string MainRiteName(Faith faith) => $"{faith.Key}_main_rite";
+
+    /// <summary>
+    /// The piety icon set for an Abrahamic-family religion: the one its borrowed temple art comes
+    /// with in vanilla (catholic and orthodox are Christianity's), crosses for anything else.
+    /// </summary>
+    private static string PietyIconGroup(string graphicalFaith) => graphicalFaith switch
+    {
+        "islamic_gfx" => "islam",
+        "zoroastrian_gfx" => "zoroastrian",
+        _ => "christian",
+    };
 
     /// <summary>
     /// The icons the game offers when a faith of this religion reforms or a new faith is founded

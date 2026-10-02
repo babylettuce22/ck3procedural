@@ -463,7 +463,7 @@ public static partial class ContentWriter
         // halves of the question exist: the culture was drawn before any faith did, and the answer
         // has to be the same one its people's religion gives. See MapGen/Cultures.AlignGender.
         Core.Stage.Time("gender", () => MapGen.Cultures.AlignGender(cultures.Declared(), faiths, vocabulary,
-            new Rng(cfg.Seed ^ 0x6E1D)));
+            new Rng(cfg.Seed ^ 0x6E1D), cfg.Gender));
 
         // Each people's own words for its ranks, when asked for. Here because a people's home
         // religion is part of the decision and this is the first point every faith exists; off

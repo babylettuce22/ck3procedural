@@ -90,6 +90,10 @@ public static class ChronicleRuntimeWriter
     /// <summary>The custom-loc entry that renders a world slot.</summary>
     public static string WorldLine(int slot) => $"gen_chw_line_{slot}";
 
+    /// <summary>A year heading, empty unless this slot begins a year in the view's reading order.</summary>
+    public static string TitleYear(int slot) => $"gen_chr_year_{slot}";
+    public static string WorldYear(int slot) => $"gen_chw_year_{slot}";
+
     /// <summary>Title scope. Pushes one entry onto this title alone.</summary>
     public const string PushEffect = "gen_chr_push_effect";
 
@@ -164,7 +168,7 @@ public static class ChronicleRuntimeWriter
     /// template becomes one localisation key per slot. <see cref="TextNoActor"/> is the line for an
     /// entry that had nobody to name; a template without one is only ever pushed with an actor.
     /// </summary>
-    private sealed record Template(string Flag, string Text, string? TextNoActor = null);
+    private sealed record Template(string Flag, string Icon, string Text, string? TextNoActor = null);
 
     /// <summary>
     /// The lines that need nothing baked in: the entry's other party is a title, a faith or a
@@ -178,54 +182,54 @@ public static class ChronicleRuntimeWriter
     private static readonly Template[] FixedTemplates =
     [
         // The Ruins and Wilderness sets.
-        new("gen_chr_ruined",
+        new("gen_chr_ruined", "disaster",
             "In {year}, {other} fell to ruin. {actor} was the last to hold it.",
             "In {year}, {other} fell to ruin, and nobody remembers who held it last."),
-        new("gen_chr_reprieved",
+        new("gen_chr_reprieved", "building_icon",
             "In {year}, {actor} paid dearly to keep {other} from ruin."),
-        new("gen_chr_reclaimed",
+        new("gen_chr_reclaimed", "builder_icon",
             "In {year}, {actor} cleared the stones of {other}, and people returned.",
             "In {year}, the stones of {other} were cleared, and people returned."),
 
         // Crowns changing hands, by how.
-        new("gen_chr_crown_inherited", "In {year}, {actor} inherited {other}."),
-        new("gen_chr_crown_usurped", "In {year}, {actor} usurped {other}."),
-        new("gen_chr_crown_conquered", "In {year}, {actor} took {other} by force of arms."),
-        new("gen_chr_crown_created", "In {year}, {actor} raised {other} from lesser crowns."),
-        new("gen_chr_crown_elected", "In {year}, {actor} was elected to {other}."),
-        new("gen_chr_crown_passed", "In {year}, {other} passed to {actor}."),
-        new("gen_chr_crown_destroyed",
+        new("gen_chr_crown_inherited", "titles_icon", "In {year}, {actor} inherited {other}."),
+        new("gen_chr_crown_usurped", "titles_icon", "In {year}, {actor} usurped {other}."),
+        new("gen_chr_crown_conquered", "war_icon", "In {year}, {actor} took {other} by force of arms."),
+        new("gen_chr_crown_created", "titles_icon", "In {year}, {actor} raised {other} from lesser crowns."),
+        new("gen_chr_crown_elected", "titles_icon", "In {year}, {actor} was elected to {other}."),
+        new("gen_chr_crown_passed", "titles_icon", "In {year}, {other} passed to {actor}."),
+        new("gen_chr_crown_destroyed", "titles_icon",
             "In {year}, {actor} let {other} lapse, and it was no more.",
             "In {year}, {other} lapsed, and was no more."),
-        new("gen_chr_crowned", "In {year}, {actor} received the crown of {other}."),
+        new("gen_chr_crowned", "titles_icon", "In {year}, {actor} received the crown of {other}."),
 
         // Wars settled.
-        new("gen_chr_war_won", "In {year}, {actor} won {other} by war."),
-        new("gen_chr_war_held", "In {year}, {actor} held {other} against a war for it."),
+        new("gen_chr_war_won", "war_icon", "In {year}, {actor} won {other} by war."),
+        new("gen_chr_war_held", "war_icon", "In {year}, {actor} held {other} against a war for it."),
 
         // New peoples and faiths, and great works.
-        new("gen_chr_faith_founded", "In {year}, {actor} broke with the old ways and founded {faith}."),
-        new("gen_chr_culture_founded", "In {year}, {actor} gave rise to a new people, {culture}."),
-        new("gen_chr_wonder", "In {year}, {actor} finished the great work at {other}, begun by others long before."),
+        new("gen_chr_faith_founded", "religious_icon", "In {year}, {actor} broke with the old ways and founded {faith}."),
+        new("gen_chr_culture_founded", "culture_icon", "In {year}, {actor} gave rise to a new people, {culture}."),
+        new("gen_chr_wonder", "building_icon", "In {year}, {actor} finished the great work at {other}, begun by others long before."),
 
         // The Dynastic Cycle's phases, world news only. `other` is the hegemony title and `actor`
         // the hegemon, who may not exist — a throne in Division can stand empty — hence the pairs.
-        new("gen_chr_cycle_stability",
+        new("gen_chr_cycle_stability", "dynasty_icon",
             "In {year}, {other} settled into an age of stability under {actor}.",
             "In {year}, {other} settled into an age of stability."),
-        new("gen_chr_cycle_expansion",
+        new("gen_chr_cycle_expansion", "dynasty_icon",
             "In {year}, {actor} turned {other} outward. An age of expansion began.",
             "In {year}, {other} turned outward. An age of expansion began."),
-        new("gen_chr_cycle_advancement",
+        new("gen_chr_cycle_advancement", "dynasty_icon",
             "In {year}, {actor} turned {other} inward. An age of advancement began.",
             "In {year}, {other} turned inward. An age of advancement began."),
-        new("gen_chr_cycle_tension",
+        new("gen_chr_cycle_tension", "dynasty_icon",
             "In {year}, tension gathered in {other}, and the court of {actor} grew uneasy.",
             "In {year}, tension gathered in {other}."),
-        new("gen_chr_cycle_conquest",
+        new("gen_chr_cycle_conquest", "dynasty_icon",
             "In {year}, {other} passed to a conqueror, and {actor} held its throne by the sword.",
             "In {year}, {other} passed to a conqueror."),
-        new("gen_chr_cycle_division",
+        new("gen_chr_cycle_division", "dynasty_icon",
             "In {year}, {other} broke apart under {actor}. An age of division began.",
             "In {year}, {other} broke apart. An age of division began."),
     ];
@@ -365,7 +369,7 @@ public static class ChronicleRuntimeWriter
         foreach (var s in struggles.Struggles)
         {
             foreach (var ending in s.Endings)
-                yield return new Template(StruggleEndingFlag(s, ending), EndingText(s, ending));
+                yield return new Template(StruggleEndingFlag(s, ending), "struggle_icon", EndingText(s, ending));
 
             foreach (var phase in s.Phases)
             {
@@ -384,7 +388,7 @@ public static class ChronicleRuntimeWriter
                     $"In {{year}}, {name} fell into {phaseName}. There was open war in every valley.",
             };
 
-            yield return new Template(StruggleFlag(s, phase), text);
+            yield return new Template(StruggleFlag(s, phase), "struggle_icon", text);
             }
         }
     }
@@ -434,13 +438,13 @@ public static class ChronicleRuntimeWriter
         {
             string name = ParadoxText.Loc(InSentence(s.Name));
 
-            yield return new Template(WildsFlag(s, "wilds_pioneers"),
+            yield return new Template(WildsFlag(s, "wilds_pioneers"), "county_icon",
                 $"In {{year}}, the first colonies took root in {name}. An age of pioneers began.");
-            yield return new Template(WildsFlag(s, "wilds_closing"),
+            yield return new Template(WildsFlag(s, "wilds_closing"), "county_icon",
                 $"In {{year}}, {name} stood more settled than wild. The frontier was closing.");
-            yield return new Template(WildsFlag(s, "wilds_settled"),
+            yield return new Template(WildsFlag(s, "wilds_settled"), "county_icon",
                 $"In {{year}}, the last wild county of {name} was claimed. The frontier was gone.");
-            yield return new Template(WildsFlag(s, "wilds_untamed"),
+            yield return new Template(WildsFlag(s, "wilds_untamed"), "county_icon",
                 $"In {{year}}, the wild took back {name}. No colony stood in it.");
         }
     }
@@ -811,17 +815,20 @@ public static class ChronicleRuntimeWriter
             	}
             }
 
-            # Root = the founder (on_faith_created). Into the founder's realm books and the world;
-            # a landless founder is world news only.
+            # Root = the new faith; scope:founder (on_faith_created). In 1.19 root was the founder;
+            # 1.20 made it the faith. Into the founder's realm books and the world; a landless
+            # founder is world news only. The game also creates faiths with no acting character
+            # (vanilla enters scope:founder with ?=), and with no actor there is no line to write.
             gen_chr_on_faith_created_effect = {
             	if = {
-            		limit = { exists = capital_county }
-            		capital_county = {
-            			{{PushChainEffect}} = { TMPL = gen_chr_faith_founded ACTOR = root OTHER = root.faith WORLD = yes }
+            		limit = { exists = scope:founder.capital_county }
+            		scope:founder.capital_county = {
+            			{{PushChainEffect}} = { TMPL = gen_chr_faith_founded ACTOR = scope:founder OTHER = root WORLD = yes }
             		}
             	}
-            	else = {
-            		{{PushWorldEffect}} = { TMPL = gen_chr_faith_founded ACTOR = root OTHER = root.faith }
+            	else_if = {
+            		limit = { exists = scope:founder }
+            		{{PushWorldEffect}} = { TMPL = gen_chr_faith_founded ACTOR = scope:founder OTHER = root }
             	}
             }
 
@@ -1090,8 +1097,16 @@ public static class ChronicleRuntimeWriter
 
             """);
 
-        for (int i = 0; i < TitleSlots; i++) WriteLineEntry(sb, TitleLine(i), TitlePrefix, i, templates);
-        for (int i = 0; i < WorldSlots; i++) WriteLineEntry(sb, WorldLine(i), WorldPrefix, i, templates);
+        for (int i = 0; i < TitleSlots; i++)
+        {
+            WriteLineEntry(sb, TitleLine(i), TitlePrefix, i, templates);
+            WriteYearEntry(sb, TitleYear(i), TitlePrefix, i, i + 1 < TitleSlots ? i + 1 : null);
+        }
+        for (int i = 0; i < WorldSlots; i++)
+        {
+            WriteLineEntry(sb, WorldLine(i), WorldPrefix, i, templates);
+            WriteYearEntry(sb, WorldYear(i), WorldPrefix, i, i > 0 ? i - 1 : null);
+        }
 
         string dir = Path.Combine(modDir, "common", "customizable_localization");
         Directory.CreateDirectory(dir);
@@ -1125,6 +1140,28 @@ public static class ChronicleRuntimeWriter
     private static string LineKey(Template t, string p, int slot, bool actor)
         => $"{t.Flag}_{p}{slot}{(actor ? "_a" : "")}";
 
+    private static string YearKey(string p, int slot) => $"gen_chr_heading_{p}{slot}";
+
+    /// <summary>
+    /// Compare the previous row in reading order, not storage order. First-match guards keep
+    /// unset slots from reading missing years; the first retained event still gets a heading
+    /// when older events fall off the store. No new save variables are needed.
+    /// </summary>
+    private static void WriteYearEntry(StringBuilder sb, string entry, string p, int slot, int? previous)
+    {
+        sb.Append($"{entry} = {{\n\ttype = landed_title\n");
+        sb.Append($"\ttext = {{ trigger = {{ NOT = {{ has_variable = {p}_{slot}_tmpl }} }} localization_key = {EmptyKey} }}\n");
+        if (previous is { } prev)
+        {
+            sb.Append($"\ttext = {{ trigger = {{ NOT = {{ has_variable = {p}_{prev}_tmpl }} }} localization_key = {YearKey(p, slot)} }}\n");
+            sb.Append($"\ttext = {{ trigger = {{ NOT = {{ var:{p}_{slot}_year = var:{p}_{prev}_year }} }} localization_key = {YearKey(p, slot)} }}\n");
+            sb.Append($"\ttext = {{ localization_key = {EmptyKey} }}\n");
+        }
+        else
+            sb.Append($"\ttext = {{ localization_key = {YearKey(p, slot)} }}\n");
+        sb.Append("}\n\n");
+    }
+
     // ===========================================================================================
     // Localisation
     // ===========================================================================================
@@ -1150,6 +1187,10 @@ public static class ChronicleRuntimeWriter
         loc.Add("GEN_CHRONICLE_SINCE", "In living memory");
         loc.Blank();
 
+        for (int i = 0; i < TitleSlots; i++) AddYear(loc, TitlePrefix, i);
+        for (int i = 0; i < WorldSlots; i++) AddYear(loc, WorldPrefix, i);
+        loc.Blank();
+
         foreach (var t in templates)
         {
             for (int i = 0; i < TitleSlots; i++) AddLine(loc, t, TitlePrefix, i);
@@ -1162,9 +1203,22 @@ public static class ChronicleRuntimeWriter
 
     private static void AddLine(LocFile loc, Template t, string p, int slot)
     {
-        loc.AddBuilt(LineKey(t, p, slot, actor: true), Fill(t.Text, p, slot));
+        loc.AddBuilt(LineKey(t, p, slot, actor: true), EntryText(t.Icon, t.Text, p, slot));
         if (t.TextNoActor is not null)
-            loc.AddBuilt(LineKey(t, p, slot, actor: false), Fill(t.TextNoActor, p, slot));
+            loc.AddBuilt(LineKey(t, p, slot, actor: false), EntryText(t.Icon, t.TextNoActor, p, slot));
+    }
+
+    private static void AddYear(LocFile loc, string p, int slot)
+        => loc.AddBuilt(YearKey(p, slot), $"[ROOT.Title.MakeScope.Var('{p}_{slot}_year').GetValue|0]");
+
+    private static string EntryText(string icon, string text, string p, int slot)
+    {
+        // Dates live in the group heading. Both actor variants use the same event icon.
+        const string datedPrefix = "In {year}, ";
+        if (text.StartsWith(datedPrefix, StringComparison.Ordinal))
+            text = text[datedPrefix.Length..];
+        text = char.ToUpperInvariant(text[0]) + text[1..];
+        return $"@{icon}! {Fill(text, p, slot)}";
     }
 
     private static string Fill(string text, string p, int slot)

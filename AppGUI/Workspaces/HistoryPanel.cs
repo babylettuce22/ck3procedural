@@ -58,7 +58,7 @@ internal sealed class HistoryPanel : Panel
         AutoSize = true,
         Font = Theme.Ui,
         ForeColor = Theme.TextDim,
-        Margin = new Padding(12, 7, 3, 3),
+        Margin = Dpi.Pad(12, 7, 3, 3),
     };
 
     private readonly CheckBox _showSuccessions = new()
@@ -67,7 +67,7 @@ internal sealed class HistoryPanel : Panel
         AutoSize = true,
         Font = Theme.Ui,
         ForeColor = Theme.TextDim,
-        Margin = new Padding(6, 7, 3, 3),
+        Margin = Dpi.Pad(6, 7, 3, 3),
     };
 
     private readonly Button _play = Theme.MakeButton("▶  Play", 84, primary: true);
@@ -76,13 +76,13 @@ internal sealed class HistoryPanel : Panel
     private readonly Button _apply = Theme.MakeButton("Apply to World…", 120);
     private readonly Button _discard = Theme.MakeButton("Discard", 70);
     private readonly Button _changeYear = Theme.MakeButton("Change year…", 104);
-    private readonly Label _appliedNote = new() { AutoSize = true, Font = Theme.Ui, ForeColor = Theme.NoticeText, Margin = new Padding(8, 5, 3, 3) };
+    private readonly Label _appliedNote = new() { AutoSize = true, Font = Theme.Ui, ForeColor = Theme.NoticeText, Margin = Dpi.Pad(8, 5, 3, 3) };
     private readonly FlowLayoutPanel _appliedBar = new()
     {
         Dock = DockStyle.Top,
-        Height = 34,
+        Height = Dpi.S(34),
         WrapContents = false,
-        Padding = new Padding(6, 2, 6, 0),
+        Padding = Dpi.Pad(6, 2, 6, 0),
         BackColor = Theme.Notice,
         Visible = false,
     };
@@ -168,7 +168,7 @@ internal sealed class HistoryPanel : Panel
     private readonly Panel _settingsPanel = new()
     {
         Dock = DockStyle.Left,
-        Width = 250,
+        Width = Dpi.S(250),
         BackColor = Theme.Surface,
         Padding = new Padding(0, 0, 1, 0),
     };
@@ -184,9 +184,9 @@ internal sealed class HistoryPanel : Panel
     private readonly List<(int Year, string Text)> _notes = [];
     private int _shownNotes;
     private bool _settingBoxes;
-    private readonly Label _year = new() { AutoSize = true, Font = new Font("Segoe UI", 12f, FontStyle.Bold), ForeColor = Theme.Text, Margin = new Padding(14, 6, 3, 3) };
-    private readonly Label _stats = new() { AutoSize = true, Font = Theme.Ui, ForeColor = Theme.TextDim, Margin = new Padding(10, 10, 3, 3) };
-    private readonly Label _readout = new() { Dock = DockStyle.Bottom, Height = 24, Font = Theme.Ui, ForeColor = Theme.TextDim, BackColor = Theme.Surface, Padding = new Padding(8, 4, 0, 0) };
+    private readonly Label _year = new() { AutoSize = true, Font = new Font("Segoe UI", 12f, FontStyle.Bold), ForeColor = Theme.Text, Margin = Dpi.Pad(14, 6, 3, 3) };
+    private readonly Label _stats = new() { AutoSize = true, Font = Theme.Ui, ForeColor = Theme.TextDim, Margin = Dpi.Pad(10, 10, 3, 3) };
+    private readonly Label _readout = new() { Dock = DockStyle.Bottom, Height = Dpi.S(24), Font = Theme.Ui, ForeColor = Theme.TextDim, BackColor = Theme.Surface, Padding = Dpi.Pad(8, 4, 0, 0) };
     private readonly System.Windows.Forms.Timer _timer = new() { Interval = 33 };
 
     private GenerationResult? _result;
@@ -230,13 +230,13 @@ internal sealed class HistoryPanel : Panel
 
         foreach (int speed in Speeds)
         {
-            var button = new Theme.SegmentButton { Text = $"{speed}", Width = speed >= 100 ? 40 : 32 };
+            var button = new Theme.SegmentButton { Text = $"{speed}", Width = Dpi.S(speed >= 100 ? 40 : 32) };
             button.Click += (_, _) => SetSpeed(speed);
             _speedButtons[speed] = button;
         }
         foreach (var view in Enum.GetValues<MapView>())
         {
-            var button = new Theme.SegmentButton { Text = $"{view}", Width = 72 };
+            var button = new Theme.SegmentButton { Text = $"{view}", Width = Dpi.S(72) };
             button.Click += (_, _) => SetMapView(view);
             _viewButtons[view] = button;
             Theme.StyleSegment(button, view == _mapView);
@@ -275,14 +275,14 @@ internal sealed class HistoryPanel : Panel
         tips.SetToolTip(_viewButtons[MapView.Cultures], "Colour the map by each county's culture, as assimilation has left them");
         tips.SetToolTip(_viewButtons[MapView.Faiths], "Colour the map by each county's faith, as conversion has left them");
 
-        var speedLabel = new Label { Text = "years / second", AutoSize = true, Font = Theme.Ui, ForeColor = Theme.TextDim, Margin = new Padding(2, 10, 3, 3) };
+        var speedLabel = new Label { Text = "years / second", AutoSize = true, Font = Theme.Ui, ForeColor = Theme.TextDim, Margin = Dpi.Pad(2, 10, 3, 3) };
 
         var toolbar = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 40,
+            Height = Dpi.S(40),
             WrapContents = false,
-            Padding = new Padding(6, 4, 6, 0),
+            Padding = Dpi.Pad(6, 4, 6, 0),
             BackColor = Theme.Surface,
         };
         toolbar.Controls.Add(_settingsToggle);
@@ -307,15 +307,15 @@ internal sealed class HistoryPanel : Panel
         var chronicleHeader = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 30,
+            Height = Dpi.S(30),
             WrapContents = false,
             BackColor = Theme.Surface,
         };
-        chronicleHeader.Controls.Add(new Label { Text = "Chronicle", AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = new Padding(8, 7, 3, 3) });
+        chronicleHeader.Controls.Add(new Label { Text = "Chronicle", AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = Dpi.Pad(8, 7, 3, 3) });
         chronicleHeader.Controls.Add(_showConquests);
         chronicleHeader.Controls.Add(_showSuccessions);
 
-        var chronicle = new Panel { Dock = DockStyle.Right, Width = 380, BackColor = Theme.Surface, Padding = new Padding(1, 0, 0, 0) };
+        var chronicle = new Panel { Dock = DockStyle.Right, Width = Dpi.S(380), BackColor = Theme.Surface, Padding = new Padding(1, 0, 0, 0) };
         chronicle.Controls.Add(_chronicle);
         chronicle.Controls.Add(chronicleHeader);
         chronicle.Paint += (_, e) => { using var pen = new Pen(Theme.Border); e.Graphics.DrawLine(pen, 0, 0, 0, chronicle.Height); };
@@ -788,17 +788,17 @@ internal sealed class HistoryPanel : Panel
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoScroll = true,
-            Padding = new Padding(10, 8, 8, 8),
+            Padding = Dpi.Pad(10, 8, 8, 8),
             BackColor = Theme.Surface,
         };
 
-        const int Inner = 222;
-        list.Controls.Add(new Label { Text = "Simulation", AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = new Padding(0, 0, 0, 2) });
+        int Inner = Dpi.S(222);
+        list.Controls.Add(new Label { Text = "Simulation", AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = Dpi.Pad(0, 0, 0, 2) });
         list.Controls.Add(new Label
         {
             Text = "Changes take effect from the next year. Reset replays them.",
             AutoSize = true, MaximumSize = new Size(Inner, 0), Font = Theme.Ui, ForeColor = Theme.TextDim,
-            Margin = new Padding(0, 0, 0, 6),
+            Margin = Dpi.Pad(0, 0, 0, 6),
         });
 
         foreach (string section in RuleChoices.Select(r => r.Section).Concat(Dials.Select(d => d.Section)).Distinct())
@@ -806,7 +806,7 @@ internal sealed class HistoryPanel : Panel
             list.Controls.Add(new Label
             {
                 Text = section, AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Accent,
-                Margin = new Padding(0, 10, 0, 2),
+                Margin = Dpi.Pad(0, 10, 0, 2),
             });
 
             foreach (var (_, rule, name, tip) in RuleChoices.Where(r => r.Section == section))
@@ -814,7 +814,7 @@ internal sealed class HistoryPanel : Panel
                 var box = new CheckBox
                 {
                     Text = name, Checked = true, AutoSize = true, Font = Theme.Ui, ForeColor = Theme.Text,
-                    Margin = new Padding(2, 2, 0, 0),
+                    Margin = Dpi.Pad(2, 2, 0, 0),
                 };
                 box.CheckedChanged += (_, _) => { if (!_settingBoxes) OnSettingsChanged(); };
                 tips.SetToolTip(box, tip);
@@ -824,18 +824,18 @@ internal sealed class HistoryPanel : Panel
 
             foreach (var (_, name, tip, max, _, _) in Dials.Where(d => d.Section == section))
             {
-                var row = new Panel { Width = Inner, Height = 50, Margin = new Padding(0, 6, 0, 0), BackColor = Theme.Surface };
-                var label = new Label { Text = name, AutoSize = true, Font = Theme.Ui, ForeColor = Theme.Text, Location = new Point(2, 2) };
+                var row = new Panel { Width = Inner, Height = Dpi.S(50), Margin = Dpi.Pad(0, 6, 0, 0), BackColor = Theme.Surface };
+                var label = new Label { Text = name, AutoSize = true, Font = Theme.Ui, ForeColor = Theme.Text, Location = new Point(Dpi.S(2), Dpi.S(2)) };
                 var value = new Label
                 {
-                    Text = "1.0×", AutoSize = false, Width = 60, TextAlign = ContentAlignment.TopRight,
-                    Font = Theme.Ui, ForeColor = Theme.TextDim, Location = new Point(Inner - 62, 2),
+                    Text = "1.0×", AutoSize = false, Width = Dpi.S(60), TextAlign = ContentAlignment.TopRight,
+                    Font = Theme.Ui, ForeColor = Theme.TextDim, Location = new Point(Inner - Dpi.S(62), Dpi.S(2)),
                 };
                 var bar = new TrackBar
                 {
                     Minimum = 0, Maximum = (int)Math.Round(max * 10), Value = 10, TickFrequency = 5,
-                    SmallChange = 1, LargeChange = 5, AutoSize = false, Height = 28, Width = Inner,
-                    Location = new Point(0, 20), BackColor = Theme.Surface,
+                    SmallChange = 1, LargeChange = 5, AutoSize = false, Height = Dpi.S(28), Width = Inner,
+                    Location = new Point(0, Dpi.S(20)), BackColor = Theme.Surface,
                 };
                 bar.ValueChanged += (_, _) =>
                 {

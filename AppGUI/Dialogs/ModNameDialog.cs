@@ -22,7 +22,7 @@ internal sealed class ModNameDialog : ChromeForm
 {
     private readonly TextBox _name = new()
     {
-        Width = 380,
+        Width = Dpi.S(380),
         BorderStyle = BorderStyle.FixedSingle,
         BackColor = Theme.Surface,
         ForeColor = Theme.Text,
@@ -32,8 +32,8 @@ internal sealed class ModNameDialog : ChromeForm
     private readonly Label _path = new()
     {
         AutoSize = false,
-        Width = 460,
-        Height = 34,
+        Width = Dpi.S(460),
+        Height = Dpi.S(34),
         ForeColor = Theme.TextDim,
         Font = Theme.Mono,
     };
@@ -41,8 +41,8 @@ internal sealed class ModNameDialog : ChromeForm
     private readonly Label _note = new()
     {
         AutoSize = false,
-        Width = 460,
-        Height = 32,
+        Width = Dpi.S(460),
+        Height = Dpi.S(32),
         ForeColor = Theme.TextDim,
         Font = Theme.Ui,
     };
@@ -76,7 +76,7 @@ internal sealed class ModNameDialog : ChromeForm
         BackColor = Theme.Background;
         ForeColor = Theme.Text;
         Font = Theme.Ui;
-        ClientSize = new Size(500, 230);
+        ClientSize = Dpi.S(500, 230);
         AcceptButton = _ok;
         CancelButton = _cancel;
 
@@ -85,7 +85,7 @@ internal sealed class ModNameDialog : ChromeForm
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 5,
-            Padding = new Padding(14, 12, 14, 10),
+            Padding = Dpi.Pad(14, 12, 14, 10),
             BackColor = Theme.Background,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -104,7 +104,7 @@ internal sealed class ModNameDialog : ChromeForm
             Text = "Mod name",
             AutoSize = true,
             ForeColor = Theme.TextDim,
-            Margin = new Padding(0, 0, 0, 2),
+            Margin = Dpi.Pad(0, 0, 0, 2),
         };
 
         layout.Controls.Add(caption, 0, 0);

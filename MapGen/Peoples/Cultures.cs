@@ -1149,8 +1149,11 @@ public static class Cultures
     /// beside them is a real thing to find on a map, and a table that never produced one would make
     /// every culture a restatement of its religion.
     /// </summary>
+    /// <param name="preference">Only <see cref="GenderPreference.Equal"/> is read here: it makes every
+    /// culture's martial custom equal, with no exceptions. Every other preference reaches the
+    /// cultures through the faiths' doctrines.</param>
     public static void AlignGender(CultureMap cultures, FaithMap faiths, VanillaVocabulary vocab,
-        Rng rng)
+        Rng rng, GenderPreference preference = GenderPreference.Historical)
     {
         // Which way each culture's people actually pray, by weight of counties rather than by
         // whichever county came up first: a culture spread across a religious border takes the
@@ -1177,6 +1180,7 @@ public static class Cultures
 
             string custom = gender switch
             {
+                _ when preference == GenderPreference.Equal => "martial_custom_equal",
                 "doctrine_gender_female_dominated" => roll switch
                 {
                     < 0.72 => "martial_custom_female_only",

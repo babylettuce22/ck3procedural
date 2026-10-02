@@ -30,7 +30,7 @@ public sealed class CalendarPanel : UserControl
     private readonly TextBox[] _months = [.. WorldCalendar.EnglishMonths.Select(_ => Box(Placeholder))];
     private readonly Label _preview = new()
     {
-        AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = new Padding(3, 10, 3, 3),
+        AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = Dpi.Pad(3, 10, 3, 3),
     };
 
     public CalendarPanel()
@@ -44,9 +44,9 @@ public sealed class CalendarPanel : UserControl
             Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding = new Padding(12, 10, 12, 16),
+            Padding = Dpi.Pad(12, 10, 12, 16),
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Dpi.S(104)));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         void Span(Control control)
@@ -60,7 +60,7 @@ public sealed class CalendarPanel : UserControl
             layout.Controls.Add(new Label
             {
                 Text = label, AutoSize = true, Font = Theme.Ui, ForeColor = Theme.Text,
-                Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 3),
+                Anchor = AnchorStyles.Left, Margin = Dpi.Pad(3, 6, 3, 3),
             });
             layout.Controls.Add(control);
         }
@@ -164,7 +164,7 @@ public sealed class CalendarPanel : UserControl
     /// <summary>The notes wrap to the column: a label's wrap width is a maximum size, not its container's.</summary>
     protected override void OnLayout(LayoutEventArgs e)
     {
-        int width = Math.Max(120, ClientSize.Width - 36);
+        int width = Math.Max(Dpi.S(120), ClientSize.Width - Dpi.S(36));
         foreach (var note in _notes)
             if (note.MaximumSize.Width != width) note.MaximumSize = new Size(width, 0);
         base.OnLayout(e);
@@ -180,21 +180,21 @@ public sealed class CalendarPanel : UserControl
         ForeColor = Theme.Text,
         BorderStyle = BorderStyle.FixedSingle,
         PlaceholderText = placeholder,
-        Margin = new Padding(3, 3, 3, 3),
+        Margin = Dpi.Pad(3, 3, 3, 3),
     };
 
     private static Label Heading(string text) => new()
     {
         Text = text, AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text,
-        Margin = new Padding(3, 14, 3, 4),
+        Margin = Dpi.Pad(3, 14, 3, 4),
     };
 
     private Label Note(string text)
     {
         var note = new Label
         {
-            Text = text, AutoSize = true, MaximumSize = new Size(300, 0), Font = Theme.Ui,
-            ForeColor = Theme.TextDim, Margin = new Padding(3, 3, 3, 6),
+            Text = text, AutoSize = true, MaximumSize = Dpi.S(300, 0), Font = Theme.Ui,
+            ForeColor = Theme.TextDim, Margin = Dpi.Pad(3, 3, 3, 6),
         };
         _notes.Add(note);
         return note;

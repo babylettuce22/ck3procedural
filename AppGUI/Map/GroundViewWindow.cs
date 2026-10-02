@@ -20,14 +20,14 @@ internal sealed class GroundViewWindow : ChromeForm
         Maximum = 400,
         Value = 100,
         TickStyle = TickStyle.None,
-        Width = 110,
-        Height = 24,
+        Width = Dpi.S(110),
+        Height = Dpi.S(24),
     };
 
     private readonly Label _readout = new()
     {
         AutoSize = true,
-        Padding = new Padding(8, 5, 0, 0),
+        Padding = Dpi.Pad(8, 5, 0, 0),
         ForeColor = Theme.TextDim,
         Font = Theme.Ui,
         Text = "drag to orbit · right-drag to pan · wheel to zoom · double-click to reset",
@@ -38,8 +38,9 @@ internal sealed class GroundViewWindow : ChromeForm
         Text = $"{modName} — CK3 ground in 3D";
         // CenterParent only applies to ShowDialog; this one is modeless.
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(480, 360);
-        Size = new Size(1280, 800);
+        var work = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 800);
+        MinimumSize = Dpi.Fit(480, 360, work);
+        Size = Dpi.Fit(1280, 800, work);
         BackColor = Theme.Background;
         ForeColor = Theme.Text;
         Font = Theme.Ui;
@@ -50,8 +51,8 @@ internal sealed class GroundViewWindow : ChromeForm
         var strip = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 32,
-            Padding = new Padding(4, 3, 4, 0),
+            Height = Dpi.S(32),
+            Padding = Dpi.Pad(4, 3, 4, 0),
             BackColor = Theme.Surface,
         };
 
@@ -64,8 +65,8 @@ internal sealed class GroundViewWindow : ChromeForm
         {
             Text = "Relief",
             AutoSize = false,
-            Width = 44,
-            Height = 24,
+            Width = Dpi.S(44),
+            Height = Dpi.S(24),
             TextAlign = ContentAlignment.MiddleRight,
             ForeColor = Theme.TextDim,
             Font = Theme.Ui,

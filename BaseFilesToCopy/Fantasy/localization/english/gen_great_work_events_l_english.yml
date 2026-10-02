@@ -1,6 +1,6 @@
 ﻿l_english:
  # ============ 0010 The Oath ============
- gen_great_work.0010.t: "The Oath of the Long Labour"
+ gen_great_work.0010.t: "Great Work: The Oath of the Long Labour"
  gen_great_work.0010.desc: "Your court has gathered to hear you swear the oath of the Long Labour. By old custom it is sworn aloud, once, before witnesses, and never taken back.\n\nAmong your people, the greatest lives are given to a single work, begun while the maker is young and strong and finished only in old age, when they have grown weary of the world. The treasury has been opened and the craftsmen are waiting. All that is left is to say what you will make."
  gen_great_work.0010.a: "A jewel that catches the light and holds it, finer than any stone ever cut."
  gen_great_work.0010.b: "A chronicle of this age, written by one who lived through it."
@@ -9,7 +9,7 @@
  gen_great_work.0010.e: "A lamp-tree: a tree that gives its own light, grown and tended by my hand."
 
  # ============ 0101 The True Material ============
- gen_great_work.0101.t: "The True Material"
+ gen_great_work.0101.t: "Great Work: The True Material"
  gen_great_work.0101.desc.jewel: "The setting is finished and the design is sound, but there is no stone in your treasury clear enough to hold what you mean it to hold. Glass clouds. Common crystal scatters the light instead of keeping it. The stone you need lies far deeper than any ordinary mine goes."
  gen_great_work.0101.desc.chronicle: "You are ready to write, but you cannot say for certain how your people's history begins. The oldest records were carried off or buried long ago, and a chronicle that begins with guesswork is no better than a tale. If those records survive anywhere, it is in the old archives beneath the mountains."
  gen_great_work.0101.desc.regalia: "Gold is soft and silver tarnishes, and the regalia of your line must outlast both. The old smiths spoke of a metal found only deep under the mountains: dark in the ore, bright when it is worked, and never touched by rust."
@@ -28,7 +28,7 @@
  gen_great_work.0101.c: "Make do with the best there is."
 
  # ============ 0102 A Flash of Vision ============
- gen_great_work.0102.t: "A Flash of Vision"
+ gen_great_work.0102.t: "Great Work: A Flash of Vision"
  gen_great_work.0102.desc.jewel: "As you are falling asleep, it comes to you: the right way to cut the stone. Not the cut you have been trying for years, but one that will make it hold the light instead of throwing it back. You can see every face of it."
  gen_great_work.0102.desc.chronicle: "You wake knowing how the chronicle must be ordered. Not as a dry list of reigns, but as one story, each age leading into the next. You can see the whole shape of it, beginning to end."
  gen_great_work.0102.desc.regalia: "In a dream you see your heirs one after another, each wearing the crown, and at last you know how it must be made so that it suits every one of them."
@@ -40,7 +40,7 @@
  gen_great_work.0102.c: "Wake the court. They should hear this."
 
  # ============ 0103 The Long Doubt ============
- gen_great_work.0103.t: "The Long Doubt"
+ gen_great_work.0103.t: "Great Work: The Long Doubt"
  gen_great_work.0103.desc.jewel: "Every morning for years you have held the half-cut stone up to the window. Some mornings it looks like the finest thing ever made, and some mornings it looks like glass. This year it has looked like glass every morning."
  gen_great_work.0103.desc.chronicle: "You read back what you have written of the age, and it reads like every other chronicle: a list of kings and the battles they fought. Whatever you meant to catch is not in it."
  gen_great_work.0103.desc.regalia: "The crown sits on its cushion in the workshop and you can no longer tell whether it is beautiful or only heavy. You catch yourself thinking your heirs would do just as well with plain gold."
@@ -52,7 +52,7 @@
  gen_great_work.0103.c: "Keep working. The doubt will pass, or it won't."
 
  # ============ 0104 A Jealous Kinsman ============
- gen_great_work.0104.t: "A Jealous Kinsman"
+ gen_great_work.0104.t: "Great Work: A Jealous Kinsman"
  gen_great_work.0104.desc.intro: "[gw_kin.GetFirstName] came to the workshop today, and not to admire the work.\n\n"
  gen_great_work.0104.desc.jewel: "\"Half the treasury has gone into that stone,\" [gw_kin.GetSheHe] said. \"Our house could have bought a duchy with it. And when it is done it will have your name on it, and no one else's.\""
  gen_great_work.0104.desc.chronicle: "\"I have read what you wrote about me,\" [gw_kin.GetSheHe] said. \"Three lines, and one of them wrong. Is that how our house will be remembered? As a footnote in your book?\""
@@ -64,7 +64,7 @@
  gen_great_work.0104.c: "Here. Take this, and leave me in peace."
 
  # ============ 0105 A Rival's Work ============
- gen_great_work.0105.t: "A Rival's Work"
+ gen_great_work.0105.t: "Great Work: A Rival's Work"
  gen_great_work.0105.desc.sworn: "Word has come that [gw_rival.GetTitledFirstName] has sworn a great work of [gw_rival.GetHerHis] own, and those who have seen it say it is very fine. Some of them have said so at your table, within your hearing."
  gen_great_work.0105.desc.boast: "[gw_rival.GetTitledFirstName] has been showing [gw_rival.GetHerHis] guests a masterpiece made at [gw_rival.GetHerHis] court, and letting it be known that nothing made at yours will ever match it."
  gen_great_work.0105.desc.jewel: "\n\nYour own stone sits half-cut on the bench. You badly want to see this rival work for yourself, and to hold the two side by side."
@@ -77,7 +77,7 @@
  gen_great_work.0105.c: "Let the court know what I think of it."
 
  # ============ 0106 A Demand to See It ============
- gen_great_work.0106.t: "A Demand to See It"
+ gen_great_work.0106.t: "Great Work: A Demand to See It"
  gen_great_work.0106.desc.liege: "A letter has come under [gw_asker.GetTitledFirstName]'s seal. [gw_asker.GetSheHe|U] has heard a great deal about the work in your workshop, and as your liege [gw_asker.GetSheHe] wants to see it now, not when it is finished."
  gen_great_work.0106.desc.suitor: "[gw_asker.GetTitledFirstName] has written to you again, warmly. [gw_asker.GetSheHe|U] would like to court you, but first [gw_asker.GetSheHe] wants to see the work you give all your time to. Everyone tells [gw_asker.GetHerHim] you love it more than any living person."
  gen_great_work.0106.desc.neighbour: "An envoy from [gw_asker.GetTitledFirstName] has come to your court with gifts and a single request: [gw_asker.GetSheHe] has heard of your great work, and would have [gw_asker.GetHerHis] envoy see it and describe it to [gw_asker.GetHerHim]."
@@ -91,7 +91,7 @@
  gen_great_work.0106.c: "Make something smaller for [gw_asker.GetHerHim], and send that."
 
  # ============ 0107 The Work and the Hearth ============
- gen_great_work.0107.t: "The Work and the Hearth"
+ gen_great_work.0107.t: "Great Work: The Work and the Hearth"
  gen_great_work.0107.desc.spouse: "[gw_hearth.GetFirstName] waited up for you again last night, and fell asleep in the chair. [gw_hearth.GetSheHe|U] has said nothing about it this morning, which is worse than saying something."
  gen_great_work.0107.desc.child: "[gw_hearth.GetFirstName] came to the workshop door today to show you something, and you sent [gw_hearth.GetHerHim] away without looking up. You cannot now remember what it was."
  gen_great_work.0107.desc.jewel: "\n\nThe stone is at the stage where one slip of the hand undoes a month. You have not eaten a meal outside the workshop since spring."
@@ -104,7 +104,7 @@
  gen_great_work.0107.c: "Bring [gw_hearth.GetFirstName] into the workshop with me."
 
  # ============ 0108 A Pupil ============
- gen_great_work.0108.t: "A Pupil"
+ gen_great_work.0108.t: "Great Work: A Pupil"
  gen_great_work.0108.desc.intro: "The work has grown too large for one pair of hands, and you have begun to wonder who would carry it on if you died before it was done.\n\n"
  gen_great_work.0108.desc.jewel: "A pupil would have to learn to see light the way you do, and to keep a steady hand for a year at a time."
  gen_great_work.0108.desc.chronicle: "A pupil would have to learn the old scripts, and how to hear the truth in a story told by someone who was lying."
@@ -120,8 +120,8 @@
  gen_great_work.0108.pupil_child.tt: "[gw_child_candidate.GetFirstName] becomes your pupil in the work"
 
  # ============ 0109 Fire / War ============
- gen_great_work.0109.t.fire: "Fire in the Workshop"
- gen_great_work.0109.t.war: "The War Comes Close"
+ gen_great_work.0109.t.fire: "Great Work: Fire in the Workshop"
+ gen_great_work.0109.t.war: "Great Work: The War Comes Close"
  gen_great_work.0109.desc.fire: "A lamp went over in the night, and by the time anyone woke the workshop roof was burning. Your servants are carrying water. Your guards are carrying out whoever was sleeping in the rooms above."
  gen_great_work.0109.desc.war: "The war has come closer than anyone expected. Scouts report riders two days from the town where your workshop stands, and your servants want to know what should be carried away first. The work has never been moved. It was never meant to be."
  gen_great_work.0109.desc.jewel: "\n\nThe stone is still in its setting on the bench."
@@ -135,7 +135,7 @@
  gen_great_work.0109.c.war: "Pay for soldiers to hold the town."
 
  # ============ 0510 The Work Is Finished ============
- gen_great_work.0510.t: "The Work Is Finished"
+ gen_great_work.0510.t: "Great Work: The Work Is Finished"
  gen_great_work.0510.desc.jewel: "You cut the last face of the stone this morning and held it up to the window. The light went into it and stayed there. It is glowing on the bench now, and your servants keep finding reasons to walk past it."
  gen_great_work.0510.desc.chronicle: "You wrote the last line of the chronicle this morning and sat looking at it until the ink was dry. Everything is in it: the kings and the battles, but also the harvests, the songs, and the names of people no one else remembered."
  gen_great_work.0510.desc.regalia: "You set the last stone in the crown this morning, and the sceptre lies beside it on the cushion. Your heirs will wear them for as long as your line lasts."
@@ -150,7 +150,7 @@
  gen_great_work.0510.d: "Show it to no one yet. Sit with it a while."
 
  # ============ 0601 The Maker's Last Wish ============
- gen_great_work.0601.t: "The Maker's Last Wish"
+ gen_great_work.0601.t: "Great Work: The Maker's Last Wish"
  gen_great_work.0601.desc.intro: "Among [gw_dead_maker.GetFirstName]'s papers in the workshop was a letter addressed to you, sealed, written some years ago by the look of the ink.\n\n"
  gen_great_work.0601.desc.jewel: "\"If I die before the stone is finished,\" it says, \"give it to [gw_pupil.GetFirstName]. [gw_pupil.GetSheHe|U] sees the light in it the way I do, and no one else ever will.\""
  gen_great_work.0601.desc.chronicle: "\"If I die before the chronicle is finished,\" it says, \"give it to [gw_pupil.GetFirstName]. [gw_pupil.GetSheHe|U] knows where every record is, and which of them lie.\""
@@ -162,7 +162,7 @@
  gen_great_work.0601.b: "A letter is not a will. I will decide this myself."
 
  # ============ 0602 The Unfinished Work ============
- gen_great_work.0602.t: "The Unfinished Work"
+ gen_great_work.0602.t: "Great Work: The Unfinished Work"
  gen_great_work.0602.desc.intro: "[gw_dead_maker.GetFirstName] is dead, and the work [gw_dead_maker.GetSheHe] swore to is not finished. It has come to you to decide what becomes of it.\n\n"
  gen_great_work.0602.desc.jewel: "The stone sits in its setting on the bench, half cut. In the right light you can see what it was going to be."
  gen_great_work.0602.desc.chronicle: "The chronicle stands on the shelves, volume after volume, and stops in the middle of a page."
@@ -180,7 +180,7 @@
  gen_great_work.0602.d: "Seal it away as it is."
 
  # ============ 0603 The Pupil's Plea ============
- gen_great_work.0603.t: "The Pupil's Plea"
+ gen_great_work.0603.t: "Great Work: The Pupil's Plea"
  gen_great_work.0603.desc.intro: "[gw_pupil.GetFirstName] was waiting for you outside the workshop. [gw_pupil.GetSheHe|U] had already heard what you decided.\n\n\"[gw_dead_maker.GetFirstName] did not give [gw_dead_maker.GetHerHis] life to this so it could sit behind a locked door,\" [gw_pupil.GetSheHe] said. "
  gen_great_work.0603.desc.jewel: "\"I know every face of that stone, and every one still to be cut."
  gen_great_work.0603.desc.chronicle: "\"I know every record the chronicle was drawn from, and every one still to be read."
@@ -194,7 +194,7 @@
  gen_great_work.0603.b.toast.tt: "[gw_decider.GetFirstName] would not let you finish [gw_dead_maker.GetFirstName]'s work. It has been sealed away as it was."
 
  # ============ 0604 A Rival Claim ============
- gen_great_work.0604.t: "A Rival Claim"
+ gen_great_work.0604.t: "Great Work: A Rival Claim"
  gen_great_work.0604.desc.intro: "You had barely said that you would take up the work when [gw_claimant.GetFirstName] came to find you.\n\n\"[gw_dead_maker.GetFirstName] gave [gw_dead_maker.GetHerHis] whole life to it,\" [gw_claimant.GetSheHe] said. \"It should go to someone who will give it the same. "
  gen_great_work.0604.desc.landed: "You have a realm to rule. I have nothing but time.\""
  gen_great_work.0604.desc.unlanded: "You have your own life to lead. I would give mine to it.\""

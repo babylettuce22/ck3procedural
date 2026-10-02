@@ -27,14 +27,14 @@ internal sealed class WorkspaceBar : Panel
     public WorkspaceBar()
     {
         Dock = DockStyle.Top;
-        Height = 42;
+        Height = Dpi.S(42);
         BackColor = Theme.Surface;
 
         _leading = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             WrapContents = false,
-            Padding = new Padding(8, 0, 0, 0),
+            Padding = Dpi.Pad(8, 0, 0, 0),
             BackColor = Color.Transparent,
         };
 
@@ -44,7 +44,7 @@ internal sealed class WorkspaceBar : Panel
             FlowDirection = FlowDirection.RightToLeft,
             AutoSize = true,
             WrapContents = false,
-            Padding = new Padding(0, 6, 8, 0),
+            Padding = Dpi.Pad(0, 6, 8, 0),
             BackColor = Color.Transparent,
         };
 
@@ -110,7 +110,7 @@ internal sealed class WorkspaceBar : Panel
             AutoSize = true,
             Font = new Font("Segoe UI", 12f),
             ForeColor = Theme.TextFaint,
-            Margin = new Padding(0, 8, 0, 0),
+            Margin = Dpi.Pad(0, 8, 0, 0),
         };
         _chevrons.Add(chevron);
         _leading.Controls.Add(chevron);
@@ -138,7 +138,7 @@ internal sealed class WorkspaceBar : Panel
             _step = step;
             _label = label;
             _badge = badge;
-            Height = 41;
+            Height = Dpi.S(41);
             Margin = new Padding(0);
             Cursor = Cursors.Hand;
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
@@ -159,11 +159,11 @@ internal sealed class WorkspaceBar : Panel
         private void Measure()
         {
             const TextFormatFlags flags = TextFormatFlags.NoPadding;
-            int width = 14;
-            if (_showStep) width += TextRenderer.MeasureText(StepText, NameFont, Size.Empty, flags).Width + 6;
+            int width = Dpi.S(14);
+            if (_showStep) width += TextRenderer.MeasureText(StepText, NameFont, Size.Empty, flags).Width + Dpi.S(6);
             width += TextRenderer.MeasureText(_label, NameBold, Size.Empty, flags).Width;
-            if (_badge is not null) width += TextRenderer.MeasureText(_badge, BadgeFont, Size.Empty, flags).Width + 14;
-            Width = width + 14;
+            if (_badge is not null) width += TextRenderer.MeasureText(_badge, BadgeFont, Size.Empty, flags).Width + Dpi.S(14);
+            Width = width + Dpi.S(14);
         }
 
         protected override void OnMouseEnter(EventArgs e) { _hover = true; Invalidate(); base.OnMouseEnter(e); }
@@ -175,7 +175,8 @@ internal sealed class WorkspaceBar : Panel
             g.Clear(_hover && !_selected ? Theme.Background : Theme.Surface);
 
             const TextFormatFlags flags = TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter;
-            var area = new Rectangle(14, 0, Width - 14, Height - 3);
+            int rule = Dpi.S(3);
+            var area = new Rectangle(Dpi.S(14), 0, Width - Dpi.S(14), Height - rule);
             int x = area.X;
 
             if (_showStep)
@@ -183,19 +184,19 @@ internal sealed class WorkspaceBar : Panel
                 var size = TextRenderer.MeasureText(StepText, NameFont, Size.Empty, TextFormatFlags.NoPadding);
                 TextRenderer.DrawText(g, StepText, NameFont, new Rectangle(x, area.Y, size.Width, area.Height),
                     _selected ? Theme.Accent : Theme.TextDim, flags);
-                x += size.Width + 6;
+                x += size.Width + Dpi.S(6);
             }
 
             var font = _selected ? NameBold : NameFont;
             var nameSize = TextRenderer.MeasureText(_label, font, Size.Empty, TextFormatFlags.NoPadding);
             TextRenderer.DrawText(g, _label, font, new Rectangle(x, area.Y, nameSize.Width, area.Height),
                 _selected ? Theme.Accent : Theme.Text, flags);
-            x += nameSize.Width + 7;
+            x += nameSize.Width + Dpi.S(7);
 
             if (_badge is not null)
             {
                 var badgeSize = TextRenderer.MeasureText(_badge, BadgeFont, Size.Empty, TextFormatFlags.NoPadding);
-                var pill = new Rectangle(x, (area.Height - badgeSize.Height) / 2 - 1, badgeSize.Width + 8, badgeSize.Height + 2);
+                var pill = new Rectangle(x, (area.Height - badgeSize.Height) / 2 - Dpi.S(1), badgeSize.Width + Dpi.S(8), badgeSize.Height + Dpi.S(2));
                 using (var back = new SolidBrush(Theme.Notice)) g.FillRectangle(back, pill);
                 TextRenderer.DrawText(g, _badge, BadgeFont, pill, Theme.NoticeText,
                     TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
@@ -204,7 +205,7 @@ internal sealed class WorkspaceBar : Panel
             if (_selected)
             {
                 using var line = new SolidBrush(Theme.Accent);
-                g.FillRectangle(line, 8, Height - 3, Width - 16, 3);
+                g.FillRectangle(line, Dpi.S(8), Height - rule, Width - Dpi.S(16), rule);
             }
         }
     }
