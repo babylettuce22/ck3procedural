@@ -15,6 +15,7 @@ public static class ReligionWriter
     {
         WriteHolySites(modDir, faiths);
         WriteReligions(modDir, faiths);
+        WriteFaithHistory(modDir, faiths);
         WriteLocalisation(modDir, faiths, seed, tooltips);
         SeeWriter.WriteAll(modDir, faiths, removeWhenNone: fromGeneration);
 
@@ -200,8 +201,49 @@ public static class ReligionWriter
     internal static void WriteSeeDependent(string modDir, FaithMap faiths, int seed, bool tooltips)
     {
         WriteReligions(modDir, faiths);
+        WriteFaithHistory(modDir, faiths);
         WriteLocalisation(modDir, faiths, seed, tooltips);
         SeeWriter.WriteAll(modDir, faiths);
+    }
+
+    private const string FaithHistoryFile = "00_generated_faiths.txt";
+
+    /// <summary>
+    /// <c>history/faiths</c>: each generated faith marked created, with its starting known, permitted
+    /// and prohibited tenets (<see cref="TenetStatuses"/>). Dated 1.1.1 so it stands on every bookmark.
+    /// A faith's own cores are left out even if an editor change made one of them a status here (the
+    /// game ignores those anyway, with a warning). When no faith carries statuses — a world reopened
+    /// from its files — the file on disk is left as it is rather than emptied.
+    /// </summary>
+    private static void WriteFaithHistory(string modDir, FaithMap faiths)
+    {
+        var decided = faiths.Faiths.Where(f => f.TenetStatus is not null).ToList();
+        if (decided.Count == 0) return;
+
+        var b = new JominiBuilder();
+        b.Comment("Generated faiths' starting tenet statuses (CK3 1.20). See MapGen/Peoples/TenetStatuses.cs.");
+        foreach (var faith in decided)
+        {
+            var s = faith.TenetStatus!;
+            List<string> Clean(List<string> list) => list.Where(t => !faith.Tenets.Contains(t)).Distinct().ToList();
+            var known = Clean(s.Known);
+            var permitted = Clean(s.Permitted);
+            var prohibited = Clean(s.Prohibited);
+
+            b.Blank();
+            using (b.Block(faith.Key))
+            using (b.Block("1.1.1"))
+            {
+                b.Field("created", "yes");
+                if (known.Count > 0) b.Inline("known", known.ToArray());
+                if (permitted.Count > 0) b.Inline("permitted", permitted.ToArray());
+                if (prohibited.Count > 0) b.Inline("prohibited", prohibited.ToArray());
+            }
+        }
+
+        string dir = Path.Combine(modDir, "history", "faiths");
+        Directory.CreateDirectory(dir);
+        ParadoxText.WriteBom(Path.Combine(dir, FaithHistoryFile), b.ToString());
     }
 
     private static void WeightedTraits(JominiBuilder b, string field, IReadOnlyList<string> traits)

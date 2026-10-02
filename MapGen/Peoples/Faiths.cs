@@ -11,6 +11,20 @@ public sealed class HeadOfFaith
     public required Title Seat { get; init; }
 
     /// <summary>
+    /// The county a spiritual head actually holds on the start date, when <see cref="HeadSeats"/>
+    /// seated them on land; null for a landless head. Usually <see cref="Seat"/>, but the carve may
+    /// pick another of the faith's counties, and the head title's capital follows the held one.
+    /// </summary>
+    public Title? LandedSeat { get; set; }
+
+    /// <summary>
+    /// Seated on land on at least one bookmark (start date or another). The head title is then written
+    /// without <c>landless = yes</c>, on every date alike since landed_titles is not dated: a landed head
+    /// whose primary title is landless becomes a landless adventurer (see ContentWriter).
+    /// </summary>
+    public bool LandedOnSomeDate { get; set; }
+
+    /// <summary>
     /// A temporal head — vanilla's caliph shape — rather than a spiritual one. The title is held
     /// by the faith's strongest landed ruler instead of a theocrat of its own, and it is written
     /// with <c>doctrine_temporal_head</c>, which vanilla only allows beside lay clergy. Only an
@@ -97,6 +111,13 @@ public sealed class Faith
     /// see's seat; null while the main rite simply reads as the faith. Set by <see cref="MapGen.Sees"/>.
     /// </summary>
     public string? MainRiteAdjective { get; set; }
+
+    /// <summary>
+    /// The faith's starting stance on tenets beyond its own three (CK3 1.20), decided by
+    /// <see cref="TenetStatuses"/> and written to <c>history/faiths</c>. Null until decided, and on a
+    /// world reopened from files, which the faith-history writer then leaves alone.
+    /// </summary>
+    public TenetStatusSet? TenetStatus { get; set; }
 
     public bool IsOrganized { get; set; } = true;
     public bool IsDominant { get; set; } = false;

@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Core;
 using Ck3MapGen.Emit;
 
@@ -365,6 +365,15 @@ public sealed partial class BookmarkEras
                     }
                 }
 
+                // A head seated on land on this date (HeadSeats): the seat's own theocrat wears the title.
+                if (!faith.Head.Temporal && era.Realms.HeadSeats.TryGetValue(faith, out var headSeat)
+                    && era.Realms.HolderCounty.GetValueOrDefault(headSeat) == headSeat
+                    && !wildThen.Contains(headSeat) && era.Rulers.TryGet(headSeat, out var seated))
+                {
+                    era.FaithHeads[faith.Head.TitleKey] = seated.Id;
+                    continue;
+                }
+
                 var sample = counties.FirstOrDefault(c => !wildThen.Contains(c) && faiths.For(c) == faith)
                              ?? counties[0];
                 var culture = cultures.For(sample);
@@ -407,11 +416,18 @@ public sealed partial class BookmarkEras
     /// The start date's own map, for a world whose realms were not grown: the same realms, less a
     /// hegemony, which is crowned at the start date and on no date the simulation did not draw.
     /// </summary>
-    private static RealmMap WithoutHegemony(RealmMap realms) => new()
+    private static RealmMap WithoutHegemony(RealmMap realms)
     {
-        HolderCounty = realms.HolderCounty.Where(kv => kv.Key.Tier != "h").ToDictionary(),
-        Liege = realms.Liege.Where(kv => kv.Key.Tier != "h" && kv.Value.Tier != "h").ToDictionary(),
-        Greatest = realms.Greatest,
-        History = realms.History,
-    };
+        var map = new RealmMap
+        {
+            HolderCounty = realms.HolderCounty.Where(kv => kv.Key.Tier != "h").ToDictionary(),
+            Liege = realms.Liege.Where(kv => kv.Key.Tier != "h" && kv.Value.Tier != "h").ToDictionary(),
+            Greatest = realms.Greatest,
+            History = realms.History,
+        };
+        // The start date's landed heads stand on a date that shares its map (HeadSeats): their seat is
+        // carved on it, so the head title goes to the seat's theocrat there too, not to a priest.
+        foreach (var (faith, seat) in realms.HeadSeats) map.HeadSeats[faith] = seat;
+        return map;
+    }
 }

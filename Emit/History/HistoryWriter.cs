@@ -940,7 +940,7 @@ public static class HistoryWriter
         {
             // A temporal head's title goes to a landed ruler, so no theocrat is written for it.
             // Same test as WriteTitleHistory, which is what keeps gen_hof_N numbering aligned.
-            if (faith.Head is null || TemporalHeadHolder(faith, realms, faiths, wilderness) is not null)
+            if (faith.Head is null || HeadRuler(faith, realms, faiths, wilderness) is not null)
             {
                 continue;
             }
@@ -1326,6 +1326,9 @@ public static class HistoryWriter
                         {
                             b.Field("holder", head);
                             if (era.Priests.Any(p => p.Id == head)) b.Field("government", HeadGovernment(faith));
+                            // A landed head on this date: the head title is their primary, as on the start date.
+                            else if (faith.Head is { Temporal: false } && era.Realms.HeadSeats.TryGetValue(faith, out var eraSeat))
+                                b.Field("government", TitleGovernment(GovernmentMap.Theocracy, eraSeat, faiths));
                         }
                     }
                 }
@@ -1335,11 +1338,20 @@ public static class HistoryWriter
                 using (b.Block(titleGrantDate))
                 {
                     // A temporal head is worn by the faith's strongest ruler beside their own titles,
-                    // under their own government, the way vanilla's caliphs wear theirs. A spiritual
+                    // under their own government, the way vanilla's caliphs wear theirs; a landed
+                    // spiritual head by the theocrat of its seat (HeadSeats). Any other spiritual
                     // one gets a theocrat of its own from WriteHeadOfFaithCharacters.
-                    if (TemporalHeadHolder(faith, realms, faiths, wilderness) is { } sovereign)
+                    if (HeadRuler(faith, realms, faiths, wilderness) is { } sovereign)
                     {
                         b.Field("holder", sovereign);
+
+                        // A landed spiritual head's primary title is this landless duchy (it outranks
+                        // the seat county), and the engine reads the government off the primary title's
+                        // history: without the line, the theocracy heads of seed 303 came out on
+                        // landless_adventurer_government with no camp (2026-10-02). Vanilla writes it on
+                        // k_papal_state the same way. Matches the seat county's own line.
+                        if (faith.Head is { Temporal: false } && realms.HeadSeats.TryGetValue(faith, out var headSeat))
+                            b.Field("government", TitleGovernment(GovernmentMap.Theocracy, headSeat, faiths));
                     }
                     else
                     {
@@ -1413,7 +1425,14 @@ public static class HistoryWriter
         int hofIndex = 0;
         foreach (var faith in faiths.Faiths)
         {
-            if (faith.Head is null || TemporalHeadHolder(faith, realms, faiths, wilderness) is not null) continue;
+            if (faith.Head is null) continue;
+            // A landed spiritual head holds the primate see from their seat, as the Pope holds d_et_roma
+            // beside the Papal States; a temporal head's faith (lay clergy) has no sees to give.
+            if (HeadRuler(faith, realms, faiths, wilderness) is { } ruler)
+            {
+                if (faith.Head is { Temporal: false }) hofIds[faith] = ruler;
+                continue;
+            }
             hofIds[faith] = $"gen_hof_{hofIndex++}";
         }
 
@@ -1808,6 +1827,17 @@ public static class HistoryWriter
             }
         }
     }
+
+    /// <summary>
+    /// Who wears a faith's head title when it is not a theocrat of its own: the temporal head's
+    /// sovereign (<see cref="TemporalHeadHolder"/>), or a spiritual head's seat theocrat when
+    /// <see cref="HeadSeats"/> gave the head land on this map. Null means a gen_hof_N character.
+    /// Every writer that numbers gen_hof_N asks this, so the numbering stays aligned.
+    /// </summary>
+    internal static string? HeadRuler(Faith faith, RealmMap realms, FaithMap faiths, WildernessMap wilderness)
+        => TemporalHeadHolder(faith, realms, faiths, wilderness)
+           ?? (realms.HeadSeats.TryGetValue(faith, out var seat) && realms.HolderCounty.GetValueOrDefault(seat) == seat
+               ? CharacterId(seat) : null);
 
     /// <summary>
     /// The character id that wears a temporal head-of-faith title: the holder of the highest-tier

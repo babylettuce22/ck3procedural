@@ -646,8 +646,20 @@ public static partial class ContentWriter
                 else
                 {
                     jb.Inline("color", F(r), F(g), F(bl));
-                    jb.Field("capital", faith.Head.Seat.Key);
-                    jb.Field("landless", "yes");
+                    // The county a landed head holds, so the title's capital is their own seat; but a
+                    // faith with sees keeps the primate see's seat (Head.Seat), because the Synod's
+                    // on_action releases any see whose capital differs from the head title's at the
+                    // first succession (zz_gen_see_electors_on_actions.txt).
+                    // The primate see's own seat, not Head.Seat: Sees.Build promotes a great see elsewhere
+                    // to primate when the head's seat has none (peer audit, 2026-10-02).
+                    var primate = faith.Sees.FirstOrDefault(s => s.Rank == SeeRank.Primate);
+                    jb.Field("capital", (primate?.Seat ?? faith.Head.LandedSeat ?? faith.Head.Seat).Key);
+                    // Not for a landed head (HeadSeats): their primary title is this one, and a landed
+                    // theocrat whose primary title is landless is turned into a landless adventurer
+                    // within the first year unless the government is landless_playable, which plain
+                    // theocracy is not and a religion without sees will not give them ecclesiastical
+                    // instead (seed 303, 2026-10-02). A plain titular duchy has no such pull.
+                    if (!faith.Head.LandedOnSomeDate) jb.Field("landless", "yes");
                     // Vanilla's head-of-faith shape (d_coptic_papacy, k_papal_state). Without it the
                     // title carried a domicile and the engine computed no heir for it, so a Synod
                     // faith's theocratic_elective never formed an election and the College buttons

@@ -1,0 +1,50 @@
+﻿# Nobody of a generated faith makes war on its own landed spiritual Head of Faith (AI only).
+#
+# Why: generated heads are seated on a county (MapGen/Peoples/HeadSeats.cs), and a head who loses his
+# last county loses the head title with it (the title is not landless once landed). Over three
+# thirty-year runs on seed 303 (2026-10-02, ck3run/loss_causes.py) every one of seven seats lost
+# belonged to a head standing alone (no protector): de jure wars by the old duke
+# (de_jure_cb, individual_county_de_jure_cb), county_conquest_cb, and changes of hands between yearly
+# saves; not one head sworn to a protector lost his seat. Those seats lie among the faith's own
+# counties (the carve prefers seats deep inside the faith), so the attackers were almost all the
+# head's own flock.
+#
+# How: vanilla already damps this: a ZEALOUS ruler is much less likely (x0.15) to attack the Head of
+# his own faith. This value is multiplied into the AI score of every de jure, conquest, claim,
+# invasion, subjugation, tributary and vassalisation war (casus_belli_types, 19 uses in 1.20.0.3), so
+# extending it is the one place that covers them all. For a generated faith with a spiritual head
+# (gen_settled_doctrine, spiritual_head_of_faith), any AI ruler of that faith scores a war on the head
+# at 0. A head sworn to a protector is not the defender in a war over his land (the protector is),
+# so this changes nothing for protected heads or for the protector's own wars. Rulers of other
+# faiths are untouched: HeadSeats keeps independent heads off land another faith's ruler has a de
+# jure claim on. Players can still declare.
+#
+# Same key as vanilla's (common/script_values/00_war_values.txt): zz_ sorts after it in the same
+# folder, so this wins. Vanilla's body is kept verbatim as the first branch.
+
+zealous_war_on_head_of_faith_ai_score_value = {
+	value = 1
+	if = {
+		limit = {
+			exists = scope:defender
+			scope:attacker = {
+				has_trait = zealous
+				faith.religious_head ?= scope:defender
+			}
+		}
+		multiply = 0.15
+	}
+	if = {
+		limit = {
+			exists = scope:defender
+			scope:attacker = {
+				faith.religious_head ?= scope:defender
+				faith = {
+					has_doctrine = gen_settled_doctrine
+					has_doctrine_parameter = spiritual_head_of_faith
+				}
+			}
+		}
+		multiply = 0
+	}
+}

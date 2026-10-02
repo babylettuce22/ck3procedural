@@ -1,0 +1,34 @@
+﻿# Opens By God Alone's Ecumenical Council to generated faiths with a Head of Faith.
+#
+# Single-object override of can_hold_ecumenical_council_trigger from
+# common/scripted_triggers/pam_scripted_triggers.txt (1.20.0.3). Script is last-wins and this
+# directory has no subfolders, so a zz_ file here replaces the trigger without touching its file.
+#
+# Vanilla: religion = religion:christianity_religion, the activity's only Christian gate. It is in
+# the Procedural set, so a vanilla-content world (which has Christians) keeps vanilla's rule.
+#
+# The council itself is faith-neutral (surveyed 2026-10-01): summons, three debates, Innovators
+# against Conservatives, a vote; the first two debates set a known tenet's status (core, permitted,
+# prohibited, known), the third rules on a doctrine. What is Christian is either gated on its own
+# (the Rome/Creed rite quarrels need faith:christian_faith with Roman and Greek delegates; Great
+# Schism progress and the Christian Church situation are guarded) or is wording, rewritten in
+# localization/replace/english/zz_gen_ecumenical_council_l_english.yml.
+#
+# Who may host is still vanilla's activity rule: a Head of Faith, an ecclesiastical ruler, or a
+# theological-agent puppet; a faith with clerical regions also needs 5 region holders
+# (ecumenical_council_min_clerical_region_holders), kept at vanilla's value on purpose (the user,
+# 2026-10-01). The activity is By God Alone's (has_pam_dlc_trigger) and stays so.
+#
+# Which faiths: any with a Head of Faith title, held or not (the user's choice, 2026-10-01).
+
+# In a custom_tooltip because the Investiture Council lists this in can_start_showing_failures_only,
+# where a bare OR has no readable failure text (tiger).
+can_hold_ecumenical_council_trigger = {
+	custom_tooltip = {
+		text = gen_can_hold_ecumenical_council_tt
+		OR = {
+			religion = religion:christianity_religion
+			exists = faith.religious_head_title
+		}
+	}
+}

@@ -1,0 +1,23 @@
+﻿l_english:
+ # By God Alone's Ecumenical Council, reworded for generated faiths. The council is opened to them by
+ # common/scripted_triggers/zz_gen_ecumenical_council_triggers.txt; these are the lines a generated
+ # faith would otherwise read as Christian (surveyed 2026-10-01 against 1.20.0.3). Everything else in
+ # the council is faith-neutral or gated to Christians on its own. Same keys and scopes as vanilla.
+
+ activity_ecumenical_council_desc: "Summon the great clergy and rulers of the [GetPlayer.GetFaith.GetName] faith! Our goal shall be to unify belief and practice, all the better to glorify [GetPlayer.GetFaith.HighGodName|U].\n\nWill we gather as one in faith, or crack our faith apart beneath the weight of our pride?"
+ activity_ecumenical_council_selection_tooltip: "Invite the most influential and learned members of our faith to debate both theological and earthly matters.\n\nAnticipated Rewards:\n$BULLET_WITH_TAB$[core_tenet|E] changes\n$BULLET_WITH_TAB$[doctrine|E] changes\n$BULLET_WITH_TAB$@fervor_icon![fervor|E]\n$BULLET_WITH_TAB$@piety_icon![piety|E]\n$BULLET_WITH_TAB$@opinion_icon![opinion|E]\n$BULLET_WITH_TAB$[GetTrait('lifestyle_scholar').GetName( GetNullCharacter )] [trait|E] or [trait_level_track_xp|E]"
+ activity_ecumenical_council_guest_help_text: "[activity_guests|E] will get opportunities to sway the council to get their preferred [core_tenets|E] and [doctrines|E] accepted."
+ ecumenical_council_events.0001.desc_intro: "The [ROOT.Char.GetFaith.HouseOfWorshipPlural] of [my_location.GetBaronyNameExplicitly] have been beautifully decorated for the occasion. The best among the faithful have answered"
+ ecumenical_council_events.0080.desc.passed: "The votes are counted. [lead_portrait.GetTitledFirstName] comes forth:\n\n"[host.GetFaith.HighGodName|U] has guided us through this council, and we stand decided. The matter is settled — in favor!""
+ ecumenical_council_events.0080.desc.failed: "The votes are counted. [lead_portrait.GetTitledFirstName] comes forth:\n\n"[host.GetFaith.HighGodName|U] has guided us through the council, and we stand decided. The proposal fails. [host.GetFaith.GetName] remains as it was.""
+ ecumenical_council_events.0010.desc.armed_pilgrimages.explanation: ""We are asked: is taking up arms and marching under holy purpose an act of devotion to [ROOT.Char.GetFaith.HighGodName]? May the sword guard pilgrimage and reclaim what the unbelievers hold?""
+ ecumenical_council_events.0010.desc.vows_of_poverty.explanation: ""We are asked whether we best serve [ROOT.Char.GetFaith.HighGodName] by taking vows of poverty, as the first of the faithful did.""
+ ecumenical_council_events.0010.desc.alexandrian_catechism.explanation: ""We are asked: must our holy texts be searched for hidden spiritual senses? May learning and allegory unlock what the bare words conceal?""
+ ecumenical_council_events_josh.0010.a: "Dedicate the service."
+ ecumenical_council_events_josh.0010.c: "Just add an extra prayer or hymn."
+ ecumenical_council_events_josh.0022.a: "Let our faith bless our alliance."
+ gen_can_hold_ecumenical_council_tt: "Your [faith|E] has a [head_of_faith|E] to call a council"
+ # The quorum scales with a generated faith's sees (common/script_values/zz_gen_ecumenical_council_values.txt);
+ # vanilla evaluates it on EmptyScope, which can only show 5, so these ask with the player as root.
+ ecumenical_council_faith_needs_clerical_region_holders_tt: "[GetPlayer.GetFaith.GetName] has at least #bold [GetPlayer.MakeScope.ScriptValue('ecumenical_council_min_clerical_region_holders')|0]#! holders of a [clerical_region|E]"
+ ecumenical_council_needs_clerical_region_quorum_tt: "At least #bold [GetPlayer.MakeScope.ScriptValue('ecumenical_council_min_clerical_region_holders')|0]#! holders of a [clerical_region|E] are in attendance"

@@ -3,7 +3,8 @@ using Ck3MapGen.Io;
 namespace Ck3MapGen.Emit;
 
 /// <summary>
-/// Keeps vanilla's council out of the wilderness.
+/// Keeps vanilla's council out of the wilderness, and keeps a see's holder from converting its
+/// capital county (<see cref="SeeGuard"/>, an engine crash).
 ///
 /// Every other route to the dummy is already shut. Landed rulers are held off by the `incapable`
 /// trait, which fails the `is_available` test almost every character interaction puts on its
@@ -77,18 +78,51 @@ public static class CouncilTaskWriter
         + "\t\t\t}\n"
         + "\t\t}\n";
 
+    /// <summary>
+    /// The second guard, for `task_conversion`: a see's holder may not have his chaplain convert the
+    /// see's capital county. Measured 2026-10-02 on seed 303 (1150): the engine crash (ck3.exe+0x31B62AD,
+    /// active_council_task ExecuteOnFinishTaskProcess, 1154-1156, six runs) came every time it was
+    /// inspected (five) as the chaplain of d_et_gen_1's holder finished converting c_gen_gana_419, the
+    /// see's capital (61-99% done months before the crash; his men-at-arms destroyed in the crash
+    /// tick). The holders were of a rival faith (the see had been revoked to them) or of the see's own;
+    /// vanilla's on_finish converts to the CHAPLAIN's faith when it differs from the liege's.
+    ///
+    /// Two earlier guards went through `scope:county.clerical_region_title` and the faiths' see lists,
+    /// and the crash came back (1155), so this one names nothing but the liege's own titles: any title
+    /// he holds with a clerical region whose capital is this county. Every other county, in his sees
+    /// or not, converts as in vanilla.
+    /// </summary>
+    private const string SeeGuard =
+        "\n\t\tNOT = {\n"
+        + "\t\t\tscope:councillor_liege = {\n"
+        + "\t\t\t\tany_held_title = {\n"
+        + "\t\t\t\t\thas_clerical_region = yes\n"
+        + "\t\t\t\t\ttitle_capital_county = scope:county\n"
+        + "\t\t\t\t}\n"
+        + "\t\t\t}\n"
+        + "\t\t}\n";
+
     public static void WriteAll(string modDir, string gameDir, Config.MapConfig cfg)
     {
-        if (!cfg.EnableWilderness)
+        // One patch per vanilla file: the chaplain file carries the see guard always and the
+        // wilderness guard when the wilderness is on.
+        var chaplain = VanillaPatch.Open(gameDir, "council tasks (court chaplain)",
+            "common", "council_tasks", "00_court_chaplain_tasks.txt");
+        if (chaplain is not null)
         {
-            Console.WriteLine("  council tasks: SKIPPED (wilderness disabled)");
-            return;
+            if (cfg.EnableWilderness)
+                chaplain.InsertAfter("task_fabricate_claim potential_county", Guard,
+                    "task_fabricate_claim = {", "potential_county = {");
+            chaplain.InsertAfter("task_conversion potential_county", SeeGuard,
+                "task_conversion = {", "potential_county = {");
+            chaplain.Ship(modDir);
         }
 
-        Patch(modDir, gameDir, "council tasks (claims)",
-            ["common", "council_tasks", "00_court_chaplain_tasks.txt"],
-            "task_fabricate_claim potential_county",
-            "task_fabricate_claim = {");
+        if (!cfg.EnableWilderness)
+        {
+            Console.WriteLine("  council tasks: wilderness guards SKIPPED (wilderness disabled)");
+            return;
+        }
 
         Patch(modDir, gameDir, "council tasks (de jure)",
             ["common", "council_tasks", "00_steward_tasks.txt"],

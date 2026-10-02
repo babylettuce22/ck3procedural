@@ -76,6 +76,13 @@ public sealed class RealmMap
     /// </summary>
     public WildernessMap? Wilderness { get; set; }
 
+    /// <summary>
+    /// Each faith's spiritual Head of Faith's seat county on this map's date, when <see cref="HeadSeats"/>
+    /// carved one: the county's holder is given the head title (HistoryWriter). Empty for a world
+    /// whose heads stay landless.
+    /// </summary>
+    public Dictionary<Faith, Title> HeadSeats { get; } = [];
+
     /// <summary>Records that <paramref name="vassal"/> answers to <paramref name="lord"/>.</summary>
     public void SetLiege(Title vassal, Title lord, LiegeOrigin origin)
     {

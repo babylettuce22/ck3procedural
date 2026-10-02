@@ -1265,7 +1265,8 @@ public static class DebugPanel
             }
             WONDERS
 
-            """.Replace("WONDERS", wonders).Replace("RACELOG\n", RaceLog(facts)) + FireEntries(events));
+            """.Replace("\r\n", "\n") // a raw literal takes the source file's line endings, CRLF on a Windows checkout (CI), where RACELOG\n would never match
+               .Replace("WONDERS", wonders).Replace("RACELOG\n", RaceLog(facts)) + FireEntries(events));
 
         WriteGatherEffect(modDir, facts);
     }

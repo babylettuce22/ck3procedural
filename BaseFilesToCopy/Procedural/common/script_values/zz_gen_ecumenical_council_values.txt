@@ -1,0 +1,64 @@
+﻿# The Ecumenical Council's quorum of see holders, scaled to a generated faith's own sees.
+#
+# Why: vanilla asks for 5 holders of a clerical region (archbishops) of the host's faith before a
+# council can be called, and as many at the table (the host's own see counts towards it). Generated
+# faiths with sees have about three each (seed 303: 13 clerical regions for 4 faiths), so with
+# vanilla's number no generated faith could ever hold one (measured 2026-10-02: can_host_activity
+# was false for every see-faith head, all their life). The user chose (2026-10-02): the faith's own
+# sees, but at least 2 people, and never above vanilla's 5.
+#
+# Counted at run time as PEOPLE: the faith's rulers who hold a see (pam_is_clerical_region_holder_trigger,
+# the very test vanilla counts against the quorum). Counting see titles instead failed twice on seed
+# 303 (2026-10-02): the generator ships empty see titles for sees standing only on other bookmarks
+# (6 of 19), and one archbishop holding two sees left a four-see faith one short forever. Counting the
+# holders follows sees founded, split, merged, vacated or lost in play, on every bookmark, so a
+# council is held by whoever wears the faith's mitres now: at least two of them, all of them up to five.
+# A faith with a single see holder cannot hold one: a council of one is no council.
+#
+# Who: only faiths carrying gen_settled_doctrine (every generated religion). Christianity and every
+# other vanilla faith keep 5.
+#
+# Where the vanilla value is read, and which character's faith answers here:
+#  - the activity's can_start (activity_ecumenical_council): root is the would-be host;
+#  - pam_ecumenical_council_has_quorum_trigger (via ecumenical_council_min_clerical_region_guests,
+#    holders - 1) in the activity's is_valid: scope:host is set, and root is the activity, so
+#    scope:host is asked first and root only when there is no scope:host;
+#  - tooltips: the English ones are re-pointed at the player in zz_gen_ecumenical_council_l_english.yml;
+#    other languages pass EmptyScope and read vanilla's 5.
+# Same key as vanilla's (pam_values.txt), so this file overrides it; zz_ sorts after pam_values.txt in
+# the same (top-level) folder, and script_values has no subfolders.
+
+ecumenical_council_min_clerical_region_holders = {
+	value = 5
+	if = {
+		limit = {
+			exists = scope:host
+			scope:host.faith ?= { has_doctrine = gen_settled_doctrine }
+		}
+		multiply = 0
+		scope:host.faith = {
+			every_faith_ruler = {
+				limit = { pam_is_clerical_region_holder_trigger = yes }
+				add = 1
+			}
+		}
+		min = 2
+		max = 5
+	}
+	else_if = {
+		limit = {
+			NOT = { exists = scope:host }
+			exists = root.faith
+			root.faith = { has_doctrine = gen_settled_doctrine }
+		}
+		multiply = 0
+		root.faith = {
+			every_faith_ruler = {
+				limit = { pam_is_clerical_region_holder_trigger = yes }
+				add = 1
+			}
+		}
+		min = 2
+		max = 5
+	}
+}

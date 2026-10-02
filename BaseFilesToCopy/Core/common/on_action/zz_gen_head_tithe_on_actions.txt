@@ -1,0 +1,98 @@
+﻿# A modest yearly tithe for the spiritual Heads of generated faiths.
+#
+# Why: measured on seed 303 (2026-10-01/02), generated heads never saved enough for By God Alone's
+# Ecumenical Council in thirty years of play: landless heads sat on 31-276 gold, landed ones on a
+# single county, and ecclesiastical ones (faiths with sees) on a church treasury of 3-12 that the
+# treasury budget spends on soldiers. The council costs ecumenical_council_base_cost (500) times the
+# host's activity_cost_scale_by_era (0.75 tribal, 1 early, 1.5 high, 3 late medieval), less 20-40%
+# for an AI head long in office. The user chose a modest tithe (2026-10-02).
+#
+# How much: (8 + 0.8 per county following the faith), clamped to 10-30, times the head's own
+# activity_cost_scale_by_era, so a median faith of 14 counties gets about 19 a year in the early
+# medieval era and 29 in the high: roughly one council per generation on top of the head's own
+# income.
+#
+# Where it goes: into a council fund on the FAITH (var:gen_council_fund), not into the head's purse.
+# Paid straight in, it never added up for the heads who can actually hold a council (faiths with
+# sees): they are ecclesiastical, and an independent ecclesiastical ruler sends half his treasury on
+# to the clergy (budget_allocation_cardinal_50) while his budget spends the rest; on seed 303 the
+# yearly tithe left them at 1-11 treasury for 25 years, and even a 2,000 lump was gone within a year
+# (2026-10-02). The fund is out of the budget's reach and outlives the head.
+#
+# When the fund covers a council (ecumenical_council_scaled_cost for this head) and the head may hold
+# one now (can_host_activity: the see quorum, no council going, the faith's own and the head's
+# cooldown), the whole fund goes to him at once (add_treasury_or_gold: the pool the council charges)
+# and the AI is asked to host straight away (ai_attempt_to_host_activity), before the budget can
+# spend it. Tested 2026-10-02: given the money that way, 3 of 4 heads called a council within days.
+# The fund stops growing at twice the council's cost (never under 1000).
+#
+# Who: the religious head of every faith carrying gen_settled_doctrine (every generated religion,
+# never a vanilla one, so a vanilla-content world's vanilla heads are untouched), only for a
+# spiritual head (a temporal head is a landed ruler with an income of their own), and only while
+# the head follows that faith. Not for a lay-clergy faith (doctrine_theocracy_lay_clergy; the user's
+# call, 2026-10-02): its head is a landless cleric the AI never plans an activity for (seed 303: four
+# years on 2,100 gold, and ai_attempt_to_host_activity ignored for two), and vanilla will not give
+# such a cleric the ecclesiastical government that would change that. No clergy, no councils, so no
+# tithe to save towards one.
+#
+# on_action lists merge (redeclaring yearly_global_pulse appends; see the on_actions memory note).
+
+yearly_global_pulse = {
+	on_actions = { gen_head_tithe_pulse }
+}
+
+gen_head_tithe_pulse = {
+	effect = {
+		every_religion_global = {
+			every_faith = {
+				limit = {
+					has_doctrine = gen_settled_doctrine
+					has_doctrine_parameter = spiritual_head_of_faith
+					NOT = { has_doctrine = doctrine_theocracy_lay_clergy }
+					exists = religious_head
+				}
+				save_scope_as = gen_tithe_faith
+				religious_head = {
+					if = {
+						limit = {
+							is_alive = yes
+							faith = scope:gen_tithe_faith
+						}
+						# Both depend on the head (his era's cost scale, his years in office).
+						save_scope_value_as = { name = gen_tithe_amount value = gen_head_tithe_value }
+						save_scope_value_as = { name = gen_council_cost value = ecumenical_council_scaled_cost }
+						save_scope_value_as = { name = gen_council_fund_cap value = gen_head_tithe_cap_value }
+						scope:gen_tithe_faith = {
+							if = {
+								limit = { NOT = { has_variable = gen_council_fund } }
+								set_variable = { name = gen_council_fund value = 0 }
+							}
+							if = {
+								limit = { var:gen_council_fund < scope:gen_council_fund_cap }
+								change_variable = { name = gen_council_fund add = scope:gen_tithe_amount }
+							}
+						}
+						if = {
+							limit = {
+								scope:gen_tithe_faith.var:gen_council_fund >= scope:gen_council_cost
+								can_host_activity = activity_ecumenical_council
+								# ai_attempt_to_host_activity overrides the cooldown, so it is asked here.
+								NOT = { is_activity_type_on_cooldown = activity_ecumenical_council }
+								scope:gen_tithe_faith = {
+									NOT = { has_variable = recent_ecumenical_council }
+									NOT = { has_variable = ecumenical_council_ongoing }
+								}
+							}
+							add_treasury_or_gold = scope:gen_tithe_faith.var:gen_council_fund
+							scope:gen_tithe_faith = { set_variable = { name = gen_council_fund value = 0 } }
+							if = {
+								limit = { is_ai = yes }
+								ai_attempt_to_host_activity = activity_ecumenical_council
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

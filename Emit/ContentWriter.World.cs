@@ -626,6 +626,29 @@ public static partial class ContentWriter
             .ToList();
         MapGen.Sees.Build(faiths, seeCounties, seeGraph, governments, development, worldCenters, cultures,
             vocabulary, cfg, wilderness, dates);
+
+        // After the sees, whose regional rites a church permits the tenets of; here rather than at
+        // the two call sites so the generated world and the history's world decide them the same way.
+        MapGen.TenetStatuses.Build(faiths, realms.CountyAdjacency, vocabulary, cfg);
+
+        // Heads of Faith on land, before the prince-bishops (who then pass these counties by) and
+        // before any ruler is drawn; not gated on sees, a head is a head either way. The start date
+        // for now: a bookmark sharing its map shares its seats, so its governments follow.
+        var headPreferred = new Dictionary<MapGen.Faith, Title>();
+        var headCarved = MapGen.HeadSeats.Carve(faiths, realms, governments, wilderness, development, headPreferred);
+        // Every other bookmark: its own map carved (preferring the start date's seat), or the start date's
+        // seats where it shares the start map (BookmarkEras copies HeadSeats with it).
+        foreach (var (year, eraGovernment) in (eraGovernments ?? []).OrderBy(kv => Math.Abs(kv.Key - cfg.StartYear)).ThenBy(kv => kv.Key))
+        {
+            if (EraMap(year) is { } eraMap)
+                MapGen.HeadSeats.Carve(faiths, eraMap, eraGovernment, eraMap.Wilderness ?? wilderness, development,
+                    headPreferred, isStartDate: false);
+            else
+                foreach (var county in headCarved) eraGovernment.Set(county, GovernmentMap.Theocracy);
+        }
+        Console.WriteLine($"  heads of faith: {realms.HeadSeats.Count} seated on land, {headCarved.Count} counties, "
+                          + $"{realms.HeadSeats.Values.Count(realms.Liege.ContainsKey)} under a protector");
+
         if (!cfg.GeneratedSees) return;
 
         // The prince-bishops, on each date's own realm map before any ruler is drawn from it. The

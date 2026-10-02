@@ -260,6 +260,22 @@ public sealed class FaithInspector : InspectorForm
 
         private string Slot(int index) => index < faith.Tenets.Count ? faith.Tenets[index] : "";
 
+        [Category("Doctrine")] [DisplayName("Tenet statuses")]
+        [Description("The faith's starting stance on tenets besides its own three (CK3 1.20): Known ones its "
+                     + "people can learn and take as personal tenets, Permitted ones it tolerates (they add "
+                     + "virtues and sins at half weight), Prohibited ones its people must keep secret. Drawn "
+                     + "from its sister faiths and the faiths it borders. Decided at generation; read-only.")]
+        [ReadOnly(true)]
+        public string TenetStatuses => faith.TenetStatus is not { } s ? "(not decided for this world)"
+            : string.Join("; ", new[]
+              {
+                  s.Known.Count > 0 ? "known: " + string.Join(", ", s.Known.Select(Short)) : null,
+                  s.Permitted.Count > 0 ? "permitted: " + string.Join(", ", s.Permitted.Select(Short)) : null,
+                  s.Prohibited.Count > 0 ? "prohibited: " + string.Join(", ", s.Prohibited.Select(Short)) : null,
+              }.OfType<string>()) is { Length: > 0 } text ? text : "(none)";
+
+        private static string Short(string tenet) => tenet.StartsWith("tenet_") ? tenet["tenet_".Length..] : tenet;
+
         private void SetSlot(int index, string? value)
         {
             string tenet = (value ?? "").Trim();

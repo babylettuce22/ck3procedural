@@ -1,0 +1,22 @@
+﻿# The generated Heads of Faith's yearly tithe; see common/on_action/zz_gen_head_tithe_on_actions.txt.
+# Root: the head (a character). scope:gen_tithe_faith: their faith, saved by the on_action.
+# The tithe now fills the faith's council fund rather than the head's purse; see the on_action.
+
+# (8 + 0.8 per county of the faith), clamped to 10-30, times the head's era cost scale, so the tithe
+# keeps pace with what an Ecumenical Council costs them (ecumenical_council_scaled_cost).
+gen_head_tithe_value = {
+	value = scope:gen_tithe_faith.num_county_followers
+	multiply = 0.8
+	add = 8
+	min = 10
+	max = 30
+	multiply = activity_cost_scale_by_era
+}
+
+# The faith's council fund (var:gen_council_fund) stops growing at twice a council's present cost
+# (never under 1000), so it saves towards one council at a time and cannot pile up.
+gen_head_tithe_cap_value = {
+	value = ecumenical_council_scaled_cost
+	multiply = 2
+	min = 1000
+}
