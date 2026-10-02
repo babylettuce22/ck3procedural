@@ -228,8 +228,13 @@ public sealed class WorldEdits
     /// </summary>
     private sealed record EthnicityKey(Culture Culture);
 
+    /// <summary>
+    /// <see cref="RiteTenets"/> is each regional rite's tenets, in <see cref="Faith.Rites"/> order:
+    /// a tenet edit re-bases them (<see cref="EditFaith"/>), so reverting the faith puts them back too.
+    /// </summary>
     private sealed record FaithSnapshot(Faith Target, string Name, (double R, double G, double B) Color,
-        string Icon, List<string> Tenets, List<(string Key, Title County)> HolySites) : ISnapshot
+        string Icon, List<string> Tenets, List<(string Key, Title County)> HolySites,
+        List<List<string>> RiteTenets) : ISnapshot
     {
         public bool Differs()
             => !string.Equals(Target.Name, Name, StringComparison.Ordinal)
@@ -247,6 +252,11 @@ public sealed class WorldEdits
             // In place: the list is get-only and shared with every writer that read it.
             Target.HolySites.Clear();
             Target.HolySites.AddRange(HolySites);
+            for (int i = 0; i < RiteTenets.Count && i < Target.Rites.Count; i++)
+            {
+                Target.Rites[i].Tenets.Clear();
+                Target.Rites[i].Tenets.AddRange(RiteTenets[i]);
+            }
         }
 
         public void Capture(EditOverlay into)
@@ -595,8 +605,18 @@ public sealed class WorldEdits
         Changed?.Invoke(WorldAspect.Ethnicities);
     }
 
+    /// <summary>
+    /// Any change to a faith. A tenet change is carried on to its regional rites
+    /// (<see cref="MapGen.Sees.FollowFaithTenets"/>), here rather than in the inspector so a saved
+    /// edit replayed onto a reopened world lands on the rites the same way.
+    /// </summary>
     public void EditFaith(Faith faith, Action<Faith> change)
-        => Apply(faith, () => Snapshot(faith), () => change(faith), WorldAspect.Faiths);
+        => Apply(faith, () => Snapshot(faith), () =>
+        {
+            var before = faith.Tenets.ToList();
+            change(faith);
+            if (!faith.Tenets.SequenceEqual(before)) MapGen.Sees.FollowFaithTenets(faith, before);
+        }, WorldAspect.Faiths);
 
     public void RenameFaith(Faith faith, string name)
     {
@@ -877,7 +897,8 @@ public sealed class WorldEdits
     private static CultureSnapshot Snapshot(Culture c)
         => new(c, c.Name, c.Color, c.Ethos, c.MartialCustom, c.HeadDetermination, [.. c.Traditions],
                c.CoaGfx, c.BuildingGfx, c.ClothingGfx, c.UnitGfx, new(c.RealmWords));
-    private static FaithSnapshot Snapshot(Faith f) => new(f, f.Name, f.Color, f.Icon, [.. f.Tenets], [.. f.HolySites]);
+    private static FaithSnapshot Snapshot(Faith f) => new(f, f.Name, f.Color, f.Icon, [.. f.Tenets], [.. f.HolySites],
+        [.. f.Rites.Select(r => r.Tenets.ToList())]);
 
     private static ReligionSnapshot Snapshot(Religion r)
         => new(r, r.Name, [.. r.Virtues], [.. r.Sins]);

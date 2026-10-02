@@ -88,10 +88,33 @@ public static class AzgaarGovernments
             ["Patriarchate"] = GovernmentMap.Theocracy,
             ["Papacy"] = GovernmentMap.Theocracy,
 
-            // Deliberately absent: Duchy, Grand Duchy, Principality, Kingdom, Empire, Despotate,
-            // Shogunate, Union, Commonwealth, United Kingdom, United Provinces, Heptarchy. Every one
-            // of those is a feudal realm in CK3 terms and reaching the default is the right answer.
+            // The expansions' governments, where the word itself names one. A shogunate is the
+            // warrior houses' rule, which is Sōryō; a despotate and a satrapy are provinces of an
+            // imperial bureaucracy. Bureaucracies below kingdom rank are made feudal again in
+            // Governments.Build, because the engine converts those once independent.
+            ["Shogunate"] = GovernmentMap.JapanFeudal,
+            ["Despotate"] = GovernmentMap.Administrative,
+            ["Satrapy"] = GovernmentMap.Administrative,
+
+            // Deliberately absent: Duchy, Grand Duchy, Principality, Kingdom, Empire, Union,
+            // Commonwealth, United Kingdom, United Provinces, Heptarchy. Every one of those is a
+            // feudal realm in CK3 terms and reaching the default is the right answer; the regional
+            // varieties are laid over them afterwards (Governments.Build).
         };
+
+    /// <summary>
+    /// Azgaar's naming bases whose people had one of the expansions' governments, for a state whose
+    /// form words left it a plain feudal realm or tribe. Matched against the culture's base name, so
+    /// it reads Azgaar's own label; a renamed or custom base simply matches nothing.
+    /// </summary>
+    private static string? ByCultureBase(string baseName, string government) => (baseName, government) switch
+    {
+        ("Japanese", GovernmentMap.Feudal) => GovernmentMap.JapanFeudal,
+        ("Chinese" or "Cantonese" or "Korean" or "Vietnamese", GovernmentMap.Feudal) => GovernmentMap.Meritocratic,
+        ("Hawaiian", GovernmentMap.Feudal or GovernmentMap.Tribal) => GovernmentMap.Wanua,
+        ("Karnataka", GovernmentMap.Feudal or GovernmentMap.Tribal) => GovernmentMap.Mandala,
+        _ => null,
+    };
 
     /// <summary>The coarse fallback, for a form word this does not know.</summary>
     private static readonly Dictionary<string, string> ByForm =
@@ -117,23 +140,34 @@ public static class AzgaarGovernments
     /// form name is "Principality" is still a Hunting state. Everything else is decided by the words
     /// the country uses for itself.
     /// </summary>
-    public static string For(AzgaarState state)
+    public static string For(AzgaarState state) => For(state, null);
+
+    /// <summary>
+    /// As <see cref="For(AzgaarState)"/>, with the state's culture read as well: a state its form
+    /// words leave feudal or tribal takes the expansion government its people's naming base points
+    /// to (<see cref="ByCultureBase"/>). A form word that names a government still wins.
+    /// </summary>
+    public static string For(AzgaarState state, AzgaarWorld? world)
     {
         if (state.StateType.Equals("Nomadic", StringComparison.OrdinalIgnoreCase))
             return GovernmentMap.Nomad;
 
+        string government = GovernmentMap.Feudal;
         if (state.StateType.Equals("Hunting", StringComparison.OrdinalIgnoreCase))
-            return GovernmentMap.Tribal;
-
-        if (state.FormName is { Length: > 0 } formName
-            && ByFormName.TryGetValue(formName.Trim(), out string? byName))
+            government = GovernmentMap.Tribal;
+        else if (state.FormName is { Length: > 0 } formName
+                 && ByFormName.TryGetValue(formName.Trim(), out string? byName))
             return byName;
+        else if (state.Form is { Length: > 0 } form
+                 && ByForm.TryGetValue(form.Trim(), out string? byForm))
+            government = byForm;
 
-        if (state.Form is { Length: > 0 } form
-            && ByForm.TryGetValue(form.Trim(), out string? byForm))
-            return byForm;
+        if (world?.Culture(state.Culture) is { } culture
+            && world.NameBases.FirstOrDefault(b => b.I == culture.Base)?.Name is { Length: > 0 } baseName
+            && ByCultureBase(baseName.Trim(), government) is { } byBase)
+            return byBase;
 
-        return GovernmentMap.Feudal;
+        return government;
     }
 
     /// <summary>
@@ -150,12 +184,16 @@ public static class AzgaarGovernments
 
         foreach (var state in azgaar.World.RealStates)
         {
-            string government = For(state);
+            string government = For(state, azgaar.World);
 
             // A horde on a map that has hordes switched off is still not a feudal realm; clan is
             // what SafeFallback already calls the settled reading of one, and tribal the unsettled.
             if (government == GovernmentMap.Nomad && !cfg.EnableNomadHordes)
                 government = GovernmentMap.Tribal;
+
+            // Likewise a bureaucracy on a map with administrative empires switched off.
+            if (GovernmentMap.IsAdminFamily(government) && !cfg.EnableAdministrativeEmpires)
+                government = GovernmentMap.Feudal;
 
             governments[state.I] = government;
         }

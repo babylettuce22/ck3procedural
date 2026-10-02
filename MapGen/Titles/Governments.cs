@@ -151,10 +151,12 @@ public sealed class GovernmentMap
     /// <c>mercenary</c> and <c>holy_order</c>, plus <c>herder</c>, which is a vassal government
     /// under a horde rather than one a realm is put on.
     ///
-    /// The generator itself reaches twelve of the fourteen: the base seven, plus meritocratic,
-    /// steppe-admin, mandala and wanua through the variety pass in <see cref="Governments.Build"/>,
-    /// and celestial for a crowned hegemon. Ritsuryō and Sōryō are left to the editor, since
-    /// their Japanese layers stay quiet on a generated map.
+    /// The generator itself reaches thirteen of the fourteen: the base seven, plus meritocratic,
+    /// steppe-admin, mandala, wanua and Sōryō (a martial people's feudal realm) through the variety
+    /// pass in <see cref="Governments.Build"/>, and celestial for a crowned hegemon. Ritsuryō is left
+    /// to the editor; the Japanese layers of both stay quiet on a generated map. Azgaar imports reach
+    /// the same varieties over each state's own government, plus Sōryō and meritocratic from form
+    /// words and culture bases (<see cref="AzgaarGovernments"/>).
     ///
     /// Absent from generation is not the same as unreachable in play: meritocratic and Ritsuryō
     /// (and Sōryō through it) can also be ADOPTED on a generated map, because
@@ -454,14 +456,38 @@ public static class Governments
             {
                 if (!stateGovernments.TryGetValue(state, out string? government)) continue;
 
-                foreach (var county in Titles.Flatten([title]).Where(t => t.Tier == "c"))
+                var stateCounties = Titles.Flatten([title]).Where(t => t.Tier == "c").ToList();
+
+                // A bureaucracy below kingdom rank is force-converted by the engine once
+                // independent, whatever the state called itself.
+                if (GovernmentMap.IsAdminFamily(government) && title.Tier is not ("k" or "e" or "h"))
+                    government = GovernmentMap.Feudal;
+
+                // The regional varieties the generated path lays over its own cascade, laid over
+                // the state's: a Kingdom in the jungle can be a mandala, a coastal Tribe a wanua, a
+                // developed Khaganate a steppe administration, a martial people's Kingdom Sōryō.
+                // Variety only ever turns a base government into its own variety, so a form word
+                // that already named something specific (a Republic, a Shogunate) passes through.
+                if (stateCounties.Count > 0 && realms.HolderCounty.TryGetValue(title, out var seat))
+                {
+                    double steppe = stateCounties.Count(c => Development.DominantTerrain(c, provinceTerrain) == TerrainClass.Steppe)
+                                    / (double)stateCounties.Count;
+                    government = Variety(seat, government, stateCounties,
+                        Development.DominantTerrain(seat, provinceTerrain),
+                        stateCounties.Average(c => (double)development.GetValueOrDefault(c)),
+                        steppe, cultures?.For(seat));
+                }
+
+                foreach (var county in stateCounties)
                 {
                     assigned[county] = government;
                     claimed.Add(county);
                 }
 
-                if (government == GovernmentMap.Nomad) nomadTitles.Add(title);
-                if (government == GovernmentMap.Administrative) adminTitles.Add(title);
+                // Listed by what the state ended up as, after the variety (a horde that became a
+                // steppe administration is an administrative realm, not a nomad one).
+                if (government == GovernmentMap.Nomad) nomadTitles.Add(title); else nomadTitles.Remove(title);
+                if (GovernmentMap.IsAdminFamily(government)) adminTitles.Add(title);
             }
 
             counties = counties.Where(c => !claimed.Contains(c)).ToList();
@@ -650,7 +676,7 @@ public static class Governments
             else
             {
                 realmGovernment = Variety(topLiege, realmGovernment, realmCounties, capitalDomTerrain,
-                    avgDev, steppeShare);
+                    avgDev, steppeShare, capitalCulture);
             }
 
             // Assign the unified government to all constituent counties
@@ -705,7 +731,7 @@ public static class Governments
         // realm that just missed being a horde would always just miss being a steppe
         // administration too.
         string Variety(Title topLiege, string government, List<Title> realmCounties,
-            TerrainClass capitalTerrain, double avgDev, double steppeShare)
+            TerrainClass capitalTerrain, double avgDev, double steppeShare, Culture? capitalCulture)
         {
             var roll = new Rng(topLiege.Index ^ salt ^ 0x41554821);
             var primary = HistoryWriter.Primary(topLiege, realms);
@@ -747,6 +773,19 @@ public static class Governments
                          && realmCounties.Count(c => IsCoastal(c, coastal)) >= realmCounties.Count / 2.0
                          && roll.Chance(cfg.WanuaShare):
                     return GovernmentMap.Wanua;
+
+                // Sōryō is the warrior houses' feudalism: house aspirations, county noble families,
+                // knights, and cheap archer cavalry and heavy infantry. So it goes to a feudal realm
+                // of a martial people (the user's rule, 2026-10-01), at duchy rank or above so it
+                // reads as a house of note rather than every petty count. After the mandala clause,
+                // which keeps the jungle realms. Its Japanese layers name title:e_japan, which no
+                // generated map has, so they stay quiet; the mod re-declares it without the
+                // Japanese heritage gate, and the game-start sweep makes it feudal without the DLC.
+                case GovernmentMap.Feudal
+                    when primary.Tier is "d" or "k" or "e" or "h"
+                         && capitalCulture?.Ethos == "ethos_bellicose"
+                         && roll.Chance(cfg.SoryoShare):
+                    return GovernmentMap.JapanFeudal;
 
                 default:
                     return government;

@@ -552,6 +552,39 @@ public static class Sees
         return s;
     }
 
+    /// <summary>
+    /// Re-bases the faith's regional rites on its tenets after they were edited (the faith window).
+    /// A rite was drawn as the faith's tenets with one swapped (<see cref="VaryTenets"/>), and a
+    /// rite's tenets are what its counties hold, so without this an edit to the faith would not reach
+    /// any county a regional rite covers. Each rite takes the new tenets and keeps its own different
+    /// one in the same slot, unless the faith now holds it too or it no longer fits beside the rest.
+    /// </summary>
+    public static void FollowFaithTenets(Faith faith, IReadOnlyList<string> before)
+    {
+        var vocab = VanillaVocabulary.Current;
+        foreach (var rite in faith.Rites)
+        {
+            var next = faith.Tenets.ToList();
+            for (int i = 0; i < rite.Tenets.Count; i++)
+            {
+                string own = rite.Tenets[i];
+                if (before.Contains(own) || next.Contains(own) || next.Count == 0) continue;
+
+                // Slot 0 is the faith's first tenet (its war tenet), which a rite never varies.
+                int slot = Math.Clamp(i, Math.Min(1, next.Count - 1), next.Count - 1);
+                var others = next.Where((_, j) => j != slot);
+                if (vocab is not null
+                    && vocab.IncompatibleWithAll(faith.Religion.Doctrines.Values.Concat(others)).Contains(own))
+                    continue;
+                next[slot] = own;
+            }
+
+            // In place: Tenets is init-only and the writers hold this list.
+            rite.Tenets.Clear();
+            rite.Tenets.AddRange(next);
+        }
+    }
+
     /// <summary>The faith's first tenet (its war tenet, when it has one) is kept; one of the others is redrawn.</summary>
     private static List<string> VaryTenets(Faith faith, VanillaVocabulary vocab, MapConfig cfg, Rng rng)
     {

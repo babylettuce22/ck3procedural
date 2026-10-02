@@ -150,11 +150,17 @@ public sealed class FaithInspector : InspectorForm
         private const string SiteHelp = "The county this holy site sits in. Moving it keeps the site's key and "
             + "renames it after the new county. Blank slots are sites the faith does not have.";
 
-        [Category("Holy sites")] [DisplayName("Holy site 1")] [Description(SiteHelp)] [TypeConverter(typeof(ChoiceConverter))]
+        // CK3 1.20 splits holy sites: the first three (FAITH_EMINENT_HOLY_SITES_MAX_DEFAULT) are
+        // eminent, whose bonus reaches every follower; the rest reward only the county's holder.
+        // ReligionWriter.SplitHolySites writes them in this order.
+        private const string EminentHelp = "An eminent holy site: its bonus reaches every follower of the faith, not "
+            + "just whoever holds the county. " + SiteHelp;
+
+        [Category("Holy sites")] [DisplayName("Holy site 1 (eminent)")] [Description(EminentHelp)] [TypeConverter(typeof(ChoiceConverter))]
         public string HolySite1 { get => Site(0); set => SetSite(0, value); }
-        [Category("Holy sites")] [DisplayName("Holy site 2")] [Description(SiteHelp)] [TypeConverter(typeof(ChoiceConverter))]
+        [Category("Holy sites")] [DisplayName("Holy site 2 (eminent)")] [Description(EminentHelp)] [TypeConverter(typeof(ChoiceConverter))]
         public string HolySite2 { get => Site(1); set => SetSite(1, value); }
-        [Category("Holy sites")] [DisplayName("Holy site 3")] [Description(SiteHelp)] [TypeConverter(typeof(ChoiceConverter))]
+        [Category("Holy sites")] [DisplayName("Holy site 3 (eminent)")] [Description(EminentHelp)] [TypeConverter(typeof(ChoiceConverter))]
         public string HolySite3 { get => Site(2); set => SetSite(2, value); }
         [Category("Holy sites")] [DisplayName("Holy site 4")] [Description(SiteHelp)] [TypeConverter(typeof(ChoiceConverter))]
         public string HolySite4 { get => Site(3); set => SetSite(3, value); }
@@ -237,7 +243,8 @@ public sealed class FaithInspector : InspectorForm
             "One of the faith's three tenets, from this install's own harvested tenet pool. The "
             + "dropdown leaves out whatever the other two slots already hold; a key the harvest "
             + "missed can still be typed in by hand. Clearing a slot leaves the faith with fewer "
-            + "than three tenets, and closes the gap.";
+            + "than three tenets, and closes the gap. The faith's regional rites follow: each "
+            + "takes the new tenets and keeps its own different one where it still fits.";
 
         [Category("Doctrine")] [DisplayName("Tenet 1")] [Description(TenetHelp)]
         [TypeConverter(typeof(TenetConverter))]
@@ -400,6 +407,46 @@ public sealed class FaithInspector : InspectorForm
             blocked.UnionWith(Own(virtues).Where((_, i) => i != index));
             return blocked;
         }
+
+        // --- Sees and rites (CK3 1.20) -------------------------------------------------------------
+        //
+        // Read-only: they are grown from the map (MapGen.Sees), and a see is a title with a region
+        // and an archbishop behind it, which a property grid cannot move coherently.
+
+        [Category("Sees and rites")] [DisplayName("Sees")]
+        [Description("The faith's clerical regions on the start date: landless sees held by its archbishops, "
+                     + "each spreading its rite over a region of counties. Some faiths found sees only in play.")]
+        [ReadOnly(true)]
+        public string SeeSummary => !faith.HasClericalRegions ? "None (no clerical hierarchy)"
+            : faith.Sees.Count == 0 ? "None yet (may found them in play)"
+            : $"{faith.Sees.Count} at the start, {faith.Sees.Count(s => s.Rank != SeeRank.Ordinary)} great"
+              + (faith.EraSees.Count > 0 ? $"; {faith.EraSees.Count} more on other bookmarks" : "");
+
+        [Category("Sees and rites")] [DisplayName("Great sees")]
+        [Description("The head of faith's own see (the primate) and the greatest of the rest, by the county they sit in.")]
+        [ReadOnly(true)]
+        public string GreatSees => string.Join(", ", faith.Sees.Where(s => s.Rank != SeeRank.Ordinary)
+            .OrderByDescending(s => s.Rank)
+            .Select(s => s.Rank == SeeRank.Primate ? $"{s.Seat.Name} (primate)" : s.Seat.Name)) is { Length: > 0 } g ? g : "(none)";
+
+        [Category("Sees and rites")] [DisplayName("Head elected")]
+        [Description("Whether the faith's archbishops elect its head of faith through the College, each see "
+                     + "holding a Synod Seat as its elector title.")]
+        [ReadOnly(true)]
+        public string Elected => faith.HasElectors ? "Yes, by its archbishops" : "No";
+
+        [Category("Sees and rites")] [DisplayName("Main rite")]
+        [Description("The faith as kept at its head's see. It carries the tenets above; it only gets a name of its "
+                     + "own once the faith has regional rites to tell it apart from.")]
+        [ReadOnly(true)]
+        public string MainRite => faith.MainRiteAdjective is { } adj ? $"{adj} Rite" : "(the faith itself)";
+
+        [Category("Sees and rites")] [DisplayName("Regional rites")]
+        [Description("Rites founded by its great sees. Each keeps the faith's tenets but one, and one doctrine of "
+                     + "its own; their counties hold the rite's tenets rather than the faith's.")]
+        [ReadOnly(true)]
+        public string RegionalRites => faith.Rites.Count == 0 ? "(none)"
+            : string.Join(", ", faith.Rites.Select(r => $"{r.Name} ({r.Founder.Seat.Name})"));
 
         [Category("Extent")]
         [Description("Whether this faith has a head of faith, and what their title is called.")]
