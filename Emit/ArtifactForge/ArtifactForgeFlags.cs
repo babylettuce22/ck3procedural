@@ -76,4 +76,18 @@ public static class ArtifactForgeFlags
     /// and abandoned.
     /// </summary>
     public static readonly bool BonePieces = true;
+
+    /// <summary>
+    /// Whether a piece in a weighted slot swells with the body through a FAT BLEND SHAPE (on), or through
+    /// four heavier copies picked by <c>current_weight</c> (off, the 09-28 mechanism).
+    ///
+    /// The copies were picked by weight alone, but how fat a body looks is the weight PLUS each
+    /// character's own <c>gene_bs_body_type</c> value: in one world (2026-10-03) DNA values ran
+    /// 77-188 of 255, i.e. -0.4 to +0.5 of the fat shape at weight 0. So a slim-gened character crossing
+    /// weight 20 put on a plate sized for a body that had not swollen at all ("much too large around
+    /// the waist"). A blend shape is driven by the engine with the body's own <c>bs_body_fat_1</c>
+    /// value, exactly as the garments' <c>_bs_fat</c> shapes are, so it tracks every character.
+    /// Unverified in game: that the engine applies blend shapes to a node-attached accessory.
+    /// </summary>
+    public static readonly bool PieceFatBlendShapes = true;
 }

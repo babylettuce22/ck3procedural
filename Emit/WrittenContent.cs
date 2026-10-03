@@ -115,6 +115,9 @@ public sealed record WrittenContent
     /// </summary>
     public RulerMap? Rulers { get; init; }
 
+    /// <summary>The bookmark camp leaders. Rebuilt at an applied history's endpoint; never simulated yet.</summary>
+    public AdventurerRoster? Adventurers { get; init; }
+
     /// <summary>
     /// The family and relations written around every ruler — ancestors, spouses, children,
     /// alliances, claims — which the character file carries beside the rulers themselves and so

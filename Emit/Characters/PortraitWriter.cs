@@ -73,6 +73,7 @@ public static class PortraitWriter
 
         // Race head features ran earlier in the same write; the horn gene is padded in only if it shipped.
         bool hornGene = RaceHeadWriter.HornGeneShipped(modDir);
+        var pieceGenes = BonePieceStep.RegisteredGenes(modDir);
 
         var men = LoadCategorizedTemplates(sourceDir, MaleTypeRegex);
         if (men.AllTemplates.Count == 0)
@@ -151,7 +152,7 @@ public static class PortraitWriter
                 // Roll a whole new face from the character's own ethnicity before anything is
                 // written, so the bookmark screen and the in-game portrait agree and both match the
                 // realm. The borrowed record keeps only its outfit.
-                body = ApplyEthnicity(body, ethnicities.GenesFor(req.Culture, rng, vanilla), rng, hornGene, racesOn);
+                body = ApplyEthnicity(body, ethnicities.GenesFor(req.Culture, rng, vanilla), rng, hornGene, racesOn, pieceGenes);
                 body = Balding(body);
 
                 // After the ethnicity, not before: the ethnicity is what a character of this culture
@@ -272,7 +273,7 @@ public static class PortraitWriter
     /// </summary>
     private static string ApplyEthnicity(string body,
         (Dictionary<string, List<ColorPaletteRange>> ColorGenes, Dictionary<string, List<GeneMorphEntry>> MorphGenes) eth,
-        Rng rng, bool hornGene, bool racesOn)
+        Rng rng, bool hornGene, bool racesOn, IReadOnlyList<(string Gene, string None)> pieceGenes)
     {
         var genes = GenesRegex.Match(body);
         if (!genes.Success) return body;
@@ -344,6 +345,12 @@ public static class PortraitWriter
         // The horn ornament gene ships in the same generated file, so it is registered exactly then.
         if (hornGene && !seen.Contains(Horns.OrnamentGene))
             added.Append($"\n{indent}{Horns.OrnamentGene}={{ \"{Horns.OrnamentNoneTemplate}\" 0 \"{Horns.OrnamentNoneTemplate}\" 0 }}");
+
+        // The bone-attached armour pieces' genes, one per slot this run shipped, on their empty template:
+        // the portrait modifiers move a wearer off it exactly as for anyone else.
+        foreach (var (gene, none) in pieceGenes)
+            if (!seen.Contains(gene))
+                added.Append($"\n{indent}{gene}={{ \"{none}\" 0 \"{none}\" 0 }}");
 
         return string.Concat(
             body.AsSpan(0, content.Index),

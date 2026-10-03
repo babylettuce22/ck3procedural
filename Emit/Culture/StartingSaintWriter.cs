@@ -104,7 +104,12 @@ public static class StartingSaintWriter
         }
         if (count == 0)
         {
-            foreach (string path in OwnedPaths) File.Delete(Path.Combine(modDir, path));
+            foreach (string path in OwnedPaths)
+            {
+                // A fresh mod folder has no subdirectories yet; File.Delete throws on a missing directory.
+                string target = Path.Combine(modDir, path);
+                if (File.Exists(target)) File.Delete(target);
+            }
             return;
         }
         Ship(modDir, CharactersPath, characters.ToString());

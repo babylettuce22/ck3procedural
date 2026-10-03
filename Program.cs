@@ -92,6 +92,9 @@ public static class Program
                 case "--verify-world-editor":
                     return Tools.WorldEditorChecks.Run(i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : null);
 
+                case "--verify-adventurers":
+                    return Tools.AdventurerChecks.Run();
+
                 case "--verify-tenets":
                     return Tools.TenetChecks.Run(options.GameDir);
 
@@ -552,6 +555,14 @@ public static class Program
                 // default). See BaseFilesToCopy/Societies/README.txt.
                 case "--societies":
                     cfg.EnableSocieties = true;
+                    break;
+
+                case "--adventurers":
+                    cfg.EnableAdventurers = true;
+                    break;
+
+                case "--no-adventurers":
+                    cfg.EnableAdventurers = false;
                     break;
 
                 // The only way to turn them off while the setting is hidden from the generator.

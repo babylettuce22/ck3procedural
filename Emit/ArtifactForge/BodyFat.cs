@@ -31,6 +31,39 @@ public sealed class BodyFat
     public const double GarmentScale = 1.15;
 
     /// <summary>
+    /// A garment's fat bulge over the body's, by height (file-space y, from 92.5 in steps of 5): the
+    /// MEDIAN over the vanilla war garments that ship a <c>_bs_fat</c> shape (34 male, 33 female), along
+    /// the body's own bulge, torso only (|x| &lt; 16), 3-tap smoothed, capped at <see cref="GarmentScale"/>.
+    ///
+    /// **Why a profile, for a piece that wraps the torso.** <see cref="GarmentScale"/> was measured at the
+    /// chest, upper chest, neck and shoulder only, and holds there. Below the chest it does not: the male
+    /// body's belly swells 8-10 units at full fat, while the garments follow it only 0.72-0.85x (they hang
+    /// from the shoulders and belt rather than wrapping the belly), so a breastplate swollen at 1.15x stood
+    /// ~4 units clear of a heavy character's waist in game (2026-10-03, "pulled in around the waist"). The
+    /// median rather than the 75th percentile: a plate that covers the whole front shows any overshoot.
+    /// Measured by <c>ck3devtools/armor_pieces/fat_profile.py</c>.
+    /// </summary>
+    private static readonly double[] MaleProfile =
+        [0.74, 0.75, 0.81, 0.87, 0.94, 0.98, 0.94, 0.90, 0.90, 0.97, 1.06, 1.10];
+
+    /// <inheritdoc cref="MaleProfile"/>
+    private static readonly double[] FemaleProfile =
+        [0.97, 1.02, 1.03, 1.03, 1.02, 0.99, 0.97, 1.02, 1.09, 1.14, 1.15, 1.15];
+
+    private const double ProfileFirst = 92.5, ProfileStep = 5.0;
+
+    private readonly bool _female;
+
+    /// <summary>The garment's share of the body's fat bulge at height <paramref name="y"/> (see <see cref="MaleProfile"/>).</summary>
+    public double GarmentScaleAt(double y)
+    {
+        double[] t = _female ? FemaleProfile : MaleProfile;
+        double f = Math.Clamp((y - ProfileFirst) / ProfileStep, 0, t.Length - 1);
+        int i = Math.Min((int)f, t.Length - 2);
+        return t[i] + (t[i + 1] - t[i]) * (f - i);
+    }
+
+    /// <summary>
     /// How many body vertices a sample blends. Enough to smooth over the body's own triangle density,
     /// so a piece deforms as one surface rather than picking up the facets of whatever lies under it.
     /// </summary>
@@ -41,10 +74,11 @@ public sealed class BodyFat
     private readonly float[] _base;
     private readonly float[] _delta;
 
-    private BodyFat(float[] basePositions, float[] delta)
+    private BodyFat(float[] basePositions, float[] delta, bool female)
     {
         _base = basePositions;
         _delta = delta;
+        _female = female;
     }
 
     /// <summary>
@@ -73,7 +107,7 @@ public sealed class BodyFat
             {
                 var delta = new float[body.Length];
                 for (int i = 0; i < body.Length; i++) delta[i] = fat[i] - body[i];
-                made = new BodyFat(body, delta);
+                made = new BodyFat(body, delta, female);
             }
         }
         catch (Exception e) when (e is IOException or InvalidDataException or NotSupportedException)

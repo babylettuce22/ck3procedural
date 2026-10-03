@@ -860,6 +860,11 @@ public sealed class MapConfig : CustomTypeDescriptor
                + "every start-date ruler, so it raises the opening military balance.")]
     public bool EnableStartingRetinues { get; set; } = false;
 
+    /// <summary>Bookmark camp leaders, rebuilt from the final world, outside the history simulator.</summary>
+    [Category("02 World State")]
+    [Description("Generate a small roster of landless adventurer camps at each bookmark. Applied histories rebuild them from their final world; adventurers do not yet act in the simulation. Requires Roads to Power.")]
+    public bool EnableAdventurers { get; set; } = true;
+
     /// <summary>
     /// How many struggles the world may carry at most.
     ///

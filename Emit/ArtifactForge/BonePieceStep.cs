@@ -22,8 +22,13 @@ using System.IO;
 /// a chest disc's lower rays further than its top and turned circles into skewed ovals. A collar that
 /// wraps the swelling chest wants the deformation and leaves this off.
 /// </param>
+/// <param name="Profiled">
+/// Whether a heavier variant swells by the garments' MEASURED share of the body's bulge at each height
+/// (<see cref="BodyFat.GarmentScaleAt"/>) rather than the chest-calibrated <see cref="BodyFat.GarmentScale"/>.
+/// For a piece reaching down to the waist, where the belly outgrows the clothing over it.
+/// </param>
 public sealed record BoneSlot(string Suffix, string Bone, string? Opposite = null, bool Weighted = false,
-    bool Rigid = false)
+    bool Rigid = false, bool Profiled = false)
 {
     /// <summary>The slot's short name, used in gene and accessory keys.</summary>
     public string Key => Suffix.TrimStart('_');
@@ -65,6 +70,12 @@ public sealed record BonePiece(string Set, BoneSlot Slot, string Source, bool Mi
 
     /// <summary>Filled in by the bake, which is the only pass that reads the mesh.</summary>
     public List<PieceShape> Shapes { get; } = [];
+
+    /// <summary>
+    /// Whether the bake also wrote <c>{Name}_bs_fat.mesh</c>, the piece at the body's full fat shape,
+    /// which the entity binds to <c>bs_body_fat_1</c> (see <see cref="ArtifactForgeFlags.PieceFatBlendShapes"/>).
+    /// </summary>
+    public bool FatShape { get; set; }
 
     /// <summary>
     /// The mod path of the set's heraldry mask, or null for a piece drawn in its own colours.
@@ -147,6 +158,10 @@ public static class BonePieceStep
         new("_elbow_l",    "bn_l_elbow",    "_elbow_r"),
         new("_elbow_r",    "bn_r_elbow",    "_elbow_l"),
         new("_neck",       "bn_sp_cervical", Weighted: true),
+        // A fitted breastplate on the chest's bone, NOT rigid: its heavier copies swell with the body the
+        // way a collar does. Moved as one body (the chest pendants' rule) a plate that wraps the torso
+        // sank into a heavier chest at the flanks and stood off it at the middle.
+        new("_breastplate", "bn_sp_thoracic", Weighted: true, Profiled: true),
         new("_chest",      "bn_sp_thoracic", Weighted: true, Rigid: true),
         new("_back",       "bn_sp_thoracic", Weighted: true, Rigid: true),
         new("_strap",      "bn_sp_thoracic", Weighted: true),
@@ -175,6 +190,9 @@ public static class BonePieceStep
     /// 1.27x there — so the worst thin case is about a unit of extra gap at the collar's sides, and
     /// only below weight -70 (full gaunt; characters start between -35 and 35).
     /// </summary>
+    /// <summary>The body's whole fat shape: what a fat blend shape is authored at.</summary>
+    private static readonly BodyTier FullFat = new("bs_fat", 0, 1.0);
+
     private static readonly BodyTier[] Tiers =
     [
         new("fat20", 20, 0.32),
@@ -240,6 +258,7 @@ public static class BonePieceStep
     private static string GroupOf(BoneSlot slot, IReadOnlySet<string> setSlots) => slot.Key switch
     {
         "chest" or "back" when setSlots.Contains("chest") && setSlots.Contains("back") => "cuirass",
+        "breastplate" => "cuirass",
         "shoulder_l" or "shoulder_r" or "l" or "r" => "pauldrons",
         "elbow_l" or "elbow_r" => "couters",
         "forearm_l" or "forearm_r" => "vambraces",
@@ -328,7 +347,8 @@ public static class BonePieceStep
 
         var fat = BodyFat.Read(gameDir);
         var femaleFat = BodyFat.Read(gameDir, female: true);
-        pieces = WithTiers(pieces, fat, femaleFat);
+        if (!ArtifactForgeFlags.PieceFatBlendShapes)
+            pieces = WithTiers(pieces, fat, femaleFat);
 
         string outDir = Path.Combine(modDir, ModelDir.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(outDir);
@@ -366,6 +386,12 @@ public static class BonePieceStep
         WriteDebug(modDir, sets);
 
         int tiered = baked.Count(p => p.Tier is not null);
+        int shaped = baked.Count(p => p.FatShape);
+
+        if (shaped > 0)
+            Console.WriteLine($"    {shaped} fat blend shape(s) on bs_body_fat_1 - slots "
+                + string.Join("/", baked.Where(p => p.FatShape).Select(p => p.Slot.Key)
+                    .Distinct().OrderBy(s => s, StringComparer.Ordinal)));
 
         if (tiered > 0)
             Console.WriteLine($"    {tiered} heavier-body variant(s): "
@@ -511,18 +537,22 @@ public static class BonePieceStep
     /// is sampled where the piece finally sits. Normals are left as they are: the displacement is a
     /// smooth, low-frequency swell a few units across a piece, which tilts no surface enough to show.
     /// </summary>
-    private static void Swell(float[] p, BodyFat fat, BodyTier tier, bool rigid)
+    private static void Swell(float[] p, BodyFat fat, BodyTier tier, BoneSlot slot)
     {
-        double scale = tier.Morph * BodyFat.GarmentScale;
         int n = p.Length / 3;
         if (n == 0) return;
 
         var delta = new (double X, double Y, double Z)[n];
-        for (int v = 0; v < n; v++) delta[v] = fat.Delta(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
+        for (int v = 0; v < n; v++)
+        {
+            var d = fat.Delta(p[v * 3], p[v * 3 + 1], p[v * 3 + 2]);
+            double k = tier.Morph * (slot.Profiled ? fat.GarmentScaleAt(p[v * 3 + 1]) : BodyFat.GarmentScale);
+            delta[v] = (d.X * k, d.Y * k, d.Z * k);
+        }
 
         // A rigid piece takes the field's MEAN over its vertices as one translation: it sits where the
         // swollen clothing is on average, and stays the shape it was modelled.
-        if (rigid)
+        if (slot.Rigid)
         {
             double mx = 0, my = 0, mz = 0;
             foreach (var (x, y, z) in delta) { mx += x; my += y; mz += z; }
@@ -532,9 +562,9 @@ public static class BonePieceStep
 
         for (int v = 0; v < n; v++)
         {
-            p[v * 3] += (float)(delta[v].X * scale);
-            p[v * 3 + 1] += (float)(delta[v].Y * scale);
-            p[v * 3 + 2] += (float)(delta[v].Z * scale);
+            p[v * 3] += (float)delta[v].X;
+            p[v * 3 + 1] += (float)delta[v].Y;
+            p[v * 3 + 2] += (float)delta[v].Z;
         }
     }
 
@@ -596,6 +626,12 @@ public static class BonePieceStep
         }
 
         int meshes = 0;
+
+        // The fat blend shape: this piece at the body's FULL fat shape, in the same bone space, vertex
+        // for vertex. The engine morphs toward it by the character's own bs_body_fat_1 value.
+        bool fatShape = ArtifactForgeFlags.PieceFatBlendShapes && piece.Slot.Weighted && piece.Tier is null && fat is not null;
+        var fatPositions = new List<(PdxNode Node, float[] P)>();
+
         Walk(root, null);
 
         if (meshes == 0)
@@ -605,6 +641,22 @@ public static class BonePieceStep
         }
 
         PdxMesh.Write(target, root);
+
+        if (fatShape)
+        {
+            // Same tree, positions swapped: a blend shape file is the mesh itself at the shape's extreme
+            // (vanilla's garment _bs_fat meshes carry the full node, normals and UVs included).
+            foreach (var (node, fp) in fatPositions)
+            {
+                float[] p = node.Floats("p");
+                Array.Copy(fp, p, p.Length);
+                Rebound(node, p);
+            }
+
+            PdxMesh.Write(Path.ChangeExtension(target, null) + "_bs_fat.mesh", root);
+            piece.FatShape = true;
+        }
+
         return true;
 
         // The shape is the mesh node's PARENT, and its name is what a meshsettings block has to
@@ -654,13 +706,29 @@ public static class BonePieceStep
                 if (piece.Mirror) Reflect(node, p);
 
                 // A heavier-body copy swells with the body before it is taken into the bone's frame.
-                if (piece.Tier is { } tier && fat is not null) Swell(p, fat, tier, piece.Slot.Rigid);
+                if (piece.Tier is { } tier && fat is not null) Swell(p, fat, tier, piece.Slot);
+
+                // ...and so does the fat blend shape, at the full shape (morph 1).
+                float[]? fp = null;
+                if (fatShape)
+                {
+                    fp = (float[])p.Clone();
+                    Swell(fp, fat!, FullFat, piece.Slot);
+                }
 
                 for (int i = 0; i + 2 < p.Length; i += 3)
                 {
                     var (x, y, z) = frame.ToLocal(p[i], p[i + 1], p[i + 2]);
                     p[i] = (float)x; p[i + 1] = (float)y; p[i + 2] = (float)z;
+
+                    if (fp is not null)
+                    {
+                        var (fx, fy, fz) = frame.ToLocal(fp[i], fp[i + 1], fp[i + 2]);
+                        fp[i] = (float)fx; fp[i + 1] = (float)fy; fp[i + 2] = (float)fz;
+                    }
                 }
+
+                if (fp is not null) fatPositions.Add((node, fp));
 
                 float[] n = node.Floats("n");
 
@@ -864,6 +932,10 @@ public static class BonePieceStep
             b.Raw($"\tname = \"{piece.Name}_mesh\"\n");
             b.Raw($"\tfile = \"{piece.Name}.mesh\"\n");
 
+            // As vanilla's garments declare theirs: the shape file here, bound to the body attribute below.
+            if (piece.FatShape)
+                b.Raw($"\tblend_shape = {{ id = \"{piece.Name}_bs_fat\" type = \"{piece.Name}_bs_fat.mesh\" }}\n");
+
             for (int i = 0; i < piece.Shapes.Count; i++)
             {
                 var shape = piece.Shapes[i];
@@ -885,6 +957,9 @@ public static class BonePieceStep
             b.Raw("entity = {\n");
             b.Raw($"\tname = \"{piece.Name}_entity\"\n");
             b.Raw($"\tpdxmesh = \"{piece.Name}_mesh\"\n");
+
+            if (piece.FatShape)
+                b.Raw($"\tattribute = {{ name = \"bs_body_fat_1\" blend_shape = \"{piece.Name}_bs_fat\" }}\n");
 
             if (piece.CoaMask is { } mask)
             {
@@ -1099,6 +1174,27 @@ public static class BonePieceStep
     /// the probe described on this class. Redeclaring an EXISTING gene here would replace it and
     /// take every vanilla accessory in it with it.
     /// </summary>
+    /// <summary>
+    /// The piece genes this run registered, each with its empty template, read back from the genes file
+    /// <see cref="WriteGenes"/> wrote (none when no pieces shipped).
+    ///
+    /// For <see cref="PortraitWriter"/>: a persistent DNA record (the bookmark characters') must name
+    /// EVERY registered gene. Without these, the game logged "Persistent portrait info missing gene
+    /// gen_armor_piece_*" for all 40 records of a world (2026-10-03), and those characters wore the
+    /// pieces on one side only in game.
+    /// </summary>
+    public static IReadOnlyList<(string Gene, string None)> RegisteredGenes(string modDir)
+    {
+        string path = Path.Combine(modDir, "common", "genes", "zz_gen_pieces.txt");
+        if (!File.Exists(path)) return [];
+
+        return [.. System.Text.RegularExpressions.Regex
+            .Matches(File.ReadAllText(path), @"^\t(gen_armor_piece_\w+) = \{", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value)
+            .Distinct()
+            .Select(g => (g, g + "_none"))];
+    }
+
     private static void WriteGenes(string modDir, List<BonePiece> pieces)
     {
         string dir = Path.Combine(modDir, "common", "genes");

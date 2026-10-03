@@ -509,6 +509,7 @@ public static partial class ContentWriter
             Realms = realms,
             Governments = governments,
             Rulers = layer.Rulers,
+            Adventurers = layer.Adventurers,
             Prehistory = layer.Prehistory,
             Bookmarks = layer.Bookmarks,
             Holdings = holdings,
@@ -572,7 +573,7 @@ public static partial class ContentWriter
 
     /// <summary>What the history layer decided, for WrittenContent and the debug panel.</summary>
     internal sealed record HistoryLayer(PrehistoryMap? Prehistory, RulerMap? Rulers, BookmarkCast? Bookmarks,
-        int ArtifactCount, int StruggleCount);
+        int ArtifactCount, int StruggleCount, AdventurerRoster Adventurers);
 
     /// <summary>
     /// The people of the start date and everything written about them: families and ancestors,
@@ -639,6 +640,11 @@ public static partial class ContentWriter
             prehistory!.Eras = Core.Stage.Time("additional bookmarks", () => BookmarkEras.Build(
                 cfg, counties, realms, rulers!, prehistory!, cultures, faiths, governments, wilderness,
                 eraGovernments));
+
+        var adventurers = Core.Stage.Time("adventurers", () => AdventurerRoster.Build(
+            cfg, counties, realms, cultures, faiths, wilderness, prehistory.Eras));
+        AdventurerWriter.WriteAll(modDir, cfg, adventurers, ethnicities);
+        Console.WriteLine($"  adventurers: {adventurers.All.Count} camp leaders across the bookmarks (outside simulation)");
 
         // The Restorationist society: a fallen crown, its house and its sworn, read off the world
         // the lines above decided. Its own files only, and nothing it mints is added to prehistory,
@@ -823,6 +829,6 @@ public static partial class ContentWriter
             modDir, gameDir, bookmarkResult.PortraitRequests, ethnicities,
             RaceMorphWriter.RacesOn(cfg), cfg.Seed));
 
-        return new HistoryLayer(prehistory, rulers, bookmarks, artifactCount, struggleCount);
+        return new HistoryLayer(prehistory, rulers, bookmarks, artifactCount, struggleCount, adventurers);
     }
 }

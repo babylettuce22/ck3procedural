@@ -412,6 +412,7 @@ public static partial class ContentWriter
         RulerMap? rulers = null;
         PrehistoryMap? prehistory = null;
         BookmarkCast? bookmarks = null;
+        AdventurerRoster? adventurers = null;
 
         // Hoisted out of the block below for the debug panel, which reports them, and for the same
         // reason the three above are: nothing outside the history phase can see what it decided.
@@ -446,6 +447,7 @@ public static partial class ContentWriter
 
                 prehistory = layer.Prehistory;
                 rulers = layer.Rulers;
+                adventurers = layer.Adventurers;
                 bookmarks = layer.Bookmarks;
                 artifactCount = layer.ArtifactCount;
                 struggleCount = layer.StruggleCount;
@@ -527,6 +529,7 @@ public static partial class ContentWriter
             WorldCenters = worldCenters,
             Realms = realms,
             Rulers = rulers,
+            Adventurers = adventurers,
             Prehistory = prehistory,
             Governments = governments,
             Steppe = steppe,

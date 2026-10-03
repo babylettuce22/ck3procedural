@@ -40,12 +40,13 @@ Credit line to reproduce verbatim wherever this is shared:
 - source: https://sketchfab.com/3d-models/shoulder-armor-053d84b1034c429ab476778022d64ff5
 - licence: CC-BY-4.0 — http://creativecommons.org/licenses/by/4.0/
 - commercial use: allowed
-- used for: the pauldrons of the `veteran` set (`attachments/veteran_shoulder_l.mesh`). The source
-  mesh and its supplied 1024x1024 baseColor/normal/metallicRoughness maps are kept unmodified in
-  `attachments/sources/pauldron1_*`; the geometry is used as-is, and its textures are re-baked into
-  the veteran set's shared atlas alongside the set's own procedurally modelled pieces, then converted
-  to CK3's layouts by `PieceTextures`. The right shoulder is reflected from the left at generation
-  time rather than shipped separately.
+- used for: the pauldrons of an armour set (the `veteran` set, withdrawn 2026-10-03; the pauldrons
+  are being reused for a new set). The source mesh and its supplied 1024x1024
+  baseColor/normal/metallicRoughness maps are kept unmodified in `attachments/sources/pauldron1_*`;
+  the geometry is used as-is (given thickness), and its textures are re-baked into the set's shared
+  atlas alongside the set's own procedurally modelled pieces, then converted to CK3's layouts by
+  `PieceTextures`. The right shoulder is reflected from the left at generation time rather than
+  shipped separately.
 
 Credit line to reproduce verbatim wherever this is shared:
 
