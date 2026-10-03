@@ -10,7 +10,7 @@ and a simulated history that decides who holds what when the game begins.
 Make a few choices in the Quick generator and watch the world take shape, or open every setting
 and tune it by hand. Then inspect and edit any title, culture, faith or ruler before you play.
 
-<img width="1790" height="935" alt="CK3 Procedural Tool desktop interface and map preview" src="https://github.com/user-attachments/assets/bece6c17-74fb-4f13-a539-60a07c044c55" />
+<img width="996" height="696" alt="image" src="https://github.com/user-attachments/assets/e0b6d5f4-c9fd-4bad-bf9a-c12aac38018f" />
 
 ## Features
 
