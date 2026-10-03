@@ -15,6 +15,7 @@ public static class ReligionWriter
     {
         WriteHolySites(modDir, faiths);
         WriteReligions(modDir, faiths);
+        TenetWriter.WriteEligibility(modDir, faiths);
         WriteFaithHistory(modDir, faiths);
         WriteLocalisation(modDir, faiths, seed, tooltips);
         SeeWriter.WriteAll(modDir, faiths, removeWhenNone: fromGeneration);
@@ -365,7 +366,7 @@ public static class ReligionWriter
             if (ordinary.Count > 0) b.Inline("holy_sites", string.Join(' ', ordinary));
             b.Blank();
 
-            b.Inline("tenets", string.Join(' ', faith.Tenets));
+            // The scripted main rite owns core tenets, including DLC selection pairs.
             if (doctrines.Count > 0) b.Inline("doctrines", string.Join(' ', doctrines));
         }
 
@@ -383,7 +384,8 @@ public static class ReligionWriter
             rites.Blank();
             rites.Inline("color", F(r), F(g), F(bl));
             rites.Blank();
-            rites.Inline("tenets", string.Join(' ', faith.Tenets));
+            TenetWriter.WriteTenets(rites, faith.Key, faith.Tenets,
+                religion.Doctrines.Values.Concat(doctrines));
             if (doctrines.Count > 0) rites.Inline("doctrines", string.Join(' ', doctrines));
         }
 
@@ -403,7 +405,8 @@ public static class ReligionWriter
                 rites.Blank();
                 rites.Inline("color", F(rr), F(rg), F(rb));
                 rites.Blank();
-                rites.Inline("tenets", string.Join(' ', rite.Tenets));
+                TenetWriter.WriteTenets(rites, rite.Key, rite.Tenets,
+                    religion.Doctrines.Values.Concat(riteDoctrines));
                 if (riteDoctrines.Count > 0) rites.Inline("doctrines", string.Join(' ', riteDoctrines));
             }
 

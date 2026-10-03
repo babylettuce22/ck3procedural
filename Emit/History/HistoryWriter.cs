@@ -15,6 +15,7 @@ public static class HistoryWriter
         CultureMap cultures, EthnicityMap ethnicities, FaithMap faiths, GovernmentMap governments,
         WildernessMap wilderness, PrehistoryMap prehistory, RulerMap rulers, WorldCalendar? calendar = null)
     {
+        StartingSaintWriter.WriteAll(modDir, cfg, faiths, cultures);
         var all = Titles.Flatten(empires).Where(t => t.Tier == "c").ToList();
         if (all.Count == 0) return;
 
@@ -1503,7 +1504,7 @@ public static class HistoryWriter
 
                     string holder;
                     Title? liege = null;
-                    bool isPrimate = faith.Head is { Temporal: false } head && see.Seat == head.Seat;
+                    bool isPrimate = faith.Head is { Temporal: false } head && see.Seat == head.PrimateSeat;
 
                     if (date.Era is null && see.Rank == SeeRank.Primate && hofIds.TryGetValue(faith, out var hof))
                     {

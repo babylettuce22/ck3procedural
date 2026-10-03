@@ -144,6 +144,55 @@ public static class RunLog
         }
     }
 
+    private const string SettingsHeading = "==== Settings (preset JSON; save as .json and load as a preset) ====";
+    private const string LogHeading = "==== Generation log ====";
+
+    /// <summary>
+    /// The settings JSON a mod's record carries, or null when there is no record or it predates
+    /// the settings block.
+    /// </summary>
+    public static string? RecordedSettings(string modDir)
+    {
+        string path = Path.Combine(modDir, FileName);
+        if (!File.Exists(path)) return null;
+
+        string text = File.ReadAllText(path);
+        int start = text.IndexOf(SettingsHeading, StringComparison.Ordinal);
+        if (start < 0) return null;
+        start += SettingsHeading.Length;
+        int end = text.IndexOf(LogHeading, start, StringComparison.Ordinal);
+        string json = (end < 0 ? text[start..] : text[start..end]).Trim();
+        return json.StartsWith('{') ? json : null;
+    }
+
+    /// <summary>
+    /// The build that wrote a mod, from its record's <c>Tool version:</c> line, with the commit
+    /// suffix dropped; null when the record does not say.
+    /// </summary>
+    public static string? RecordedVersion(string modDir)
+    {
+        string path = Path.Combine(modDir, FileName);
+        if (!File.Exists(path)) return null;
+        foreach (string line in File.ReadLines(path))
+        {
+            if (line.Length == 0) break;
+            if (line.StartsWith("Tool version:", StringComparison.Ordinal))
+                return line["Tool version:".Length..].Trim().Split('+')[0];
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Adds a dated section to the end of a mod's record, after its generation log, for work done
+    /// to the mod since it was written. The header, and so <see cref="WroteFolder"/>, are untouched.
+    /// </summary>
+    public static void Append(string modDir, string heading, string body)
+    {
+        string text = $"{Environment.NewLine}==== {heading} — {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz} by {ToolVersion()} ===="
+                      + Environment.NewLine + body.Replace("\r\n", "\n").Replace("\n", Environment.NewLine) + Environment.NewLine;
+        File.AppendAllText(Path.Combine(modDir, FileName), text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    }
+
     private static void WriteRecord(string modDir, GenerationOptions options, string outcome)
     {
         var cfg = options.Config;
@@ -168,11 +217,11 @@ public static class RunLog
                         + $"{Environment.ProcessorCount} cores, .NET {Environment.Version}");
         text.AppendLine();
 
-        text.AppendLine("==== Settings (preset JSON; save as .json and load as a preset) ====");
+        text.AppendLine(SettingsHeading);
         text.AppendLine(SettingsJson(cfg));
         text.AppendLine();
 
-        text.AppendLine("==== Generation log ====");
+        text.AppendLine(LogHeading);
         text.Append(Text);
 
         // The header is built with AppendLine and the log with bare '\n'; one convention for the file.

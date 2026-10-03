@@ -86,6 +86,7 @@ public static class HierarchyFlavourWriter
         }
 
         WriteArticles(modDir, gameDir);
+        CathedralFlavourWriter.WriteAll(modDir, gameDir, cfg);
         WriteLegationGate(modDir, gameDir);
         WriteLegatineMissionGate(modDir, gameDir);
         WriteCouncilInvalidation(modDir, gameDir, "ecumenical council", "ecumenical_council.txt");

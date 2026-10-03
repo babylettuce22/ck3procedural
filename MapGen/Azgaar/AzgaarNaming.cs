@@ -94,9 +94,39 @@ public static class AzgaarNaming
     /// guessing from terrain, which is a better answer than a random look. Null is also what an
     /// untagged culture returns, which is every culture on a non-fantasy export.
     /// </summary>
-    internal static RaceArchetype? ParseRace(string name)
+    internal static RaceArchetype? ParseRace(string name) => RaceOfTag(Tag(name));
+
+    /// <summary>
+    /// The race of an export culture: its name's tag, else the fantasy name base it names from — an
+    /// export can say "these are dwarves" by giving a culture the Dwarven base and no tag at all.
+    /// </summary>
+    internal static RaceArchetype? ParseRace(AzgaarCulture culture, AzgaarWorld world)
+        => RaceOfTag(RaceTag(culture, world));
+
+    /// <summary>
+    /// What <see cref="Tag"/> reads off the name, or, untagged, the culture's name base when that
+    /// base is a fantasy people's. Real-world bases (English, Turkish) say nothing about race —
+    /// every culture on an ordinary export names from one — so they stay empty, as an untagged
+    /// name does, and the ethnicity builder guesses as it always has. Draconic, Serpents and
+    /// Arachnid map to no race of ours but still keep their peoples apart in
+    /// <see cref="AzgaarFamilies"/>, the same as when they are written as tags.
+    /// </summary>
+    internal static string RaceTag(AzgaarCulture culture, AzgaarWorld world)
     {
-        string tag = Tag(name);
+        string tag = Tag(culture.Name);
+        if (tag.Length > 0) return tag;
+
+        var source = world.NameBases.FirstOrDefault(b => b.I == culture.Base)
+                     ?? (culture.Base >= 0 && culture.Base < world.NameBases.Count ? world.NameBases[culture.Base] : null);
+        string name = source?.Name.Trim().ToLowerInvariant() ?? "";
+        return RaceOfTag(name) is not null || UnmatchedFantasyBases.Any(name.Contains) ? name : "";
+    }
+
+    /// <summary>Azgaar's fantasy name bases with no race of ours to map onto.</summary>
+    private static readonly string[] UnmatchedFantasyBases = ["draconic", "drakonic", "serpent", "arachnid"];
+
+    private static RaceArchetype? RaceOfTag(string tag)
+    {
         if (tag.Length == 0) return null;
 
         if (tag.Contains("human")) return RaceArchetype.Human;
@@ -311,7 +341,7 @@ public static class AzgaarNaming
             // The race tag is read before the parenthetical carrying it is stripped for display —
             // the tag is data (these people are dwarves), the parenthetical is Azgaar's UI showing
             // that data, and only the second has no place in a CK3 tooltip.
-            culture.ImportedArchetype = ParseRace(source.Name) ?? culture.ImportedArchetype;
+            culture.ImportedArchetype = ParseRace(source, azgaar.World) ?? culture.ImportedArchetype;
 
             string name = StripParenthetical(StripArticle(source.Name));
             if (name.Length == 0) continue;

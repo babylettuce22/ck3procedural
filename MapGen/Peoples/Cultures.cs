@@ -473,8 +473,8 @@ public static class Cultures
                 LanguageColor = vocab.LanguageColors.Count > 0 ? rng.Pick(vocab.LanguageColors) : null,
             };
             heritage.ImportedArchetype = imported.Exists
-                && azgaar!.World.Culture(imported.Id)?.Name is { Length: > 0 } tagged
-                    ? AzgaarNaming.ParseRace(tagged)
+                && azgaar!.World.Culture(imported.Id) is { } tagged
+                    ? AzgaarNaming.ParseRace(tagged, azgaar.World)
                     : null;
 
             heritages.Add(heritage);
@@ -823,7 +823,7 @@ public static class Cultures
         // every culture as descended from Wildlands, so the ancestry it ships is a statement that no
         // culture is related to any other, which is not what its author meant and is not a world CK3
         // can do anything with.
-        var (family, basis) = AzgaarFamilies.Group(live, held, graph, index, cfg.CulturesPerHeritage);
+        var (family, basis) = AzgaarFamilies.Group(live, azgaar.World, held, graph, index, cfg.CulturesPerHeritage);
 
         var heritages = new List<Heritage>();
         var cultures = new List<Culture>();
@@ -881,7 +881,7 @@ public static class Cultures
                 Look = ClothingClimate.PickLook(lookPool,
                     ClothingClimate.Of(members.SelectMany(id => held[id]), provinceClimate), rng),
                 LanguageColor = vocab.LanguageColors.Count > 0 ? rng.Pick(vocab.LanguageColors) : null,
-                ImportedArchetype = AzgaarNaming.ParseRace(founder.Name),
+                ImportedArchetype = AzgaarNaming.ParseRace(founder, azgaar.World),
             };
 
             heritages.Add(heritage);
@@ -908,7 +908,7 @@ public static class Cultures
                 }
 
                 if (AzgaarColors.TryParseColor(source.Color, out var rgb)) culture.Color = rgb;
-                culture.ImportedArchetype = AzgaarNaming.ParseRace(source.Name) ?? heritage.ImportedArchetype;
+                culture.ImportedArchetype = AzgaarNaming.ParseRace(source, azgaar.World) ?? heritage.ImportedArchetype;
 
                 heritage.Cultures.Add(culture);
                 cultures.Add(culture);

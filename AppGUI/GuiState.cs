@@ -283,10 +283,12 @@ internal static class Preset
     /// existed should still load, minus that setting.
     /// </summary>
     /// <returns>How many settings were applied.</returns>
-    public static int Load(MapConfig config, string path)
+    public static int Load(MapConfig config, string path) => LoadJson(config, File.ReadAllText(path));
+
+    /// <summary>As <see cref="Load"/>, from the JSON itself — such as the block in a mod's <c>proctool.txt</c>.</summary>
+    public static int LoadJson(MapConfig config, string json)
     {
-        var document = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-            File.ReadAllText(path)) ?? [];
+        var document = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json) ?? [];
 
         int applied = 0;
         foreach (var property in Settable(config))

@@ -1,7 +1,7 @@
 ﻿# Faith scope. How many more personal Synod Seats (chaplain petitions,
-# zz_gen_synod_chaplain_interaction.txt) the faith may hold: one per three permanent see seats,
-# at least one, less those already held. Keeps a few rich rulers from packing the electorate.
-gen_synod_personal_seat_room_value = {
+# and direct appointments) the faith may hold: one per three permanent see seats,
+# at least one. The remaining-room value below subtracts existing personal appointments.
+gen_synod_personal_seat_limit_value = {
 	value = 0
 	every_clerical_elector_title = {
 		limit = { NOT = { has_variable = gen_synod_personal } }
@@ -10,8 +10,57 @@ gen_synod_personal_seat_room_value = {
 	divide = 3
 	floor = yes
 	min = 1
+}
+
+gen_synod_personal_seat_count_value = {
+	value = 0
 	every_clerical_elector_title = {
 		limit = { has_variable = gen_synod_personal }
-		subtract = 1
+		add = 1
 	}
+}
+
+# Both direct appointments and chaplain petitions use this remaining allowance.
+gen_synod_personal_seat_room_value = {
+	value = gen_synod_personal_seat_limit_value
+	subtract = gen_synod_personal_seat_count_value
+}
+
+gen_synod_personal_seat_after_appointment_value = {
+	value = gen_synod_personal_seat_count_value
+	add = 1
+}
+
+# Interaction context. No automatic refill bonuses for generated Synods.
+gen_synod_personal_appointment_ai_value = {
+	value = 20
+	if = { limit = { scope:recipient.learning >= 15 } add = 10 }
+	if = { limit = { scope:recipient.piety_level >= 2 } add = 10 }
+	add = { value = scope:recipient.num_virtuous_traits multiply = 10 }
+	subtract = { value = scope:recipient.num_sinful_traits multiply = 10 }
+	if = { limit = { scope:puppet_or_actor = { has_relation_friend = scope:recipient } } add = 20 }
+	if = {
+		limit = { scope:recipient = { opinion = { target = scope:puppet_or_actor value >= 50 } } }
+		add = 10
+	}
+	if = {
+		limit = {
+			scope:puppet_or_actor = {
+				OR = { has_trait = ambitious has_trait = cynical }
+				is_any_family_relation_or_spouse_trigger = { CHARACTER = scope:recipient }
+			}
+		}
+		add = 20
+	}
+	if = {
+		limit = { scope:puppet_or_actor = { has_trait = zealous } scope:recipient.num_virtuous_traits > 0 }
+		add = 10
+	}
+	if = {
+		limit = { scope:puppet_or_actor.faith = { gen_synod_personal_seat_room_value = 1 } }
+		multiply = 0.25
+	}
+	if = { limit = { scope:recipient = { has_relation_rival = scope:puppet_or_actor } } multiply = 0 }
+	min = 0
+	max = 100
 }

@@ -28,6 +28,7 @@ internal sealed class StartPage : Panel
     public event Action? QuickPicked;
     public event Action? ComplexPicked;
     public event Action? OpenWorldPicked;
+    public event Action? UpdateWorldPicked;
     public event Action? GuidePicked;
     public event Action? GameFolderPicked;
 
@@ -49,6 +50,7 @@ internal sealed class StartPage : Panel
     private readonly ModeCard _complex;
     private readonly LinkButton _openWorld;
     private readonly LinkButton _guide;
+    private readonly LinkButton _updateWorld;
     private readonly Panel _rule = new() { BackColor = Theme.Border };
     private readonly StatusGlyph _gameGlyph = new();
     private readonly FooterText _gameText = new();
@@ -118,6 +120,7 @@ internal sealed class StartPage : Panel
         };
 
         _openWorld = new LinkButton { Name = "startOpenWorld", Glyph = "", Text = "Open a generated world…" };
+        _updateWorld = new LinkButton { Name = "startUpdateWorld", Glyph = "", Text = "Update an old world…" };
         _guide = new LinkButton { Name = "startGuide", Glyph = "", Text = "Getting started" };
 
         _gameChange = new LinkButton { Name = "startGameFolder", Text = "Change…" };
@@ -127,6 +130,11 @@ internal sealed class StartPage : Panel
         _complex.Click += (_, _) => ComplexPicked?.Invoke();
         _openWorld.Click += (_, _) => OpenWorldPicked?.Invoke();
         _guide.Click += (_, _) => GuidePicked?.Invoke();
+        _updateWorld.Click += (_, _) => UpdateWorldPicked?.Invoke();
+        _tips.SetToolTip(_updateWorld,
+            "Bring a world written by an older version up to date with this version's fixes and hand-written content\n"
+            + "(events, decisions, interface). The map, realms, people and history are left as they are;\n"
+            + "features generated per world need a fresh generation.");
         _gameChange.Click += (_, _) => GameFolderPicked?.Invoke();
         _remember.Click += (_, _) =>
         {
@@ -142,7 +150,7 @@ internal sealed class StartPage : Panel
 
         // A window too short for the page scrolls it; see OnLayout.
         WheelFollowsMouse.Install();
-        Controls.AddRange([_banner, _title, _subtitle, _azgaar, _quick, _complex, _openWorld, _guide, _remember,
+        Controls.AddRange([_banner, _title, _subtitle, _azgaar, _quick, _complex, _openWorld, _updateWorld, _guide, _remember,
                            _rule, _gameGlyph, _gameText, _gameChange, _theme]);
     }
 
@@ -309,7 +317,8 @@ internal sealed class StartPage : Panel
         y += cardH + S(16);
 
         _openWorld.Location = new Point(x, y + (linkH - _openWorld.Height) / 2);
-        _guide.Location = new Point(_openWorld.Right + S(24), _openWorld.Top);
+        _updateWorld.Location = new Point(_openWorld.Right + S(24), _openWorld.Top);
+        _guide.Location = new Point(_updateWorld.Right + S(24), _openWorld.Top);
         _remember.FitWidth();
         _remember.Location = new Point(x + width - _remember.Width, y + (linkH - _remember.Height) / 2);
         y += linkH + S(18);

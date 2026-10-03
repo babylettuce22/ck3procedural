@@ -104,7 +104,8 @@ public sealed record SeeWords(string See, string GreatSee, string Primacy);
 ///   <see cref="MinHeartland"/> counties. See <see cref="Eligible"/>.</item>
 /// <item><b>Coverage:</b> the heartland only: the faith's counties under a settled government.
 ///   Tribal and nomad fringes stay mission land, as vanilla's 867 map leaves pagan Europe.</item>
-/// <item><b>Seats:</b> the head of faith's seat is the primate see; the rest are seeded at holy
+/// <item><b>Seats:</b> the head of faith's seat (the county he holds, when HeadSeats landed him)
+///   is the primate see; the rest are seeded at holy
 ///   sites, world centres and the most developed duchies, spaced apart, then grown over de jure
 ///   duchies to vanilla's grain (about <see cref="CountiesPerSee"/> counties each; vanilla's 867
 ///   median is ten).</item>
@@ -203,7 +204,7 @@ public static class Sees
                 faith.Sees.Add(see);
             }
 
-            if (faith.Head is { Temporal: false } head && faith.Sees.FirstOrDefault(s => s.Seat == head.Seat) is { } primate)
+            if (faith.Head is { Temporal: false } head && faith.Sees.FirstOrDefault(s => s.Seat == head.PrimateSeat) is { } primate)
                 primate.Rank = SeeRank.Primate;
 
             RankSees(faith);
@@ -329,7 +330,7 @@ public static class Sees
         }
 
         var holySites = faith.HolySites.Select(h => h.County).ToHashSet();
-        Title? primateSeat = faith.Head is { Temporal: false } head && unitOf.ContainsKey(head.Seat) ? head.Seat : null;
+        Title? primateSeat = faith.Head is { Temporal: false } head && unitOf.ContainsKey(head.PrimateSeat) ? head.PrimateSeat : null;
 
         double CountyScore(Title c)
             => (c == primateSeat ? 1e6 : 0) + (keep.Contains(c) ? 1e5 : 0) + (holySites.Contains(c) ? 60 : 0)

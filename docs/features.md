@@ -122,9 +122,13 @@ by the Head of Faith repairs missing registrations, including sees in older save
 keep their succession and survival rules. Temple baronies and the Head of Faith receive no new
 seats. A personal appointment marked `gen_synod_personal` is removed when its holder receives a
 permanent seat or becomes Head of Faith. Personal titles are excluded from permanent-seat recovery.
-Generated clerical-region faiths skip vanilla's automatic cardinal refills and seeding toward ten;
-the vanilla chaplain-cardinalate request is hidden for them. Their see-founding, influence-vote,
-and Legation eligibility systems remain in place.
+Generated clerical-region faiths skip vanilla's automatic cardinal refills and seeding toward ten.
+Their Head of Faith can instead use **Appoint Synod Member** to give an eligible same-faith cleric
+a personal seat, and a ruler can petition the head to seat their court chaplain. Both routes share
+one allowance (one personal seat per three permanent seats, minimum one), charge only when the
+seat is granted, and recheck eligibility and capacity on acceptance; see
+`docs/synod-personal-appointments.md`. Their see-founding, influence-vote, and Legation
+eligibility systems remain in place.
 
 Run `python tools/verify_synod_registration.py --game "<CK3 game directory>"` to check the scripts'
 vanilla fallback bodies, references, persistent links, and localization encoding. This checks

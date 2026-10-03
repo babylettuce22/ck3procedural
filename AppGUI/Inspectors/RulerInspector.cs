@@ -638,7 +638,8 @@ public sealed class RulerInspector : InspectorForm
             get
             {
                 string birth = character.Value("Birth date");
-                return int.TryParse(birth.Split('.')[0], out int born) && int.TryParse(world.World.StartDate.Split('.')[0], out int start) && start < 9999
+                return int.TryParse(birth.Split('.')[0], out int born) && world.World.StartDate != Core.LoadedWorld.NoStartDate
+                       && int.TryParse(world.World.StartDate.Split('.')[0], out int start)
                     ? (start - born).ToString() : "—";
             }
         }

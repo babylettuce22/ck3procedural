@@ -228,6 +228,7 @@ public static partial class ContentWriter
         // Dynastic Cycle branch that every independent satisfies. MusicWriter keys them on dress.
         Core.Stage.Time("music pools", () => MusicWriter.WriteAll(modDir, gameDir));
         Core.Stage.Time("institutional faith mechanics", () => InstitutionalFaithWriter.WriteAll(modDir, gameDir, faiths));
+        Core.Stage.Time("patron saints", () => StartingSaintWriter.WritePatronSaints(modDir, gameDir, faiths));
 
         Core.Stage.Time("route files", () => RouteWriter.WriteAll(modDir, routes, crossings, silkRoad,
             provinces, order, baronyCount, provinceTerrain));
@@ -481,27 +482,15 @@ public static partial class ContentWriter
             Console.Write(historyLog.ToString());
         }
 
-        List<string> sets = [StaticFileWriter.Core];
+        var sets = StaticFileWriter.SetsFor(cfg);
         if (cfg.EnableWilderness)
         {
-            sets.Add(StaticFileWriter.Wilderness);
-
             // abandon_county_effect in the set calls gen_strip_buildings_effect by name, and the
             // effect's body is the game's building list, so it is emitted beside the set every time
             // the set ships. See BuildingStripWriter for why it cannot be a static file.
             Core.Stage.Time("building strip", () => Console.WriteLine(
                 $"  buildings: strip effect covers {BuildingStripWriter.Write(modDir, gameDir)} keys"));
         }
-
-        // ANDed, never implied. Ruins hand counties to a dummy under wilderness_government and
-        // expect the colonisation flow to be the way back, so shipping them without the wilderness
-        // set would ship a system whose every reference dangles.
-        if (cfg.EnableWilderness && cfg.EnableRuins) sets.Add(StaticFileWriter.Ruins);
-        if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
-            sets.Add(StaticFileWriter.Fantasy);
-        if (cfg.EnableSocieties) sets.Add(StaticFileWriter.Societies);
-        else if (cfg.EnableSocietyPrototype) sets.Add(StaticFileWriter.SocietyPrototype);
-        if (cfg.ContentSource != MapConfig.ContentSourceMode.VanillaWorld) sets.Add(StaticFileWriter.Procedural);
         Core.Stage.Time("static files", () => StaticFileWriter.WriteAll(modDir, sets, runStarted));
 
         // DEAD LAST, and both halves of that matter.
@@ -648,7 +637,8 @@ public static partial class ContentWriter
                 {
                     jb.Inline("color", F(r), F(g), F(bl));
                     // The county a landed head holds, so the title's capital is their own seat; but a
-                    // faith with sees keeps the primate see's seat (Head.Seat), because the Synod's
+                    // faith with sees keeps the primate see's seat (Head.PrimateSeat, the held county
+                    // when there is one, so the two agree), because the Synod's
                     // on_action releases any see whose capital differs from the head title's at the
                     // first succession (zz_gen_see_electors_on_actions.txt).
                     // The primate see's own seat, not Head.Seat: Sees.Build promotes a great see elsewhere

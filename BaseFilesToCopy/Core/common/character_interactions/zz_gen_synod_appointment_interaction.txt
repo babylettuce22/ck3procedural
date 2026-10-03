@@ -1,0 +1,775 @@
+﻿# Single-object CK3 1.20.0.3 override. Generated branches are explicit; else bodies are vanilla.
+# Generated costs are shown in the confirmation and charged only after the guarded grant.
+appoint_cardinal_interaction = {
+	category = interaction_category_religion
+	icon = cardinal
+	interface_priority = 45
+	common_interaction = yes
+	use_diplomatic_range = no
+	ai_maybe = yes
+	ai_min_reply_days = 1
+	ai_max_reply_days = 5
+	popup_on_receive = yes
+	notification_text = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:puppet_or_actor.faith = { has_doctrine = special_doctrine_gen_clerical_regions } }
+				desc = gen_synod_appoint_notification
+			}
+			desc = appoint_cardinal_interaction_notification
+		}
+	}
+	# Chosen here, not via custom loc: a Custom() key loses the interaction scopes (only ROOT.Char).
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:puppet_or_actor.faith = { has_doctrine = special_doctrine_gen_clerical_regions } }
+				desc = gen_synod_appoint_desc
+			}
+			desc = appoint_cardinal_interaction_desc
+		}
+	}
+	is_available = {
+		has_pam_dlc_trigger = yes
+	}
+	is_shown = {
+		trigger_if = {
+			limit = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			scope:puppet_or_actor = {
+				gen_synod_appointment_head_trigger = yes
+			}
+			scope:recipient = {
+				gen_synod_personal_candidate_identity_trigger = {
+					AUTHORITY = scope:puppet_or_actor
+				}
+			}
+		}
+		trigger_else = {
+			scope:puppet_or_actor ?= {
+				this != scope:recipient
+				faith ?= {
+					has_doctrine_parameter = has_clerical_electors
+				}
+				faith = scope:recipient.faith
+				pam_leads_college_of_cardinals_trigger = yes
+			}
+			scope:recipient = {
+				pam_is_investiture_clergy_trigger = yes
+				pam_can_hold_cardinalate_trigger = yes
+				pam_can_receive_cardinalate_trigger = yes
+				pam_pope_is_head_of_faith_or_rite_trigger = yes
+				NOT = {
+					exists = clerical_elector_title
+				}
+			}
+		}
+	}
+	cooldown_against_recipient = {
+		years = 10
+	}
+	is_valid_showing_failures_only = {
+		trigger_if = {
+			limit = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			scope:puppet_or_actor = {
+				is_alive = yes
+				is_available_quick = {
+					adult = yes
+					incapable = no
+					imprisoned = no
+					hostage = no
+				}
+				custom_tooltip = {
+					text = gen_synod_direct_cooldown_tt
+					NOT = {
+						has_character_flag = gen_synod_direct_appointment_cooldown
+					}
+				}
+				custom_tooltip = {
+					text = gen_synod_appointment_funds_tt
+					gen_synod_can_afford_appointment_trigger = {
+						AMOUNT = minor_treasury_value
+					}
+				}
+				trigger_if = {
+					limit = {
+						scope:is_puppet_action ?= yes
+					}
+					piety >= medium_piety_value
+				}
+			}
+			scope:recipient = {
+				custom_tooltip = {
+					text = gen_synod_candidate_eligible_tt
+					gen_synod_personal_candidate_valid_trigger = {
+						AUTHORITY = scope:puppet_or_actor
+					}
+				}
+			}
+			scope:puppet_or_actor.faith = {
+				custom_tooltip = {
+					text = gen_synod_personal_seat_cap_tt
+					gen_synod_personal_seat_room_value > 0
+				}
+				custom_tooltip = {
+					text = gen_synod_max_members_tt
+					NOT = {
+						any_clerical_elector_title = {
+							count >= 70
+						}
+					}
+				}
+			}
+		}
+		trigger_else = {
+			trigger_if = {
+				limit = {
+					scope:is_puppet_action ?= yes
+				}
+				scope:puppet_or_actor = {
+					piety >= medium_piety_value
+				}
+			}
+			trigger_if = {
+				limit = {
+					scope:is_puppet_action ?= yes
+				}
+				scope:puppet_or_actor = {
+					treasury >= minor_treasury_value
+				}
+			}
+			custom_tooltip = {
+				text = appoint_cardinal_interaction_max_cardinals_tt
+				scope:puppet_or_actor.faith ?= {
+					NOT = {
+						any_clerical_elector_title = {
+							count >= 70
+						}
+					}
+				}
+			}
+			scope:puppet_or_actor = {
+				is_available_quick = {
+					adult = yes
+					incapable = no
+					imprisoned = no
+					hostage = no
+				}
+			}
+			scope:recipient = {
+				is_available_quick = {
+					adult = yes
+					incapable = no
+					imprisoned = no
+					hostage = no
+				}
+				NOR = {
+					is_at_war_with = scope:puppet_or_actor
+					has_trait = excommunicated
+				}
+			}
+			custom_tooltip = {
+				text = pam_interaction_clerical_gender_tt
+				scope:puppet_or_actor.rite = {
+					rite_has_allowed_gender_for_clergy = scope:recipient
+				}
+			}
+		}
+	}
+	cost = {
+		treasury = {
+			value = scope:actor.minor_treasury_value
+			if = {
+				limit = {
+					scope:is_puppet_action ?= yes
+				}
+				multiply = 0
+			}
+			if = {
+				limit = {
+					scope:puppet_or_actor.faith = {
+						has_doctrine = special_doctrine_gen_clerical_regions
+					}
+				}
+				multiply = 0
+			}
+		}
+	}
+	auto_accept = {
+		trigger_if = {
+			limit = {
+				scope:puppet_or_actor.faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+			}
+			scope:recipient = { is_ai = yes }
+		}
+		trigger_else = {
+			trigger_if = {
+				limit = { scope:recipient = { is_ai = yes } }
+				always = yes
+			}
+		}
+	}
+	on_accept = {
+		if = {
+			limit = {
+				OR = {
+					scope:gen_synod_direct_offer ?= yes
+					AND = {
+						NOT = { exists = scope:gen_synod_direct_offer }
+						scope:puppet_or_actor.faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+					}
+				}
+			}
+			custom_tooltip = gen_synod_appointment_effect_tt
+			custom_tooltip = gen_synod_personal_capacity_preview_tt
+			custom_tooltip = gen_synod_appointment_cost_tt
+			if = {
+				limit = {
+					scope:recipient = {
+						is_ruler = no
+					}
+				}
+				custom_tooltip = gen_synod_unlanded_promotion_tt
+				if = {
+					limit = {
+						scope:recipient = {
+							is_councillor = yes
+						}
+					}
+					custom_tooltip = gen_synod_council_departure_tt
+				}
+			}
+			hidden_effect = {
+				gen_synod_accept_direct_appointment_effect = yes
+			}
+		}
+		else = {
+			if = {
+				limit = {
+					scope:is_puppet_action ?= yes
+				}
+				scope:puppet_or_actor = {
+					if = {
+						limit = {
+							minor_treasury_value > 0
+						}
+						remove_treasury = {
+							value = minor_treasury_value
+						}
+					}
+				}
+			}
+			scope:recipient = {
+				custom_tooltip = {
+					text = appoint_cardinal_interaction_accept_tt
+					hidden_effect = {
+						grant_cardinal_title_effect = {
+							CARDINAL_COUNTY = capital_county
+						}
+					}
+				}
+			}
+			scope:puppet_or_actor = {
+				show_as_tooltip = {
+					add_piety = medium_piety_gain
+				}
+				hidden_effect = {
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = appoint_cardinal_interaction_toast
+						left_icon = scope:recipient
+						right_icon = scope:cardinalate
+						custom_tooltip = appoint_cardinal_interaction_accept_title_tt
+						add_piety = medium_piety_value
+					}
+				}
+				if = {
+					limit = {
+						scope:recipient = {
+							pam_is_monastic_order_member_trigger = yes
+						}
+					}
+					if = {
+						limit = {
+							can_add_hook = {
+								target = scope:recipient
+								type = favor_hook
+							}
+						}
+						add_hook = {
+							type = favor_hook
+							target = scope:recipient
+						}
+					}
+					pam_the_christian_church_appointed_cardinal_catalyst_effect = {
+						POPE = scope:puppet_or_actor
+						CARDINAL = scope:recipient
+						OTHERWISE = catalyst_the_christian_church_appointed_monastic_cardinal
+					}
+				}
+				else = {
+					pam_the_christian_church_appointed_cardinal_catalyst_effect = {
+						POPE = scope:puppet_or_actor
+						CARDINAL = scope:recipient
+						OTHERWISE = catalyst_the_christian_church_appointed_cardinal
+					}
+				}
+			}
+			if = {
+				limit = {
+					scope:is_puppet_action ?= yes
+					scope:actor != scope:recipient
+				}
+				scope:actor = {
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = appoint_cardinal_interaction_toast_puppeteer
+						left_icon = scope:puppet_or_actor
+						right_icon = scope:recipient
+						custom_tooltip = appoint_cardinal_interaction_accept_title_tt
+					}
+				}
+			}
+		}
+	}
+	on_decline = {
+		if = {
+			limit = {
+				OR = {
+					scope:gen_synod_direct_offer ?= yes
+					AND = {
+						NOT = { exists = scope:gen_synod_direct_offer }
+						scope:puppet_or_actor.faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+					}
+				}
+			}
+			scope:puppet_or_actor = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = gen_synod_appointment_declined_title
+					left_icon = scope:recipient
+					custom_tooltip = gen_synod_appointment_declined_tt
+				}
+			}
+		}
+		else = {
+			scope:puppet_or_actor = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = appoint_cardinal_interaction_decline_toast
+					right_icon = scope:recipient
+					scope:recipient = {
+						if = {
+							limit = {
+								is_ai = yes
+							}
+							add_opinion = {
+								target = scope:puppet_or_actor
+								modifier = annoyed_opinion
+								opinion = -10
+							}
+						}
+					}
+				}
+			}
+			if = {
+				limit = {
+					scope:is_puppet_action ?= yes
+					scope:actor != scope:recipient
+				}
+				scope:actor = {
+					send_interface_toast = {
+						type = event_toast_effect_bad
+						title = appoint_cardinal_interaction_decline_toast_puppeteer
+						left_icon = scope:puppet_or_actor
+						right_icon = scope:recipient
+					}
+				}
+			}
+		}
+	}
+	ai_accept = {
+		base = 100
+	}
+	ai_targets = {
+		ai_recipients = family
+		max = 5
+	}
+	ai_targets = {
+		ai_recipients = vassals
+		ai_recipients = clerical_region_rulers_in_realm
+		ai_recipients = rulers_in_clerical_region
+		ai_recipients = subordinates
+		ai_recipients = scripted_relations
+		ai_recipients = faith_holy_order_leaders
+	}
+	ai_targets = {
+		ai_recipients = courtiers
+		max = 5
+	}
+	ai_target_quick_trigger = {
+		adult = yes
+	}
+	ai_frequency_by_tier = {
+		barony = 0
+		county = 0
+		duchy = 24
+		kingdom = 6
+		empire = 6
+		hegemony = 6
+	}
+	ai_will_do = {
+		base = 20
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			scope:puppet_or_actor = {
+				is_any_family_relation_or_spouse_trigger = {
+					CHARACTER = scope:recipient
+				}
+			}
+			add = 70
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 10
+			scope:recipient = {
+				has_trait = overseer
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 10
+			scope:recipient = {
+				has_trait = administrator
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 30
+			scope:recipient = {
+				has_trait = zealous
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 30
+			scope:puppet_or_actor = {
+				has_trait = zealous
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = -20
+			scope:puppet_or_actor = {
+				has_trait = cynical
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 20
+			scope:puppet_or_actor = {
+				is_allied_to = scope:recipient
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 1000
+			scope:puppet_or_actor = {
+				has_relation_friend = scope:recipient
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 1000
+			scope:puppet_or_actor = {
+				has_relation_lover = scope:recipient
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 10
+			scope:recipient = {
+				opinion = {
+					target = scope:puppet_or_actor
+					value >= 65
+				}
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 20
+			scope:puppet_or_actor.faith = {
+				any_holy_site = {
+					holy_site_county ?= {
+						holder ?= {
+							OR = {
+								this = scope:recipient
+								is_vassal_or_below_of = scope:recipient
+							}
+						}
+					}
+				}
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 150
+			desc = pam_the_christian_church_desire_more_cardinals_desc
+			scope:puppet_or_actor.religion = religion:christianity_religion
+			situation:the_christian_church ?= {
+				has_situation_top_phase_parameter = the_christian_church_desire_more_cardinals
+			}
+			scope:puppet_or_actor.faith ?= {
+				any_clerical_elector_title = {
+					count < 40
+				}
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 50
+			scope:recipient.rite.head_of_rite ?= scope:recipient
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 25
+			scope:puppet_or_actor = {
+				number_of_personality_traits_in_common = {
+					target = scope:recipient
+					value = 1
+				}
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 25
+			scope:puppet_or_actor = {
+				number_of_personality_traits_in_common = {
+					target = scope:recipient
+					value = 2
+				}
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 25
+			scope:puppet_or_actor = {
+				number_of_personality_traits_in_common = {
+					target = scope:recipient
+					value = 3
+				}
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 40
+			scope:puppet_or_actor = {
+				has_same_culture_as = scope:recipient
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 100
+			scope:puppet_or_actor.faith ?= {
+				any_clerical_elector_title = {
+					count < 20
+				}
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 200
+			scope:puppet_or_actor.faith ?= {
+				any_clerical_elector_title = {
+					count < 10
+				}
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			add = 40
+			scope:recipient = {
+				dynasty ?= {
+					has_dynasty_perk = pam_legacy_4
+				}
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			factor = 0
+			scope:recipient = {
+				has_relation_rival = scope:puppet_or_actor
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			factor = 0.5
+			scope:puppet_or_actor.treasury < 500
+			scope:puppet_or_actor.faith ?= {
+				any_clerical_elector_title = {
+					count >= 30
+				}
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			factor = 0.5
+			scope:puppet_or_actor.faith ?= {
+				any_clerical_elector_title = {
+					count >= 30
+				}
+			}
+		}
+		modifier = {
+			NOT = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			factor = 0.5
+			scope:puppet_or_actor.faith ?= {
+				any_clerical_elector_title = {
+					count >= 40
+				}
+			}
+		}
+		modifier = {
+			scope:puppet_or_actor.faith = {
+				has_doctrine = special_doctrine_gen_clerical_regions
+			}
+			add = {
+				value = gen_synod_personal_appointment_ai_value
+				subtract = 20
+			}
+		}
+	}
+	on_send = {
+		if = {
+			limit = {
+				scope:puppet_or_actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			save_scope_value_as = {
+				name = gen_synod_direct_offer
+				value = yes
+			}
+			scope:puppet_or_actor = {
+				save_scope_as = gen_synod_sent_head
+				faith = {
+					save_scope_as = gen_synod_sent_faith
+				}
+				save_scope_value_as = {
+					name = gen_synod_sent_cost
+					value = minor_treasury_value
+				}
+			}
+		}
+		else = { save_scope_value_as = { name = gen_synod_direct_offer value = no } }
+	}
+	localization_values = {
+		GEN_SYNOD_COST = scope:puppet_or_actor.minor_treasury_value
+		GEN_SYNOD_USED = scope:puppet_or_actor.faith.gen_synod_personal_seat_count_value
+		GEN_SYNOD_LIMIT = scope:puppet_or_actor.faith.gen_synod_personal_seat_limit_value
+		GEN_SYNOD_AFTER = scope:puppet_or_actor.faith.gen_synod_personal_seat_after_appointment_value
+	}
+}

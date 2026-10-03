@@ -3649,6 +3649,8 @@ public sealed partial class MainForm : ChromeForm
 
     private void SetEnabled(bool enabled)
     {
+        // A run replaces the cached Counties frame the Ctrl peek may be showing, and disposes the old one.
+        if (!enabled) SetCountyPeek(false);
         _grid.Enabled = enabled;
         _sections.Enabled = enabled;
         _settingsSearch.Enabled = enabled;
@@ -3815,7 +3817,7 @@ public sealed partial class MainForm : ChromeForm
                 {
                     MapPick.Culture => "Click a county to inspect and edit its culture",
                     MapPick.Faith => "Click a county to inspect and edit its faith",
-                    MapPick.Realm => "Click a realm to focus it · Ctrl+click jumps to a county · Esc steps back",
+                    MapPick.Realm => "Click a realm to focus it · hold Ctrl to see counties, Ctrl+click to jump to one · Esc steps back",
                     MapPick.Dynasty => "Click a county to inspect its holder's dynasty and house",
                     _ => $"Click a {TierWord(pick.Tier)} to inspect and edit it",
                 };
@@ -3856,7 +3858,7 @@ public sealed partial class MainForm : ChromeForm
             _rendered[mode.Name] = bitmap;
         }
 
-        _viewer.SetImage(bitmap);
+        _viewer.SetImage(PeekFrame(bitmap));
         oldFocus?.Dispose();
         ShowReadout(_viewer.Zoom, null);
     }
@@ -3915,7 +3917,7 @@ public sealed partial class MainForm : ChromeForm
                     ? "Estimated from the current world — write the mod to see what it actually ships"
                     : mode.Pick?.Kind switch
                     {
-                        MapPick.Realm => "Click a realm to focus and drill into it — Ctrl+click for the county",
+                        MapPick.Realm => "Click a realm to focus and drill into it — hold Ctrl to see counties, Ctrl+click for one",
                         not null => "Click the map in this mode to inspect and edit",
                         null => null,
                     });
@@ -3996,7 +3998,7 @@ public sealed partial class MainForm : ChromeForm
 
             _legendBar.Controls.Add(new Label
             {
-                Text = "   Esc steps back · Ctrl+click jumps to a county",
+                Text = "   Esc steps back · hold Ctrl to see counties, Ctrl+click to jump to one",
                 AutoSize = true,
                 Font = Theme.Ui,
                 ForeColor = Theme.TextDim,
@@ -4222,6 +4224,55 @@ public sealed partial class MainForm : ChromeForm
                        + holder.Name + (county == seat ? " (their seat)" : "");
 
         SelectView("Realms");
+    }
+
+    /// <summary>
+    /// Ctrl held on the Realms view: the map shows counties, since that is what a Ctrl+click picks.
+    /// Shown only while the key is down; the realm frame underneath is kept, not redrawn.
+    /// </summary>
+    private bool _countyPeek;
+
+    private void SetCountyPeek(bool on)
+    {
+        on &= _view == "Realms" && _workspace == Workspace.World && _worldView == WorldView.Map && !_busy;
+        if (on == _countyPeek) return;
+        _countyPeek = on;
+        if (_view != "Realms") return;   // released after leaving the view: nothing of ours on show
+
+        var realms = _focusFrame ?? _rendered.GetValueOrDefault("Realms");
+        if (PeekFrame(realms) is { } frame) _viewer.SetImage(frame);
+    }
+
+    /// <summary>What the viewer shows for a Realms frame: the frame itself, or counties while Ctrl is held.</summary>
+    private Bitmap? PeekFrame(Bitmap? realms)
+    {
+        if (!_countyPeek || _view != "Realms") return realms;
+        if (_rendered.TryGetValue("Counties", out var counties)) return counties;
+
+        if (_loadedWorld is not null) counties = _loadedWorld.Render("Counties");
+        else if (_result is not null) counties = ToBitmap(MapModes.Find("Counties")!.Render(_result, _written));
+        else return realms;
+        return _rendered["Counties"] = counties;
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.KeyCode == Keys.ControlKey && !TypingInText()) SetCountyPeek(true);
+    }
+
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        base.OnKeyUp(e);
+        if (e.KeyCode == Keys.ControlKey) SetCountyPeek(false);
+    }
+
+    // The key-up goes to whichever window has focus, so leaving this one with Ctrl held would
+    // otherwise strand the counties on screen.
+    protected override void OnDeactivate(EventArgs e)
+    {
+        base.OnDeactivate(e);
+        SetCountyPeek(false);
     }
 
     private void InspectRealm(MapGen.Title seat)

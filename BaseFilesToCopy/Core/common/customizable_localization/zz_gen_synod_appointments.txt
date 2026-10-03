@@ -1,0 +1,30 @@
+﻿GenSynodAppointName = {
+	type = character
+	text = {
+		trigger = {
+			faith = {
+				has_doctrine = special_doctrine_gen_clerical_regions
+			}
+		}
+		localization_key = gen_synod_appoint_name
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_synod_vanilla_appoint_cardinal_interaction
+	}
+}
+GenSynodPetitionName = {
+	type = character
+	text = {
+		trigger = {
+			faith = {
+				has_doctrine = special_doctrine_gen_clerical_regions
+			}
+		}
+		localization_key = gen_synod_petition_name
+	}
+	text = {
+		fallback = yes
+		localization_key = gen_synod_vanilla_request_court_chaplain_cardinalate_interaction
+	}
+}

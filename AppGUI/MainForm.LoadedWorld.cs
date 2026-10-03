@@ -101,7 +101,7 @@ public sealed partial class MainForm
             {
                 MapPick.Culture => "Click a county to inspect and edit its culture",
                 MapPick.Faith => "Click a county to inspect and edit its faith",
-                MapPick.Realm => "Click a realm to focus it · Ctrl+click jumps to a county · Esc steps back",
+                MapPick.Realm => "Click a realm to focus it · hold Ctrl to see counties, Ctrl+click to jump to one · Esc steps back",
                 MapPick.Title => $"Click a {TierWord(mode.Pick.Value.Tier)} to inspect and edit it",
                 _ => $"Loaded world · {name}",
             };
@@ -121,7 +121,7 @@ public sealed partial class MainForm
             using (new WaitCursorFor(this)) bitmap = _loadedWorld.Render(name);
             _rendered[name] = bitmap;
         }
-        _viewer.SetImage(bitmap);
+        _viewer.SetImage(PeekFrame(bitmap));
         oldFocus?.Dispose();
         ShowReadout(_viewer.Zoom, null);
     }

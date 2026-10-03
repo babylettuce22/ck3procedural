@@ -67,6 +67,7 @@ public sealed partial class MainForm
             _start.SetDarkMode(_state.DarkMode);
         };
         _start.OpenWorldPicked += () => OpenGeneratedWorldAsync().Forget("open generated world");
+        _start.UpdateWorldPicked += () => UpdateOldWorldAsync().Forget("update old world");
         _start.GuidePicked += ShowWelcomeGuide;
         _start.GameFolderPicked += PickGameFolder;
         return _start;
@@ -232,6 +233,87 @@ public sealed partial class MainForm
         if (_state.WelcomeShown) return;
         _state.WelcomeShown = true;
         ShowWelcomeGuide();
+    }
+
+    /// <summary>
+    /// The start page's "Update an old world…": this build's hand-kept files and GUI patches
+    /// copied into a world an older build wrote, everything generated left alone. See
+    /// <see cref="Emit.StaticRefresh"/>.
+    /// </summary>
+    private async Task UpdateOldWorldAsync()
+    {
+        if (_busy) return;
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "Choose a generated world to update",
+            UseDescriptionForTitle = true,
+            SelectedPath = ModFolderToOpen() ?? _state.ModRoot ?? "",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        string modDir = dialog.SelectedPath;
+
+        if (!RunLog.WroteFolder(modDir))
+        {
+            MessageBox.Show(this, "That folder has no generation record (proctool.txt), so it is not a world this tool wrote. Nothing was changed.",
+                "Not a generated world", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (RunLog.RecordedSettings(modDir) is not { } json)
+        {
+            MessageBox.Show(this, "This world's record is too old to say which settings it was made with, so it can't be updated safely. Nothing was changed.",
+                "Can't update this world", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (_loadedWorld is not null && string.Equals(Path.GetFullPath(_loadedWorld.World.DirectoryPath).TrimEnd('\\'),
+                Path.GetFullPath(modDir).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(this, "That world is open in the editor. Close it first, then update it.",
+                "World is open", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var cfg = new Config.MapConfig();
+        try { Preset.LoadJson(cfg, json); }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"This world's settings could not be read ({ex.Message}). Nothing was changed.",
+                "Can't update this world", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        string from = RunLog.RecordedVersion(modDir) ?? "an unknown version";
+        string to = RunLog.ToolVersion().Split('+')[0];
+        var answer = MessageBox.Show(this,
+            $"Update \"{Path.GetFileName(modDir)}\" (written by {from}) to this version ({to})?\n\n"
+            + "This copies in this version's fixes and hand-written content: events, decisions, mechanics and interface. "
+            + "The map, realms, people, cultures, faiths and history stay exactly as they are, so features that are generated "
+            + "per world won't appear. Those need a fresh generation.\n\n"
+            + "Every file it replaces is backed up first. Best used before starting a new campaign; a save in progress "
+            + "keeps most of its own state.",
+            "Update an old world", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
+        if (answer != DialogResult.OK) return;
+
+        string gameDir = _options.GameDir;
+        try
+        {
+            _busy = true;
+            UseWaitCursor = true;
+            var result = await Task.Run(() => Emit.StaticRefresh.Run(modDir, gameDir, cfg));
+            UseWaitCursor = false;
+
+            string summary = result.Updated + result.Added == 0
+                ? "Its hand-written files were already current."
+                : $"{result.Updated} file(s) updated and {result.Added} added.";
+            if (!result.GuiRefreshed) summary += "\n\nThe game folder wasn't found, so the interface patches were not refreshed.";
+            if (result.BackupDir is { } backup) summary += $"\n\nReplaced files were backed up to:\n{backup}";
+            MessageBox.Show(this, $"\"{Path.GetFileName(modDir)}\" is updated. {summary}", "World updated",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Could not update the world", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally { UseWaitCursor = false; _busy = false; }
     }
 
     private void UpdateStartPageFolders()

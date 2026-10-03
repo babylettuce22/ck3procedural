@@ -310,13 +310,15 @@ public sealed partial class MainForm
         _options.AppliedHistory = null;
         _history.ShowApplied(null);
 
-        UseForgeForGeneration(allowUnverifiedSize: false);
+        // Only a Custom size can be one CK3 is not known to render; the page warned before the run.
+        bool unverified = !choices.SizeVerified;
+        UseForgeForGeneration(allowUnverifiedSize: unverified);
 
         // The workspace holds the choice map-wide, the only form one pipeline can; the world itself
         // is built with it region by region. See RegionalRelief.
         if (choices.RegionalRelief)
             SetSource(new QuickReliefProvider(type.PresetPathFor(choices.Mountains), choices.Seed, width, height,
-                type.Feature, choices.Relief, type.Key, upscale));
+                type.Feature, choices.Relief, type.Key, upscale, unverified));
         return switchedOff;
     }
 

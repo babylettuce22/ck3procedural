@@ -1,0 +1,61 @@
+﻿# Faith scope. Personal appointments extend an established election, never create one.
+gen_synod_established_faith_trigger = {
+	gen_synod_electing_faith_trigger = yes
+	NOT = { has_doctrine = unreformed_faith_doctrine }
+	religious_head = { has_realm_law = theocratic_elective_succession_law }
+	any_clerical_elector_title = { NOT = { has_variable = gen_synod_personal } }
+}
+
+# Character scope. Only the actual spiritual Head of Faith appoints directly.
+gen_synod_appointment_head_trigger = {
+	this = faith.religious_head
+	faith = { gen_synod_established_faith_trigger = yes }
+}
+
+# Character scope. Stable identity checks, including inactive generated seats.
+gen_synod_personal_candidate_identity_trigger = {
+	this != $AUTHORITY$
+	faith = $AUTHORITY$.faith
+	pam_is_investiture_clergy_trigger = yes
+	pam_can_receive_cardinalate_trigger = yes
+	NOT = { exists = clerical_elector_title }
+	NOT = {
+		any_held_title = {
+			OR = { has_variable = gen_synod_faith has_variable = gen_synod_see has_variable = gen_synod_personal }
+		}
+	}
+}
+
+gen_synod_personal_candidate_valid_trigger = {
+	gen_synod_personal_candidate_identity_trigger = { AUTHORITY = $AUTHORITY$ }
+	is_alive = yes
+	is_available_quick = { adult = yes incapable = no imprisoned = no hostage = no }
+	NOT = { has_trait = excommunicated }
+	NOT = { is_at_war_with = $AUTHORITY$ }
+	$AUTHORITY$.rite = { rite_has_allowed_gender_for_clergy = prev }
+	# A see awaiting permanent registration is not a personal-appointment opportunity.
+	NOT = { any_held_title = { gen_synod_unregistered_see_trigger = yes } }
+}
+
+# Faith scope. Both routes share the allowance and the native total-appointment ceiling.
+gen_synod_personal_capacity_trigger = {
+	gen_synod_personal_seat_room_value > 0
+	NOT = { any_clerical_elector_title = { count >= 70 } }
+}
+
+# Character scope. Also checked inside the shared title-grant effect.
+gen_synod_can_grant_personal_seat_trigger = {
+	$AUTHORITY$ = {
+		gen_synod_appointment_head_trigger = yes
+		is_alive = yes
+		is_available_quick = { adult = yes incapable = no imprisoned = no hostage = no }
+	}
+	gen_synod_personal_candidate_valid_trigger = { AUTHORITY = $AUTHORITY$ }
+	faith = { gen_synod_personal_capacity_trigger = yes }
+}
+
+# Character scope. Native financial values use treasury where present, otherwise gold.
+gen_synod_can_afford_appointment_trigger = {
+	trigger_if = { limit = { has_treasury = yes } treasury >= $AMOUNT$ }
+	trigger_else = { gold >= $AMOUNT$ }
+}

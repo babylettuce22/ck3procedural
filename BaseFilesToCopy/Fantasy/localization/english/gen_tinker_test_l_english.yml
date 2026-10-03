@@ -99,7 +99,7 @@
  gen_tinker.0350.patron.nothing: "\n\nThere is nothing to send to [gen_tk_beneficiary.GetShortUIName], who paid for it. Someone will have to write that letter."
  gen_tinker.0350.patron.dead: "\n\nThe one who commissioned it did not live to see it. It stays with you."
 
- gen_tinker.0350.a.masterwork: "I knew it. (I hoped it.)"
+ gen_tinker.0350.a.masterwork: "I knew it!"
  gen_tinker.0350.a.works: "It works! Of course it works."
  gen_tinker.0350.a.dud: "Back to the drawing board. Again."
  gen_tinker.0350.a.explodes: "Note to self: less of that next time."

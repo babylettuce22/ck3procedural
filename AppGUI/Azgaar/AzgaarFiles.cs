@@ -53,7 +53,7 @@ internal sealed class AzgaarExportSummary
                 + "Menu ▸ Save/Load ▸ Export to JSON ▸ Full.");
 
         var races = loaded.World.RealCultures
-            .Select(c => AzgaarNaming.ParseRace(c.Name))
+            .Select(c => AzgaarNaming.ParseRace(c, loaded.World))
             .Where(r => r is not null && r != RaceArchetype.Human)
             .GroupBy(r => r!.Value)
             .OrderByDescending(g => g.Count())

@@ -13,6 +13,7 @@ remain in the lifted definitions.
 | Spiritual fulfillment | Add generated religions with clerical regions or historical/current sees to the native fulfillment type. This also opens fulfillment-gated confession, devotion, mentor, last rites and endow-masses decisions when their other requirements are met. |
 | Promulgate Word of Pious Deeds | Actual generated Synod electors can take the decision without a Christian chancery domicile. Uses a faith-aware event: +30 native election candidacy score and prestige, or the native extra-piety Populist shortlist boost. Keeps the native initial cost, once-per-lifetime flag and other restrictions. |
 | Cathedral great projects | All three tiers become eligible through fulfillment; bell rewards accept generated institutional faiths. Native cathedral building effects retain their ecclesiastical-government requirement. |
+| Cathedral stories (procedural content only) | Frescoes, stained glass, construction and completion use the faith's deity and sacred traditions. Frescoes/glass draw a saint from the actor's faith registry, with generic wording if it is empty. The west-portal sermon admits institutional faiths and keeps its six native reward choices without Bible quotations. Vanilla content mode retains the installed stories. |
 | Clerical arbitration | Enforce succession, request white peace and request victory accept generated institutional actors. The shared enemy eligibility check also accepts them; common faith/rite/head and war restrictions remain. |
 | Senior clergy and monastic courts | Shared checks accept generated institutional characters, retaining their existing government, monasticism and relationship conditions. |
 | Clergy dynasty legacy | An institutional dynast qualifies; existing DLC, unrestricted-legacies and already-unlocked-perk behavior remains. |
@@ -42,7 +43,14 @@ interactions and activities for Christianity and Christian-fulfillment restricti
   blocked by that particular check. It is retained in this pass.
 
 Other fulfillment-gated vanilla events can still contain Christian wording. This change opens
-their mechanics; it does not rewrite every event's religious flavor.
+their mechanics; it does not rewrite every event's religious flavor. Cathedral stories are adapted
+separately by `Emit/Culture/CathedralFlavourWriter.cs`, called through the procedural-only
+`HierarchyFlavourWriter` path. It overrides the installed event file at its matching path, changes
+its theme to the generic faith theme, replaces Mary's historical character lookup, and broadens
+the sermon gate. It preserves the installed option blocks, construction cadence and rewards.
+Only the affected localization keys are replaced; shared Christian glossaries and Bible quote
+providers remain available to other events. The saint-name custom localization checks for its
+saved scope before using it, so older saves and faiths without registered saints have a fallback.
 
 ## Validation and game checks
 
@@ -71,6 +79,24 @@ After regenerating and restarting CK3 with the updated mod:
 3. Complete a cathedral in an ecclesiastical holding and verify building effects and bell rewards.
 4. Inspect clergy arbitration between qualifying rulers of the same institutional faith and the
    clergy dynasty legacy for an institutional dynast.
+5. In a procedural world, fund frescoes and stained glass: the choices should reference local
+   saints/traditions, not Christian figures. Check a faith without saints for readable fallback
+   wording. Inspect vaulting, bell-casting and completion, and the west-portal sermon with its six
+   unchanged rewards. A world generated with vanilla content should still show vanilla stories.
 
-By God Alone remains required. Inspect `error.log` and `database_conflicts.log` after the game
+`--verify-cathedral-flavour [fixture-directory]` checks both content modes against the installed
+game, compares every event option block (including rewards, costs and AI weights), checks saint
+selection/fallback and sermon eligibility, and verifies UTF-8 BOMs. An explicit directory keeps
+adapted and vanilla-control fixtures for validator comparison.
+
+Cathedral validation (2026-10-03, installed 1.20.0.3): the build and fixture checks passed;
+EventFlow reported no findings. Adapted and unmodified event fixtures produced identical Tiger
+diagnostic messages (44 errors from native great-project schema gaps; fixture encoding/logic
+warnings). Full generation with seed 924031 completed and included the new stories. The full
+world still has unrelated validation findings, and Tiger flags the completion story's native
+`[province.GetName]` binding because its datafunction tables are incomplete. In-game rendering
+and campaign behavior remain to be checked.
+
+These expansion mechanics retain their By God Alone DLC gates; the project itself does not
+require the expansion. Inspect `error.log` and `database_conflicts.log` after the game
 test to confirm engine acceptance and the winning overrides.

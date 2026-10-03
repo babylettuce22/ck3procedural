@@ -129,10 +129,13 @@ public sealed class VanillaVocabulary
 
     /// <summary>
     /// The tenets a generated faith draws its three from: <c>common/religion/tenet_types</c>
-    /// since 1.20, the <c>doctrine_core_tenets</c> group before it. By God Alone's own tenets are
-    /// left out; see <see cref="ReadTenets"/>.
+    /// since 1.20, the <c>doctrine_core_tenets</c> group before it. DLC tenets are emitted with
+    /// native selection pairs and compatible base-game fallbacks.
     /// </summary>
     public List<string> Tenets { get; } = [];
+
+    public sealed record TenetDefinition(string Script, string? DlcFlag);
+    public Dictionary<string, TenetDefinition> TenetDefinitions { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Which doctrines CK3 refuses to let one faith hold at once, read off the <c>can_pick</c>
@@ -315,7 +318,8 @@ public sealed class VanillaVocabulary
             Path.Combine(religionDir, "doctrine_types"));
         v.ReadTenets(Path.Combine(religionDir, "tenet_types"));
         v.ReadDoctrineConflicts(Path.Combine(religionDir, "doctrine_types"));
-        v.ReadDoctrineConflicts(Path.Combine(religionDir, "tenet_types"));
+        v.ReadDoctrineConflicts(Path.Combine(religionDir, "tenet_types"),
+            Path.Combine(gameDir, "common/scripted_triggers/00_religious_triggers.txt"));
         v.ReadReligions(Path.Combine(religionDir, "religion_types"),
             Path.Combine(gameDir, "gfx", "interface", "icons", "faith"),
             Path.Combine(religionDir, "faith_types"));
@@ -530,12 +534,8 @@ public sealed class VanillaVocabulary
     /// The tenet pool, from <c>common/religion/tenet_types</c> (1.20 on). A no-op on an older
     /// install, where <see cref="ReadDoctrines"/> has already filled it from the group.
     ///
-    /// Tenets gated on <c>by_god_alone</c> are skipped. They are the expansion's Christian
-    /// liturgy — Transubstantiation, Apostolic Succession, Hesychasm — shown only to Christians and
-    /// dropped outright for a player without the DLC, so a generated faith that drew one would be
-    /// a faith short of its three for most players. What is left is the 1.19 pool less the two
-    /// tenets 1.20 retired (<c>tenet_monasticism</c>, now its own doctrine group, and
-    /// <c>tenet_rite</c>). Older DLC tenets stay, as they always have.
+    /// Keep DLC metadata and the installed definitions so emission can preserve ownership gates
+    /// and adapt eligibility without maintaining frozen copies of vanilla tenets.
     /// </summary>
     private void ReadTenets(string dir)
     {
@@ -546,9 +546,9 @@ public sealed class VanillaVocabulary
         {
             foreach (var (key, body) in TopLevelBlocks(File.ReadAllText(path)))
             {
-                if (Regex.IsMatch(body, @"(^|\n)\s*requires_dlc_flag\s*=\s*by_god_alone\b")) continue;
                 if (Regex.IsMatch(body, @"(^|\n)\s*visible\s*=\s*no\b")) continue;
                 read.Add(key);
+                TenetDefinitions[key] = new(body, Line(body, "requires_dlc_flag"));
             }
         }
 
@@ -583,9 +583,15 @@ public sealed class VanillaVocabulary
     ///
     /// 51 doctrines and 65 pairs on a full install; a stub or a DLC-less one just harvests fewer.
     /// </summary>
-    private void ReadDoctrineConflicts(string dir)
+    private void ReadDoctrineConflicts(string dir, string? sharedTriggersFile = null)
     {
         if (!Directory.Exists(dir)) return;
+
+        // The three new Christologies delegate their mutual exclusion to a shared trigger.
+        // Read that helper from this install rather than hardcoding its member tenets.
+        string? christology = sharedTriggersFile is not null && File.Exists(sharedTriggersFile)
+            ? TopLevelBlocks(File.ReadAllText(sharedTriggersFile))
+                .FirstOrDefault(d => d.Key == "unique_christology_trigger").Body : null;
 
         foreach (string path in Directory.GetFiles(dir, "*.txt").OrderBy(p => p, StringComparer.Ordinal))
         {
@@ -593,6 +599,9 @@ public sealed class VanillaVocabulary
             {
                 string? pick = Block(body, "can_pick");
                 if (pick is null) continue;
+                if (christology is not null)
+                    pick = Regex.Replace(pick, @"(?m)^(\s*)unique_christology_trigger\s*=\s*yes\b",
+                        m => m.Groups[1].Value + christology[(christology.IndexOf('{') + 1)..^1]);
 
                 var open = new List<string>();
 
@@ -628,7 +637,7 @@ public sealed class VanillaVocabulary
 
         // An OR only widens whatever is being negated around it, and a custom_description only
         // names the tooltip the refusal shows. Neither changes what the reference asserts.
-        static bool Transparent(string block) => block is "OR" or "custom_description";
+        static bool Transparent(string block) => block is "OR" or "AND" or "custom_description" or "custom_tooltip";
     }
 
     /// <param name="dir">common/religion/religion_types.</param>

@@ -84,6 +84,58 @@ public static class StaticFileWriter
     private static readonly string[] NotModContent = ["README.txt", "ignore.txt", ".ignore.txt"];
 
     /// <summary>
+    /// The sets a world built with <paramref name="cfg"/> ships, in copy order. One list for the
+    /// full write, <c>--static-only</c> and <see cref="StaticRefresh"/>, so the three cannot drift.
+    /// </summary>
+    public static List<string> SetsFor(Config.MapConfig cfg)
+    {
+        List<string> sets = [Core];
+        if (cfg.EnableWilderness) sets.Add(Wilderness);
+
+        // ANDed, never implied. Ruins hand counties to a dummy under wilderness_government and
+        // expect the colonisation flow to be the way back, so shipping them without the wilderness
+        // set would ship a system whose every reference dangles.
+        if (cfg.EnableWilderness && cfg.EnableRuins) sets.Add(Ruins);
+        if (cfg.EnableFantasyEthnicities && cfg.RaceMode != Config.MapConfig.FantasyRaceMode.HumanOnly)
+            sets.Add(Fantasy);
+        if (cfg.EnableSocieties) sets.Add(Societies);
+        else if (cfg.EnableSocietyPrototype) sets.Add(SocietyPrototype);
+        if (cfg.ContentSource != Config.MapConfig.ContentSourceMode.VanillaWorld) sets.Add(Procedural);
+        return sets;
+    }
+
+    /// <summary>
+    /// Paths a set carries that a full write then generates over, per world: the descriptor (the
+    /// mod's name), the map tables (rescaled to the map's size by <see cref="MapTableWriter"/>) and
+    /// the disaster regions (<see cref="CompatibilityWriter"/> fills them from the world's own
+    /// provinces). A full write never copies these over its fresh output, because it skips files
+    /// written during the run; a refresh of an old world has no run, so it has to be told.
+    ///
+    /// Found by comparing every set file against a fresh mod (2026-10-03). A new collision would
+    /// show up the same way: a static path whose copy in a just-written mod differs from its source.
+    /// </summary>
+    public static bool WrittenPerWorld(string relativePath)
+    {
+        string path = relativePath.Replace('\\', '/');
+        return path.Equals("descriptor.mod", StringComparison.OrdinalIgnoreCase)
+               || path.Equals("map_data/geographical_regions/10_natural_disaster_regions.txt", StringComparison.OrdinalIgnoreCase)
+               || (path.StartsWith("gfx/map/map_object_data/map_table_", StringComparison.OrdinalIgnoreCase)
+                   && path.EndsWith(".txt", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Every mod file a set holds, as (source path, path in the mod), READMEs and ignore lists left out.</summary>
+    public static IEnumerable<(string Source, string Relative)> FilesOf(string set)
+    {
+        string sourceDir = SetDirectory(set);
+        if (!Directory.Exists(sourceDir)) yield break;
+        foreach (string sourceFile in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+        {
+            if (NotModContent.Contains(Path.GetFileName(sourceFile), StringComparer.OrdinalIgnoreCase)) continue;
+            yield return (sourceFile, Path.GetRelativePath(sourceDir, sourceFile));
+        }
+    }
+
+    /// <summary>
     /// Where a set lives beside the executable.
     /// </summary>
     public static string SetDirectory(string set)
@@ -95,7 +147,13 @@ public static class StaticFileWriter
     public static string BaseDirectory
         => Path.Combine(AppContext.BaseDirectory, SourceFolder);
 
-    public static void WriteAll(string modDir, IEnumerable<string> sets, DateTime runStarted)
+    /// <param name="keep">
+    /// Files to leave as they are even though they are older than the run, by set and path in the
+    /// mod. Only <see cref="StaticRefresh"/> passes one.
+    /// </param>
+    /// <returns>How many files were copied, and how many of those replaced an older copy.</returns>
+    public static (int Copied, int Refreshed) WriteAll(string modDir, IEnumerable<string> sets, DateTime runStarted,
+        Func<string, string, bool>? keep = null)
     {
         int copied = 0, skipped = 0, refreshed = 0, ignored = 0;
         var written = new List<string>();
@@ -140,7 +198,8 @@ public static class StaticFileWriter
 
                 if (File.Exists(targetFile))
                 {
-                    if (File.GetLastWriteTimeUtc(targetFile) >= runStarted.AddMinutes(-1))
+                    if (File.GetLastWriteTimeUtc(targetFile) >= runStarted.AddMinutes(-1)
+                        || keep?.Invoke(set, relativePath) == true)
                     {
                         skipped++;
                         continue;
@@ -163,6 +222,7 @@ public static class StaticFileWriter
                           (refreshed > 0 ? $"{refreshed} refreshed from an earlier run; " : "") +
                           (ignored > 0 ? $"{ignored} excluded via ignore.txt; " : "") +
                           $"{skipped} left alone, already generated)");
+        return (copied, refreshed);
     }
 
     /// <summary>

@@ -1,0 +1,124 @@
+﻿# Interaction effect. Save the original head, faith and fee on send; revalidate before any grant.
+# Generated costs are deferred, so invalid pending offers spend no currency or hooks.
+gen_synod_accept_direct_appointment_effect = {
+    if = {
+        limit = {
+            exists = scope:gen_synod_sent_head
+            exists = scope:gen_synod_sent_faith
+            exists = scope:gen_synod_sent_cost
+            scope:gen_synod_sent_head = scope:puppet_or_actor
+            scope:puppet_or_actor = {
+                faith = scope:gen_synod_sent_faith
+                NOT = { has_character_flag = gen_synod_direct_appointment_cooldown }
+                gen_synod_can_afford_appointment_trigger = { AMOUNT = scope:gen_synod_sent_cost }
+                trigger_if = { limit = { scope:is_puppet_action ?= yes } piety >= medium_piety_value }
+            }
+            scope:recipient = { gen_synod_can_grant_personal_seat_trigger = { AUTHORITY = scope:puppet_or_actor } }
+        }
+        scope:recipient = { gen_synod_grant_personal_seat_effect = { AUTHORITY = scope:puppet_or_actor } }
+        if = {
+            limit = { scope:gen_personal_seat ?= { holder = scope:recipient } }
+            scope:puppet_or_actor = {
+                remove_treasury_or_gold = scope:gen_synod_sent_cost
+                add_character_flag = { flag = gen_synod_direct_appointment_cooldown years = 2 }
+                send_interface_toast = {
+                    type = event_toast_effect_good
+                    title = gen_synod_appointment_success_title
+                    left_icon = scope:recipient
+                    right_icon = scope:gen_personal_seat
+                    custom_tooltip = gen_synod_appointment_success_tt
+                }
+            }
+            scope:recipient = { add_opinion = { target = scope:puppet_or_actor modifier = grateful_opinion opinion = 20 } }
+            if = {
+                limit = { scope:is_puppet_action ?= yes scope:actor != scope:puppet_or_actor }
+                scope:actor = {
+                    send_interface_toast = {
+                        type = event_toast_effect_good
+                        title = gen_synod_appointment_success_title
+                        left_icon = scope:recipient
+                        right_icon = scope:gen_personal_seat
+                        custom_tooltip = gen_synod_appointment_success_tt
+                    }
+                }
+            }
+        }
+        else = { gen_synod_direct_appointment_cancelled_effect = yes }
+    }
+    else = { gen_synod_direct_appointment_cancelled_effect = yes }
+}
+
+gen_synod_direct_appointment_cancelled_effect = {
+    scope:actor = {
+        send_interface_toast = {
+            type = event_toast_effect_neutral
+            title = gen_synod_appointment_cancelled_title
+            left_icon = scope:recipient
+            custom_tooltip = gen_synod_appointment_cancelled_tt
+        }
+    }
+}
+
+gen_synod_accept_chaplain_petition_effect = {
+    scope:gen_synod_sent_chaplain ?= { save_scope_as = new_cardinal }
+    if = {
+        limit = {
+            exists = scope:new_cardinal
+            exists = scope:gen_synod_sent_head
+            exists = scope:gen_synod_sent_faith
+            exists = scope:gen_synod_sent_petition_cost
+            scope:recipient = scope:gen_synod_sent_head
+            scope:actor = {
+                is_alive = yes
+                is_available_quick = { adult = yes incapable = no imprisoned = no hostage = no }
+                faith = scope:gen_synod_sent_faith
+                cp:councillor_court_chaplain ?= scope:new_cardinal
+                piety >= scope:gen_synod_sent_petition_cost
+                NOT = { has_trait = excommunicated }
+                NOT = { is_at_war_with = scope:recipient }
+                NOT = { has_character_modifier = promised_pilgrimage_to_clergy_modifier }
+                clergy_interaction_generic_piety_level_or_puppet_req_trigger = yes
+                trigger_if = { limit = { scope:gen_synod_petition_hook ?= yes } has_usable_hook = scope:recipient }
+            }
+            scope:new_cardinal = { gen_synod_can_grant_personal_seat_trigger = { AUTHORITY = scope:recipient } }
+        }
+        scope:new_cardinal = { gen_synod_grant_personal_seat_effect = { AUTHORITY = scope:recipient } }
+        if = {
+            limit = { scope:gen_personal_seat ?= { holder = scope:new_cardinal } }
+            scope:actor = {
+                add_piety = { value = scope:gen_synod_sent_petition_cost multiply = -1 }
+                if = { limit = { scope:gen_synod_petition_hook ?= yes } use_hook = scope:recipient }
+                if = { limit = { scope:new_cardinal = { is_councillor_of = scope:actor } } fire_councillor = scope:new_cardinal }
+                send_interface_toast = {
+                    type = event_toast_effect_good
+                    title = gen_synod_petition_success_title
+                    left_icon = scope:recipient
+                    right_icon = scope:gen_personal_seat
+                    custom_tooltip = gen_synod_petition_success_tt
+                }
+            }
+            if = {
+                limit = { scope:actor = { NOT = { exists = puppet:external_theological_agent_puppet } } }
+                scope:new_cardinal = { pam_make_clerical_ruler_puppet_effect = { PUPPETEER = scope:actor } }
+            }
+            scope:new_cardinal = {
+                add_opinion = { target = scope:actor modifier = grateful_opinion opinion = 50 }
+                remove_opinion = { target = scope:actor modifier = fired_from_council_opinion }
+            }
+            pam_offer_pilgrimage_effect = { ACTOR = scope:actor CLERIC = scope:recipient }
+        }
+        else = { gen_synod_chaplain_petition_cancelled_effect = yes }
+    }
+    else = { gen_synod_chaplain_petition_cancelled_effect = yes }
+}
+
+gen_synod_chaplain_petition_cancelled_effect = {
+    scope:actor = {
+        send_interface_toast = {
+            type = event_toast_effect_neutral
+            title = gen_synod_appointment_cancelled_title
+            right_icon = scope:recipient
+            custom_tooltip = gen_synod_petition_cancelled_tt
+        }
+    }
+}

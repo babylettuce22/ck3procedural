@@ -161,7 +161,8 @@ internal sealed class QuickPage : Panel
             .Add(QuickSize.Small, "Small", "4096 × 2048 · quickest to make", "quickSizeSmall")
             .Add(QuickSize.Standard, "Standard", "8192 × 4096 · recommended", "quickSizeStandard")
             .Add(QuickSize.Large, "Large", "9216 × 4608 · half of vanilla", "quickSizeLarge")
-            .Add(QuickSize.Vanilla, "Vanilla", "18432 × 9216 · full vanilla size, slowest to make", "quickSizeVanilla");
+            .Add(QuickSize.Vanilla, "Vanilla", "18432 × 9216 · full vanilla size, slowest to make", "quickSizeVanilla")
+            .Add(QuickSize.Custom, "Custom", "", "quickSizeCustom");
         _era = new ChoiceGroup<QuickEra>("Era", "When the game begins, and how advanced its cultures are.", QuickEra.High)
             .Add(QuickEra.Early, "Early medieval", "867 · tribes and young kingdoms", "quickEraEarly")
             .Add(QuickEra.High, "High medieval", "1066 · feudal realms at their height", "quickEraHigh")
@@ -193,7 +194,17 @@ internal sealed class QuickPage : Panel
             .Add(GenderPreference.FemaleDominated, "Women rule", "Women hold the land and titles", "quickRulersWomen")
             .Add(GenderPreference.Equal, "Equal", "Men and women alike, everywhere", "quickRulersEqual");
 
-        _size.Changed += v => _choices.Size = v;
+        _size.Changed += v =>
+        {
+            // Custom asks for its size every time it is picked, so picking it again edits it.
+            if (v == QuickSize.Custom && !EditCustomSize())
+            {
+                _size.Value = _choices.Size;
+        ShowCustomSize();
+                return;
+            }
+            _choices.Size = v;
+        };
         _era.Changed += v => _choices.Era = v;
         _climate.Changed += v => _choices.Climate = v;
         _density.Changed += v => _choices.Density = v;
@@ -485,6 +496,8 @@ internal sealed class QuickPage : Panel
         var kept = _choices;
         _choices = QuickChoices.Surprise(Random.Shared, _types);
         _choices.Size = kept.Size;
+        _choices.CustomWidth = kept.CustomWidth;
+        _choices.CustomHeight = kept.CustomHeight;
         _choices.Density = kept.Density;
         _choices.People = kept.People;
         // A matter of taste rather than of the world, so a surprise keeps what the player chose.
@@ -600,6 +613,28 @@ internal sealed class QuickPage : Panel
 
         _choices.Mix = dialog.Mix.IsDefault ? null : dialog.Mix;
         ShowFantasy();
+    }
+
+    /// <summary>
+    /// Opens the Custom size over the page. False when it was cancelled, which leaves the size
+    /// that was picked before.
+    /// </summary>
+    private bool EditCustomSize()
+    {
+        using var dialog = new CustomSizeDialog(_choices.CustomWidth, _choices.CustomHeight);
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return false;
+        (_choices.CustomWidth, _choices.CustomHeight) = dialog.Pixels;
+        ShowCustomSize();
+        return true;
+    }
+
+    /// <summary>The Custom card's line: its size, and whether CK3 is known to render it.</summary>
+    private void ShowCustomSize()
+    {
+        var (w, h) = QuickChoices.SnapCustom(_choices.CustomWidth, _choices.CustomHeight);
+        _size.SetSubtitle(QuickSize.Custom, $"{w} × {h} · "
+            + (MapGen.TileFit.Fits(w, h) ? "your own pick" : "untested in CK3"));
+        _worldPanel.PerformLayout();
     }
 
     /// <summary>Puts every control in step with <see cref="_choices"/>.</summary>
@@ -968,7 +1003,7 @@ internal sealed class QuickPage : Panel
     // ================================================================ review
 
     private static readonly Dictionary<QuickSize, string> SizeNames = new()
-        { [QuickSize.Small] = "Small", [QuickSize.Standard] = "Standard", [QuickSize.Large] = "Large", [QuickSize.Vanilla] = "Vanilla" };
+        { [QuickSize.Small] = "Small", [QuickSize.Standard] = "Standard", [QuickSize.Large] = "Large", [QuickSize.Vanilla] = "Vanilla", [QuickSize.Custom] = "Custom" };
     private static readonly Dictionary<QuickEra, string> EraNames = new()
         { [QuickEra.Early] = "Early medieval", [QuickEra.High] = "High medieval", [QuickEra.Late] = "Late medieval" };
     private static readonly Dictionary<QuickClimate, string> ClimateNames = new()
@@ -1008,7 +1043,7 @@ internal sealed class QuickPage : Panel
                 QuickRelief.Highlands => "Highlands  ·  more hills and mountains",
                 _ => "Standard",
             } + (_choices.Mountains == QuickMountains.Classic ? "  ·  classic mountains" : ""),
-            $"{SizeNames[_choices.Size]}  ·  {w} × {h}",
+            $"{SizeNames[_choices.Size]}  ·  {w} × {h}" + (_choices.SizeVerified ? "" : "  ·  untested in CK3"),
             $"{EraNames[_choices.Era]}  ·  {_choices.StartYear}",
             ClimateNames[_choices.Climate],
             DensityNames[_choices.Density],

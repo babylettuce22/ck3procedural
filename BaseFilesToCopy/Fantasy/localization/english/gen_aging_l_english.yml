@@ -16,7 +16,7 @@
 
  # ============ Onset: The Weight of Centuries ============
  gen_aging.0001.t: "The Weight of Centuries"
- gen_aging.0001.desc: "It arrives without herald or hour: a morning on which the light through the leaves looks exactly as it did a hundred years ago, and the sameness is heavier than any grief. The faces around me are dear, and yet I find I am watching them from a slight remove, as one watches a river — fond of the water, certain it will pass.\n\nMy people do not wither. We are not taken. But I understand now what the old ones meant when they said the world is a garment, and that one day it simply grows loose upon the shoulders."
+ gen_aging.0001.desc: "It arrives without herald or hour: a morning on which the light through the leaves looks exactly as it did a hundred years ago, and the sameness is heavier than any grief. The faces around me are dear, and yet I find I am watching them from a slight remove, as one watches a river... fond of the water, certain it will pass.\n\nMy people do not wither. We are not taken. But I understand now what the old ones meant when they said the world is a garment, and that one day it simply grows loose upon the shoulders."
  gen_aging.0001.a: "Then I will wear it lightly."
  gen_aging.0001.b: "Not yet. There is work unfinished."
 

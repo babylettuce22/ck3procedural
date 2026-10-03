@@ -77,7 +77,9 @@ public sealed class LoadedWorld
         "none", "castle_holding", "city_holding", "church_holding", "tribal_holding",
         "nomad_holding", "temple_citadel_holding",
     ];
-    public string StartDate { get; private set; } = "9999.12.31";
+    /// <summary>The start date when no bookmark names one: later than any date <see cref="DateNumber"/> accepts.</summary>
+    public const string NoStartDate = "199999.12.31";
+    public string StartDate { get; private set; } = NoStartDate;
     public List<string> Notes { get; } = [];
     public string? LastBackup { get; private set; }
     public IReadOnlyCollection<EditableWorldFile> Files => _files.Values;
@@ -255,8 +257,15 @@ public sealed class LoadedWorld
         {
             if (Entries.FirstOrDefault(e => e.Kind == "Faith" && e.Key == rite.Key) is not { } faith) continue;
 
+            // New generated faiths keep their core tenets on the main rite, with ownership
+            // selection pairs. Expose the intended tenets and re-emit the whole selection on edit.
+            // Old worlds with mirrored plain lists retain their existing range bindings below.
+            bool riteOwnsTenets = faith.Fields.All(f => f.Name != "tenets");
+            if (riteOwnsTenets) AddRiteTenets(faith, file, rite);
+
             foreach (string key in new[] { "color", "tenets", "doctrines" })
             {
+                if (key == "tenets" && riteOwnsTenets) continue;
                 int at = faith.Fields.FindIndex(f => f.Name == key);
                 if (at < 0 || rite.ChildrenNamed(key).FirstOrDefault(n => n.IsBlock) is not { } mirror) continue;
 
@@ -280,6 +289,49 @@ public sealed class LoadedWorld
                 };
             }
         }
+    }
+
+    private void AddRiteTenets(WorldEntry faith, EditableWorldFile file, GuiNode rite)
+    {
+        var nodes = rite.Children.Where(n => n.Key is "tenets" or "tenet_selection_pair").ToList();
+        if (nodes.Count == 0) return;
+        var first = file.NodeRange(nodes[0]);
+        var last = file.NodeRange(nodes[^1]);
+        var range = (Start: first.Start, Length: last.Start + last.Length - first.Start);
+        var anchor = nodes[0];
+        string ReadTenets()
+        {
+            var parsed = GuiParser.Parse(file.Read(range));
+            return string.Join(' ', parsed.Roots.SelectMany(n => n.Key == "tenets"
+                ? n.Children.SelectMany(c => c.Head)
+                : new[] { n.Field("tenet")! }));
+        }
+        string? religionKey = Read(FaithTypesFile).Script!.Roots.FirstOrDefault(n => n.Key == faith.Key)?
+            .ChildrenNamed("faith_details").FirstOrDefault()?.Field("religion");
+        faith.Fields.Add(new WorldField
+        {
+            Name = "tenets", Category = "Properties", IsList = true,
+            Options = OptionsFor(faith, "tenets", anchor), Read = ReadTenets,
+            Description = "Core tenets; DLC requirements and compatible fallbacks are preserved on edit.",
+            Write = value =>
+            {
+                if (value == ReadTenets()) return;
+                if (nodes.Any(n => n.Key == "tenet_selection_pair") && MapGen.VanillaVocabulary.Current is null)
+                    throw new InvalidOperationException("Load the installed CK3 vocabulary before editing DLC tenets.");
+                ValidateValue(faith, "tenets", value, anchor);
+                var doctrines = rite.ChildrenNamed("doctrines").Where(n => n.IsBlock)
+                    .SelectMany(n => file.Read(file.ValueRange(n))
+                        .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                    .Concat(Entries.Where(e => e.Kind == "Religion" && e.Key == religionKey)
+                        .SelectMany(e => e.Fields.Where(f => f.Name == "doctrine" || f.Name.StartsWith("doctrine "))
+                            .Select(f => f.Read())));
+                var b = new JominiBuilder(startDepth: 1);
+                Emit.TenetWriter.WriteTenets(b, faith.Key,
+                    value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries), doctrines);
+                file.Set(range, b.ToString().Trim());
+            },
+            Reset = () => file.RevertRange(range),
+        });
     }
 
     private void ReadEntries(string relative, string kind)
@@ -520,7 +572,9 @@ public sealed class LoadedWorld
     {
         var parts = date.Split('.');
         return parts.Length == 3 && int.TryParse(parts[0], out int y) && int.TryParse(parts[1], out int m)
-            && int.TryParse(parts[2], out int d) && y > 0 && y < 10000 && m is >= 1 and <= 12 && d is >= 1 and <= 31
+            // Generated worlds can start well past year 9999 (Ondrerol opens in 15532); the cap
+            // only keeps y * 10000 inside an int.
+            && int.TryParse(parts[2], out int d) && y > 0 && y < 200000 && m is >= 1 and <= 12 && d is >= 1 and <= 31
                 ? y * 10000 + m * 100 + d : 0;
     }
 

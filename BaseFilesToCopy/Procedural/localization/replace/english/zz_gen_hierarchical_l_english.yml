@@ -18,7 +18,7 @@
  # installed game by Emit/Culture/HierarchyFlavourWriter.cs, which skips every key in this file.
  #
  # Left Christian on purpose: everything behind a Christianity or Papacy check (the Christian
- # Church situation, bulls, the ecumenical council, grand cathedrals, spiritual fulfilment).
+ # Church situation and bulls). Council and cathedral stories have separate procedural adaptations.
  # A generated world never reaches it. Tenets are out of scope too.
  #
  # The College of Cardinals is the exception: a generated faith with a spiritual head and 3+ sees

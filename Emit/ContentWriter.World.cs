@@ -621,19 +621,13 @@ public static partial class ContentWriter
         // from it later by BookmarkEras, bishoprics and all, so it is not carved again.
         RealmMap? EraMap(int year) => realms.EraMaps?.GetValueOrDefault(year) is { } map && !ReferenceEquals(map, realms) ? map : null;
 
-        var dates = eraGovernments?.OrderBy(kv => kv.Key)
-            .Select(kv => new MapGen.SeeDate(kv.Key, kv.Value, EraMap(kv.Key)?.Wilderness))
-            .ToList();
-        MapGen.Sees.Build(faiths, seeCounties, seeGraph, governments, development, worldCenters, cultures,
-            vocabulary, cfg, wilderness, dates);
-
-        // After the sees, whose regional rites a church permits the tenets of; here rather than at
-        // the two call sites so the generated world and the history's world decide them the same way.
-        MapGen.TenetStatuses.Build(faiths, realms.CountyAdjacency, vocabulary, cfg);
-
         // Heads of Faith on land, before the prince-bishops (who then pass these counties by) and
-        // before any ruler is drawn; not gated on sees, a head is a head either way. The start date
-        // for now: a bookmark sharing its map shares its seats, so its governments follow.
+        // before any ruler is drawn; not gated on sees, a head is a head either way. Before the sees
+        // too, so the primate see is seated in the head's own county as d_et_roma is in the Pope's:
+        // its church estate then stands where the head builds, and a Grand Cathedral at his capital
+        // raises it (qw 2026-10-03: estate and land in different counties, cathedral did nothing).
+        // The carve reads nothing the sees decide, and its theocracies still count as settled land.
+        // The start date for now: a bookmark sharing its map shares its seats, so its governments follow.
         var headPreferred = new Dictionary<MapGen.Faith, Title>();
         var headCarved = MapGen.HeadSeats.Carve(faiths, realms, governments, wilderness, development, headPreferred);
         // Every other bookmark: its own map carved (preferring the start date's seat), or the start date's
@@ -648,6 +642,16 @@ public static partial class ContentWriter
         }
         Console.WriteLine($"  heads of faith: {realms.HeadSeats.Count} seated on land, {headCarved.Count} counties, "
                           + $"{realms.HeadSeats.Values.Count(realms.Liege.ContainsKey)} under a protector");
+
+        var dates = eraGovernments?.OrderBy(kv => kv.Key)
+            .Select(kv => new MapGen.SeeDate(kv.Key, kv.Value, EraMap(kv.Key)?.Wilderness))
+            .ToList();
+        MapGen.Sees.Build(faiths, seeCounties, seeGraph, governments, development, worldCenters, cultures,
+            vocabulary, cfg, wilderness, dates);
+
+        // After the sees, whose regional rites a church permits the tenets of; here rather than at
+        // the two call sites so the generated world and the history's world decide them the same way.
+        MapGen.TenetStatuses.Build(faiths, realms.CountyAdjacency, vocabulary, cfg);
 
         if (!cfg.GeneratedSees) return;
 

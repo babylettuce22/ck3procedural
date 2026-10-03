@@ -18,6 +18,13 @@ public sealed class HeadOfFaith
     public Title? LandedSeat { get; set; }
 
     /// <summary>
+    /// Where the faith's primate see sits: the county the head holds, else <see cref="Seat"/>. Read by
+    /// <see cref="Sees"/> (seeding and ranking) and the see history (who holds the primate on each
+    /// date), which must agree. HeadSeats runs first so the landed county is known by then.
+    /// </summary>
+    public Title PrimateSeat => LandedSeat ?? Seat;
+
+    /// <summary>
     /// Seated on land on at least one bookmark (start date or another). The head title is then written
     /// without <c>landless = yes</c>, on every date alike since landed_titles is not dated: a landed head
     /// whose primary title is landless becomes a landless adventurer (see ContentWriter).

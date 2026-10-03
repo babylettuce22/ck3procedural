@@ -70,8 +70,34 @@ public static class Program
                     catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
                 }
 
+                // The start page's "Update an old world…": this build's static files and GUI patches
+                // into a world an older build wrote, by its recorded settings. Put --game first.
+                case "--update-world" when i + 1 < args.Length:
+                {
+                    try
+                    {
+                        string dir = args[++i];
+                        var recorded = new MapConfig();
+                        AppGUI.Preset.LoadJson(recorded, RunLog.RecordedSettings(dir)
+                            ?? throw new InvalidOperationException($"{dir} has no recorded settings to update by."));
+                        var result = Emit.StaticRefresh.Run(dir, options.GameDir, recorded);
+                        Console.WriteLine($"Updated {dir}: sets {string.Join(", ", result.Sets)}; {result.Updated} updated, "
+                                          + $"{result.Added} added, {result.Unchanged} current; GUI {(result.GuiRefreshed ? "rewritten" : "skipped")}; "
+                                          + $"backup {result.BackupDir ?? "(none)"}");
+                        return 0;
+                    }
+                    catch (Exception ex) { Console.Error.WriteLine(ex.Message); return 1; }
+                }
+
                 case "--verify-world-editor":
                     return Tools.WorldEditorChecks.Run(i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : null);
+
+                case "--verify-tenets":
+                    return Tools.TenetChecks.Run(options.GameDir);
+
+                case "--verify-cathedral-flavour":
+                    return Tools.CathedralChecks.Run(options.GameDir,
+                        i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : null);
 
                 case "--verify-history-alliances":
                     return MapGen.HistorySim.VerifyAlliances(i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : null);
@@ -863,11 +889,9 @@ public static class Program
 
             Console.WriteLine($"Running in static-only mode. Destination: {modDir}");
 
-            var sets = new List<string> { Ck3MapGen.Emit.StaticFileWriter.Core };
+            var sets = Ck3MapGen.Emit.StaticFileWriter.SetsFor(cfg);
             if (cfg.EnableWilderness)
             {
-                sets.Add(Ck3MapGen.Emit.StaticFileWriter.Wilderness);
-
                 // The set calls a generated effect by name; a static-only ship into a fresh
                 // folder would otherwise leave that reference dangling. Needs the game folder,
                 // which a static-only run does not otherwise touch.
@@ -875,34 +899,13 @@ public static class Program
                     Ck3MapGen.Emit.BuildingStripWriter.Write(modDir, options.GameDir);
                 else
                     Console.WriteLine("  buildings: game folder not found, gen_strip_buildings_effect not refreshed");
-
-                // Never on its own: every file in the Ruins set references the wilderness
-                // government, its buildings or its colonisation flow.
-                if (cfg.EnableRuins)
-                {
-                    sets.Add(Ck3MapGen.Emit.StaticFileWriter.Ruins);
-                }
-            }
-            if (cfg.EnableFantasyEthnicities && cfg.RaceMode != MapConfig.FantasyRaceMode.HumanOnly)
-            {
-                sets.Add(Ck3MapGen.Emit.StaticFileWriter.Fantasy);
-            }
-            if (cfg.EnableSocieties)
-            {
-                sets.Add(Ck3MapGen.Emit.StaticFileWriter.Societies);
-            }
-            else if (cfg.EnableSocietyPrototype)
-            {
-                sets.Add(Ck3MapGen.Emit.StaticFileWriter.SocietyPrototype);
-            }
-            if (cfg.ContentSource != MapConfig.ContentSourceMode.VanillaWorld)
-            {
-                sets.Add(Ck3MapGen.Emit.StaticFileWriter.Procedural);
             }
 
             // Using UtcNow as runStarted ensures all previously existing files in the target
-            // folder are considered older than this run and will be overwritten/refreshed.
-            Ck3MapGen.Emit.StaticFileWriter.WriteAll(modDir, sets, DateTime.UtcNow);
+            // folder are considered older than this run and will be overwritten/refreshed — all
+            // but the few a full write generates over their static copies, which hold the world.
+            Ck3MapGen.Emit.StaticFileWriter.WriteAll(modDir, sets, DateTime.UtcNow,
+                (_, relative) => Ck3MapGen.Emit.StaticFileWriter.WrittenPerWorld(relative));
             return 0;
         }
 

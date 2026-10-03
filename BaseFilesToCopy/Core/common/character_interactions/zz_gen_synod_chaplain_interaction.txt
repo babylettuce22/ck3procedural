@@ -1,129 +1,246 @@
-﻿# Single-object override of request_court_chaplain_cardinalate_interaction (CK3 1.20.0.3).
-# Changes are marked "Changed from vanilla". For a generated Synod faith (special_doctrine_gen_clerical_regions)
-# the chaplain must share the Head of Faith's faith instead of following the Pope, personal seats are
-# capped (gen_synod_personal_seat_room_value), the "undermanned College" acceptance bonuses are off,
-# and the grant is gen_synod_grant_personal_seat_effect: a personal seat that ends with its holder and
-# yields to a see's permanent seat, never a title from the shared roma_cardinalates pool. Other faiths
-# are unchanged.
-
+﻿# Single-object CK3 1.20.0.3 override; vanilla else bodies are unchanged.
+# Generated petitions pin their chaplain/authority/cost on send and charge only after a valid grant.
 request_court_chaplain_cardinalate_interaction = {
 	category = interaction_category_religion
 	icon = cardinal
 	interface_priority = 45
 	common_interaction = yes
-
 	ai_maybe = yes
 	ai_min_reply_days = 1
 	ai_max_reply_days = 5
 	popup_on_receive = yes
-	notification_text = request_court_chaplain_cardinalate_interaction_notification
-
-	desc = request_court_chaplain_cardinalate_interaction_desc
-
-	cooldown_against_recipient = { years = 10 }
-
-	# Actor-only tests belong here, since is_available runs once per actor and is_shown per recipient
+	notification_text = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:actor.faith = { has_doctrine = special_doctrine_gen_clerical_regions } }
+				desc = gen_synod_petition_notification
+			}
+			desc = request_court_chaplain_cardinalate_interaction_notification
+		}
+	}
+	# Chosen here, not via custom loc: a Custom() key loses the interaction scopes (only ROOT.Char).
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:actor.faith = { has_doctrine = special_doctrine_gen_clerical_regions } }
+				desc = gen_synod_petition_desc
+			}
+			desc = request_court_chaplain_cardinalate_interaction_desc
+		}
+	}
+	cooldown_against_recipient = {
+		years = 10
+	}
 	is_available = {
 		pam_can_hold_cardinalate_trigger = yes
-		NOT = { religious_head_or_challenger ?= this }
+		NOT = {
+			religious_head_or_challenger ?= this
+		}
 		exists = cp:councillor_court_chaplain
-		cp:councillor_court_chaplain = { pam_can_receive_cardinalate_trigger = yes }
+		cp:councillor_court_chaplain = {
+			pam_can_receive_cardinalate_trigger = yes
+		}
 		has_pam_dlc_trigger = yes
+		trigger_if = {
+			limit = {
+				faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			faith = {
+				gen_synod_established_faith_trigger = yes
+			}
+		}
 	}
-
 	is_shown = {
-		scope:actor != scope:recipient
-		OR = {
-			scope:actor.religious_head_or_challenger ?= scope:recipient
-			AND = {
-				NOT = { exists = scope:actor.faith.religious_head }
-				scope:actor.rite = scope:recipient.rite
-				scope:recipient = { pam_leads_college_of_cardinals_trigger = yes }
+		trigger_if = {
+			limit = {
+				scope:actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			scope:actor != scope:recipient
+			scope:recipient = {
+				gen_synod_appointment_head_trigger = yes
+			}
+			scope:actor.faith.religious_head = scope:recipient
+		}
+		trigger_else = {
+			scope:actor != scope:recipient
+			OR = {
+				scope:actor.religious_head_or_challenger ?= scope:recipient
+				AND = {
+					NOT = {
+						exists = scope:actor.faith.religious_head
+					}
+					scope:actor.rite = scope:recipient.rite
+					scope:recipient = {
+						pam_leads_college_of_cardinals_trigger = yes
+					}
+				}
 			}
 		}
 	}
-
 	is_valid_showing_failures_only = {
-		custom_tooltip = {
-			text = appoint_cardinal_interaction_max_cardinals_tt
-			scope:actor.faith ?= {
-				NOT = { any_clerical_elector_title = { count >= 70 } }
+		trigger_if = {
+			limit = {
+				scope:actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
 			}
-		}
-		pam_not_antipope_when_recipient_is_hof_tt = { CHARACTER = scope:actor }
-		scope:actor = {
-			NOT = { has_trait = excommunicated }
-			NOT = { is_at_war_with = scope:recipient }
-			custom_tooltip = {
-				text = actor_promised_pilgrimage_tt
-				NOT = { has_character_modifier = promised_pilgrimage_to_clergy_modifier }
-			}
-			clergy_interaction_generic_piety_level_or_puppet_req_trigger = yes
-			cp:councillor_court_chaplain ?= {
+			scope:actor = {
+				is_alive = yes
 				is_available_quick = {
 					adult = yes
 					incapable = no
 					imprisoned = no
 					hostage = no
 				}
-				custom_tooltip = {
-					text = request_court_chaplain_cardinalate_chaplain_not_excommunicated_tt
-					NOT = { has_trait = excommunicated }
+				NOT = {
+					has_trait = excommunicated
+				}
+				NOT = {
+					is_at_war_with = scope:recipient
 				}
 				custom_tooltip = {
-					text = request_court_chaplain_cardinalate_chaplain_not_cardinal_tt
-					NOT = { exists = clerical_elector_title }
-				}
-				# Changed from vanilla: a Synod has no Pope to follow, only its own faith
-				trigger_if = {
-					limit = { scope:actor.faith = { has_doctrine = special_doctrine_gen_clerical_regions } }
-					custom_tooltip = {
-						text = gen_synod_chaplain_same_faith_tt
-						faith = scope:recipient.faith
+					text = actor_promised_pilgrimage_tt
+					NOT = {
+						has_character_modifier = promised_pilgrimage_to_clergy_modifier
 					}
 				}
-				trigger_else = {
+				clergy_interaction_generic_piety_level_or_puppet_req_trigger = yes
+				custom_tooltip = {
+					text = gen_synod_petition_piety_tt
+					piety >= pam_request_court_chaplain_cardinalate_cost_value
+				}
+				cp:councillor_court_chaplain = {
+					custom_tooltip = {
+						text = gen_synod_candidate_eligible_tt
+						gen_synod_personal_candidate_valid_trigger = {
+							AUTHORITY = scope:recipient
+						}
+					}
+				}
+			}
+			scope:recipient = {
+				is_alive = yes
+				is_available_quick = {
+					adult = yes
+					incapable = no
+					imprisoned = no
+					hostage = no
+				}
+			}
+			scope:recipient.faith = {
+				custom_tooltip = {
+					text = gen_synod_personal_seat_cap_tt
+					gen_synod_personal_seat_room_value > 0
+				}
+				custom_tooltip = {
+					text = gen_synod_max_members_tt
+					NOT = {
+						any_clerical_elector_title = {
+							count >= 70
+						}
+					}
+				}
+			}
+		}
+		trigger_else = {
+			custom_tooltip = {
+				text = appoint_cardinal_interaction_max_cardinals_tt
+				scope:actor.faith ?= {
+					NOT = {
+						any_clerical_elector_title = {
+							count >= 70
+						}
+					}
+				}
+			}
+			pam_not_antipope_when_recipient_is_hof_tt = {
+				CHARACTER = scope:actor
+			}
+			scope:actor = {
+				NOT = {
+					has_trait = excommunicated
+				}
+				NOT = {
+					is_at_war_with = scope:recipient
+				}
+				custom_tooltip = {
+					text = actor_promised_pilgrimage_tt
+					NOT = {
+						has_character_modifier = promised_pilgrimage_to_clergy_modifier
+					}
+				}
+				clergy_interaction_generic_piety_level_or_puppet_req_trigger = yes
+				cp:councillor_court_chaplain ?= {
+					is_available_quick = {
+						adult = yes
+						incapable = no
+						imprisoned = no
+						hostage = no
+					}
+					custom_tooltip = {
+						text = request_court_chaplain_cardinalate_chaplain_not_excommunicated_tt
+						NOT = {
+							has_trait = excommunicated
+						}
+					}
+					custom_tooltip = {
+						text = request_court_chaplain_cardinalate_chaplain_not_cardinal_tt
+						NOT = {
+							exists = clerical_elector_title
+						}
+					}
 					custom_tooltip = {
 						text = request_court_chaplain_cardinalate_chaplain_follows_pope_tt
 						pam_pope_is_head_of_faith_or_rite_trigger = yes
 					}
 				}
 			}
-			# Changed from vanilla: personal Synod Seats are capped against the see seats
-			trigger_if = {
-				limit = { faith = { has_doctrine = special_doctrine_gen_clerical_regions } }
-				custom_tooltip = {
-					text = gen_synod_personal_seat_cap_tt
-					scope:recipient.faith = { gen_synod_personal_seat_room_value > 0 }
+			scope:recipient = {
+				is_available_quick = {
+					adult = yes
+					incapable = no
+					imprisoned = no
+					hostage = no
 				}
 			}
 		}
-		scope:recipient = {
-			is_available_quick = {
-				adult = yes
-				incapable = no
-				imprisoned = no
-				hostage = no
-			}
-		}
 	}
-
 	is_highlighted = {
 		scope:actor.piety_level > scope:recipient.piety_level
 	}
-
 	cost = {
-		piety = pam_request_court_chaplain_cardinalate_cost_value
+		piety = {
+			value = pam_request_court_chaplain_cardinalate_cost_value
+			if = {
+				limit = {
+					scope:actor.faith = {
+						has_doctrine = special_doctrine_gen_clerical_regions
+					}
+				}
+				multiply = 0
+			}
+		}
 	}
-
-	#Use hook
 	send_option = {
+		is_shown = {
+			NOT = {
+				scope:actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+		}
 		is_valid = {
 			scope:actor = {
 				has_usable_hook = scope:recipient
 			}
 			scope:recipient = {
-				NOT = { is_imprisoned_by = scope:actor }
+				NOT = {
+					is_imprisoned_by = scope:actor
+				}
 			}
 		}
 		flag = hook
@@ -131,129 +248,187 @@ request_court_chaplain_cardinalate_interaction = {
 	}
 	send_option = {
 		is_shown = {
-			pam_offer_pilgrimage_option_shown_trigger = { ACTOR = scope:actor }
+			pam_offer_pilgrimage_option_shown_trigger = {
+				ACTOR = scope:actor
+			}
 		}
 		is_valid = {
-			pam_offer_pilgrimage_option_valid_trigger = { ACTOR = scope:actor }
+			pam_offer_pilgrimage_option_valid_trigger = {
+				ACTOR = scope:actor
+			}
 		}
 		flag = offer_pilgrimage
 		localization = OFFER_PILGRIMAGE_INTERACTION_OPTION
 	}
 	should_use_extra_icon = {
-		scope:actor = { has_usable_hook = scope:recipient }
+		scope:actor = {
+			has_usable_hook = scope:recipient
+		}
 	}
 	extra_icon = "gfx/interface/icons/character_interactions/hook_icon.dds"
-
 	send_options_exclusive = no
-
 	auto_accept = {
-		custom_description = {
-			text = "spending_hook"
-			subject = scope:actor
-			object = scope:recipient
-			scope:hook = yes
-			scope:actor = { has_strong_hook = scope:recipient }
+		trigger_if = {
+			limit = {
+				scope:actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			custom_description = {
+				text = spending_hook
+				subject = scope:actor
+				object = scope:recipient
+				scope:gen_synod_petition_hook ?= yes
+				scope:actor = {
+					has_strong_hook = scope:recipient
+				}
+			}
+		}
+		trigger_else = {
+			custom_description = {
+				text = "spending_hook"
+				subject = scope:actor
+				object = scope:recipient
+				scope:hook = yes
+				scope:actor = {
+					has_strong_hook = scope:recipient
+				}
+			}
 		}
 	}
-
 	on_accept = {
-		scope:actor.cp:councillor_court_chaplain ?= {
-			save_scope_as = new_cardinal
-		}
 		if = {
-			limit = { exists = scope:new_cardinal }
-			scope:actor = {
-				send_interface_toast = {
-					type = event_toast_effect_good
-					title = request_court_chaplain_cardinalate_interaction_toast
-					left_icon = scope:recipient
-					right_icon = scope:new_cardinal
-					custom_tooltip = {
-						text = request_court_chaplain_cardinalate_interaction_accept_tt
-						scope:new_cardinal = {
-							# Changed from vanilla: a Synod's seat is our own, outside the shared pool
-							if = {
-								limit = { faith = { has_doctrine = special_doctrine_gen_clerical_regions } }
-								gen_synod_grant_personal_seat_effect = yes
-							}
-							else = {
-								grant_cardinal_title_effect = { CARDINAL_COUNTY = capital_county }
+			limit = {
+				OR = {
+					scope:gen_synod_petition_offer ?= yes
+					AND = {
+						NOT = { exists = scope:gen_synod_petition_offer }
+						scope:actor.faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+					}
+				}
+			}
+			custom_tooltip = gen_synod_petition_effect_tt
+			custom_tooltip = gen_synod_personal_capacity_preview_tt
+			custom_tooltip = gen_synod_petition_cost_tt
+			hidden_effect = {
+				gen_synod_accept_chaplain_petition_effect = yes
+			}
+		}
+		else = {
+			scope:actor.cp:councillor_court_chaplain ?= {
+				save_scope_as = new_cardinal
+			}
+			if = {
+				limit = {
+					exists = scope:new_cardinal
+				}
+				scope:actor = {
+					send_interface_toast = {
+						type = event_toast_effect_good
+						title = request_court_chaplain_cardinalate_interaction_toast
+						left_icon = scope:recipient
+						right_icon = scope:new_cardinal
+						custom_tooltip = {
+							text = request_court_chaplain_cardinalate_interaction_accept_tt
+							scope:new_cardinal = {
+								grant_cardinal_title_effect = {
+									CARDINAL_COUNTY = capital_county
+								}
 							}
 						}
 					}
 				}
-			}
-			# on_lose_position covers other title gains
-			if = {
-				limit = {
-					scope:actor = { NOT = { exists = puppet:external_theological_agent_puppet } }
-				}
-				custom_tooltip = {
-					text = request_court_chaplain_cardinalate_becomes_clerical_puppet_tt
-					# Changed from vanilla: the seat's title gain already unseats him; firing again is an error
-					if = {
-						limit = { scope:new_cardinal = { is_councillor_of = scope:actor } }
-						scope:actor = { fire_councillor = scope:new_cardinal }
-					}
-					scope:new_cardinal = {
-						pam_make_clerical_ruler_puppet_effect = { PUPPETEER = scope:actor }
-					}
-				}
-			}
-			else = {
-				custom_tooltip = {
-					text = request_court_chaplain_cardinalate_leaves_council_tt
-					if = {
-						limit = { scope:new_cardinal = { is_councillor_of = scope:actor } }
-						scope:actor = { fire_councillor = scope:new_cardinal }
-					}
-				}
-			}
-			scope:new_cardinal = {
-				# The hat came from his liege's petition, and he knows whose it was
-				add_opinion = {
-					target = scope:actor
-					modifier = grateful_opinion
-					opinion = 50
-				}
-				# This is a promotion not a dismissal, so we hide the fired from council opinion or it cancels at once
-				hidden_effect = {
-					remove_opinion = {
-						modifier = fired_from_council_opinion
-						target = scope:actor
-					}
-				}
-			}
-		}
-		pam_offer_pilgrimage_effect = {
-			ACTOR = scope:actor
-			CLERIC = scope:recipient
-		}
-	}
-
-	on_decline = {
-		scope:actor = {
-			send_interface_toast = {
-				type = event_toast_effect_bad
-				title = request_court_chaplain_cardinalate_interaction_decline_toast
-				right_icon = scope:recipient
 				if = {
-					limit = { is_ai = yes }
+					limit = {
+						scope:actor = {
+							NOT = {
+								exists = puppet:external_theological_agent_puppet
+							}
+						}
+					}
+					custom_tooltip = {
+						text = request_court_chaplain_cardinalate_becomes_clerical_puppet_tt
+						scope:actor = {
+							fire_councillor = scope:new_cardinal
+						}
+						scope:new_cardinal = {
+							pam_make_clerical_ruler_puppet_effect = {
+								PUPPETEER = scope:actor
+							}
+						}
+					}
+				}
+				else = {
+					custom_tooltip = {
+						text = request_court_chaplain_cardinalate_leaves_council_tt
+						scope:actor = {
+							fire_councillor = scope:new_cardinal
+						}
+					}
+				}
+				scope:new_cardinal = {
 					add_opinion = {
-						target = scope:recipient
-						modifier = annoyed_opinion
-						opinion = -10
+						target = scope:actor
+						modifier = grateful_opinion
+						opinion = 50
+					}
+					hidden_effect = {
+						remove_opinion = {
+							modifier = fired_from_council_opinion
+							target = scope:actor
+						}
+					}
+				}
+			}
+			pam_offer_pilgrimage_effect = {
+				ACTOR = scope:actor
+				CLERIC = scope:recipient
+			}
+		}
+	}
+	on_decline = {
+		if = {
+			limit = {
+				OR = {
+					scope:gen_synod_petition_offer ?= yes
+					AND = {
+						NOT = { exists = scope:gen_synod_petition_offer }
+						scope:actor.faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+					}
+				}
+			}
+			scope:actor = {
+				send_interface_toast = {
+					type = event_toast_effect_neutral
+					title = gen_synod_petition_declined_title
+					right_icon = scope:recipient
+					custom_tooltip = gen_synod_petition_declined_tt
+				}
+			}
+		}
+		else = {
+			scope:actor = {
+				send_interface_toast = {
+					type = event_toast_effect_bad
+					title = request_court_chaplain_cardinalate_interaction_decline_toast
+					right_icon = scope:recipient
+					if = {
+						limit = {
+							is_ai = yes
+						}
+						add_opinion = {
+							target = scope:recipient
+							modifier = annoyed_opinion
+							opinion = -10
+						}
 					}
 				}
 			}
 		}
 	}
-
 	ai_targets = {
 		ai_recipients = head_of_faith
 	}
-
-	# Only kings and above bother the Pope with this
 	ai_frequency_by_tier = {
 		barony = 0
 		county = 0
@@ -262,14 +437,14 @@ request_court_chaplain_cardinalate_interaction = {
 		empire = 24
 		hegemony = 24
 	}
-
 	ai_will_do = {
 		base = 30
-
-		modifier = { # A kinsman in the College is a kinsman on the papal throne
+		modifier = {
 			add = 60
 			scope:actor.cp:councillor_court_chaplain ?= {
-				is_any_family_relation_or_spouse_trigger = { CHARACTER = scope:actor }
+				is_any_family_relation_or_spouse_trigger = {
+					CHARACTER = scope:actor
+				}
 			}
 		}
 		modifier = {
@@ -278,7 +453,7 @@ request_court_chaplain_cardinalate_interaction = {
 				dynasty ?= scope:actor.dynasty
 			}
 		}
-		modifier = { # No point elevating a chaplain we cannot steer
+		modifier = {
 			add = 40
 			scope:actor = {
 				puppet:theological_agent_puppet ?= cp:councillor_court_chaplain
@@ -286,19 +461,23 @@ request_court_chaplain_cardinalate_interaction = {
 		}
 		modifier = {
 			add = 30
-			scope:actor = { has_trait = zealous }
+			scope:actor = {
+				has_trait = zealous
+			}
 		}
 		modifier = {
 			add = -60
-			scope:actor = { has_trait = cynical }
+			scope:actor = {
+				has_trait = cynical
+			}
 		}
-		modifier = { # A chaplain nobody respects will not be made a Cardinal
+		modifier = {
 			add = -40
 			scope:actor.cp:councillor_court_chaplain ?= {
 				piety_level < 2
 			}
 		}
-		modifier = { # No use spending the favour on a chaplain we are about to replace
+		modifier = {
 			add = -50
 			scope:actor = {
 				exists = cp:councillor_court_chaplain
@@ -309,51 +488,48 @@ request_court_chaplain_cardinalate_interaction = {
 			}
 		}
 	}
-
 	ai_accept = {
 		base = 0
-
-		# The petitioner's own standing with the Pope, shared with the other clerical title petitions
 		clerical_petition_to_authority_acceptance_modifier = yes
-
-		# Weak hook: a strong one already auto-accepts
 		modifier = {
 			scope:hook = yes
 			add = 100
-			scope:actor = { NOT = { has_strong_hook = scope:recipient } }
+			scope:actor = {
+				NOT = {
+					has_strong_hook = scope:recipient
+				}
+			}
 			desc = SCHEME_WEAK_HOOK_USED
 		}
-
 		modifier = {
 			add = pam_offer_pilgrimage_acceptance_value
 			scope:offer_pilgrimage = yes
 			desc = OFFER_PILGRIMAGE_INTERACTION_OPTION_REASON
 		}
-
-		# The rest weighs the candidate rather than the petitioner
 		opinion_modifier = {
-			trigger = { exists = scope:actor.cp:councillor_court_chaplain }
+			trigger = {
+				exists = scope:actor.cp:councillor_court_chaplain
+			}
 			who = scope:recipient
 			opinion_target = scope:actor.cp:councillor_court_chaplain
 			desc = AI_OPINION_REASON
 		}
-
 		modifier = {
 			add = -25
 			exists = scope:actor.cp:councillor_court_chaplain
 			scope:actor.cp:councillor_court_chaplain.rite != scope:recipient.rite
 			desc = COURT_CHAPLAIN_DIFFERENT_RITE
 		}
-
 		modifier = {
 			add = -50
 			exists = scope:actor.cp:councillor_court_chaplain
 			scope:recipient.rite = {
-				NOT = { rite_has_allowed_gender_for_clergy = scope:actor.cp:councillor_court_chaplain }
+				NOT = {
+					rite_has_allowed_gender_for_clergy = scope:actor.cp:councillor_court_chaplain
+				}
 			}
 			desc = COURT_CHAPLAIN_WRONG_CLERICAL_GENDER
 		}
-
 		modifier = {
 			add = {
 				add = 10
@@ -363,7 +539,6 @@ request_court_chaplain_cardinalate_interaction = {
 			scope:actor.cp:councillor_court_chaplain.num_virtuous_traits > 0
 			desc = COURT_CHAPLAIN_VIRTUOUS
 		}
-
 		modifier = {
 			add = {
 				add = -10
@@ -373,54 +548,134 @@ request_court_chaplain_cardinalate_interaction = {
 			scope:actor.cp:councillor_court_chaplain.num_sinful_traits > 0
 			desc = COURT_CHAPLAIN_SINFUL
 		}
-
 		modifier = {
 			add = 10
 			exists = scope:actor.cp:councillor_court_chaplain
-			scope:actor.cp:councillor_court_chaplain = { has_education_learning_trigger = yes }
+			scope:actor.cp:councillor_court_chaplain = {
+				has_education_learning_trigger = yes
+			}
 			desc = COURT_CHAPLAIN_LEARNING_EDUCATION_REASON
 		}
-
 		modifier = {
 			add = 15
 			exists = scope:actor.cp:councillor_court_chaplain
-			scope:actor.cp:councillor_court_chaplain = { has_trait = celibate }
+			scope:actor.cp:councillor_court_chaplain = {
+				has_trait = celibate
+			}
 			desc = COURT_CHAPLAIN_CELIBATE
 		}
-
 		modifier = {
 			add = 15
 			exists = scope:actor.cp:councillor_court_chaplain
-			scope:actor.cp:councillor_court_chaplain = { has_trait = devoted }
+			scope:actor.cp:councillor_court_chaplain = {
+				has_trait = devoted
+			}
 			desc = COURT_CHAPLAIN_DEVOTED
 		}
-
-		# A chaplain of no standing is not Cardinal material
 		modifier = {
 			add = -25
 			exists = scope:actor.cp:councillor_court_chaplain
-			scope:actor.cp:councillor_court_chaplain = { piety_level = 0 }
+			scope:actor.cp:councillor_court_chaplain = {
+				piety_level = 0
+			}
 			desc = COURT_CHAPLAIN_LOW_PIETY
 		}
-
-		# A College short on Cardinals needs bodies more than it needs leverage
-		# Changed from vanilla: not for a Synod, whose size is its sees and is never "short"
 		modifier = {
+			NOT = {
+				scope:actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
 			add = 60
 			scope:recipient.faith ?= {
-				NOT = { has_doctrine = special_doctrine_gen_clerical_regions }
-				any_clerical_elector_title = { count < 20 }
+				any_clerical_elector_title = {
+					count < 20
+				}
 			}
 			desc = COLLEGE_OF_CARDINALS_UNDERMANNED_REASON
 		}
-
 		modifier = {
+			NOT = {
+				scope:actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
 			add = 100
 			scope:recipient.faith ?= {
-				NOT = { has_doctrine = special_doctrine_gen_clerical_regions }
-				any_clerical_elector_title = { count < 10 }
+				any_clerical_elector_title = {
+					count < 10
+				}
 			}
 			desc = COLLEGE_OF_CARDINALS_SEVERELY_UNDERMANNED_REASON
 		}
+		modifier = {
+			scope:gen_synod_petition_hook ?= yes
+			scope:actor = {
+				NOT = {
+					has_strong_hook = scope:recipient
+				}
+			}
+			add = 100
+			desc = SCHEME_WEAK_HOOK_USED
+		}
+	}
+	send_option = {
+		is_shown = {
+			scope:actor.faith = {
+				has_doctrine = special_doctrine_gen_clerical_regions
+			}
+		}
+		is_valid = {
+			scope:actor = {
+				has_usable_hook = scope:recipient
+			}
+			scope:recipient = {
+				NOT = {
+					is_imprisoned_by = scope:actor
+				}
+			}
+		}
+		flag = gen_synod_petition_hook
+		localization = SCHEME_HOOK
+	}
+	on_send = {
+		if = {
+			limit = {
+				scope:actor.faith = {
+					has_doctrine = special_doctrine_gen_clerical_regions
+				}
+			}
+			save_scope_value_as = {
+				name = gen_synod_petition_offer
+				value = yes
+			}
+			# Persist the selected custom option with the pending offer's other saved values.
+			if = {
+				limit = { scope:gen_synod_petition_hook ?= yes }
+				save_scope_value_as = { name = gen_synod_petition_hook value = yes }
+			}
+			scope:recipient = {
+				save_scope_as = gen_synod_sent_head
+			}
+			scope:actor = {
+				faith = {
+					save_scope_as = gen_synod_sent_faith
+				}
+				cp:councillor_court_chaplain = {
+					save_scope_as = gen_synod_sent_chaplain
+				}
+				save_scope_value_as = {
+					name = gen_synod_sent_petition_cost
+					value = pam_request_court_chaplain_cardinalate_cost_value
+				}
+			}
+		}
+		else = { save_scope_value_as = { name = gen_synod_petition_offer value = no } }
+	}
+	localization_values = {
+		GEN_SYNOD_PIETY_COST = scope:actor.pam_request_court_chaplain_cardinalate_cost_value
+		GEN_SYNOD_USED = scope:recipient.faith.gen_synod_personal_seat_count_value
+		GEN_SYNOD_LIMIT = scope:recipient.faith.gen_synod_personal_seat_limit_value
+		GEN_SYNOD_AFTER = scope:recipient.faith.gen_synod_personal_seat_after_appointment_value
 	}
 }

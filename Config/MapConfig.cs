@@ -2290,7 +2290,7 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Category("06 Map Objects")]
     [DisplayName("Paper Map Edge Feather")]
     [Description("Softly fade the flat (paper) map's outer edge into the table, over open sea only. Land and coasts are never faded.")]
-    public bool FlatmapFeather { get; set; } = false;
+    public bool FlatmapFeather { get; set; } = true; // defaulting true for testing
 
     /// <summary>
     /// Ships vanilla's <c>gfx/FX/surroundmap.shader</c> with a depth test on its 3D layers, so the

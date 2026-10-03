@@ -168,8 +168,10 @@ public static class RegionalRelief
 /// </summary>
 /// <param name="upscale">Enlarges the finished field this many times, after erosion: the Forge runs at
 /// width x height and the world is built at the product. See <see cref="QuickChoices.ForgeUpscale"/>.</param>
+/// <param name="allowUnverifiedSize">Build at a Custom size CK3 is not known to render, to test it;
+/// see <see cref="QuickChoices.SizeVerified"/>.</param>
 public sealed class QuickReliefProvider(string presetPath, int seed, int width, int height,
-    QuickFeature feature, QuickRelief relief, string name, int upscale = 1) : MapGen.HeightmapProvider
+    QuickFeature feature, QuickRelief relief, string name, int upscale = 1, bool allowUnverifiedSize = false) : MapGen.HeightmapProvider
 {
     public override string Label => $"Forge · {name} (regional relief)";
 
@@ -181,7 +183,8 @@ public sealed class QuickReliefProvider(string presetPath, int seed, int width, 
 
     public override string Stamp =>
         $"quick-regional|{presetPath}|{File.GetLastWriteTimeUtc(presetPath).Ticks}|{width}x{height}"
-        + $"|seed={seed}|{relief}|{feature}" + (upscale > 1 ? $"|x{upscale}" : "");
+        + $"|seed={seed}|{relief}|{feature}" + (upscale > 1 ? $"|x{upscale}" : "")
+        + (allowUnverifiedSize ? "|unverified" : "");
 
     public override MapGen.HeightmapImage Produce(Config.MapConfig cfg, CancellationToken ct, IProgress<string>? status)
     {
@@ -195,6 +198,6 @@ public sealed class QuickReliefProvider(string presetPath, int seed, int width, 
             field.Clamp01();
         }
         var raw = field.ToUInt16();
-        return MapGen.HeightmapSource.FromRaw(raw, field.Width, field.Height, Label, cfg);
+        return MapGen.HeightmapSource.FromRaw(raw, field.Width, field.Height, Label, cfg, allowUnverifiedSize);
     }
 }

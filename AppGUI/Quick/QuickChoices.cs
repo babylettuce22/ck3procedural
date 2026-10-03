@@ -3,10 +3,12 @@ using Ck3MapGen.Config;
 namespace Ck3MapGen.AppGUI;
 
 /// <summary>
-/// How big the map is. Each is a size CK3 is known to render; see MapGen.TileFit. Vanilla comes
-/// last only because the choice is remembered as a number in <see cref="GuiState.Quick"/>.
+/// How big the map is. Each preset is a size CK3 is known to render; see MapGen.TileFit. Custom is
+/// whatever <see cref="QuickChoices.CustomWidth"/> by <see cref="QuickChoices.CustomHeight"/> says,
+/// which may not be. Vanilla and Custom come last only because the choice is remembered as a
+/// number in <see cref="GuiState.Quick"/>.
 /// </summary>
-public enum QuickSize { Small, Standard, Large, Vanilla }
+public enum QuickSize { Small, Standard, Large, Vanilla, Custom }
 
 /// <summary>When the game starts. Sets the World Year; advancement follows it.</summary>
 public enum QuickEra { Early, High, Late }
@@ -61,6 +63,14 @@ public sealed class QuickChoices
     public QuickRelief Relief { get; set; } = QuickRelief.Standard;
     public QuickMountains Mountains { get; set; } = QuickMountains.Ranges;
     public QuickSize Size { get; set; } = QuickSize.Standard;
+
+    /// <summary>
+    /// The Custom size, in heightmap pixels. Kept while another size is picked, like the race mix,
+    /// so choosing Custom again finds it. Read through <see cref="Pixels"/>, which snaps it.
+    /// </summary>
+    public int CustomWidth { get; set; } = 6144;
+    public int CustomHeight { get; set; } = 3072;
+
     public QuickEra Era { get; set; } = QuickEra.High;
     public QuickClimate Climate { get; set; } = QuickClimate.Temperate;
     public QuickDensity Density { get; set; } = QuickDensity.Balanced;
@@ -125,7 +135,7 @@ public sealed class QuickChoices
     {
         var (w, h) = Pixels;
         return $"Quick world: {MapType}, seed {Seed}, relief {Relief} ({(RegionalRelief ? "regional" : "map-wide")}), mountains {Mountains}, "
-               + $"size {Size} ({w}x{h}), era {Era}, climate {Climate}, density {Density}, "
+               + $"size {Size} ({w}x{h}{(SizeVerified ? "" : ", unverified")}), era {Era}, climate {Climate}, density {Density}, "
                + $"people {People}"
                + (InspirationInWorld is { } inspiration
                    ? $" (inspiration: {inspiration.Describe()}; theme {inspiration.Theme}, faces {inspiration.Look})" : "")
@@ -151,17 +161,61 @@ public sealed class QuickChoices
         QuickSize.Small => (4096, 2048),
         QuickSize.Large => (9216, 4608),
         QuickSize.Vanilla => (18432, 9216),
+        QuickSize.Custom => SnapCustom(CustomWidth, CustomHeight),
         _ => (8192, 4096),
     };
+
+    /// <summary>The smallest and largest Custom sides, and the step they snap to.</summary>
+    public const int MinCustomWidth = 2048, MaxCustomWidth = 18432;
+    public const int MinCustomHeight = 1024, MaxCustomHeight = 9216;
+
+    /// <summary>
+    /// A multiple of 128 on both sides: the heightmap packer's 64 px tiles must cover the map
+    /// exactly (see MapGen.TileFit), and a size forged at half and doubled has to manage that at
+    /// half too. Every known size is already one.
+    /// </summary>
+    public const int CustomStep = 128;
+
+    /// <summary>A Custom size brought inside the range and onto the step.</summary>
+    public static (int Width, int Height) SnapCustom(int width, int height)
+    {
+        static int Snap(int v, int min, int max)
+            => Math.Clamp((int)Math.Round(v / (double)CustomStep) * CustomStep, min, max);
+        return (Snap(width, MinCustomWidth, MaxCustomWidth), Snap(height, MinCustomHeight, MaxCustomHeight));
+    }
+
+    /// <summary>
+    /// Whether <see cref="Pixels"/> is a size CK3 is known to render. Only a Custom size can fail
+    /// it; one that does is built anyway, as a test, the way the Terrain workspace's "build at this
+    /// size anyway" does, and the page says so before the run.
+    /// </summary>
+    public bool SizeVerified
+    {
+        get
+        {
+            var (w, h) = Pixels;
+            return MapGen.TileFit.Fits(w, h);
+        }
+    }
 
     /// <summary>
     /// How many times the Forge's heightfield is enlarged, after erosion, to reach <see cref="Pixels"/>.
     /// Vanilla is forged at half size and doubled: erosion holds about 56 bytes a cell on the GPU,
     /// 9.5 GB at 18432x9216, which overflows a 10 GB card into shared memory and crawls; and its
     /// step count grows with the height too, so full size would be about 8x Large's erosion work.
-    /// Half size is Large's own load. The rest of the generator still builds at full size.
+    /// Half size is Large's own load. The rest of the generator still builds at full size. A
+    /// Custom size bigger than Large is forged at half for the same reason.
     /// </summary>
-    public int ForgeUpscale => Size == QuickSize.Vanilla ? 2 : 1;
+    public int ForgeUpscale
+    {
+        get
+        {
+            if (Size == QuickSize.Vanilla) return 2;
+            if (Size != QuickSize.Custom) return 1;
+            var (w, h) = Pixels;
+            return (long)w * h > 9216L * 4608 ? 2 : 1;
+        }
+    }
 
     /// <summary>The size the Forge preset itself runs at; <see cref="Pixels"/> over <see cref="ForgeUpscale"/>.</summary>
     public (int Width, int Height) ForgePixels => (Pixels.Width / ForgeUpscale, Pixels.Height / ForgeUpscale);

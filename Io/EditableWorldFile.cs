@@ -55,6 +55,12 @@ public sealed class EditableWorldFile
         return (span.End - node.Value.Length, node.Value.Length);
     }
 
+    public (int Start, int Length) NodeRange(GuiNode node)
+    {
+        var span = _ranges[node];
+        return (span.Start, span.End - span.Start);
+    }
+
     public string Read((int Start, int Length) range)
         => _edits.GetValueOrDefault(range, Original.Substring(range.Start, range.Length));
 

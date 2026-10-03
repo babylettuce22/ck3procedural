@@ -70,6 +70,7 @@ public static class AzgaarFamilies
     /// </param>
     public static Grouping Group(
         IReadOnlyDictionary<int, AzgaarCulture> live,
+        AzgaarWorld world,
         IReadOnlyDictionary<int, List<Title>> held,
         RegionGrowth.Graph graph,
         IReadOnlyDictionary<Title, int> countyIndex,
@@ -129,7 +130,7 @@ public static class AzgaarFamilies
         bool byBase = Count(ids, Find) < ids.Count;
 
         // --- 3. Geography, for whatever the corpus left alone ---------------------------------------
-        var race = ids.ToDictionary(i => i, i => Race(live[i].Name));
+        var race = ids.ToDictionary(i => i, i => Race(live[i], world));
         var contact = Contact(ids, held, graph, countyIndex);
 
         int target = Math.Max(1, (int)Math.Round(ids.Count / Math.Max(1.0, culturesPerHeritage)));
@@ -169,12 +170,13 @@ public static class AzgaarFamilies
     /// as "no race stated" let the geographic pass put it in the elves' family on the Fleunland
     /// export, purely because its ground is next to theirs. The export plainly said otherwise. Going
     /// through the archetype where there is one still normalises the synonyms an author might use —
-    /// "(Elfish)" and "(Elven)" are one people, not two.
+    /// "(Elfish)" and "(Elven)" are one people, not two. An untagged culture on a fantasy name base
+    /// reads its race from the base (<see cref="AzgaarNaming.RaceTag"/>).
     /// </summary>
-    private static string? Race(string name)
+    private static string? Race(AzgaarCulture culture, AzgaarWorld world)
     {
-        if (AzgaarNaming.ParseRace(name) is { } archetype) return archetype.ToString();
-        return AzgaarNaming.Tag(name) is { Length: > 0 } tag ? tag : null;
+        if (AzgaarNaming.ParseRace(culture, world) is { } archetype) return archetype.ToString();
+        return AzgaarNaming.RaceTag(culture, world) is { Length: > 0 } tag ? tag : null;
     }
 
     /// <summary>True when <paramref name="a"/> should outrank <paramref name="b"/> as family head.</summary>

@@ -15,7 +15,7 @@
  gen_great_work.0101.desc.regalia: "Gold is soft and silver tarnishes, and the regalia of your line must outlast both. The old smiths spoke of a metal found only deep under the mountains: dark in the ore, bright when it is worked, and never touched by rust."
  gen_great_work.0101.desc.harp: "The frame must be cut from one piece of old, seasoned wood that has never been shaped for anything else, and the strings drawn from a metal that holds its note for a hundred years. Neither can be had at any market you know of."
  gen_great_work.0101.desc.lamp: "The lamp-tree must grow from living stock, and nothing in your gardens gives off any light. The old stories say a pale, glowing root still grows in the caves under the mountains, where the first lamp-trees were tended."
- gen_great_work.0101.desc.dwarf: "\n\n[gw_dwarf.GetTitledFirstName]'s people have mined under the mountains for longer than anyone can remember, and are said to have what you need, for a price. Or you could go down and find it yourself."
+ gen_great_work.0101.desc.dwarf: "\n\n[gw_dwarf.GetTitledFirstName]'s people have mined under the mountains for longer than anyone can remember, and are said to have what you need, for a price. Or... what if you went down and found it yourself?"
  gen_great_work.0101.desc.alone: "\n\nNo one trades in such things. If you want it, you will have to go down under the mountains and find it yourself, or make do with what you have."
  gen_great_work.0101.a: "Buy it from [gw_dwarf.GetFirstName]'s people."
  gen_great_work.0101.b: "Go down under the mountains and find it myself."

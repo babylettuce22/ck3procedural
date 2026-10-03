@@ -26,7 +26,10 @@ public static class InstitutionalFaithWriter
                 "common/scripted_triggers/zz_gen_senior_clerics.txt",
                 "common/character_interactions/zz_gen_clerical_arbitration.txt",
                 "common/great_projects/types/zz_gen_cathedrals.txt" })
-                File.Delete(Path.Combine(modDir, path));
+            {
+                string target = Path.Combine(modDir, path);
+                if (File.Exists(target)) File.Delete(target);
+            }
             return;
         }
 

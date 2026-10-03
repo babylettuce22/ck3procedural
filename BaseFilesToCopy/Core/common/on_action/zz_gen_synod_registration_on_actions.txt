@@ -4,7 +4,51 @@ on_title_gain = {
 }
 
 yearly_playable_pulse = {
-	on_actions = { gen_synod_registration_repair }
+	on_actions = { gen_synod_registration_repair gen_synod_ineligible_personal_cleanup }
+}
+
+on_faith_conversion = {
+	on_actions = { gen_synod_personal_conversion_cleanup }
+}
+
+on_government_change = {
+	on_actions = { gen_synod_ineligible_personal_cleanup }
+}
+
+# Native stripping uses the active elector pointer. Also remove inactive personal titles when
+# their holder loses clergy status or an eligible government; never preserve or refill them.
+# This is local to the changed holder, with a yearly repair for older saves.
+gen_synod_ineligible_personal_cleanup = {
+	trigger = {
+		any_held_title = { has_variable = gen_synod_personal }
+		OR = {
+			NOT = { pam_can_receive_cardinalate_trigger = yes }
+			NOT = { pam_is_investiture_clergy_trigger = yes }
+		}
+	}
+	effect = { gen_synod_remove_personal_seats_effect = yes }
+}
+
+# Converted personal titles may leave the active elector iterator. Destroy them, never refill.
+gen_synod_personal_conversion_cleanup = {
+	trigger = {
+		any_held_title = {
+			has_variable = gen_synod_personal
+			has_variable = gen_synod_faith
+			NOT = { var:gen_synod_faith = root.faith }
+		}
+	}
+	effect = {
+		every_held_title = {
+			limit = {
+				has_variable = gen_synod_personal
+				has_variable = gen_synod_faith
+				NOT = { var:gen_synod_faith = root.faith }
+			}
+			save_scope_as = gen_converted_personal_seat
+			holder = { pam_destroy_cardinal_title_effect = { CARDINALATE = scope:gen_converted_personal_seat } }
+		}
+	}
 }
 
 # Root: the new title holder. Wait for creation/grant/split to resolve before creating another
