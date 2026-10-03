@@ -12,6 +12,7 @@ and tune it by hand. Then inspect and edit any title, culture, faith or ruler be
 
 <img width="996" height="696" alt="image" src="https://github.com/user-attachments/assets/e0b6d5f4-c9fd-4bad-bf9a-c12aac38018f" />
 <img width="1765" height="1035" alt="image" src="https://github.com/user-attachments/assets/9c49d08c-1ee9-4dd9-a0e4-73e1bf850e0c" />
+<img width="1012" height="781" alt="Recording 2026-10-02 at 20 11 06(1)" src="https://github.com/user-attachments/assets/d5eb20e0-517b-4e9a-9808-145cab927fc3" />
 
 ## Features
 
