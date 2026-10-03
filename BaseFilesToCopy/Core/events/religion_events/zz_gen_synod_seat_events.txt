@@ -15,7 +15,10 @@ gen_synod.0001 = {
 
 	trigger = {
 		exists = scope:gen_stripped_seat
-		scope:gen_stripped_seat = { has_variable = gen_synod_faith }
+		scope:gen_stripped_seat = {
+			has_variable = gen_synod_faith
+			NOT = { has_variable = gen_synod_personal }
+		}
 	}
 
 	immediate = {
@@ -23,11 +26,41 @@ gen_synod.0001 = {
 			limit = {
 				NOT = {
 					scope:gen_stripped_seat.holder ?= {
-						gen_synod_rightful_holder_trigger = { FAITH = scope:gen_stripped_seat.var:gen_synod_faith }
+						gen_synod_can_receive_seat_trigger = { FAITH = scope:gen_stripped_seat.var:gen_synod_faith SEAT = scope:gen_stripped_seat }
 					}
 				}
 			}
 			gen_synod_seat_fresh_holder_effect = { SEAT = scope:gen_stripped_seat }
 		}
+	}
+}
+
+gen_synod.0003 = {
+	type = character_event
+	hidden = yes
+	trigger = {
+		any_held_title = { has_variable = gen_synod_personal }
+		OR = {
+			this = faith.religious_head
+			any_held_title = {
+				has_variable = gen_synod_faith
+				NOT = { has_variable = gen_synod_personal }
+			}
+		}
+	}
+	immediate = { gen_synod_remove_personal_seats_effect = yes }
+}
+
+# New see registration, outside its founding transaction. Queued more than once is harmless:
+# the effect rechecks the see's link, holder, government and faith each time it runs.
+gen_synod.0002 = {
+	type = character_event
+	hidden = yes
+	trigger = {
+		exists = scope:gen_pending_see
+		scope:gen_pending_see = { gen_synod_unregistered_see_trigger = yes }
+	}
+	immediate = {
+		scope:gen_pending_see = { gen_synod_register_see_effect = yes }
 	}
 }

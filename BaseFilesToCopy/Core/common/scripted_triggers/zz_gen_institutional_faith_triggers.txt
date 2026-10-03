@@ -1,0 +1,18 @@
+﻿# Character scope. Shared institutions, without changing a religion's historical identity.
+gen_institutional_religion_trigger = {
+    custom_description = {
+        text = gen_institutional_faith_required_tt
+        OR = {
+            religion = religion:christianity_religion
+            faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+        }
+    }
+}
+
+# An actual elector can publicize their deeds even without an ecclesiastical domicile.
+# Being a ruler of the faith or reading the shortlist alone does not grant this decision.
+gen_synod_promulgation_candidate_trigger = {
+    faith = { has_doctrine = special_doctrine_gen_clerical_regions }
+    pam_can_hold_cardinalate_trigger = yes
+    exists = clerical_elector_title
+}

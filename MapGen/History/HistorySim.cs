@@ -159,7 +159,8 @@ public sealed partial class HistorySim
         history.SeatDeJure(earlier);
         history.SeatWilds(wilds);
         history.SeatPeoples(peoples, earlier);
-        history.SeatWars();
+        history.SeatAlliances(prehistory, earlier);
+        history.SeatWars(prehistory, earlier);
         history.SeatIndependence(earlier);
         history.KeepFrame();
         return history;
@@ -176,6 +177,7 @@ public sealed partial class HistorySim
         int logged = _sim.Events.Count;
         int remembered = _memory.Count;
         var blocs = BlocsByCounty();
+        PruneDiplomacy();
         Formation.Step(_sim, rng);
 
         // The step's conquests and walkouts, as grudges, while its realms are as it left them.
@@ -190,6 +192,10 @@ public sealed partial class HistorySim
         // it dies, so this is a guard rather than a rule.
         foreach (var p in _sim.Polities)
             if (p.Alive && p.Suzerain is { Alive: false }) p.Suzerain = null;
+
+        // How big each realm that fell had been at its height, for the year's highlights (MarkHighlights).
+        foreach (var p in _sim.Polities)
+            if (!p.Alive) _fallenPeaks[p.Capital] = Math.Max(_fallenPeaks.GetValueOrDefault(p.Capital), p.Peak);
 
         // The dead are dropped rather than kept. Every rule already skips them, so nothing plays
         // out differently; what changes is that a history centuries long does not scan every
@@ -212,6 +218,11 @@ public sealed partial class HistorySim
         // settled who their lords are, each on a stream of its own. What it changes, the realm
         // simulation reads next year through cohesion. See HistoryPeoples.
         PeoplesYear();
+
+        // Renew political agreements after succession and changes of independence. New agreements
+        // affect the following year's wars, never a battle that has already been fought.
+        AlliancesYear();
+        PruneDiplomacy();
 
         // Last: drift reads who holds what once the year's conquests and partitions are done, and
         // changes no realm, so nothing after it could depend on it.
@@ -279,6 +290,7 @@ public sealed partial class HistorySim
         CheckWars(problems);
         CheckHouses(problems);
         CheckPeoples(problems);
+        CheckAlliances(problems);
         return problems;
     }
 

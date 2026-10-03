@@ -129,7 +129,7 @@ public sealed record RulerProfile
 
     public static RulerProfile Build(
         Title county, string tier, string government, string ethos, int age, bool hasVassals,
-        int seed, int salt)
+        int seed, int salt, HeadOfFaith? headOfFaith = null)
     {
         // salt 0 is the start-date ruler; an earlier generation in the same seat passes its own.
         var rng = Rng.For(seed, 0x6F13, county.Index, salt);
@@ -138,6 +138,12 @@ public sealed record RulerProfile
 
         string lifestyle = PickLifestyle(rng, government, ethos, null);
         int level = PickEducationLevel(rng, rank);
+        bool educatedHead = age >= 16 && headOfFaith is { Inherited: false };
+        if (educatedHead && !headOfFaith!.Temporal)
+        {
+            lifestyle = LearningLifestyle;
+            level = Math.Max(3, level);
+        }
 
         // Vanilla auto-assigns baseline perks on game start for adult characters based on age and
         // education, so explicit perk points are kept modest (halved) to avoid over-stacking perks.
@@ -158,6 +164,8 @@ public sealed record RulerProfile
         }
 
         var skills = RollSkills(rng, rank, lifestyle);
+        if (educatedHead)
+            skills[LearningLifestyle] = Math.Max(skills[LearningLifestyle], headOfFaith!.Temporal ? 20 : 14);
         int prowess = RollProwess(rng, rank, government, lifestyle);
         string? nickname = PickNickname(rng, rank, lifestyle, level);
 

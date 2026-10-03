@@ -1,0 +1,65 @@
+﻿# Title scope. Called after the original title transaction, and rechecks every condition.
+# No cardinal_flag, pam_dynamic_cardinalate, roma_cardinalates or personal appointments:
+# this is a permanent institutional seat, with the same links as HistoryWriter's static seats.
+gen_synod_register_see_effect = {
+	if = {
+		limit = { gen_synod_unregistered_see_trigger = yes }
+		save_scope_as = gen_register_see
+		title_capital_county = { save_scope_as = gen_register_county }
+		holder = {
+			save_scope_as = gen_register_holder
+			faith = { save_scope_as = gen_register_faith }
+			gen_synod_remove_personal_seats_effect = yes
+		}
+		create_dynamic_title = {
+			tier = duchy
+			name = gen_synod_dynamic_seat_name
+			adj = gen_synod_dynamic_seat_adj
+		}
+		scope:new_title = {
+			save_scope_as = gen_registered_seat
+			set_capital_county = scope:gen_register_county
+			set_coa = scope:gen_register_see
+			set_color_from_title = scope:gen_register_see
+			set_landless_title = yes
+			set_destroy_on_succession = no
+			set_no_automatic_claims = yes
+			set_can_be_named_after_dynasty = no
+			set_variable = { name = gen_synod_see value = scope:gen_register_see }
+			set_variable = { name = gen_synod_faith value = scope:gen_register_faith }
+			add_clerical_elector = scope:gen_register_faith
+		}
+		# Write both links before handing over the title. Recursive title-gain hooks then see a
+		# registered see and cannot schedule another seat, including after a save/reload.
+		scope:gen_register_see = {
+			set_variable = { name = gen_synod_seat value = scope:gen_registered_seat }
+		}
+		create_title_and_vassal_change = {
+			type = created
+			save_scope_as = gen_registration_change
+			add_claim_on_loss = no
+		}
+		scope:gen_registered_seat = {
+			change_title_holder = {
+				holder = scope:gen_register_holder
+				change = scope:gen_registration_change
+				government_base = scope:gen_register_holder
+			}
+		}
+		resolve_title_and_vassal_change = scope:gen_registration_change
+		scope:gen_register_holder = { set_primary_title_to = scope:gen_register_see }
+		scope:gen_register_faith.religious_head = { gen_see_electors_grant_law_effect = yes }
+	}
+}
+
+# Character scope. A personal appointment yields to an institutional seat, and also ends when
+# its holder becomes Head of Faith. These titles are never recycled as permanent seats.
+gen_synod_remove_personal_seats_effect = {
+	every_held_title = {
+		limit = { has_variable = gen_synod_personal }
+		save_scope_as = gen_retired_personal_seat
+		holder = {
+			pam_destroy_cardinal_title_effect = { CARDINALATE = scope:gen_retired_personal_seat }
+		}
+	}
+}

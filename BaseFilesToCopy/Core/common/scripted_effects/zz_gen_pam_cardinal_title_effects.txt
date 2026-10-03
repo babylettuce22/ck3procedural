@@ -1,6 +1,6 @@
 ﻿# A generated faith's Synod Seats are never destroyed: a seat vanilla would destroy goes to a new
-# archbishop of its faith instead, so the synod keeps the size the generator gave it (the user's
-# choice, 2026-10-02).
+# archbishop of its faith instead. New sees may add seats, but existing permanent seats survive.
+# Personal seats carrying gen_synod_personal are explicitly excluded from this preservation.
 #
 # Single-object override of pam_destroy_cardinal_title_effect from
 # common/scripted_effects/11_dlc_pam_scripted_effects.txt (1.20.0.3). scripted_effects has no
@@ -21,7 +21,12 @@
 
 pam_destroy_cardinal_title_effect = {
 	if = {
-		limit = { $CARDINALATE$ = { has_variable = gen_synod_faith } }
+		limit = {
+			$CARDINALATE$ = {
+				has_variable = gen_synod_faith
+				NOT = { has_variable = gen_synod_personal }
+			}
+		}
 		$CARDINALATE$ = { save_scope_as = gen_stripped_seat }
 		trigger_event = {
 			id = gen_synod.0001

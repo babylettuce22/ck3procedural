@@ -1,0 +1,73 @@
+﻿# Generated heads begin office educated. Append hooks without replacing vanilla effects.
+on_game_start_after_lobby = {
+	on_actions = { gen_head_education_start }
+}
+
+gen_head_education_start = {
+	effect = {
+		every_religion_global = {
+			every_faith = {
+				limit = { has_doctrine = gen_settled_doctrine exists = religious_head }
+				save_scope_as = gen_educated_faith
+				religious_head = {
+					if = {
+						limit = { faith = scope:gen_educated_faith }
+						gen_head_education_effect = yes
+					}
+				}
+			}
+		}
+	}
+}
+
+# Root is the new holder; scope:title is the title gained, including creation and succession.
+on_title_gain = {
+	on_actions = { gen_head_education_title_gain }
+}
+
+gen_head_education_title_gain = {
+	trigger = {
+		exists = scope:title
+		scope:title = { is_head_of_faith = yes }
+		faith = { has_doctrine = gen_settled_doctrine }
+	}
+	effect = { gen_head_education_effect = yes }
+}
+
+# A child temporal heir keeps normal childhood education until adulthood.
+on_16th_birthday = {
+	on_actions = { gen_head_education_adulthood }
+}
+
+gen_head_education_adulthood = {
+	trigger = {
+		faith = { has_doctrine = gen_settled_doctrine exists = religious_head religious_head = root }
+	}
+	# Vanilla finishes education cleanup two days after the birthday; apply afterwards.
+	effect = { trigger_event = { on_action = gen_head_education_after_adulthood days = 3 } }
+}
+
+gen_head_education_after_adulthood = {
+	trigger = {
+		faith = { has_doctrine = gen_settled_doctrine exists = religious_head religious_head = root }
+	}
+	effect = { gen_head_education_effect = yes }
+}
+
+# Covers a new/reformed faith whose head was already holding their title during setup.
+on_faith_created = {
+	on_actions = { gen_head_education_faith_created }
+}
+
+gen_head_education_faith_created = {
+	trigger = { has_doctrine = gen_settled_doctrine exists = religious_head }
+	effect = {
+		save_scope_as = gen_educated_faith
+		religious_head = {
+			if = {
+				limit = { faith = scope:gen_educated_faith }
+				gen_head_education_effect = yes
+			}
+		}
+	}
+}

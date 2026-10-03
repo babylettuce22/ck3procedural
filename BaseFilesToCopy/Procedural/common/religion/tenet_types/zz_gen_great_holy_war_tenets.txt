@@ -1,0 +1,195 @@
+﻿# Opens the two great-holy-war tenets to generated religions.
+#
+# Single-object overrides of tenet_armed_pilgrimages and tenet_struggle_submission from
+# common/religion/tenet_types/00_tenet_types.txt (1.20.0.3), copied verbatim except for can_pick.
+# The folder has no subfolders, so this zz_ file loads after vanilla's and wins both keys.
+# Re-copy from vanilla when a patch changes either tenet.
+#
+# Vanilla gates them by religion: Armed Pilgrimages to Christianity/Judaism, Struggle and
+# Submission to Islam/Dualism. Those are the only tenets with great_holy_wars_active, and
+# Faiths.SeedWarTenet gives one to every generated faith with a Head of Faith (spiritual head:
+# Armed Pilgrimages, temporal: Struggle and Submission), so no generated faith could pass the gate.
+# Script-written faiths load anyway, but every UI that checks can_pick against the rite showed
+# "<Rite> can not pick <Tenet> as a Tenet", and reform / tenet-status changes could never pick
+# them again. Here the religion gate is dropped and the doctrine conflicts are kept.
+#
+# In the Procedural set, so a vanilla-content world (which has the real religions) keeps vanilla's rule.
+
+# Armed Pilgrimages / Peregrinatio Armata / Énoplon Proskýnēma
+tenet_armed_pilgrimages = {
+	icon = tenet_armed_pilgrimages
+
+	piety_cost = {
+		if = {
+			limit = { rite_religion_tag = christianity_religion }
+			value = faith_tenet_cost_low
+		}
+		else = {
+			value = faith_tenet_cost_mid
+		}
+
+		# Multiplier for keeping same tenet
+		if = {
+			limit = { rite_has_tenet = tenet_armed_pilgrimages }
+			multiply = faith_unchanged_doctrine_cost_mult
+		}
+	}
+
+	name = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					has_pam_dlc_trigger = yes
+					pam_latin_as_liturgical_language_trigger = yes
+				}
+				desc = tenet_armed_pilgrimages_latin_name
+			}
+			triggered_desc = {
+				trigger = {
+					has_pam_dlc_trigger = yes
+					pam_greek_as_liturgical_language_trigger = yes
+				}
+				desc = tenet_armed_pilgrimages_greek_name
+			}
+			triggered_desc = {
+				trigger = {
+					has_pam_dlc_trigger = yes
+					pam_greek_as_liturgical_language_trigger = no
+					pam_latin_as_liturgical_language_trigger = no
+				}
+				desc = tenet_armed_pilgrimages_default_name
+			}
+			desc = tenet_armed_pilgrimages_name
+		}
+	}
+
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = {
+					has_pam_dlc_trigger = yes
+					pam_latin_as_liturgical_language_trigger = yes
+				}
+				desc = tenet_armed_pilgrimages_latin_desc
+			}
+			triggered_desc = {
+				trigger = {
+					has_pam_dlc_trigger = yes
+					pam_greek_as_liturgical_language_trigger = yes
+				}
+				desc = tenet_armed_pilgrimages_greek_desc
+			}
+			triggered_desc = {
+				trigger = {
+					has_pam_dlc_trigger = yes
+					pam_greek_as_liturgical_language_trigger = no
+					pam_latin_as_liturgical_language_trigger = no
+				}
+				desc = tenet_armed_pilgrimages_default_desc
+			}
+			desc = tenet_armed_pilgrimages_desc
+		}
+	}
+
+	can_pick = {
+		# Vanilla: OR = { religion = christianity_religion religion = judaism_religion } (dropped)
+		custom_description = {
+			text = incompatible_tenet_pacifism_trigger
+			NOT = { tenet:tenet_pacifism = { is_in_list = selected_doctrines } }
+		}
+		custom_description = {
+			text = incompatible_tenet_dharmic_pacifism_trigger
+			NOT = { tenet:tenet_dharmic_pacifism = { is_in_list = selected_doctrines } }
+		}
+		custom_description = {
+			text = incompatible_tenet_armed_pilgrimages_vs_forbidden_pilgrimages
+			NOT = { doctrine:doctrine_pilgrimage_forbidden = { is_in_list = selected_doctrines } }
+		}
+	}
+
+	parameters = {
+		cheaper_holy_wars_active
+		great_holy_wars_active
+		ghw_no_hof_conversion_buffs_active
+		pilgrimage_decision_active
+		sanctify_artifacts_weapons
+	}
+
+	character_modifier = {
+		accolade_glory_gain_mult = 0.1
+	}
+
+	personal_tenet_modifier = {
+		knight_limit = 1
+		monthly_piety_gain_per_knight_mult = 0.01
+		holy_order_hire_cost_mult = -0.1
+	}
+
+	personal_tenet_parameters = {
+		leasing_to_military_order_give_spiritual_fulfillment_personal
+	}
+
+	traits = {
+		virtues = {
+			brave = { weight = 15 scale = 1 }
+			zealous = { weight = 10 scale = 1 }
+		}
+		sins = {
+			craven = { weight = 15 scale = 1 }
+		}
+	}
+}
+
+
+# Struggle and Submission
+tenet_struggle_submission = {
+	icon = tenet_struggle_submission
+
+	piety_cost = {
+		if = {
+			limit = {
+				rite_religion_tag = islam_religion
+			}
+			value = faith_tenet_cost_low
+		}
+		else = {
+			value = faith_tenet_cost_high
+		}
+
+		# Multiplier for keeping same tenet
+		if = {
+			limit = { rite_has_tenet = tenet_struggle_submission }
+			multiply = faith_unchanged_doctrine_cost_mult
+		}
+	}
+
+	# Vanilla: can_pick = { OR = { religion = islam_religion religion = dualism_religion } } (dropped;
+	# vanilla states no doctrine conflicts for this tenet, so nothing else gates it)
+
+	parameters = {
+		great_holy_wars_active
+		ghw_no_hof_conversion_buffs_active
+		bonus_holy_war_piety_active
+		pilgrimage_decision_active
+		unlock_voluntary_laampdom_faith
+	}
+
+	personal_tenet_parameters = {
+		unlock_voluntary_laampdom_faith
+	}
+	personal_tenet_modifier = {
+		martial_per_piety_level = 1
+		maa_toughness_mult = 0.05
+	}
+
+	traits = {
+		virtues = {
+			humble = { weight = 10 scale = 1 }
+			patient = { weight = 10 scale = 1 }
+		}
+		sins = {
+			arrogant = { weight = 10 scale = 1 }
+		}
+	}
+}
+

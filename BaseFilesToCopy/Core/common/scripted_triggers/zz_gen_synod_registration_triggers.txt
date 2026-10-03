@@ -1,0 +1,65 @@
+﻿# Faith scope. Registration extends an existing Synod, never invents an election for a faith.
+gen_synod_electing_faith_trigger = {
+	has_pam_dlc_trigger = yes
+	has_doctrine = gen_settled_doctrine
+	has_doctrine = special_doctrine_gen_clerical_regions
+	has_doctrine_parameter = has_clerical_electors
+	has_doctrine = doctrine_spiritual_head
+	exists = religious_head
+}
+
+# Title scope. Only a living, adult, same-faith hierarch with no permanent vote can receive a new seat.
+# A personal vote is replaced, rather than added to, by the registration effect.
+# Capital faith is checked again after the delayed event: a region being invalidated must not
+# mint a seat. The head's existing primate seat is left alone; no new seat is granted to the head.
+gen_synod_unregistered_see_trigger = {
+	# Temple baronies also report has_clerical_region. They are not independent sees.
+	tier = tier_duchy
+	is_head_of_faith = no
+	has_clerical_region = yes
+	is_title_created = yes
+	exists = holder
+	NOT = { has_variable = gen_synod_seat }
+	exists = title_capital_county
+	holder ?= {
+		is_alive = yes
+		is_adult = yes
+		faith = prev.title_capital_county.faith
+		faith = { gen_synod_electing_faith_trigger = yes }
+		gen_synod_rightful_holder_trigger = { FAITH = faith }
+		NOT = { this = faith.religious_head }
+		OR = {
+			NOT = { exists = clerical_elector_title }
+			clerical_elector_title = { has_variable = gen_synod_personal }
+		}
+		NOT = {
+			any_held_title = {
+				has_variable = gen_synod_faith
+				NOT = { has_variable = gen_synod_personal }
+			}
+		}
+	}
+}
+
+# Character scope. Existing seat transfers must not give a holder a second elector title.
+# Keeping $SEAT$ is allowed. Personal seats are eligible for replacement, but must be destroyed
+# before handing over a permanent seat. Other permanent seats block the handover, even when inactive.
+gen_synod_can_receive_seat_trigger = {
+	gen_synod_rightful_holder_trigger = { FAITH = $FAITH$ }
+	gen_synod_no_other_seat_trigger = { SEAT = $SEAT$ }
+}
+
+gen_synod_no_other_seat_trigger = {
+	NOT = {
+		any_held_title = {
+			has_variable = gen_synod_faith
+			NOT = { has_variable = gen_synod_personal }
+			NOT = { this = $SEAT$ }
+		}
+	}
+	OR = {
+		NOT = { exists = clerical_elector_title }
+		clerical_elector_title = $SEAT$
+		clerical_elector_title = { has_variable = gen_synod_personal }
+	}
+}

@@ -1,0 +1,17 @@
+﻿# Faith scope. How many more personal Synod Seats (chaplain petitions,
+# zz_gen_synod_chaplain_interaction.txt) the faith may hold: one per three permanent see seats,
+# at least one, less those already held. Keeps a few rich rulers from packing the electorate.
+gen_synod_personal_seat_room_value = {
+	value = 0
+	every_clerical_elector_title = {
+		limit = { NOT = { has_variable = gen_synod_personal } }
+		add = 1
+	}
+	divide = 3
+	floor = yes
+	min = 1
+	every_clerical_elector_title = {
+		limit = { has_variable = gen_synod_personal }
+		subtract = 1
+	}
+}

@@ -33,6 +33,9 @@ public sealed class SimWar
 
     public required int Started { get; init; }
 
+    public HashSet<Polity> AttackingAllies { get; } = [];
+    public HashSet<Polity> DefendingAllies { get; } = [];
+
     /// <summary>-100 to 100: at 100 the attacker has won, at -100 the defender.</summary>
     public double Score { get; set; }
 
@@ -99,7 +102,43 @@ public sealed partial class HistorySim
         => _claims.Where(kv => kv.Value.Claimant.Alive && kv.Value.Until > _sim.Year)
                   .OrderBy(kv => kv.Key.Index).Select(kv => (kv.Key, kv.Value.Claimant, kv.Value.Until));
 
-    private void SeatWars() => _sim.Wage = Declare;
+    private void SeatWars(PrehistoryMap? prehistory, AppliedHistory? earlier)
+    {
+        _sim.Wage = Declare;
+        _sim.MilitaryStrength = ExpectedStrength;
+        var byId = _sim.Polities.ToDictionary(p => p.Id);
+        var counties = _sim.Owner.Keys.ToDictionary(c => c.Index);
+        if (earlier is not null)
+        {
+            foreach (var t in earlier.Truces)
+                if (t.Until > Year && byId.TryGetValue(t.A, out var a) && byId.TryGetValue(t.B, out var b) && a != b)
+                    _truces[Pair(a, b)] = t.Until;
+            foreach (var c in earlier.Claims)
+                if (c.Until > Year && counties.TryGetValue(c.County, out var county) && byId.TryGetValue(c.Claimant, out var claimant))
+                    _claims[county] = (claimant, c.Until);
+            foreach (var w in earlier.Wars)
+            {
+                if (!byId.TryGetValue(w.Attacker, out var a) || !byId.TryGetValue(w.Defender, out var b)
+                    || !Sovereign(a) || !Sovereign(b) || a == b || !counties.TryGetValue(w.Target, out var target)) continue;
+                var war = new SimWar
+                {
+                    Id = w.Id > 0 ? w.Id : _nextWar++, Attacker = a, Defender = b,
+                    Beneficiary = w.Beneficiary is { } beneficiaryId && byId.TryGetValue(beneficiaryId, out var beneficiary) ? beneficiary : a,
+                    Duchy = w.Duchy is { } key ? Titles.Flatten(Titles.Roots([target])).FirstOrDefault(t => t.Key == key) : null,
+                    Target = target, Goal = w.Goal.Where(counties.ContainsKey).Select(i => counties[i]).ToHashSet(),
+                    Started = w.Started, Score = w.Score,
+                };
+                foreach (int id in w.AttackingAllies ?? []) if (byId.TryGetValue(id, out var ally)) war.AttackingAllies.Add(ally);
+                foreach (int id in w.DefendingAllies ?? []) if (byId.TryGetValue(id, out var ally)) war.DefendingAllies.Add(ally);
+                _wars.Add(war);
+                _nextWar = Math.Max(_nextWar, war.Id + 1);
+            }
+            _nextWar = Math.Max(_nextWar, earlier.NextWarId);
+        }
+        PruneDiplomacy();
+    }
+
+    internal int NextWarId => _nextWar;
 
     /// <summary>
     /// The formation's dice have given <paramref name="p"/> a county of <paramref name="defender"/>'s.
@@ -112,11 +151,18 @@ public sealed partial class HistorySim
 
         var attacker = p.Root;
         var enemy = defender.Root;
+        if (attacker == enemy) return true;
+        if (UsesAlliances && AlliesOf(attacker).Contains(enemy)) return true;
+        if (_wars.Any(w => (OnSide(w, attacker, true) && OnSide(w, enemy, true))
+            || (OnSide(w, attacker, false) && OnSide(w, enemy, false)))) return true;
+        // An ally already deployed on the other side cannot declare a contradictory second war.
+        if (_wars.Any(w => Opposed(w, attacker, enemy) && w.Attacker != attacker && w.Defender != attacker)) return true;
 
         // Already fighting: the dice's win is a battle won in that war, for whichever side rolled it.
         if (_wars.FirstOrDefault(w => (w.Attacker == attacker && w.Defender == enemy)
                                       || (w.Attacker == enemy && w.Defender == attacker)) is { } war)
         {
+            // The formation roll has already been weighted by the committed sides' strength.
             war.Score = Math.Clamp(war.Score + (war.Attacker == attacker ? SkirmishScore : -SkirmishScore), -100, 100);
             return true;
         }
@@ -150,6 +196,7 @@ public sealed partial class HistorySim
             Target = target, Goal = goal, Started = _sim.Year,
         };
         _wars.Add(declared);
+        CallAllies(declared);
 
         string behalf = p == attacker ? "" : $", for its vassal {p.Capital.Name}";
         string over = duchy is not null
@@ -163,6 +210,7 @@ public sealed partial class HistorySim
     /// <summary>The year's fighting and peaces, oldest war first, on the wars' own stream.</summary>
     private void WarsYear()
     {
+        _militaryNeighbours = null;
         foreach (var (county, claim) in _claims.ToList())
             if (claim.Until <= _sim.Year || !claim.Claimant.Alive
                 || _sim.Owner.GetValueOrDefault(county)?.Root == claim.Claimant.Root)
@@ -187,7 +235,7 @@ public sealed partial class HistorySim
             }
 
             // The year's battle, weighed by what each side can bring to bear.
-            double atk = Formation.Strength(_sim, war.Attacker), def = Formation.Strength(_sim, war.Defender);
+            double atk = SideStrength(war, true), def = SideStrength(war, false);
             bool won = rng.Chance(atk / Math.Max(1e-9, atk + def));
             war.Score = Math.Clamp(war.Score + (won ? BattleScore : -BattleScore), -100, 100);
 
@@ -264,6 +312,7 @@ public sealed partial class HistorySim
     private void End(SimWar war, string note)
     {
         _wars.Remove(war);
+        _militaryNeighbours = null;
         if (war.Attacker.Alive && war.Defender.Alive) _truces[Pair(war.Attacker, war.Defender)] = _sim.Year + TruceYears;
         _sim.Log(FormationKind.WarEnded, war.Duchy?.Capital ?? war.Goal.FirstOrDefault() ?? war.Attacker.Capital,
             war.Attacker.Alive ? war.Attacker : null, war.Defender.Alive ? war.Defender : null, 0, note);

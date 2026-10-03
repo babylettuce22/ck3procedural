@@ -175,6 +175,21 @@ public static partial class ContentWriter
         var governments = MapGen.Governments.Build(empires, counties, realms, provinceTerrain, coastal,
             development, cultures, worldCenters, cfg, new Rng(cfg.Seed ^ 0x6017), azgaar, stateGovernments);
 
+        // A surviving clerical office does not become a hereditary monarchy because the export
+        // re-runs the terrain-based government cascade on its changed borders. Keep its own land
+        // clerical, provided the current religion supports clergy government; legacy histories
+        // without government records continue using the existing cascade.
+        var countyByIndex = counties.ToDictionary(c => c.Index);
+        foreach (var realm in applied.Realms.Where(r => r.Government is not null && HistorySim.IsTheocracy(r.Government)))
+        {
+            if (!capitals.TryGetValue(realm.Id, out var seat) || faiths.For(seat).Religion.LayClergy) continue;
+            foreach (int index in realm.Counties)
+                if (countyByIndex.TryGetValue(index, out var county) && !wilderness.Contains(county))
+                    governments.Set(county, GovernmentMap.Theocracy);
+            foreach (var primary in realms.HolderCounty.Where(kv => kv.Value == seat).Select(kv => kv.Key))
+                governments.MarkRealm(primary, administrative: false, nomad: false);
+        }
+
         // The additional bookmarks, around the applied year: each date's map from whichever run
         // covered it, titled on the frontier it had, and the governments that follow. Before the
         // hegemon's realm is expanded, as BuildWorld orders it for a generated world.

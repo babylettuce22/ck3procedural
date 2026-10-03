@@ -75,6 +75,11 @@ public enum FormationKind
 
     /// <summary>A county took its lords' faith, graded as <see cref="Assimilated"/>. The History workspace's only.</summary>
     Converted,
+
+    Allied,
+    AllianceEnded,
+    WarJoined,
+    AidRefused,
 }
 
 /// <summary>
@@ -179,8 +184,11 @@ public enum RealmRules
     /// </summary>
     Conversion = 8192,
 
+    /// <summary>Rulers negotiate alliances, renew them at succession, and call direct allies to war.</summary>
+    Alliances = 16384,
+
     All = Conquest | Homage | Secession | Collapse | Succession | DeJureDrift | Colonisation | Ruination | Wars | Independence
-          | Feuds | Standing | Assimilation | Conversion,
+          | Feuds | Standing | Assimilation | Conversion | Alliances,
 }
 
 /// <summary>One thing the simulation did, dated, with both parties named.</summary>
@@ -216,6 +224,13 @@ public sealed class FormationEvent
     /// from one between two counts; 0 in generation, which never measures.
     /// </summary>
     public int Scale { get; internal set; }
+
+    /// <summary>
+    /// Among the run's biggest news, for the History logs' "highlights only": judged by how much
+    /// changed, not by how big the powers in it were. Set by the History workspace at the end of
+    /// each year (see <c>HistorySim.MarkHighlights</c>); false in generation.
+    /// </summary>
+    public bool Highlight { get; internal set; }
 }
 
 /// <summary>
@@ -424,6 +439,9 @@ public static class Formation
         /// on the spot, which is how generation has always run.
         /// </summary>
         public Func<Polity, Polity, Title, bool>? Wage { get; set; }
+
+        /// <summary>History's wartime strength estimate. Homage and cohesion still use own strength.</summary>
+        public Func<Polity, Polity, double>? MilitaryStrength { get; set; }
 
         /// <summary>
         /// Counties a realm holds apart from the rest of it at the start date, and the realm: the
@@ -947,7 +965,9 @@ public static class Formation
             return;
         }
 
-        if (!rng.Chance(sim.Aggression * atk / (atk + def))) return;
+        double militaryAtk = sim.MilitaryStrength?.Invoke(p, defender) ?? atk;
+        double militaryDef = sim.MilitaryStrength?.Invoke(defender, p) ?? def;
+        if (!rng.Chance(sim.Aggression * militaryAtk / Math.Max(1e-9, militaryAtk + militaryDef))) return;
         if (!sim.Rules.HasFlag(RealmRules.Conquest)) return;
 
         // The History workspace fights a war over it instead; generation never sets this.

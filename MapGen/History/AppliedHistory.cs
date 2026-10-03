@@ -12,10 +12,15 @@ public sealed record SimDiplomacy(
     List<SimDiplomacy.OngoingWar> Wars,
     List<(Title A, Title B, int Days)> Truces,
     List<(Title Claimant, Title Target, int RemainingYears)> Claims,
-    List<SimDiplomacy.HouseFeud>? Feuds = null)
+    List<SimDiplomacy.HouseFeud>? Feuds = null,
+    List<SimDiplomacy.Alliance>? Alliances = null,
+    bool? WarsSimulated = null)
 {
     /// <summary>A war under way on the start date, by the seats of its two sides and the county fought from.</summary>
-    public sealed record OngoingWar(Title Attacker, Title Defender, Title Target, int Started, double Score, string Name);
+    public sealed record OngoingWar(Title Attacker, Title Defender, Title Target, int Started, double Score, string Name,
+        List<Title>? AttackingAllies = null, List<Title>? DefendingAllies = null);
+
+    public sealed record Alliance(Title A, Title B, int Since, int Until, string Reason);
 
     /// <summary>A house relation the history left, by the seats of the two houses' heads. See <see cref="AppliedHistory.Feud"/>.</summary>
     public sealed record HouseFeud(Title A, Title B, string Level, int Since, string? Cause, string? CauseTitle, int CauseYear);
@@ -25,7 +30,7 @@ public sealed record SimDiplomacy(
     /// prehistory would invent. A history with feuds and no wars keeps the invented wars, as one
     /// saved before feuds did.
     /// </summary>
-    public bool CarriesWars => Wars.Count > 0 || Truces.Count > 0 || Claims.Count > 0;
+    public bool CarriesWars => WarsSimulated == true || Wars.Count > 0 || Truces.Count > 0 || Claims.Count > 0;
 }
 
 /// <summary>
@@ -143,6 +148,14 @@ public sealed class AppliedHistory
             Fallen = Fallen,
             Peoples = [.. Peoples.Select(p => p with { Year = p.Year + delta })],
             Wars = [.. Wars.Select(w => w with { Started = w.Started + delta })],
+            WarsSimulated = WarsSimulated,
+            NextWarId = NextWarId,
+            Alliances = Alliances?.Select(a => a with
+            {
+                Since = a.Since + delta, Until = a.Until + delta,
+                CrownedA = a.CrownedA + delta, CrownedB = a.CrownedB + delta,
+            }).ToList(),
+            AllianceOffers = [.. AllianceOffers.Select(o => o with { Until = o.Until + delta })],
             Truces = [.. Truces.Select(t => t with { Until = t.Until + delta })],
             Claims = [.. Claims.Select(c => c with { Until = c.Until + delta })],
             DriftClocks = [.. DriftClocks.Select(c => c with { Since = c.Since + delta })],
@@ -191,7 +204,8 @@ public sealed class AppliedHistory
     /// saved before it was kept.
     /// </summary>
     public sealed record Realm(int Id, int Capital, int? Suzerain, string Culture, int Founded, int Peak, int[] Counties,
-        string? Ruler = null, bool RulerFemale = false, int RulerBorn = 0, string? RulerParent = null, int RulerCrowned = 0);
+        string? Ruler = null, bool RulerFemale = false, int RulerBorn = 0, string? RulerParent = null, int RulerCrowned = 0,
+        string? Government = null);
 
     /// <summary>The realms as the simulation had them in one year, without their rulers.</summary>
     public sealed record Frame(int Year, List<Realm> Realms);
@@ -336,10 +350,20 @@ public sealed class AppliedHistory
     }
 
     /// <summary>A war under way on the applied date, by realm id and county index. See <see cref="SimWar"/>.</summary>
-    public sealed record War(int Attacker, int Defender, int Target, int[] Goal, int Started, double Score, string Name);
+    public sealed record War(int Attacker, int Defender, int Target, int[] Goal, int Started, double Score, string Name,
+        int[]? AttackingAllies = null, int[]? DefendingAllies = null, int? Beneficiary = null, string? Duchy = null, int Id = 0);
 
     /// <summary>The wars under way on the applied date. Empty in a file saved before wars were simulated.</summary>
     public List<War> Wars { get; init; } = [];
+    public bool? WarsSimulated { get; init; }
+    public int NextWarId { get; init; } = 1;
+
+    public sealed record Alliance(int A, int B, int Since, int Until, int CrownedA, int CrownedB,
+        string HouseA, string HouseB, string Reason);
+    /// <summary>Null is legacy/off; empty explicitly means no surviving simulated agreements.</summary>
+    public List<Alliance>? Alliances { get; init; }
+    public sealed record AllianceOffer(int A, int B, int Until);
+    public List<AllianceOffer> AllianceOffers { get; init; } = [];
 
     /// <summary>
     /// One thing the chronicle will remember, by title key and seat county index — see
@@ -562,7 +586,8 @@ public sealed class AppliedHistory
     /// or run with them off — so the start date keeps the starting wars it would invent.</returns>
     public SimDiplomacy? DiplomacyFor(IReadOnlyDictionary<int, Title> capitals, IEnumerable<Title> counties)
     {
-        if (Wars.Count == 0 && Truces.Count == 0 && Claims.Count == 0 && Feuds is null) return null;
+        if (Wars.Count == 0 && Truces.Count == 0 && Claims.Count == 0 && Feuds is null
+            && Alliances is null && WarsSimulated is null) return null;
 
         var byIndex = counties.Where(c => c.Tier == "c").ToDictionary(c => c.Index);
         var wars = new List<SimDiplomacy.OngoingWar>();
@@ -571,7 +596,10 @@ public sealed class AppliedHistory
             if (!capitals.TryGetValue(war.Attacker, out var attacker) || !capitals.TryGetValue(war.Defender, out var defender)) continue;
             var target = war.Goal.Contains(war.Target) ? war.Target : war.Goal.DefaultIfEmpty(war.Target).Min();
             if (!byIndex.TryGetValue(target, out var county)) continue;
-            wars.Add(new SimDiplomacy.OngoingWar(attacker, defender, county, war.Started, war.Score, war.Name));
+            List<Title> Participants(int[]? ids) => (ids ?? []).Where(capitals.ContainsKey)
+                .Select(i => capitals[i]).Where(t => t != attacker && t != defender).Distinct().ToList();
+            wars.Add(new SimDiplomacy.OngoingWar(attacker, defender, county, war.Started, war.Score, war.Name,
+                Participants(war.AttackingAllies), Participants(war.DefendingAllies)));
         }
 
         var truces = Truces
@@ -590,7 +618,10 @@ public sealed class AppliedHistory
             .Select(f => new SimDiplomacy.HouseFeud(capitals[f.A], capitals[f.B], f.Level, f.Since, f.Cause, f.CauseTitle, f.CauseYear))
             .ToList();
 
-        return new SimDiplomacy(wars, truces, claims, feuds);
+        var alliances = Alliances?.Where(a => a.Until > Year && capitals.ContainsKey(a.A) && capitals.ContainsKey(a.B)
+                && capitals[a.A] != capitals[a.B])
+            .Select(a => new SimDiplomacy.Alliance(capitals[a.A], capitals[a.B], a.Since, a.Until, a.Reason)).ToList();
+        return new SimDiplomacy(wars, truces, claims, feuds, alliances, WarsSimulated);
     }
 
     /// <summary>Whether the history moved the edge of the wild at all.</summary>
@@ -741,7 +772,7 @@ public sealed class AppliedHistory
             Realms = [.. sim.Realms.OrderBy(p => p.Id).Select(p => sim.RulerOf(p) is { } r
                 ? new Realm(p.Id, p.Capital.Index, p.Suzerain?.Id, p.Culture.Key, p.Founded, p.Peak,
                     [.. p.Counties.Select(c => c.Index).Order()], r.Name, r.Female, r.Born,
-                    r.Parent is { } parent ? PersonKey(parent, sim.StartYear) : null, r.Crowned)
+                    r.Parent is { } parent ? PersonKey(parent, sim.StartYear) : null, r.Crowned, sim.GovernmentOf(p))
                 : new Realm(p.Id, p.Capital.Index, p.Suzerain?.Id, p.Culture.Key, p.Founded, p.Peak,
                     [.. p.Counties.Select(c => c.Index).Order()]))],
             RealmLineage = realmLineage,
@@ -749,7 +780,15 @@ public sealed class AppliedHistory
             Reigns = WithEarlierReigns(PastReigns(sim), sim, earlier),
             DeJure = sim.DeJureMap().ToDictionary(kv => kv.Key.Key, kv => kv.Value.Key),
             Wars = [.. sim.Wars.Select(w => new War(w.Attacker.Id, w.Defender.Id, w.Target.Index,
-                [.. w.Goal.Select(c => c.Index).Order()], w.Started, w.Score, w.Name))],
+                [.. w.Goal.Select(c => c.Index).Order()], w.Started, w.Score, w.Name,
+                [.. w.AttackingAllies.Select(p => p.Id).Order()], [.. w.DefendingAllies.Select(p => p.Id).Order()],
+                w.Beneficiary.Id, w.Duchy?.Key, w.Id))],
+            WarsSimulated = sim.Rules.HasFlag(RealmRules.Wars),
+            NextWarId = sim.NextWarId,
+            Alliances = sim.Rules.HasFlag(RealmRules.Alliances)
+                ? [.. sim.Alliances.Select(a => new Alliance(a.A.Id, a.B.Id, a.Since, a.Until,
+                    a.CrownedA, a.CrownedB, a.HouseA, a.HouseB, a.Reason))] : null,
+            AllianceOffers = [.. sim.AllianceOffers.Select(o => new AllianceOffer(o.A, o.B, o.Until))],
             Truces = [.. sim.Truces.Select(t => new Truce(t.A, t.B, t.Until))],
             Claims = [.. sim.Claims.Select(c => new Claim(c.County.Index, c.Claimant.Id, c.Until))],
             // What is partway done on the day, for a history run on from this one to pick up.

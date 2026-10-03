@@ -52,6 +52,12 @@ public sealed partial class MainForm
         };
         _quick.AcceptRequested += () => AcceptQuickHistoryAsync().Forget("accept history");
         _quick.ContinueHistoryRequested += () => ContinueQuickHistoryAsync().Forget("continue history");
+        _quick.Run.HighlightsOnly = _state.QuickHighlightsOnly;
+        _quick.Run.HighlightsOnlyChanged += on =>
+        {
+            _state.QuickHighlightsOnly = on;
+            _state.Save();
+        };
         _historyClock.Tick += (_, _) => OnHistoryYear();
         return _quick;
     }

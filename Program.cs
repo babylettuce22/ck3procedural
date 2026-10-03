@@ -73,6 +73,9 @@ public static class Program
                 case "--verify-world-editor":
                     return Tools.WorldEditorChecks.Run(i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : null);
 
+                case "--verify-history-alliances":
+                    return MapGen.HistorySim.VerifyAlliances(i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : null);
+
                 // Reads the installed game's cultures, faiths, holy sites and heads of faith the
                 // way --content vanilla will, prints what it found, and exits. Needs no heightmap.
                 // Pass a culture or faith key to see that one entry in full.
@@ -656,6 +659,14 @@ public static class Program
                 case "--relief-detail" when i + 1 < args.Length:
                     cfg.ReliefDetailRadius = int.Parse(args[++i],
                         System.Globalization.CultureInfo.InvariantCulture);
+                    break;
+
+                // Imported heightmaps: turn islands of up to this many pixels of a 4096x2048 map
+                // into sea (MapConfig.RemoveTinyIslands, on by default at 64). 0 turns it off.
+                case "--remove-tiny-islands" when i + 1 < args.Length:
+                    cfg.TinyIslandMaxArea = double.Parse(args[++i],
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    cfg.RemoveTinyIslands = cfg.TinyIslandMaxArea > 0;
                     break;
 
                 // Diagnostic: ship vanilla's camera ladder instead of this map's, to rule the

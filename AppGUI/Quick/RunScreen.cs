@@ -43,6 +43,17 @@ internal sealed class RunScreen : Panel
     /// <summary>The done view's "See in 3D": the written world's CK3 ground, draped over its relief.</summary>
     public event Action? See3DRequested;
 
+    /// <summary>The chronicle's "Highlights only" was switched by the player, for the host to remember.</summary>
+    public event Action<bool>? HighlightsOnlyChanged;
+
+    /// <summary>Whether the history chronicle shows only its highlights. Setting it switches the box.</summary>
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    public bool HighlightsOnly
+    {
+        get => _highlightsOnly.Checked;
+        set => _highlightsOnly.Checked = value;
+    }
+
     private enum Mode { Idle, Running, History, Done }
     private Mode _mode;
     private bool _failed;
@@ -80,6 +91,15 @@ internal sealed class RunScreen : Panel
     private readonly ChronicleFeed _chronicle = new()
     {
         EmptyText = "Wars won, realms divided, thrones seized: the chronicle fills as the years pass.",
+    };
+    private readonly CheckBox _highlightsOnly = new()
+    {
+        Text = "Highlights only",
+        Font = Small,
+        ForeColor = Theme.TextDim,
+        BackColor = Color.Transparent,
+        AutoSize = true,
+        UseMnemonic = false,
     };
     private readonly PillButton _continueHistory = new() { Text = "Continue its history", Glyph = "" };
     private readonly WrappingToolTip _tips = new() { InitialDelay = 500 };
@@ -136,6 +156,7 @@ internal sealed class RunScreen : Panel
         _pace.Name = namePrefix + "Pace";
         _accept.Name = namePrefix + "Accept";
         _chronicle.Name = namePrefix + "Chronicle";
+        _highlightsOnly.Name = namePrefix + "HighlightsOnly";
 
         // A discovery with a place gets its pin as its card is shown, not as it arrives: the column
         // paces the cards, and the pin keeps step with the card it belongs to.
@@ -414,7 +435,16 @@ internal sealed class RunScreen : Panel
     private void BuildHistoryView()
     {
         _historyPanel.Controls.AddRange([_historyTitle, _historySubtitle, _historyMap, _playPause, _pace, _accept, _standing,
-            _chronicleTitle, _chronicleCount, _chronicle]);
+            _chronicleTitle, _chronicleCount, _highlightsOnly, _chronicle]);
+        _highlightsOnly.CheckedChanged += (_, _) =>
+        {
+            _chronicle.HighlightsOnly = _highlightsOnly.Checked;
+            UpdateChronicleCount();
+            HighlightsOnlyChanged?.Invoke(_highlightsOnly.Checked);
+        };
+        _tips.SetToolTip(_highlightsOnly, "Only the biggest news, judged by how much changed: a realm that mattered "
+            + "falling, a sizeable one breaking free or swearing fealty, a war that took a good share of land, a great "
+            + "throne seized, a giant divided. Untick to see everything.");
         _playPause.Click += (_, _) => PlayPauseRequested?.Invoke();
         _pace.Click += (_, _) => PaceRequested?.Invoke();
         _accept.Click += (_, _) => AcceptRequested?.Invoke();
@@ -436,10 +466,14 @@ internal sealed class RunScreen : Panel
             int columnW = SideColumn(w), gap = S(24);
             int left = w - columnW - gap;
             int cx = x + left + gap;
+            // The title, then a row under it: the filter on the left, how many lines on the right.
             _chronicleTitle.Location = new Point(cx, y);
+            int row = y + _chronicleTitle.PreferredHeight + S(4);
+            int rowH = Math.Max(_highlightsOnly.PreferredSize.Height, _chronicleCount.PreferredHeight);
+            _highlightsOnly.Location = new Point(cx, row + (rowH - _highlightsOnly.PreferredSize.Height) / 2);
             _chronicleCount.Location = new Point(cx + columnW - _chronicleCount.PreferredWidth,
-                y + (_chronicleTitle.PreferredHeight - _chronicleCount.PreferredHeight) / 2);
-            int top = y + _chronicleTitle.PreferredHeight + S(8);
+                row + (rowH - _chronicleCount.PreferredHeight) / 2);
+            int top = row + rowH + S(8);
             _chronicle.Bounds = new Rectangle(cx, top, columnW, Math.Max(S(60), panel.ClientSize.Height - top - S(10)));
 
             // The map leaves room under it for its controls and the line on how the world stands.
@@ -510,8 +544,10 @@ internal sealed class RunScreen : Panel
         UpdateChronicleCount();
 
         // Each line's place flares on the map as it arrives, in the colour of what happened there.
+        // Only the lines showing: with highlights only, the map stays as calm as the column.
         foreach (var line in lines)
         {
+            if (_chronicle.HighlightsOnly && !line.Highlight) continue;
             if (line.Mark is not { } mark || PaintMark?.Invoke(mark) is not { } painted) continue;
             _pulses.Add(new Pulse(painted.Mask, painted.Bounds, Environment.TickCount64));
             while (_pulses.Count > MaxPulses)
@@ -626,8 +662,10 @@ internal sealed class RunScreen : Panel
 
     private void UpdateChronicleCount()
     {
-        int n = _chronicle.Count;
-        _chronicleCount.Text = n == 0 ? "" : n == 1 ? "1 entry" : $"{n} entries";
+        int n = _chronicle.Count, all = _chronicle.Total;
+        _chronicleCount.Text = all == 0 ? ""
+            : n < all ? $"{n} of {all} entries"
+            : n == 1 ? "1 entry" : $"{n} entries";
         _historyPanel.PerformLayout();
     }
 

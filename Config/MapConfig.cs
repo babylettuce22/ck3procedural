@@ -2347,6 +2347,36 @@ public sealed class MapConfig : CustomTypeDescriptor
     public HeightmapNormalization Normalization { get; set; } = HeightmapNormalization.Shift;
 
     /// <summary>
+    /// Turns isolated specks of land in an imported coastline into sea before anything reads the
+    /// heightmap: a PNG, an Azgaar map as drawn, or an Azgaar map after weathering (whose relief
+    /// is ours but whose coastline is still the author's). A Forge pipeline has its own Remove
+    /// Tiny Islands stage instead and is never touched here. See
+    /// <see cref="MapGen.HeightmapImage.ImportedCoastline"/> and
+    /// <see cref="NoiseTool.Core.IslandCleanup"/>, which the Forge stage shares, so the same
+    /// setting removes the same islands in both.
+    ///
+    /// On by default (user's call, 2026-10-02): an imported coastline almost always arrives with
+    /// specks nobody drew on purpose, and the default cutoff is small enough to leave anything
+    /// that reads as an island. Turn it off to keep every island an authored map was drawn with.
+    /// Islands too small to be a province at all are drowned regardless, later, by the province
+    /// partition and <see cref="Emit.MapDataWriter"/>; this removes them earlier, before climate,
+    /// rivers and provinces are built around them, and also takes the ones above that floor.
+    /// </summary>
+    [Category("7 Height scale")]
+    [Description("Imported heightmaps only (PNG and Azgaar): turn isolated land components no larger than Tiny island area into sea before the map is built. Whole islands only: peninsulas, narrow necks and lakes are never touched. Turn off to keep every island the map was drawn with. Forge pipelines use their own Remove Tiny Islands stage instead.")]
+    public bool RemoveTinyIslands { get; set; } = true;
+
+    /// <summary>
+    /// The largest island <see cref="RemoveTinyIslands"/> removes, in pixels of a 4096x2048 map;
+    /// the real cutoff scales with the heightmap's area (<see cref="NoiseTool.Core.IslandCleanup.Cutoff"/>),
+    /// so 64 is 256 px at 8192x4096 and 324 at 9216x4608. Read against the heightmap at the size
+    /// it is built at, after any fit. The generation log prints the cutoff that applied.
+    /// </summary>
+    [Category("7 Height scale")]
+    [Description("Largest island Remove tiny islands deletes, in pixels of a 4096x2048 map. Scales with map area: 64 removes islands of up to 16 px at 2048x1024, 256 px at 8192x4096 and 324 px at 9216x4608. The generation log shows the cutoff used.")]
+    public double TinyIslandMaxArea { get; set; } = 64;
+
+    /// <summary>
     /// Where the source heightmap puts its own sea level, on the 0-255 scale.
     ///
     /// Advisory rather than load-bearing, since the land floor became a detected value: this now

@@ -221,6 +221,9 @@ public sealed class RulerMap
         // One character per RULER, not per county: a liege's personal demesne covers several
         // counties under one man, and only the seat gets a character.
         var seats = realms.HolderCounty.Values.ToHashSet();
+        var headRulers = faiths.Faiths.Where(f => f.Head is { Inherited: false })
+            .Select(f => HistoryWriter.HeadRuler(f, realms, faiths, wilderness))
+            .Where(id => id is not null).ToHashSet();
 
         // Which rulers actually have someone answering to them. Only they need the standing that
         // holds a court together, and writing it for a lone count would just be free stats.
@@ -255,7 +258,9 @@ public sealed class RulerMap
             // standing he starts with. See Emit/Characters/RulerProfile.cs for what each number is worth.
             var profile = RulerProfile.Build(
                 county, primaryTitle.Tier, government, culture.Ethos,
-                cfg.StartYear - birthYear, liegeCounties.Contains(county), cfg.Seed, cfg.PeopleSalt);
+                cfg.StartYear - birthYear, liegeCounties.Contains(county), cfg.Seed, cfg.PeopleSalt,
+                headRulers.Contains(HistoryWriter.CharacterId(county))
+                    ? faith.Head : null);
 
             string dynastyId = prehistory.CharacterDynastyMap.GetValueOrDefault(county, HistoryWriter.DynastyId(county));
             string houseKey = prehistory.CharacterHouseMap.GetValueOrDefault(county, $"house_gen_{county.Index}");

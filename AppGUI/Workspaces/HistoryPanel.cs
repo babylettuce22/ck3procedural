@@ -70,6 +70,15 @@ internal sealed class HistoryPanel : Panel
         Margin = Dpi.Pad(6, 7, 3, 3),
     };
 
+    private readonly CheckBox _highlightsOnly = new()
+    {
+        Text = "Highlights only",
+        AutoSize = true,
+        Font = Theme.Ui,
+        ForeColor = Theme.TextDim,
+        Margin = Dpi.Pad(12, 7, 3, 3),
+    };
+
     private readonly Button _play = Theme.MakeButton("▶  Play", 84, primary: true);
     private readonly Button _step = Theme.MakeButton("+1 year", 70);
     private readonly Button _reset = Theme.MakeButton("Reset", 64);
@@ -95,6 +104,8 @@ internal sealed class HistoryPanel : Panel
         ("Realms", RealmRules.Wars, "Wars and truces", "Conquest is fought as wars over a de jure duchy or lost land, won or lost "
             + "over years, followed by a five-year truce. Off, counties change hands one at a time"),
         ("Realms", RealmRules.Homage, "Homage", "A realm several times a neighbour's size takes it as a vassal, whole"),
+        ("Realms", RealmRules.Alliances, "Alliances", "Independent rulers negotiate nearby political alliances, renew them at succession, "
+            + "and call their direct allies to war. Clerical rulers make political agreements without marriage."),
         ("Realms", RealmRules.Secession, "Secession", "An overstretched realm loses a block of its edge, which becomes a realm of its own"),
         ("Realms", RealmRules.Collapse, "Collapse", "An unstable realm's vassals all walk out at once"),
         ("Realms", RealmRules.Independence, "Independence", "A vassal throws off its liege — most readily when the whole realm "
@@ -256,6 +267,12 @@ internal sealed class HistoryPanel : Panel
         _changeYear.Click += (_, _) => ChangeYearRequested?.Invoke();
         _showConquests.CheckedChanged += (_, _) => RebuildChronicle();
         _showSuccessions.CheckedChanged += (_, _) => RebuildChronicle();
+        _highlightsOnly.CheckedChanged += (_, _) =>
+        {
+            // The detail the other two add is never a highlight.
+            _showConquests.Enabled = _showSuccessions.Enabled = !_highlightsOnly.Checked;
+            RebuildChronicle();
+        };
         _timer.Tick += (_, _) => OnFrame();
         _view.ViewChanged += (_, pixel) => ShowReadout(pixel);
 
@@ -266,6 +283,9 @@ internal sealed class HistoryPanel : Panel
         tips.SetToolTip(_showConquests, "List every war declared and every war abandoned, not only the peaces that "
             + "move borders — and, with wars off, every county that changes hands");
         tips.SetToolTip(_showSuccessions, "List every ruler's death and heir, not only the partitions and usurpations");
+        tips.SetToolTip(_highlightsOnly, "List only the biggest news, judged by how much changed: a realm that mattered "
+            + "falling, a sizeable one breaking free or swearing fealty, a war that took a good share of land, a great "
+            + "throne seized, a giant divided, a feud begun, a kingdom changing empire");
         tips.SetToolTip(_apply, "Make the realms as they stand now the world's start, and write the mod with them");
         tips.SetToolTip(_discard, "Go back to the realms the generator grows; takes effect when the mod is next written");
         tips.SetToolTip(_changeYear, "Write the applied history as another year. Every date moves with it; nothing is simulated again");
@@ -304,14 +324,19 @@ internal sealed class HistoryPanel : Panel
         _settingsToggle.Click += (_, _) => SetSettingsOpen(!_settingsPanel.Visible);
         tips.SetToolTip(_settingsToggle, "Show or hide the simulation's settings");
 
+        // Wraps onto a second row: the three filters don't fit the column's width beside the title.
         var chronicleHeader = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = Dpi.S(30),
-            WrapContents = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            WrapContents = true,
+            Padding = Dpi.Pad(0, 0, 0, 4),
             BackColor = Theme.Surface,
         };
         chronicleHeader.Controls.Add(new Label { Text = "Chronicle", AutoSize = true, Font = Theme.UiBold, ForeColor = Theme.Text, Margin = Dpi.Pad(8, 7, 3, 3) });
+        chronicleHeader.Controls.Add(_highlightsOnly);
+        chronicleHeader.SetFlowBreak(_highlightsOnly, true);
         chronicleHeader.Controls.Add(_showConquests);
         chronicleHeader.Controls.Add(_showSuccessions);
 
@@ -761,6 +786,8 @@ internal sealed class HistoryPanel : Panel
                         SuccessionLaw.Elective => " · elective",
                         _ => " · single heir",
                     });
+        var allies = _sim.AlliesOf(owner.Root).Select(a => a.Capital.Name).ToList();
+        if (allies.Count > 0) text += $" · allies: {string.Join(", ", allies)}";
         if (_sim.WarOver(county) is { } war)
             text += $" · fought over in {war.Name}, {war.Attacker.Capital.Name} against {war.Defender.Capital.Name}, "
                     + $"war score {war.Score:+0;-0;0}";
@@ -959,6 +986,8 @@ internal sealed class HistoryPanel : Panel
     /// </summary>
     private string? Describe(FormationEvent e)
     {
+        if (_highlightsOnly.Checked && !e.Highlight) return null;
+
         string subject = e.Subject.Name;
         string actor = e.Actor?.Name ?? "a realm";
         string other = e.Counterpart?.Name ?? "its lord";

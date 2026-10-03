@@ -25,7 +25,9 @@
 #
 # A seat with no var:gen_synod_faith (a world generated before it existed) follows its see as before.
 #
-# Sees founded in play have no seat, so they do not vote; only the generated sees do.
+# Sees founded in play gain permanent seats through zz_gen_synod_registration_on_actions.txt.
+# A holder already owning another seat cannot take a second: an existing seat goes to a fresh
+# eligible hierarch instead. The seat branches also check this to prevent a handover loop.
 #
 # The head-of-faith branch is only for faiths carrying gen_settled_doctrine (every generated
 # religion's) and the clerical-regions doctrine; the seat branches only touch our own titles. Vanilla's
@@ -48,6 +50,7 @@ gen_see_electors_faith_conversion = {
 	trigger = {
 		any_held_title = {
 			has_variable = gen_synod_faith
+			NOT = { has_variable = gen_synod_personal }
 			NOT = { var:gen_synod_faith = root.faith }
 		}
 	}
@@ -55,6 +58,7 @@ gen_see_electors_faith_conversion = {
 		every_held_title = {
 			limit = {
 				has_variable = gen_synod_faith
+				NOT = { has_variable = gen_synod_personal }
 				NOT = { var:gen_synod_faith = root.faith }
 			}
 			save_scope_as = gen_converted_seat
@@ -106,7 +110,7 @@ gen_see_electors_title_gain = {
 				limit = {
 					OR = {
 						NOT = { scope:gen_moving_seat = { has_variable = gen_synod_faith } }
-						gen_synod_rightful_holder_trigger = { FAITH = scope:gen_moving_seat.var:gen_synod_faith }
+						gen_synod_can_receive_seat_trigger = { FAITH = scope:gen_moving_seat.var:gen_synod_faith SEAT = scope:gen_moving_seat }
 					}
 				}
 				gen_synod_seat_transfer_effect = { SEAT = scope:gen_moving_seat HOLDER = root }
@@ -115,7 +119,7 @@ gen_see_electors_title_gain = {
 				limit = {
 					NOT = {
 						scope:gen_moving_seat.holder ?= {
-							gen_synod_rightful_holder_trigger = { FAITH = scope:gen_moving_seat.var:gen_synod_faith }
+							gen_synod_can_receive_seat_trigger = { FAITH = scope:gen_moving_seat.var:gen_synod_faith SEAT = scope:gen_moving_seat }
 						}
 					}
 				}
@@ -132,7 +136,7 @@ gen_see_electors_title_gain = {
 					OR = {
 						NOT = { scope:title = { has_variable = gen_synod_faith } }
 						scope:title.var:gen_synod_see.holder = {
-							gen_synod_rightful_holder_trigger = { FAITH = scope:title.var:gen_synod_faith }
+							gen_synod_can_receive_seat_trigger = { FAITH = scope:title.var:gen_synod_faith SEAT = scope:title }
 						}
 					}
 				}
@@ -141,7 +145,7 @@ gen_see_electors_title_gain = {
 			else_if = {
 				limit = {
 					scope:title = { has_variable = gen_synod_faith }
-					NOT = { gen_synod_rightful_holder_trigger = { FAITH = scope:title.var:gen_synod_faith } }
+					NOT = { gen_synod_can_receive_seat_trigger = { FAITH = scope:title.var:gen_synod_faith SEAT = scope:title } }
 				}
 				gen_synod_seat_fresh_holder_effect = { SEAT = scope:title }
 			}

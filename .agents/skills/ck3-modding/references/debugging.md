@@ -1,7 +1,11 @@
 # Debugging, graphics, tooling
 
 (For GUI-specific debugging including the test-window feedback loop, see `gui.md`.
-For static validation with ck3-tiger, see `validation.md`.)
+For static validation with ck3-tiger, see `validation.md`.
+For a **crash or CTD**, use the `mod-verify` skill's "When the game crashes" section. CK3's
+`exception.txt` names no functions, but `ck3devtools\crashdump` gives exact labelled stacks and
+full-memory dumps that name the event, effect or key involved. Relaunching the game truncates
+`<logs>`, so copy them first.)
 
 ## Debugging workflow (do this every time)
 
@@ -37,6 +41,10 @@ portrait editor (debug mode) exports DNA strings. Music/sound: definitions in `m
 `sound/` gated by triggers. For deep work here use the wiki (Graphical assets, 3D models pages)
 plus the install's `gfx/`. PoD's `common/dna_data/` (per-clan DNA files) and `common/genes/`
 overrides are a good worked example of heavy portrait modding.
+
+**On this machine:** head shapes (genes, ethnicities, portrait modifiers, head blendshapes and
+bone-driven sliders) and map ground can be rendered offline in seconds. See
+`offline-renders.md`, which also documents the full gene → attribute → blendshape/`.anim` chain.
 
 ## Tooling and resources
 

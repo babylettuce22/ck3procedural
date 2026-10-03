@@ -1,0 +1,34 @@
+﻿# Character scope: the head of a generated faith. Called at game start and when the head-of-faith
+# title is gained (zz_gen_head_devotion_on_actions.txt), for every kind of head: a landless
+# gen_hof_N theocrat, a landed spiritual head, a temporal ruler, and a head of an earlier bookmark.
+#
+# A head of faith should read as one: piety level 4 for a spiritual head, 3 for a temporal one
+# (level 3 is what most clergy interactions ask, e.g. clergy_interaction_generic_piety_level_or_puppet_req_trigger),
+# and 1000 piety in hand to spend. Floors only: a more devout head keeps what they have.
+gen_head_devotion_effect = {
+	if = {
+		limit = {
+			is_alive = yes
+			faith = { has_doctrine = gen_settled_doctrine }
+		}
+		if = {
+			limit = { faith = { has_doctrine_parameter = spiritual_head_of_faith } }
+			while = {
+				count = 5
+				limit = { piety_level < 4 }
+				add_piety_level = 1
+			}
+		}
+		else = {
+			while = {
+				count = 5
+				limit = { piety_level < 3 }
+				add_piety_level = 1
+			}
+		}
+		if = {
+			limit = { piety < 1000 }
+			add_piety = { value = 1000 subtract = piety }
+		}
+	}
+}

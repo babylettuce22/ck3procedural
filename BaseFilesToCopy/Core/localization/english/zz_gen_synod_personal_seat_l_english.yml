@@ -1,0 +1,5 @@
+﻿l_english:
+ gen_synod_personal_seat_name:0 "[gen_personal_recipient.GetFirstNameNoTooltip]"
+ gen_synod_personal_seat_adj:0 "[gen_personal_recipient.GetFirstNameNoTooltip]"
+ gen_synod_chaplain_same_faith_tt:0 "Your chaplain must follow [recipient.GetFaith.GetName]"
+ gen_synod_personal_seat_cap_tt:0 "[recipient.GetFaith.GetName] must have room for another personal [cardinalate|E]: one for every three tied to a see"

@@ -7,7 +7,8 @@ namespace Ck3MapGen.AppGUI;
 /// One line of the Quick page's chronicle: the year, what happened, and the colour of the realm
 /// it happened to as the map shows it, for a swatch.
 /// </summary>
-internal readonly record struct ChronicleLine(int Year, string Text, (byte R, byte G, byte B)? Colour, MapMark? Mark = null);
+internal readonly record struct ChronicleLine(int Year, string Text, (byte R, byte G, byte B)? Colour, MapMark? Mark = null,
+    bool Highlight = false);
 
 /// <summary>
 /// Where a chronicle line happened on the history map, to light up: counties by their place in
@@ -31,8 +32,7 @@ internal sealed record MapMark(int[] Counties, (byte R, byte G, byte B) Colour);
 /// </summary>
 internal sealed class QuickHistory
 {
-    private readonly HistorySim _sim;
-    private readonly CountyCanvas _canvas;
+    private readonly HistorySim _sim;    private readonly CountyCanvas _canvas;
     private readonly RulerMap? _rulers;
     private readonly PrehistoryMap? _prehistory;
     private readonly AppliedHistory? _earlier;
@@ -221,7 +221,7 @@ internal sealed class QuickHistory
             var about = e.Actor ?? e.Subject;
             bool fallen = e.Kind == FormationKind.Standing && e.Tension == 0;
             var colour = !fallen && _sim.OwnerOf(about) is { } owner ? ColourOf(owner.Root) : ((byte, byte, byte)?)null;
-            lines.Add(new ChronicleLine(e.Year, text, colour, Mark(e)));
+            lines.Add(new ChronicleLine(e.Year, text, colour, Mark(e), e.Highlight));
         }
         _changedFrom.Clear();
         return lines;

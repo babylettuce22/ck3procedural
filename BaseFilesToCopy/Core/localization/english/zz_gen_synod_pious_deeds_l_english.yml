@@ -1,0 +1,9 @@
+﻿l_english:
+ gen_synod_promulgate_desc:0 "Those close to me have assembled an account of my service to [ROOT.Char.GetFaith.GetName]. They wish to carry it among the faithful, so that my deeds may speak for me when the Synod chooses its next head of faith."
+ gen_institutional_faith_required_tt:0 "Follows a faith with the required religious institutions"
+ gen_synod_promulgate_selection:0 "Permit the faithful to spread word of your pious deeds."
+ gen_synod_pious_deeds_desc:0 "An account of my deeds is ready to travel among the faithful. I could let it build my standing in the Synod, or spend more to ensure that my name is the one on everyone's lips."
+ gen_synod_pious_deeds_score:0 "Let my deeds speak for themselves."
+ gen_synod_pious_deeds_score_tt:0 "Your election candidacy score increases by #P 30#!."
+ gen_synod_pious_deeds_populist:0 "Let every town hear my name."
+ gen_synod_pious_deeds_populist_tt:0 "Increase your Populist score enough to take first place on the current shortlist. This does not guarantee victory in the election."

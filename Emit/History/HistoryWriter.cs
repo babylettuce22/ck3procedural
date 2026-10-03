@@ -778,6 +778,7 @@ public static class HistoryWriter
                     if (priest.Female) b.Field("female", "yes");
                     b.Field("religion", priest.FaithKey);
                     b.Field("culture", priest.CultureKey);
+                    WriteHeadEducation(b, Rng.For(cfg.Seed, 0x48E1, Rng.StableHash(priest.Id)));
                     if (cultures.Cultures.FirstOrDefault(c => c.Key == priest.CultureKey) is { } priestCulture)
                         b.Field("trait", GetPhenotypeTrait(priestCulture, ethnicities, cfg));
                     b.Inline(priest.BirthDate, "birth = yes");
@@ -966,6 +967,7 @@ public static class HistoryWriter
 
                 b.Field("religion", faith.Key);
                 b.Field("culture", culture.Key);
+                WriteHeadEducation(b, Rng.For(cfg.Seed, 0x48E1, Rng.StableHash(faith.Key)));
                 b.Inline($"{birthYear}.1.1", "birth = yes");
 
                 using (b.Block(cfg.StartDate))
@@ -985,6 +987,14 @@ public static class HistoryWriter
         {
             ParadoxText.WriteBom(Path.Combine(dir, "02_generated_head_of_faith.txt"), b.ToString());
         }
+    }
+
+    private static void WriteHeadEducation(JominiBuilder b, Rng rng)
+    {
+        b.Field("trait", rng.Chance(0.5) ? "education_learning_3" : "education_learning_4");
+        // Base skill plus education yields 20-28 before personality and other modifiers.
+        // The game-start hook corrects any shortfall and also covers landed/temporal heads.
+        b.Field("learning", rng.Int(14, 20));
     }
 
     private static void WriteWildernessHolder(string modDir, MapConfig cfg, List<Title> wild,

@@ -227,6 +227,7 @@ public static partial class ContentWriter
         // Mood music pools are gated on vanilla heritages a generated culture never has, plus a
         // Dynastic Cycle branch that every independent satisfies. MusicWriter keys them on dress.
         Core.Stage.Time("music pools", () => MusicWriter.WriteAll(modDir, gameDir));
+        Core.Stage.Time("institutional faith mechanics", () => InstitutionalFaithWriter.WriteAll(modDir, gameDir, faiths));
 
         Core.Stage.Time("route files", () => RouteWriter.WriteAll(modDir, routes, crossings, silkRoad,
             provinces, order, baronyCount, provinceTerrain));

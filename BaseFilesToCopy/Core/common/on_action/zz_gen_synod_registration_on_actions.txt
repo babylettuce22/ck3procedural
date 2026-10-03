@@ -1,0 +1,56 @@
+﻿# Append custom actions; never replace the vanilla title-gain or yearly effects.
+on_title_gain = {
+	on_actions = { gen_synod_queue_new_see gen_synod_queue_personal_cleanup }
+}
+
+yearly_playable_pulse = {
+	on_actions = { gen_synod_registration_repair }
+}
+
+# Root: the new title holder. Wait for creation/grant/split to resolve before creating another
+# title. The event uses the see's CURRENT holder, not the possibly dead/changed original root.
+gen_synod_queue_new_see = {
+	trigger = {
+		exists = scope:title
+		scope:title = { gen_synod_unregistered_see_trigger = yes }
+	}
+	effect = {
+		scope:title = { save_scope_as = gen_pending_see }
+		trigger_event = { id = gen_synod.0002 days = 1 }
+	}
+}
+
+# Only the faith's head scans, once a year, and only that faith's own clerical regions. This also
+# repairs older saves containing sees founded before registration existed. Repeated calls do
+# nothing to registered sees, or to holders who already have a permanent vote.
+gen_synod_registration_repair = {
+	trigger = {
+		faith = { gen_synod_electing_faith_trigger = yes }
+		this = faith.religious_head
+	}
+	effect = {
+		gen_synod_remove_personal_seats_effect = yes
+		faith = {
+			every_clerical_region_title = {
+				limit = { gen_synod_unregistered_see_trigger = yes }
+				gen_synod_register_see_effect = yes
+			}
+		}
+	}
+}
+
+# Vanilla vacates one elector title on a Head of Faith's title gain. Clean up all personal titles
+# after the transaction as well, including a save that already contained duplicate appointments.
+gen_synod_queue_personal_cleanup = {
+	trigger = {
+		any_held_title = { has_variable = gen_synod_personal }
+		OR = {
+			this = faith.religious_head
+			any_held_title = {
+				has_variable = gen_synod_faith
+				NOT = { has_variable = gen_synod_personal }
+			}
+		}
+	}
+	effect = { trigger_event = { id = gen_synod.0003 days = 1 } }
+}

@@ -44,6 +44,12 @@ namespace Ck3MapGen.Emit;
 /// A decision vanilla shows to every clergy ruler but that needs the Christian Church situation,
 /// which never starts here. Hidden unless that situation exists. See WriteLegatineMissionGate.
 ///
+/// ---- Council invalidation ----
+///
+/// The Ecumenical and Investiture Councils tell every guest the host renounced the faith when a
+/// council fails under an unlanded host, and a Hierarch hosting from a see is always unlanded.
+/// Narrowed so they get vanilla's real reason. See WriteCouncilInvalidation.
+///
 /// Only for <see cref="MapConfig.ContentSourceMode.Procedural"/>, like the set it completes. A
 /// VanillaWorld map has the real Christian faiths, and vanilla's text and building are right there.
 /// </summary>
@@ -82,6 +88,37 @@ public static class HierarchyFlavourWriter
         WriteArticles(modDir, gameDir);
         WriteLegationGate(modDir, gameDir);
         WriteLegatineMissionGate(modDir, gameDir);
+        WriteCouncilInvalidation(modDir, gameDir, "ecumenical council", "ecumenical_council.txt");
+        WriteCouncilInvalidation(modDir, gameDir, "investiture council", "pam_investiture_council.txt");
+    }
+
+    /// <summary>
+    /// A council's <c>on_invalidated</c> picks its message by <c>scope:host = { is_landed = no }</c>:
+    /// unlanded, and every guest gets <c>activity_system.0321</c>, "our host no longer believes in the
+    /// faith / is no longer its head"; landed, and they get the real reason (no quorum, nobody came,
+    /// imprisoned, incapable). A see and a Synod Seat are not land, so a Hierarch hosting from their see
+    /// is always "unlanded", and a council that merely failed its quorum told every guest the host had
+    /// renounced the faith (seen in game 2026-10-02, qw). The text picks "renounced" because the host is
+    /// not Christian, which no generated faith is.
+    ///
+    /// The fallback is narrowed to a host who has truly lost the standing to host: unlanded, holding no
+    /// head-of-faith title and no see. Anyone else falls through to vanilla's specific reasons.
+    /// Patched from the installed game each generate, so the rest of the activity stays current.
+    /// </summary>
+    private static void WriteCouncilInvalidation(string modDir, string gameDir, string label, string file)
+    {
+        var patch = VanillaPatch.Open(gameDir, label, "common", "activities", "activity_types", file);
+        if (patch is null) return;
+
+        patch.InsertAfter("on_invalidated host unlanded",
+            "\n\t\t\t\t# Not a Hierarch hosting from a see. See Emit/Culture/HierarchyFlavourWriter.cs.\n" +
+            "\t\t\t\tscope:host = {\n" +
+            "\t\t\t\t\tNOT = { any_held_title = { is_head_of_faith = yes } }\n" +
+            "\t\t\t\t\tNOT = { any_held_title = { tier >= tier_duchy has_clerical_region = yes } }\n" +
+            "\t\t\t\t}",
+            "on_invalidated = {", "scope:host = { is_landed = no }");
+
+        patch.Ship(modDir);
     }
 
     private static void WriteArticles(string modDir, string gameDir)

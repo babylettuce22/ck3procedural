@@ -48,6 +48,8 @@ public static class HistoryChronicle
             // A duchy turning is news; one county, much less so.
             "assimilated" or "converted" => r.Subject.StartsWith("c_") ? 0.75 : 1.5,
             "held" => 1.5,
+            "allied" or "aided" or "refusedaid" => 1.5,
+            "unallied" => 0.75,
             "chosen" or "settled" or "resettled" or "ruined" => 1,
             "drifted" => r.Into?.StartsWith("e_") == true ? 4 : 2.5,
             _ => 0,
@@ -166,6 +168,10 @@ public static class HistoryChronicle
             "won" => $"In {r.Year} {Lords(r.Actor)} took {Ground()} from {Lords(r.Counterpart)}"
                      + (r.Counties?.Contains(r.Counterpart) == true ? ", seat and all." : "."),
             "held" => $"In {r.Year} {Lords(r.Actor)} held {Ground()} against {Lords(r.Counterpart)}.",
+            "allied" => $"In {r.Year} {Lords(r.Actor)} agreed an alliance with {Lords(r.Counterpart)}.",
+            "unallied" => $"In {r.Year} the alliance between {Lords(r.Actor)} and {Lords(r.Counterpart)} ended.",
+            "aided" => $"In {r.Year} {Lords(r.Actor)} answered {Lords(r.Counterpart)}'s call to war over {Ground()}.",
+            "refusedaid" => $"In {r.Year} {Lords(r.Actor)} refused {Lords(r.Counterpart)}'s call to war over {Ground()}.",
             "divided" when r.Person is { } heir => $"When {r.Other ?? "the old ruler"} died in {r.Year}, {heir} took "
                                                   + $"{Named(subject)} as {pronoun} share of the realm.",
             "seized" when r.Person is { } who => $"In {r.Year}, after {r.Other ?? "the old ruler"} died, {who} seized the seat at {ChronicleMap.TitleLink(subject)}.",

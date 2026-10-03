@@ -120,7 +120,14 @@ public sealed partial class HistorySim
                 }
 
                 _law[p.Id] = LawFor(ruler.Government);
-                _femaleShare[p.Id] = FemaleShareOf(ruler.Faith);
+                _government[p.Id] = ruler.Government;
+                _femaleShare[p.Id] = IsTheocracy(ruler.Government)
+                    ? ruler.Faith.DoctrineOf("doctrine_clerical_gender") switch
+                    {
+                        "doctrine_clerical_gender_male_only" => 0,
+                        "doctrine_clerical_gender_female_only" => 1,
+                        _ => FemaleShareOf(ruler.Faith),
+                    } : FemaleShareOf(ruler.Faith);
                 Seat(p, new SimRuler
                 {
                     Id = _nextRuler++, Name = ruler.Name, Female = ruler.Female, Born = ruler.BirthYear,
@@ -142,10 +149,18 @@ public sealed partial class HistorySim
             }
 
             // The laws of the land, for whatever breaks away from here later (SeatNewRealms).
+            if (earlier?.Realms.FirstOrDefault(r => r.Id == p.Id)?.Government is { } government)
+            {
+                _government[p.Id] = government;
+                _law[p.Id] = LawFor(government);
+            }
             foreach (var county in p.Counties)
             {
                 _landLaw[county] = _law[p.Id];
                 _landFemaleShare[county] = _femaleShare[p.Id];
+                _landGovernment[county] = GovernmentOf(p);
+                if (rulers is not null && rulers.TryGet(p.Capital, out var seated))
+                    _diplomaticFaith[county] = seated.Faith.Key;
             }
         }
     }
@@ -236,6 +251,18 @@ public sealed partial class HistorySim
             : Math.Min(1.0, (0.02 + 0.25 * instability) * _settings.Crises));
         int younger = (rng.Chance(Math.Min(1.0, 0.5 * _settings.Heirs)) ? 1 : 0)
                     + (rng.Chance(Math.Min(1.0, 0.25 * _settings.Heirs)) ? 1 : 0);
+
+        // Clerical appointment is not partition or a child inheriting the priesthood. Even with
+        // succession's political effects disabled, seat an adult cleric without a parent link.
+        if (IsTheocracy(GovernmentOf(p)))
+        {
+            var cleric = NewRuler(p, FoundHouse(p.Culture, rng), rng, age: rng.Int(30, 60));
+            Seat(p, cleric);
+            Remember("chosen", p.Capital, p, person: cleric.Name, other: dead.Name);
+            _sim.Log(FormationKind.Succeeded, p.Capital, p, null, 0,
+                $"{dead} died; {cleric.Name} was appointed to rule {p.Capital.Name}");
+            return;
+        }
 
         if (succession && newHouse)
         {
@@ -440,6 +467,7 @@ public sealed partial class HistorySim
         {
             _law.TryAdd(p.Id, _landLaw.GetValueOrDefault(p.Capital, SuccessionLaw.Partition));
             _femaleShare.TryAdd(p.Id, _landFemaleShare.GetValueOrDefault(p.Capital, 0.05));
+            _government.TryAdd(p.Id, _landGovernment.GetValueOrDefault(p.Capital, GovernmentMap.Feudal));
 
             Seat(p, NewRuler(p, FoundHouse(p.Culture, rng), rng, age: rng.Int(20, 50)));
         }
@@ -451,6 +479,12 @@ public sealed partial class HistorySim
     /// </summary>
     private readonly Dictionary<Title, SuccessionLaw> _landLaw = [];
     private readonly Dictionary<Title, double> _landFemaleShare = [];
+    private readonly Dictionary<int, string> _government = [];
+    private readonly Dictionary<Title, string> _landGovernment = [];
+
+    public string GovernmentOf(Polity p) => _government.GetValueOrDefault(p.Id, GovernmentMap.Feudal);
+    internal static bool IsTheocracy(string government)
+        => government is GovernmentMap.Theocracy or GovernmentMap.Ecclesiastical;
 
     /// <summary>A new house with a name from its culture's list that no house in the history has used.</summary>
     private SimHouse FoundHouse(Culture culture, Rng rng)
@@ -492,7 +526,7 @@ public sealed partial class HistorySim
     /// </summary>
     private static SuccessionLaw LawFor(string government) => GovernmentMap.Family(government) switch
     {
-        GovernmentMap.Republic or GovernmentMap.Theocracy => SuccessionLaw.Elective,
+        GovernmentMap.Republic or GovernmentMap.Theocracy or GovernmentMap.Ecclesiastical => SuccessionLaw.Elective,
         GovernmentMap.Administrative => SuccessionLaw.Single,
         _ => SuccessionLaw.Partition,
     };

@@ -388,10 +388,11 @@ public static class Faiths
     public const string AbrahamicHostility = "abrahamic_hostility_doctrine";
 
     /// <summary>
-    /// The two tenets that carry <c>great_holy_wars_active</c>. Vanilla shows the first only to
-    /// Christianity and Judaism and the second only to Islam, but <c>is_shown</c> gates the
-    /// creation screen, not script, so a generated faith can hold either. The first suits a
-    /// spiritual head, the second a temporal one.
+    /// The two tenets that carry <c>great_holy_wars_active</c>. Vanilla's <c>can_pick</c> limits
+    /// the first to Christianity/Judaism and the second to Islam/Dualism; script-written faiths
+    /// load past that, but the rite UI flagged the tenet as unpickable, so the Procedural set
+    /// overrides both without the religion gate (zz_gen_great_holy_war_tenets.txt). The first
+    /// suits a spiritual head, the second a temporal one.
     /// </summary>
     private const string SpiritualWarTenet = "tenet_armed_pilgrimages";
     private const string TemporalWarTenet = "tenet_struggle_submission";

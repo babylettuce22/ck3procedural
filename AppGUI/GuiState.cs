@@ -144,6 +144,9 @@ public sealed class GuiState
     /// </summary>
     public bool RememberStartChoice { get; set; }
 
+    /// <summary>The Quick history chronicle's "Highlights only": the biggest news alone while the years pass.</summary>
+    public bool QuickHighlightsOnly { get; set; } = true;
+
     /// <summary>"Azgaar", "Quick" or "Complex": where a remembered launch opens. Null until a card is picked.</summary>
     public string? StartWith { get; set; }
 

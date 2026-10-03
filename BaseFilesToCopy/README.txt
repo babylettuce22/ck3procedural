@@ -114,3 +114,11 @@ vanilla concept tooltips and without the Japanese historical framing.
 Mandala and Wanua are generalized as Sacral and Maritime. Government and related concept
 descriptions retain their mechanical tooltips; Sacral emphasizes divine kingship and tributaries,
 and Maritime emphasizes seafaring tribal communities, barter and raiding.
+InstitutionalFaithWriter also adapts spiritual fulfillment, Synod promulgation, cathedral projects,
+clerical arbitration, tenet popularity and the clergy legacy for generated institutional religions.
+Its overrides are lifted from the installed game's individual definitions on each generation;
+the shared trigger, Synod event and localization ship in Core. See docs/institutional-faith-access.md.
+
+The two great-holy-war tenets (Armed Pilgrimages, Struggle and Submission) are re-declared without
+vanilla's religion gate in can_pick, since every generated faith with a Head of Faith is seeded with
+one (common/religion/tenet_types/zz_gen_great_holy_war_tenets.txt).

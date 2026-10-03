@@ -635,6 +635,8 @@ public sealed class AzgaarReliefProvider(string heightmapPath, string exportPath
 
         int sea = (int)Math.Round(Math.Clamp(cfg.SourceSeaLevel, 0, 254) * MapDataWriter.Step255);
         var raw = AzgaarRelief.Build(drawn.Raw, drawn.Width, drawn.Height, sea, world, seed, ct, status);
-        return HeightmapSource.FromRaw(raw, drawn.Width, drawn.Height, Label, cfg, allowUnverifiedSize);
+        // Weathered relief, but the coastline is still the one the author drew.
+        return HeightmapSource.FromRaw(raw, drawn.Width, drawn.Height, Label, cfg, allowUnverifiedSize,
+            importedCoastline: true);
     }
 }

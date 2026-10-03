@@ -1,0 +1,36 @@
+﻿# Generated heads of faith begin office devout. See common/scripted_effects/zz_gen_head_devotion_effects.txt.
+# Appended hooks only; vanilla's game-start and title-gain effects are untouched.
+on_game_start_after_lobby = {
+	on_actions = { gen_head_devotion_start }
+}
+
+gen_head_devotion_start = {
+	effect = {
+		every_religion_global = {
+			every_faith = {
+				limit = { has_doctrine = gen_settled_doctrine exists = religious_head }
+				save_scope_as = gen_devout_faith
+				religious_head = {
+					if = {
+						limit = { faith = scope:gen_devout_faith }
+						gen_head_devotion_effect = yes
+					}
+				}
+			}
+		}
+	}
+}
+
+# Root is the new holder; scope:title is the title gained (creation, grant or succession).
+on_title_gain = {
+	on_actions = { gen_head_devotion_title_gain }
+}
+
+gen_head_devotion_title_gain = {
+	trigger = {
+		exists = scope:title
+		scope:title = { is_head_of_faith = yes }
+		faith = { has_doctrine = gen_settled_doctrine }
+	}
+	effect = { gen_head_devotion_effect = yes }
+}

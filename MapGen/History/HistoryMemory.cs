@@ -29,6 +29,9 @@ public sealed partial class HistorySim
 {
     private readonly List<SimMemory> _memory = [];
 
+    /// <summary>The peak size of each realm that died this year, by its last seat; emptied by <see cref="MarkHighlights"/>.</summary>
+    private readonly Dictionary<Title, int> _fallenPeaks = [];
+
     /// <summary>Everything worth a line of history, oldest first. See <see cref="AppliedHistory.Chronicle"/>.</summary>
     public IReadOnlyList<SimMemory> Memory => _memory;
 
@@ -71,6 +74,70 @@ public sealed partial class HistorySim
         {
             var m = _memory[i];
             _memory[i] = m with { Scale = Math.Max(Of(m.Subject), Math.Max(Of(m.Actor), Of(m.Counterpart))) };
+        }
+
+        MarkHighlights(events, memories, before, after);
+    }
+
+    /// <summary>
+    /// Marks the year's biggest news (<see cref="FormationEvent.Highlight"/>), by how much changed
+    /// rather than by <see cref="FormationEvent.Scale"/>: an empire taking one county is not news
+    /// because the empire is large. Sizes are shares of the world's held counties, so a small map
+    /// and a large one read alike: sizable a 25th of them, great an 8th, vast a quarter.
+    /// Read-only, like <see cref="MeasureYear"/>.
+    /// </summary>
+    private void MarkHighlights(int events, int memories, Dictionary<Title, int> before, Dictionary<Title, int> after)
+    {
+        var fallen = new Dictionary<Title, int>(_fallenPeaks);
+        _fallenPeaks.Clear();
+
+        int world = Math.Max(1, _sim.Owner.Count);
+        int sizable = Math.Max(5, world / 25), great = Math.Max(12, world / 8), vast = Math.Max(24, world / 4);
+        int Before(Title? t) => t is null ? 0 : before.GetValueOrDefault(t);
+        int After(Title? t) => t is null ? 0 : after.GetValueOrDefault(t);
+
+        // A war's land, as the memory of it counts it: the peace's note is prose.
+        var taken = new Dictionary<Title, int>();
+        for (int i = memories; i < _memory.Count; i++)
+            if (_memory[i] is { What: "won", Actor: { } attacker, Counties: { } counties })
+                taken[attacker] = taken.GetValueOrDefault(attacker) + counties.Count;
+
+        for (int i = events; i < _sim.Events.Count; i++)
+        {
+            var e = _sim.Events[i];
+            e.Highlight = e.Kind switch
+            {
+                // A realm of some size going its own way, or bending the knee, with its vassals.
+                FormationKind.Freed => After(e.Subject) >= sizable,
+                FormationKind.Fragmented => e.Tension >= 2 && After(e.Subject) >= sizable,
+                FormationKind.Vassalized => Before(e.Subject) >= sizable,
+                FormationKind.Collapsed => Before(e.Subject) >= sizable,
+                // The end of a realm that once mattered, however little was left of it at the last.
+                FormationKind.Absorbed => e.Actor is { } seat && fallen.GetValueOrDefault(seat) >= sizable,
+                // The attacker's peace and a good share of land with it; a defence held is not news.
+                FormationKind.WarEnded => e.Actor is { } a && taken.GetValueOrDefault(a) >= (sizable + 1) / 2,
+                FormationKind.Usurped => Before(e.Subject) >= great,
+                // Partition is how most realms pass on; only the breaking of a giant is news.
+                FormationKind.Partitioned => Before(e.Subject) >= vast,
+                FormationKind.Feud => e.Tension >= 3,
+                FormationKind.Standing => true,
+                // A kingdom changing empire (logged at its capital duchy); a duchy changing kingdom is not.
+                FormationKind.Drifted => e.Subject.Tier == "d",
+                _ => false,
+            };
+        }
+
+        // A war that ended a realm is told once, as the fall: the peace logs no defender when the
+        // defender is gone, so it is a fall the same year to the winner's bloc — often to the
+        // vassal the war was fought for, which took the last county.
+        Polity? Bloc(Title? t) => t is null ? null : _sim.Owner.GetValueOrDefault(t)?.Root;
+        for (int i = events; i < _sim.Events.Count; i++)
+        {
+            var war = _sim.Events[i];
+            if (war is { Kind: FormationKind.WarEnded, Highlight: true, Counterpart: null } && Bloc(war.Actor) is { } winner
+                && _sim.Events.Skip(events).Any(f => f is { Kind: FormationKind.Absorbed, Highlight: true }
+                                                     && Bloc(f.Counterpart) == winner))
+                war.Highlight = false;
         }
     }
 }

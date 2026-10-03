@@ -360,6 +360,7 @@ public sealed partial class BookmarkEras
 
                     if (seat is not null && era.Rulers.TryGet(seat, out var sovereign))
                     {
+                        EducateHead(sovereign, faith.Head);
                         era.FaithHeads[faith.Head.TitleKey] = sovereign.Id;
                         continue;
                     }
@@ -370,6 +371,7 @@ public sealed partial class BookmarkEras
                     && era.Realms.HolderCounty.GetValueOrDefault(headSeat) == headSeat
                     && !wildThen.Contains(headSeat) && era.Rulers.TryGet(headSeat, out var seated))
                 {
+                    EducateHead(seated, faith.Head);
                     era.FaithHeads[faith.Head.TitleKey] = seated.Id;
                     continue;
                 }
@@ -388,6 +390,12 @@ public sealed partial class BookmarkEras
                     $"{birth}.1.1", next is null ? null : $"{death}.{rng.Int(1, 12)}.{rng.Int(1, 28)}");
                 era.Priests.Add(priest);
                 era.FaithHeads[faith.Head.TitleKey] = priest.Id;
+            }
+
+            void EducateHead(Ruler ruler, HeadOfFaith head)
+            {
+                ruler.Profile = RulerProfile.Build(ruler.Seat, ruler.PrimaryTitle.Tier, ruler.Government,
+                    ruler.Culture.Ethos, era.Year - ruler.BirthYear, ruler.HasVassals, cfg.Seed, salt, head);
             }
         }
     }

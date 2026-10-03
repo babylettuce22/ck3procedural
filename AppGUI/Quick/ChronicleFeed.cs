@@ -16,8 +16,11 @@ namespace Ck3MapGen.AppGUI;
 /// </summary>
 internal sealed class ChronicleFeed : Control
 {
-    /// <summary>Lines kept; older ones fall off the bottom. The written chronicle keeps its own record.</summary>
-    private const int Limit = 400;
+    /// <summary>
+    /// Lines kept, highlights or not; older ones fall off the bottom. The written chronicle keeps
+    /// its own record. Enough that the highlights alone still reach well back.
+    /// </summary>
+    private const int Limit = 1000;
 
     private static readonly Font YearFont = new("Segoe UI Semibold", 9f);
     private static readonly Font LineFont = new("Segoe UI", 9f);
@@ -58,7 +61,32 @@ internal sealed class ChronicleFeed : Control
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public string EmptyText { get; set; } = "";
 
-    public int Count => _entries.Count;
+    /// <summary>
+    /// Show only the lines marked <see cref="ChronicleLine.Highlight"/>. The rest are kept, so
+    /// switching back shows them again.
+    /// </summary>
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public bool HighlightsOnly
+    {
+        get => _highlightsOnly;
+        set
+        {
+            if (_highlightsOnly == value) return;
+            _highlightsOnly = value;
+            _scroll = 0;
+            SetHover(null);
+            Invalidate();
+        }
+    }
+    private bool _highlightsOnly;
+
+    private bool Shown(Entry entry) => !_highlightsOnly || entry.Line.Highlight;
+
+    /// <summary>The lines showing.</summary>
+    public int Count => _highlightsOnly ? _entries.Count(e => e.Line.Highlight) : _entries.Count;
+
+    /// <summary>Every line kept, shown or not.</summary>
+    public int Total => _entries.Count;
 
     private int S(int logical) => LaunchUi.S(this, logical);
 
@@ -82,7 +110,7 @@ internal sealed class ChronicleFeed : Control
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        SetHover(_entries.FirstOrDefault(x => e.Y >= x.Top && e.Y < x.Top + x.Height && x.Line.Mark is not null));
+        SetHover(_entries.FirstOrDefault(x => Shown(x) && e.Y >= x.Top && e.Y < x.Top + x.Height && x.Line.Mark is not null));
     }
 
     protected override void OnMouseLeave(EventArgs e)
@@ -101,7 +129,7 @@ internal sealed class ChronicleFeed : Control
         {
             var entry = new Entry(line);
             _entries.Insert(0, entry);
-            added += HeightOf(entry);
+            if (Shown(entry)) added += HeightOf(entry);
         }
 
         // Only a reader who has scrolled back is kept where they were; at the top, the news shows.
@@ -180,9 +208,12 @@ internal sealed class ChronicleFeed : Control
         using var cardPath = Rounded(card, S(10));
         using (var fill = new SolidBrush(Theme.Surface)) g.FillPath(fill, cardPath);
 
-        if (_entries.Count == 0)
+        if (!_entries.Any(Shown))
         {
-            TextRenderer.DrawText(g, EmptyText, EmptyFont, new Rectangle(Pad, Pad, Width - 2 * Pad, Height - 2 * Pad),
+            string empty = _entries.Count == 0 ? EmptyText
+                : "Nothing big enough for the highlights yet. Untick \"Highlights only\" to see everything.";
+            _contentHeight = 0;
+            TextRenderer.DrawText(g, empty, EmptyFont, new Rectangle(Pad, Pad, Width - 2 * Pad, Height - 2 * Pad),
                 Theme.TextDim, Wrap);
         }
         else
@@ -193,6 +224,11 @@ internal sealed class ChronicleFeed : Control
             _contentHeight = S(16);
             foreach (var entry in _entries)
             {
+                if (!Shown(entry))
+                {
+                    entry.Top = int.MinValue;
+                    continue;
+                }
                 int h = HeightOf(entry);
                 _contentHeight += h;
                 bool firstOfYear = entry.Line.Year != lastYear;

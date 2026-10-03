@@ -291,8 +291,9 @@ public sealed partial class MainForm : ChromeForm
     };
 
     /// <summary>
-    /// The settings <see cref="MapGen.HeightmapNormalizer"/> reads. Changing any of them changes
-    /// what the game would be handed, so the 3D view has to be rebuilt.
+    /// The settings <see cref="MapGen.HeightmapNormalizer"/> and <see cref="MapGen.TinyIslands"/>
+    /// read. Changing any of them changes what the game would be handed, so the 3D view has to be
+    /// rebuilt.
     /// </summary>
     private static readonly HashSet<string> NormalizationSettings =
     [
@@ -301,6 +302,8 @@ public sealed partial class MainForm : ChromeForm
         nameof(MapConfig.LandTop),
         nameof(MapConfig.LandTopPercentile),
         nameof(MapConfig.LandFloorDensity),
+        nameof(MapConfig.RemoveTinyIslands),
+        nameof(MapConfig.TinyIslandMaxArea),
     ];
 
     private bool _sourceShown;

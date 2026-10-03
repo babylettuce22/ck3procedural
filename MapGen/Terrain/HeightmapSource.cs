@@ -293,17 +293,36 @@ public sealed class HeightmapImage
     public bool Ck3Scale { get; init; }
 
     /// <summary>
-    /// Samples as the game will be handed them: normalised, unless already on its scale, then
-    /// scaled to this map's size.
+    /// True when the coastline came from outside this program — a PNG, an Azgaar map as drawn, or
+    /// one weathered by <see cref="AzgaarRelief"/> (our relief, the author's coast) — which is
+    /// what makes <see cref="MapConfig.RemoveTinyIslands"/> apply. False for a Forge pipeline,
+    /// whose own Remove Tiny Islands stage decides instead.
+    ///
+    /// An explicit marker rather than <see cref="Ck3Scale"/>: weathered Azgaar output is already
+    /// on CK3's scale, exactly like a Forge field, and still carries an imported coastline.
+    /// </summary>
+    public bool ImportedCoastline { get; init; }
+
+    /// <summary>
+    /// Samples as the game will be handed them: normalised, unless already on its scale, cleaned
+    /// of tiny islands when that applies, then scaled to this map's size.
     ///
     /// The relief pass is outside the Ck3Scale short-circuit on purpose. "Already on CK3's height
     /// scale" says the source's 0-255 range means what CK3 means by it; it says nothing about how
     /// wide the world under it is, and that is the whole question — see
     /// <see cref="HeightmapNormalizer.CompressRelief"/>.
+    ///
+    /// The island pass sits after normalisation because that is where the waterline becomes CK3's
+    /// own, and before relief compression, which never moves a pixel across it. It never writes
+    /// to <see cref="Raw"/>, so changing the setting always starts again from the decoded file.
     /// </summary>
-    public ushort[] Levels(MapConfig cfg) =>
-        HeightmapNormalizer.CompressRelief(
-            Ck3Scale ? Raw : HeightmapNormalizer.Normalize(Raw, cfg), cfg);
+    public ushort[] Levels(MapConfig cfg)
+    {
+        var levels = Ck3Scale ? Raw : HeightmapNormalizer.Normalize(Raw, cfg);
+        if (ImportedCoastline && cfg.RemoveTinyIslands)
+            levels = TinyIslands.Remove(levels, Width, Height, cfg);
+        return HeightmapNormalizer.CompressRelief(levels, cfg);
+    }
 
     public bool StillStandsFor(string path)
     {
@@ -338,8 +357,9 @@ public static class HeightmapSource
     /// gets built and looked at; see <see cref="TileFit.Known"/>.
     /// </summary>
     /// <param name="label">What to call it in the log and the toolbar; it is not a path.</param>
+    /// <param name="importedCoastline">See <see cref="HeightmapImage.ImportedCoastline"/>.</param>
     public static HeightmapImage FromRaw(ushort[] raw, int width, int height, string label, MapConfig cfg,
-        bool allowUnverifiedSize = false)
+        bool allowUnverifiedSize = false, bool importedCoastline = false)
     {
         if (width <= 0 || height <= 0 || (long)width * height != raw.LongLength)
             throw new ArgumentException($"{label}: {width}x{height} does not match {raw.LongLength:N0} samples.");
@@ -371,6 +391,7 @@ public static class HeightmapSource
             Raw = raw,
             Histogram = Histogram(raw),
             Ck3Scale = true,
+            ImportedCoastline = importedCoastline,
         };
 
         Apply(loaded, cfg);
@@ -464,6 +485,7 @@ public static class HeightmapSource
             Height = height,
             Raw = raw,
             Histogram = histogram,
+            ImportedCoastline = true,
         };
 
         Apply(loaded, cfg);

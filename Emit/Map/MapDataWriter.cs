@@ -266,6 +266,52 @@ public static class MapDataWriter
             : index == RiverIndexLand ? ((byte)255, (byte)255, (byte)255)
             : ((byte)2, (byte)0, (byte)1);
 
+    /// <summary>
+    /// Sinks every island of the heightmap that the province map has no land under.
+    ///
+    /// <see cref="MapGen.Provinces"/> gives each land province smaller than
+    /// <see cref="MapConfig.MinProvincePixels"/> with no land neighbour to the sea, and
+    /// <see cref="ForceCoastlineToMatchProvinces"/> cannot follow it there: it leaves every
+    /// mismatch within a province pixel of a natural shore alone, and every pixel of an islet is
+    /// next to its own shore. So the islet shipped as a dot of land in a sea zone — on the seed
+    /// 4242 default world, 111 of the 124 land components of 32 px or less, 546 px in all.
+    ///
+    /// Whole components only, so a shore fringe the coastline pass meant to leave is never
+    /// touched, and only when no pixel of the component lies in a land province or a major river
+    /// (whose banks are land in the heightmap on purpose). The seabed comes from the water around
+    /// it; <see cref="ShapeCoastline"/>, which runs next, then gives it its depth by distance.
+    /// </summary>
+    private static void SinkDrownedIslets(ushort[] height, MapConfig cfg, ProvinceMap provinces)
+    {
+        int width = cfg.Width, rows = cfg.Height;
+        int pw = provinces.Width, ph = provinces.Height;
+        int scaleX = Math.Max(1, width / pw), scaleY = Math.Max(1, rows / ph);
+
+        // Only bounds how much of a component is kept in memory while it is traced: a drowned
+        // province is under MinProvincePixels province pixels by construction, and the margin
+        // covers the heightmap's own coastline wandering either side of the province raster's.
+        long maxArea = 4L * cfg.MinProvincePixels * scaleX * scaleY;
+
+        bool Drowned(int[] island)
+        {
+            foreach (int i in island)
+            {
+                int x = i % width, y = i / width;
+                var seed = provinces.Seeds[provinces.Label[Math.Min(y / scaleY, ph - 1) * pw
+                                                          + Math.Min(x / scaleX, pw - 1)]];
+                if (seed.IsLand || seed.IsMajorRiver) return false;
+            }
+            return true;
+        }
+
+        var land = NoiseTool.Core.IslandCleanup.LandBits(height, width, rows, WaterLevel16);
+        var islets = NoiseTool.Core.IslandCleanup.Find(land, width, rows, maxArea, Drowned, CancellationToken.None);
+        if (islets.Count == 0) return;
+
+        long pixels = NoiseTool.Core.IslandCleanup.Fill(height, width, rows, land, islets, WaterLevel16);
+        Console.WriteLine($"  sank {islets.Count} islets the province map had drowned ({pixels} px)");
+    }
+
     private static void ForceCoastlineToMatchProvinces(ushort[] height, MapConfig cfg, ProvinceMap provinces)
     {
         int pw = provinces.Width, ph = provinces.Height;
@@ -856,6 +902,7 @@ public static class MapDataWriter
         var full = Core.Stage.Detail("      · to 16-bit", () => ElevationTo16(terra.Elevation, cfg));
         Core.Stage.Detail("      · match provinces",
             () => ForceCoastlineToMatchProvinces(full, cfg, provinces));
+        Core.Stage.Detail("      · sink drowned islets", () => SinkDrownedIslets(full, cfg, provinces));
         Core.Stage.Detail("      · shape coastline", () => ShapeCoastline(full, cfg, provinces));
         return full;
     }

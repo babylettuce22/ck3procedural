@@ -5,6 +5,11 @@ mod and checks cross-references, scopes, syntax, loc, and idioms. Run it after w
 BEFORE telling the user to test in-game. It tracks each CK3 patch within days/weeks; right after
 a game update expect transient false positives (it warns at startup on a version mismatch).
 
+**On this machine (2026-10-02): `<tiger>` is a local 1.20 fork** at
+`C:\Users\caelo\Desktop\ck3devtools\tiger-1.20\` (build `./build-local.sh`, notes and known gaps in
+`LOCAL-120.md`), because no upstream release covered 1.20 yet. Fix false positives in the fork, not by
+filtering. When an official 1.20 release appears, compare it against the fork before switching back.
+
 **Install:** grab the release matching the game version from github.com/amtep/tiger (Windows and
 Linux builds; each ships `ck3-tiger`, the zero-config `ck3-tiger-auto`, a sample `ck3-tiger.conf`,
 and docs `filter.md`/`annotations.md`). `<tiger>` below = the full path to the ck3-tiger

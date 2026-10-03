@@ -111,6 +111,26 @@ settings, and `--societies` turns them on. The older `SocietyPrototype` set is a
 reference implementation; `--society-prototype` ships it in place of the generated societies.
 The presence of a magic setting does not represent a completed procedural magic system.
 
+Adult heads of generated faiths begin office with at least 20 Learning. Spiritual heads receive
+at least three-star Learning education; temporal heads keep their existing education specialty.
+This applies at the starting bookmarks and to successors or newly created heads in play.
+Higher skills and education are retained, and childhood education proceeds normally.
+
+Generated faiths that already elect their spiritual head register new duchy-tier sees with a
+permanent Synod Seat. Registration follows the founding title transfer by a day; a yearly check
+by the Head of Faith repairs missing registrations, including sees in older saves. Existing seats
+keep their succession and survival rules. Temple baronies and the Head of Faith receive no new
+seats. A personal appointment marked `gen_synod_personal` is removed when its holder receives a
+permanent seat or becomes Head of Faith. Personal titles are excluded from permanent-seat recovery.
+Generated clerical-region faiths skip vanilla's automatic cardinal refills and seeding toward ten;
+the vanilla chaplain-cardinalate request is hidden for them. Their see-founding, influence-vote,
+and Legation eligibility systems remain in place.
+
+Run `python tools/verify_synod_registration.py --game "<CK3 game directory>"` to check the scripts'
+vanilla fallback bodies, references, persistent links, and localization encoding. This checks
+source compatibility; [the runtime checklist](synod-registration-checks.md) covers actual elections,
+title changes, and save/reload behavior in CK3.
+
 ## Azgaar imports
 
 The importer uses the export's names and name bases, province and state domains, political
@@ -252,6 +272,20 @@ complete reproducibility record**. Keep the configuration, optional Azgaar/Forge
 generator and Forge revisions, installed game data, and required assets as well. Exported
 watermarks include a generation timestamp, so whole-folder byte identity is not promised.
 
+The History simulation also maintains political alliances between nearby independent adult
+rulers. Shared threats, house relations, and religious compatibility influence agreement;
+each ruler has at most three allies. Agreements are reviewed at succession and periodically,
+and direct allies may accept or refuse calls to war. Committed support influences warfare and
+is divided across simultaneous wars. Losing independence ends an external agreement.
+Independent theocrats can negotiate same-faith political agreements without marriage; their
+successors are appointed adult clerics rather than child heirs. This does not simulate a full
+marriage market or let vassals form independent military coalitions.
+
+Applying a history carries its surviving alliances and allied war participants into the main
+bookmark, rather than inventing a replacement external alliance network. The saved history
+also keeps offer cooldowns, ongoing wars, truces, and claims for continuation. The History
+workspace exposes an **Alliances** rule and lists each realm's allies in the map readout.
+
 ## Validation and current limits
 
 The repository includes focused diagnostic checks:
@@ -259,11 +293,15 @@ The repository includes focused diagnostic checks:
 ```powershell
 dotnet run -- --verify-world-editor
 dotnet run -- --verify-compose
+
+dotnet run -- --verify-history-alliances
 ```
 
 The world-editor check exercises edits in a disposable fixture. An optional mod path also
 checks that opening and saving an unchanged existing world preserves bytes and timestamps.
 The composition check compares weapon attachment and merged geometry.
+The alliance check covers formation, calls and refusals, shared military commitments,
+clerical succession, neutrality, deterministic yearly runs, and diplomatic save/resume.
 
 These checks do not establish that a generated mod works in CK3. Changes to emitted content
 also need an export, validation with a matching **ck3-tiger**, and in-game inspection. Map

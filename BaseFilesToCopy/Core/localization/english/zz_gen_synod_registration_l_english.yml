@@ -1,0 +1,3 @@
+﻿l_english:
+ gen_synod_dynamic_seat_name:0 "[gen_register_county.GetNameNoTierNoTooltip]"
+ gen_synod_dynamic_seat_adj:0 "[gen_register_county.GetBaseNameNoTooltip]"

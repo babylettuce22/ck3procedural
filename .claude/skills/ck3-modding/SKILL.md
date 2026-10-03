@@ -27,6 +27,8 @@ this machine and must not be blindly overwritten by a regenerated one. Local cha
     pointers added to this repo's own verification tooling (mod-verify skill).
   - 2026-09-30: references/offline-renders.md added (TerrainRender + portrait_render in ck3devtools).
   - 2026-09-30: references/event-flow.md added (EventFlow: event-chain outlines and flow checks).
+  - 2026-10-02: Step 0 moved to game 1.20.0.3 and the local tiger 1.20 fork; "CK3 1.20 changes
+    that bite" section added; crash reading pointed at the mod-verify skill's crashdump tools.
 -->
 
 # CK3 Modding
@@ -41,17 +43,17 @@ the game ignore your file with no error. Follow the workflow below to avoid that
 The base game files are THE source of truth for everything. Never guess trigger/effect/scope
 names from memory; find them in a vanilla file, an `_*.info` schema doc, or the script_docs logs.
 
-**These were resolved on 2026-08-10 and re-checked 2026-09-29 (all present; game 1.19.0.6).** Re-detect only if one turns out to
+**These were resolved on 2026-08-10 and re-checked 2026-10-02 (all present; game 1.20.0.3 "Crozier").** Re-detect only if one turns out to
 be missing (a Steam library move, an uninstall). Wherever this skill or its reference files write
 `<game>`, `<logs>`, `<mods>`, `<workshop>` or `<tiger>`, substitute the real path from this table:
 
 | Placeholder | What | **Resolved path on this machine** |
 |---|---|---|
-| `<game>` | **Base game data (primary source of truth)** | `C:\Program Files (x86)\Steam\steamapps\common\Crusader Kings III\game` — **installed patch 1.19.0.6** |
+| `<game>` | **Base game data (primary source of truth)** | `C:\Program Files (x86)\Steam\steamapps\common\Crusader Kings III\game` — **installed patch 1.20.0.3** (Chapter V). Anything learned on 1.19 about religion, laws or the main menu may be stale; see "CK3 1.20 changes that bite" |
 | `<logs>` | Game logs (`error.log`, `script_docs` dumps, `data_types/`) | `C:\Users\caelo\Documents\Paradox Interactive\Crusader Kings III\logs` |
 | `<mods>` | User mod folder (where mods are developed) | `C:\Users\caelo\Documents\Paradox Interactive\Crusader Kings III\mod` |
 | `<workshop>` | Steam Workshop content for CK3 | `C:\Program Files (x86)\Steam\steamapps\workshop\content\1158310` — see the subscription list below |
-| `<tiger>` | ck3-tiger validator executable | `C:\Users\caelo\Desktop\ck3-tiger-windows-v1.19.0\ck3-tiger.exe` (installed 2026-08-26, matches the 1.19 patch). Run it against the mod's `descriptor.mod`; it emits ANSI colour even when piped, so strip with `sed -e 's/\x1b\[[0-9;]*m//g'` before grepping `^error` |
+| `<tiger>` | ck3-tiger validator executable | `C:\Users\caelo\Desktop\ck3devtools\tiger-1.20\target\release\ck3-tiger.exe`, a **local 1.20 fork** (notes in `LOCAL-120.md` beside it; build with `build-local.sh`). The official `C:\Users\caelo\Desktop\ck3-tiger-windows-v1.19.0\ck3-tiger.exe` predates 1.20 and reports about 27k errors of noise on 1.20 script; use it only for comparison. Run it against the mod's `descriptor.mod`; it emits ANSI colour even when piped, so strip with `sed -e 's/\x1b\[[0-9;]*m//g'` before grepping `^error` |
 
 **This project.** The primary working directory is a C# heightmap-to-CK3 map generator; it *emits*
 `<mods>\proceduralmap` (map_data, landed_titles, history, generated cultures/faiths) rather than
@@ -165,11 +167,49 @@ last play session will list stale effect/trigger names and mislead you. Confirm 
    prefer per-actor story cycles over `every_living_character` (AGOT is the worked example).
 9. Validate with **ck3-tiger** after writing code, before asking the user to test in-game
    (see `references/validation.md`). Localization checks stay off unless asked for.
-   ck3-tiger is installed at the `<tiger>` path in the Step 0 table; the repo's clean baseline is
-   a handful of gui datafunction-arity errors in `gui\window_*.gui` plus loc-hash-collision noise.
+   ck3-tiger is at the `<tiger>` path in the Step 0 table (the 1.20 fork). On a generated world it
+   reports about 70–100 errors; judge by `[MOD]` findings, not totals. Its 1.20 gaps (unchecked
+   arguments on some new commands; interactions, selectors and GUI data functions not updated) are
+   listed in `LOCAL-120.md`.
 10. Then test in-game: ask the user to launch with `-debug_mode` and run the console tests
     (`event x.1`, `effect ...`, `trigger ...`), then read `error.log` yourself
     (see "Game logs" above) — don't ask the user what it says.
+
+## CK3 1.20 changes that bite
+
+Verified against the installed 1.20.0.3 files, 2026-09-30 to 10-02. Read the vanilla file before
+relying on 1.19 knowledge in these areas.
+
+- **Religion was split into databases.** Faiths are defined in `common/religion/faith_types/` (e.g.
+  `sunni` in `00_faith_types.txt`), with `rite_types/`, `rite_names/`, `tenet_types/` and doctrine
+  categories beside them. Each faith has a **main rite** (`main_rite`), a new `rite` scope and
+  `rite = { … }` link (vanilla sets `scope:check_rite` that way), and rite-scoped triggers such as
+  `rite_has_doctrine` and `rite_has_parameter`. Character and province history take `rite`.
+- **Laws are standalone**: `common/laws/00_succession_laws.txt` (e.g. `male_only_law`) and
+  `00_realm_laws.txt` (e.g. `crowned_king`, `camp_purpose_*`), with law groups.
+- **`on_faith_created`'s root is the new faith**, not a character. The acting character is
+  `scope:founder`, which can be absent (vanilla enters it with `?=`). `on_faith_conversion` is still
+  character-rooted. Check each on_action's comment in `common/on_action/*.txt` before reusing 1.19
+  code.
+- **Title history `clerical_region`** takes a geographical region (`et_<…>_region` in
+  `map_data/geographical_regions/`) or `none`.
+- **The main menu draws three characters.** It uses the latest save's characters when that save has
+  a usable player. Otherwise it takes a `common/menu_scenes` entry (vanilla ships only the `.info`),
+  and otherwise the defines `NMainMenu|DEFAULT_MAIN/HEIR/SECONDARY_BOOKMARK_CHARACTER`
+  (`common/defines/graphic/00_graphics.txt`), which name vanilla bookmark portraits. A
+  `replace_path="common/bookmark_portraits"` deletes those and **crashes the main menu**. Ship your own
+  three portraits and override the defines, or add a `menu_scenes` entry.
+- **`common/portrait_types/`** is new: the `human` group with male, female, boy and girl types, picked
+  by `NPortraits|DEFAULT_PORTRAIT_GROUP`.
+- **Stubbing a vanilla scripted effect must keep its `$PARAM$`s.** If any caller passes arguments
+  (`effect_x = { OWNER = this }`), an empty `effect_x = { }` logs `Scripted effect should have no
+  arguments` and `PostValidate … returned false` at load, then **crashes the game** when the call runs.
+  Mention every parameter in the stub body (`$OWNER$ = { save_temporary_scope_as = unused }`).
+- Any `replace_path` can break a vanilla define or script that names a vanilla key, and tiger does not
+  report problems in vanilla files. Grep `<game>/common/defines` for keys from a folder you replace.
+- **Reading a crash:** use the `mod-verify` skill's "When the game crashes" section (crashdump
+  `--triage`, exact labelled stacks, full-memory dumps with procwatch/explore). CK3's own
+  `exception.txt` names no functions.
 
 ## Workflow for any modding task
 

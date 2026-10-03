@@ -13,6 +13,8 @@ public sealed class ActiveWar
     public required Title DefenderCounty { get; init; }
     public Title? ClaimantCounty { get; init; }
     public required string Description { get; init; }
+    public List<Title> AttackingAllies { get; init; } = [];
+    public List<Title> DefendingAllies { get; init; } = [];
 }
 
 public sealed class DynastyDef
@@ -329,6 +331,24 @@ public sealed partial class PrehistoryMap
 
         // 5. Border Friction, Nuanced House Relations, Truces, Claims, and Alliances
         BuildInterDynasticRelations(map, topLiegeNeighbors, realms, faiths, cfg);
+
+        if (diplomacy?.Alliances is { } simulatedAlliances)
+        {
+            // Keep internal family relationships, but external military agreements belong to the
+            // simulated history, including an explicitly empty network. No fresh export-time pact.
+            foreach (var (seat, links) in map.Alliances)
+                links.RemoveAll(l => TopLiegeCounty(seat, realms) != TopLiegeCounty(l.PartnerCounty, realms));
+            foreach (var a in simulatedAlliances)
+            {
+                if (!rulerCounties.Contains(a.A) || !rulerCounties.Contains(a.B) || a.A == a.B
+                    || TopLiegeCounty(a.A, realms) != a.A || TopLiegeCounty(a.B, realms) != a.B) continue;
+                if ((HistorySim.IsTheocracy(governments.For(a.A)) || HistorySim.IsTheocracy(governments.For(a.B)))
+                    && faiths.For(a.A).Key != faiths.For(a.B).Key) continue;
+                int earliest = Math.Max(HistoryWriter.GetRulerBirthYear(a.A, cfg), HistoryWriter.GetRulerBirthYear(a.B, cfg)) + 16;
+                if (earliest > cfg.StartYear) continue;
+                AddDirectAlliance(map, a.A, a.B, $"{Math.Max(earliest, Math.Max(1, a.Since))}.1.1");
+            }
+        }
 
         // 6. Internal Realm Drama & Sibling Cadet Branches
         BuildInternalDrama(map, rulerCounties, realms, faiths, cfg);
@@ -1688,6 +1708,10 @@ public sealed partial class PrehistoryMap
                 AttackerCounty = war.Attacker,
                 DefenderCounty = war.Defender,
                 ClaimantCounty = war.Attacker,
+                AttackingAllies = (war.AttackingAllies ?? []).Where(a => Sovereign(a)
+                    && a != war.Attacker && a != war.Defender).Distinct().ToList(),
+                DefendingAllies = (war.DefendingAllies ?? []).Where(a => Sovereign(a)
+                    && a != war.Attacker && a != war.Defender && !(war.AttackingAllies?.Contains(a) ?? false)).Distinct().ToList(),
                 Description = $"{char.ToUpperInvariant(war.Name[0])}{war.Name[1..]}, begun {war.Started} (war score {war.Score:+0;-0;0} when history stopped)",
             });
         }

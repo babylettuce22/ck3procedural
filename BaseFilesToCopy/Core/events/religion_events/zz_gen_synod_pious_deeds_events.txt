@@ -1,0 +1,40 @@
+﻿namespace = gen_synod_pious_deeds
+
+# Generated Synods use the native election-score variables and shortlist effect.
+# The vanilla saint/Papal event remains the decision's branch for other faiths.
+gen_synod_pious_deeds.0001 = {
+    type = character_event
+    title = pam_promulgate_word_of_pious_deeds_decision
+    desc = gen_synod_pious_deeds_desc
+    theme = faith
+    left_portrait = { character = root animation = personality_bold }
+
+    option = {
+        name = gen_synod_pious_deeds_score
+        custom_tooltip = gen_synod_pious_deeds_score_tt
+        add_prestige = medium_prestige_gain
+        set_variable = { name = pam_propagate_word_of_my_piety value = 30 }
+        ai_chance = { base = 50 }
+    }
+    option = {
+        name = gen_synod_pious_deeds_populist
+        trigger = {
+            pam_papabile_slot_open_to_trigger = { SLOT = theocratic_elective_populist }
+            piety >= pam_place_first_as_populist_piety_cost_value
+        }
+        show_as_unavailable = {
+            pam_papabile_slot_open_to_trigger = { SLOT = theocratic_elective_populist }
+            piety < pam_place_first_as_populist_piety_cost_value
+        }
+        custom_tooltip = gen_synod_pious_deeds_populist_tt
+        add_piety = { value = pam_place_first_as_populist_piety_cost_value multiply = -1 }
+        pam_place_first_as_populist_effect = { VALUE = pam_papabile_place_first_populist_value }
+        stress_impact = {
+            humble = minor_stress_impact_gain
+            content = minor_stress_impact_gain
+            ambitious = minor_stress_impact_loss
+            arrogant = minor_stress_impact_loss
+        }
+        ai_chance = { base = 0 }
+    }
+}
