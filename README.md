@@ -11,6 +11,7 @@ Make a few choices in the Quick generator and watch the world take shape, or ope
 and tune it by hand. Then inspect and edit any title, culture, faith or ruler before you play.
 
 <img width="996" height="696" alt="image" src="https://github.com/user-attachments/assets/e0b6d5f4-c9fd-4bad-bf9a-c12aac38018f" />
+<img width="1765" height="1035" alt="image" src="https://github.com/user-attachments/assets/9c49d08c-1ee9-4dd9-a0e4-73e1bf850e0c" />
 
 ## Features
 
