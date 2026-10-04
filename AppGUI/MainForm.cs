@@ -130,8 +130,14 @@ public sealed partial class MainForm : ChromeForm
     /// <summary>The Terrain workspace: CK3 Heightmap Forge, embedded. See <see cref="Forge.ForgePanel"/>.</summary>
     private readonly Forge.ForgePanel _forge = new() { Dock = DockStyle.Fill };
 
-    /// <summary>The Climate workspace: paint the climate over the heightmap. See <see cref="ClimatePanel"/>.</summary>
+    /// <summary>The Masks workspace's climate page: paint the climate over the heightmap. See <see cref="ClimatePanel"/>.</summary>
     private readonly ClimatePanel _climate = new() { Dock = DockStyle.Fill };
+
+    /// <summary>The Masks workspace's impassable page. See <see cref="ImpassablePanel"/>.</summary>
+    private readonly ImpassablePanel _impassable = new() { Dock = DockStyle.Fill };
+
+    /// <summary>The Masks workspace: both pages above, one at a time. See <see cref="MasksPanel"/>.</summary>
+    private readonly MasksPanel _masks;
 
     /// <summary>The History workspace: the written world run on past its start date. See <see cref="HistoryPanel"/>.</summary>
     private readonly HistoryPanel _history = new() { Dock = DockStyle.Fill };
@@ -144,9 +150,9 @@ public sealed partial class MainForm : ChromeForm
 
     private const string CalendarSection = "Calendar";
 
-    /// <summary>Which source the Climate tab was last given terrain for; null when it needs a fresh one.</summary>
-    private string? _climateStamp;
-    private int _climateGeneration;
+    /// <summary>Which source the Masks workspace was last given terrain for; null when it needs a fresh one.</summary>
+    private string? _masksStamp;
+    private int _masksGeneration;
 
     private readonly ImageView _viewer = new() { Dock = DockStyle.Fill };
 
@@ -370,6 +376,7 @@ public sealed partial class MainForm : ChromeForm
     public MainForm(GenerationOptions options)
     {
         _options = options;
+        _masks = new MasksPanel(_climate, _impassable) { Dock = DockStyle.Fill };
 
         _source = options.Heightmap;
         if (_source is null && File.Exists(_state.HeightmapPath))
@@ -450,8 +457,11 @@ public sealed partial class MainForm : ChromeForm
             if (changed is nameof(MapConfig.CalendarEnabled) or nameof(MapConfig.ContentSource)) SyncCalendarSection();
             if (changed == nameof(MapConfig.StartYear)) _calendar.RefreshPreview();
 
-            // The Climate tab's prediction runs on the same settings; its cached model is stale.
-            _climate.InvalidateModel();
+            // The impassable page's mode switch mirrors the grid row.
+            if (changed == nameof(MapConfig.ImpassablePaintMode)) _impassable.Mode = _options.Config.ImpassablePaintMode;
+
+            // The Masks previews run on the same settings; their cached models are stale.
+            _masks.InvalidateModel();
 
             if (!NormalizationSettings.Contains(changed)) return;
             InvalidateProcessed();
@@ -595,7 +605,7 @@ public sealed partial class MainForm : ChromeForm
 
         // ---- View -----------------------------------------------------------------------
         var terrain = MenuItem("Terrain", () => SelectWorkspace(Workspace.Terrain), "Ctrl+1");
-        var climate = MenuItem("Climate", () => SelectWorkspace(Workspace.Climate), "Ctrl+2");
+        var masks = MenuItem("Masks", () => SelectWorkspace(Workspace.Masks), "Ctrl+2");
         var world = MenuItem("World", () => SelectWorkspace(Workspace.World), "Ctrl+3");
         var history = MenuItem("History", () => SelectWorkspace(Workspace.History), "Ctrl+4");
         var mapView = MenuItem("Map", () => SelectWorldView(WorldView.Map));
@@ -612,7 +622,7 @@ public sealed partial class MainForm : ChromeForm
         });
 
         var view = TopMenu(menu, "&View",
-            terrain, climate, world, history, new ToolStripSeparator(),
+            terrain, masks, world, history, new ToolStripSeparator(),
             mapView, solidView, titlesView, new ToolStripSeparator(),
             showLog, new ToolStripSeparator(),
             darkMode);
@@ -620,10 +630,10 @@ public sealed partial class MainForm : ChromeForm
         view.DropDownOpening += (_, _) =>
         {
             terrain.Visible = _workspaceBar.IsAvailable(Workspace.Terrain);
-            climate.Visible = _workspaceBar.IsAvailable(Workspace.Climate);
+            masks.Visible = _workspaceBar.IsAvailable(Workspace.Masks);
             history.Visible = _workspaceBar.IsAvailable(Workspace.History);
             terrain.Checked = _workspace == Workspace.Terrain;
-            climate.Checked = _workspace == Workspace.Climate;
+            masks.Checked = _workspace == Workspace.Masks;
             world.Checked = _workspace == Workspace.World;
             history.Checked = _workspace == Workspace.History;
 
@@ -883,14 +893,24 @@ public sealed partial class MainForm : ChromeForm
         _forge.UseForGeneration += UseForgeForGeneration;
         _forge.PresetDir = _state.ForgePresetDir;
 
-        // Climate paints over whatever heightmap is chosen. An unvisited workspace changes nothing
-        // — see ClimatePanel.EffectivePaint — and a painted one says so in its label.
+        // Masks paint over whatever heightmap is chosen. An unvisited workspace changes nothing
+        // — see ClimatePanel.EffectivePaint and ImpassablePanel.EffectivePaint — and a painted one
+        // says so in its label.
         _climate.PaintDir = _state.ClimatePaintDir;
         _climate.UseAutomatic = _state.ClimateAutomatic;
-        _climate.PaintChanged += RefreshClimateLabel;
+        _climate.PaintChanged += RefreshMasksLabel;
+        _impassable.PaintDir = _state.ImpassablePaintDir;
+        _impassable.Mode = _options.Config.ImpassablePaintMode;
+        _impassable.PaintChanged += RefreshMasksLabel;
+        _impassable.ModeChanged += mode =>
+        {
+            _options.Config.ImpassablePaintMode = mode;
+            _grid.Refresh();
+        };
+        if (Enum.TryParse(_state.MasksPage, out MasksPanel.Page masksPage)) _masks.Select(masksPage);
 
         _workspacePages[Workspace.Terrain] = Page(_forge);
-        _workspacePages[Workspace.Climate] = Page(_climate);
+        _workspacePages[Workspace.Masks] = Page(_masks);
         _workspacePages[Workspace.World] = BuildWorld();
         _workspacePages[Workspace.History] = Page(_history);
         _history.ApplyRequested += applied => ApplyHistoryAsync(applied).Forget("apply history");
@@ -1066,7 +1086,7 @@ public sealed partial class MainForm : ChromeForm
         ResumeLayout();
 
         if (workspace == Workspace.Terrain) _forge.EnsureStarted();
-        if (workspace == Workspace.Climate) ShowClimateAsync().Forget("climate view");
+        if (workspace == Workspace.Masks) ShowMasksAsync().Forget("masks view");
         if (workspace == Workspace.World && _worldView == WorldView.ThreeD) EnsureSourceShown();
     }
 
@@ -1572,8 +1592,10 @@ public sealed partial class MainForm : ChromeForm
         SetLogOpen(_state.LogOpen);
 
         // An opened mod can be adopted before the window is shown (--edit-world), and it has only
-        // the World workspace; a saved Terrain or Climate would leave no page showing at all.
-        var workspace = Enum.TryParse(_state.Workspace, out Workspace saved) && _workspaceBar.IsAvailable(saved)
+        // the World workspace; a saved Terrain or Masks would leave no page showing at all.
+        // "Climate" is what Masks was called before it held the impassable page too.
+        string? savedName = _state.Workspace == "Climate" ? nameof(Workspace.Masks) : _state.Workspace;
+        var workspace = Enum.TryParse(savedName, out Workspace saved) && _workspaceBar.IsAvailable(saved)
             ? saved
             : Workspace.World;
         var worldView = Enum.TryParse(_state.WorldView, out WorldView savedView) ? savedView : WorldView.Map;
@@ -1584,6 +1606,7 @@ public sealed partial class MainForm : ChromeForm
 
         ReportFolders();
         RestoreClimatePaint();
+        RestoreImpassablePaint();
 
         // Last, once every splitter above has been placed against a visible page.
         if (OpensToStartPage) OpenOnLaunch();
@@ -1730,6 +1753,17 @@ public sealed partial class MainForm : ChromeForm
         {
             Console.WriteLine($"Could not save the climate paint: {ex.Message}");
         }
+        _state.ImpassablePaintDir = _impassable.PaintDir;
+        _state.MasksPage = _masks.Current.ToString();
+        try
+        {
+            string autosave = GuiState.ImpassablePaintAutosave;
+            if (!_impassable.SavePaint(autosave) && File.Exists(autosave)) File.Delete(autosave);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not save the impassable paint: {ex.Message}");
+        }
         _state.HeightmapPath = _lastHeightmapFile;
         _state.View = _view;
         _state.CategoryViews = new Dictionary<string, string>(_lastInCategory);
@@ -1768,10 +1802,10 @@ public sealed partial class MainForm : ChromeForm
                 return base.ProcessCmdKey(ref message, key);
         }
 
-        // Terrain and Climate own the brush keys while they are on screen, and say so by handling
+        // Terrain and Masks own the brush keys while they are on screen, and say so by handling
         // them; anything they pass on falls through to the window's own shortcuts.
         if (_workspace == Workspace.Terrain && !TypingInText() && _forge.HandleKey(key)) return true;
-        if (_workspace == Workspace.Climate && !TypingInText() && _climate.HandleKey(key)) return true;
+        if (_workspace == Workspace.Masks && !TypingInText() && _masks.HandleKey(key)) return true;
         if (_workspace == Workspace.History && !TypingInText() && _history.HandleKey(key)) return true;
 
         bool onMap = _workspace == Workspace.World && _worldView == WorldView.Map;
@@ -1783,7 +1817,7 @@ public sealed partial class MainForm : ChromeForm
                 return true;
 
             case Keys.Control | Keys.D2:
-                SelectWorkspace(Workspace.Climate);
+                SelectWorkspace(Workspace.Masks);
                 return true;
 
             case Keys.Control | Keys.D3:
@@ -2083,30 +2117,30 @@ public sealed partial class MainForm : ChromeForm
         InvalidateProcessed();
         if (_sourceShown) ShowSourceAsync().Forget("source view");
 
-        // Climate paints over the source; a new one is read the next time the workspace is looked
+        // Masks paint over the source; a new one is read the next time the workspace is looked
         // at, or now if it is the one on screen.
-        _climateStamp = null;
-        if (_workspace == Workspace.Climate) ShowClimateAsync().Forget("climate view");
+        _masksStamp = null;
+        if (_workspace == Workspace.Masks) ShowMasksAsync().Forget("masks view");
     }
 
     /// <summary>
-    /// Hands the Climate tab the current source at province resolution, decoding it if no run has
+    /// Hands the Masks workspace the current source at province resolution, decoding it if no run has
     /// yet. Shares the decode cache with the run and the 3D tab, so a heightmap already read is
     /// not read again; only the province downsample and the land mask are computed here.
     /// </summary>
-    private async Task ShowClimateAsync()
+    private async Task ShowMasksAsync()
     {
         if (_source is not { } source)
         {
-            _climate.SetTerrain(null);
+            _masks.SetTerrain(null);
             return;
         }
 
         var cfg = _options.Config;
         string stamp = source.Stamp;
-        if (_climateStamp == stamp)
+        if (_masksStamp == stamp)
         {
-            _climate.Activated();
+            _masks.Activated();
             return;
         }
 
@@ -2115,12 +2149,12 @@ public sealed partial class MainForm : ChromeForm
         // The stamp stays unset, so the tab is filled in when the run ends — see SetEnabled.
         if (_busy)
         {
-            _status.Text = "Climate will load its heightmap when the current run finishes.";
+            _status.Text = "Masks will load the heightmap when the current run finishes.";
             return;
         }
 
-        int generation = ++_climateGeneration;
-        _status.Text = "Reading the heightmap for Climate…";
+        int generation = ++_masksGeneration;
+        _status.Text = "Reading the heightmap for Masks…";
 
         try
         {
@@ -2138,25 +2172,26 @@ public sealed partial class MainForm : ChromeForm
                 return (loaded, new ClimatePanel.Terrain(cfg, province, land, stamp));
             });
 
-            if (generation != _climateGeneration) return;
+            if (generation != _masksGeneration) return;
 
             _loaded = image;
             _loadedStamp = stamp;
-            _climateStamp = stamp;
-            _climate.SetTerrain(terrain);
-            _status.Text = $"Climate ready — {source.Label}";
+            _masksStamp = stamp;
+            _masks.SetTerrain(terrain);
+            _status.Text = $"Masks ready — {source.Label}";
         }
         catch (Exception error)
         {
-            if (generation != _climateGeneration) return;
-            Console.WriteLine($"Could not read the heightmap for Climate: {error.Message}");
-            _status.Text = "Could not read the heightmap for Climate — see log";
+            if (generation != _masksGeneration) return;
+            Console.WriteLine($"Could not read the heightmap for Masks: {error.Message}");
+            _status.Text = "Could not read the heightmap for Masks — see log";
         }
     }
 
     /// <summary>The workspace says when its paint will change the next run, the way editable map modes do.</summary>
-    private void RefreshClimateLabel()
-        => _workspaceBar.SetLabel(Workspace.Climate, _climate.EffectivePaint is not null ? "Climate ✎" : "Climate");
+    private void RefreshMasksLabel()
+        => _workspaceBar.SetLabel(Workspace.Masks,
+            _climate.EffectivePaint is not null || _impassable.EffectivePaint is not null ? "Masks ✎" : "Masks");
 
     /// <summary>Where a preset's climate paint lives: beside it, named after it.</summary>
     private static string ClimateSidecar(string presetPath)
@@ -2185,6 +2220,31 @@ public sealed partial class MainForm : ChromeForm
         catch (Exception ex)
         {
             Console.WriteLine($"Could not restore last session's climate paint: {ex.Message}");
+        }
+    }
+
+    /// <summary>Where a preset's impassable paint lives: beside it, named after it.</summary>
+    private static string ImpassableSidecar(string presetPath)
+        => Path.Combine(Path.GetDirectoryName(presetPath) ?? "",
+            Path.GetFileNameWithoutExtension(presetPath) + ".impassable.png");
+
+    /// <summary>Last session's impassable paint, as <see cref="RestoreClimatePaint"/>.</summary>
+    private void RestoreImpassablePaint()
+    {
+        string path = GuiState.ImpassablePaintAutosave;
+        if (!File.Exists(path)) return;
+
+        try
+        {
+            var paint = MapGen.ImpassablePaint.Load(path);
+            if (paint.IsEmpty) return;
+
+            _impassable.AdoptPaint(paint, "Impassable paint restored from last session.");
+            Console.WriteLine("Impassable paint restored from last session.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not restore last session's impassable paint: {ex.Message}");
         }
     }
 
@@ -2655,6 +2715,19 @@ public sealed partial class MainForm : ChromeForm
             note = " — climate paint could not be written, see log";
         }
 
+        // The impassable paint likewise.
+        string wallSidecar = ImpassableSidecar(dialog.FileName);
+        try
+        {
+            if (_impassable.SavePaint(wallSidecar)) note += " and its impassable paint";
+            else if (File.Exists(wallSidecar)) { File.Delete(wallSidecar); note += " (removed its old impassable paint)"; }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not write {wallSidecar}: {ex.Message}");
+            note += " — impassable paint could not be written, see log";
+        }
+
         _status.Text = $"Saved settings to {Path.GetFileName(dialog.FileName)}{note}";
     }
 
@@ -2682,7 +2755,8 @@ public sealed partial class MainForm : ChromeForm
             _advanced.Checked = _options.Config.ShowAdvancedSettings;
             ApplyAzgaarChip();
             RefreshSettings();
-            _climate.InvalidateModel();
+            _masks.InvalidateModel();
+            _impassable.Mode = _options.Config.ImpassablePaintMode;
             _calendar.Bind(_options.Config);
             SyncCalendarSection();
 
@@ -2708,7 +2782,27 @@ public sealed partial class MainForm : ChromeForm
             else if (_climate.HasPaint)
             {
                 _climate.ClearPaint();
-                note = " — it carries no climate paint, so the painted climate was cleared (Undo in Climate restores it)";
+                note = " — it carries no climate paint, so the painted climate was cleared (Undo in Masks ▸ Climate restores it)";
+            }
+
+            string wallSidecar = ImpassableSidecar(dialog.FileName);
+            if (File.Exists(wallSidecar))
+            {
+                try
+                {
+                    _impassable.AdoptPaint(MapGen.ImpassablePaint.Load(wallSidecar), $"Impassable paint loaded with {Path.GetFileName(dialog.FileName)}.");
+                    note += " and its impassable paint";
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Could not read {wallSidecar}: {ex.Message}");
+                    note += " — its impassable paint could not be read, see log";
+                }
+            }
+            else if (_impassable.HasPaint)
+            {
+                _impassable.ClearPaint();
+                note += " — it carries no impassable paint, so the painted walls were cleared (Undo in Masks ▸ Impassable restores them)";
             }
 
             _status.Text = $"Loaded {applied} settings from {Path.GetFileName(dialog.FileName)}{note}";
@@ -3369,9 +3463,10 @@ public sealed partial class MainForm : ChromeForm
 
         // Read on the UI thread before the run, and cloned: the tab stays enabled for panning but
         // the paint must not change under the model mid-run. A Quick world's climate is the one its
-        // page chose, so paint left on the Climate workspace does not reach it; an Azgaar world's
-        // climate is the export's, for the same reason.
+        // page chose, so paint left on the Masks workspace does not reach it; an Azgaar world's
+        // climate is the export's, for the same reason. Painted walls likewise skip a Quick world.
         var climatePaint = _inLauncher ? null : _climate.EffectivePaint?.Clone();
+        var impassablePaint = _inLauncher ? null : _impassable.EffectivePaint?.Clone();
 
         // Set inside the run when the applied history turns out not to fit the world just built.
         MapGen.AppliedHistory? dropped = null;
@@ -3403,7 +3498,7 @@ public sealed partial class MainForm : ChromeForm
                     () => MapGen.TerrainData.FromElevation(_loaded!.ToElevation(cfg), cfg));
 
                 var r = Generator.FromTerrain(terra, cfg, OnProgressivePreview,
-                    climatePaint: climatePaint);
+                    climatePaint: climatePaint, impassablePaint: impassablePaint);
 
                 // A history applied in the History workspace moves the start date, on a copy: the
                 // grid keeps the user's own World Year, and discarding the history needs no undo.
@@ -3672,12 +3767,12 @@ public sealed partial class MainForm : ChromeForm
 
         _titles.Enabled = enabled;
         _forge.Enabled = enabled;
-        _climate.Enabled = enabled;
+        _masks.Enabled = enabled;
         ShowPending();
 
         // A Climate tab opened mid-run was told to wait; the run is over.
-        if (enabled && _workspace == Workspace.Climate && _climateStamp is null)
-            ShowClimateAsync().Forget("climate view");
+        if (enabled && _workspace == Workspace.Masks && _masksStamp is null)
+            ShowMasksAsync().Forget("masks view");
 
         bool ready = enabled && _source is not null;
         _writeMod.Enabled = ready;

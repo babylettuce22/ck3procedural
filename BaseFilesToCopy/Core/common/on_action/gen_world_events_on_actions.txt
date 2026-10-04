@@ -1,0 +1,20 @@
+﻿# Append rather than replace vanilla's global pulse effects. No root here.
+yearly_global_pulse = {
+	on_actions = { gen_world_events_yearly }
+}
+
+gen_world_events_yearly = {
+	effect = {
+		gen_world_war_census_effect = yes
+		if = {
+			limit = {
+				gen_world_at_war_trigger = yes
+				NOT = { has_global_variable = gen_world_season_of_swords_seen }
+			}
+			every_player = {
+				limit = { gen_world_events_recipient_trigger = yes }
+				trigger_event = { id = gen_world_events.0001 }
+			}
+		}
+	}
+}

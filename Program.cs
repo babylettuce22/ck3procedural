@@ -364,6 +364,12 @@ public static class Program
                     cfg.ImpassableMaskMode = Enum.Parse<ImpassableMaskMode>(args[++i], ignoreCase: true);
                     break;
 
+                // What the mask's transparent pixels mean; see ImpassablePaintMode. Manual (passable)
+                // is the default; ManualPlusAuto lets the auto-cut decide them.
+                case "--impassable-paint-mode" when i + 1 < args.Length:
+                    cfg.ImpassablePaintMode = Enum.Parse<ImpassablePaintMode>(args[++i], ignoreCase: true);
+                    break;
+
                 // How big a barony is relative to vanilla's. 2 makes each one twice as wide and a
                 // quarter as numerous; the rest of the title hierarchy follows.
                 case "--county-scale" when i + 1 < args.Length:
@@ -1006,9 +1012,11 @@ public static class Program
             Console.Error.WriteLine(
                 "       [--azgaar-terrain drawn|weathered]  drawn (default) builds the PNG as it stands; weathered adds hills, ridges and erosion");
             Console.Error.WriteLine(
-                "       [--impassable-mask <mask.png>]  optional; white = impassable, black = passable, painted over provinces.png");
+                "       [--impassable-mask <mask.png>]  optional; white = impassable, black = passable, transparent = automatic, painted over provinces.png");
             Console.Error.WriteLine(
                 "       [--impassable-mask-mode snap|touch]  snap (default) cuts provinces to the paint; touch turns whole provinces");
+            Console.Error.WriteLine(
+                "       [--impassable-paint-mode manual|manualplusauto]  manual (default): transparent is passable; manualplusauto: the auto-cut fills it in");
             Console.Error.WriteLine(
                 "       [--gender historical|mixed|femaledominated]  which way the world's laws and rulers lean; historical is the default");
             Console.Error.WriteLine(

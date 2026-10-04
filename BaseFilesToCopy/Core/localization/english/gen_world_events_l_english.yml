@@ -1,0 +1,10 @@
+﻿l_english:
+ gen_world_events.0001.t: "A Season of Swords"
+ gen_world_events.0001.desc: "A cloth merchant lays his battered itinerary before me. Beside one town he has written 'under siege'; beside another, 'bridge burned'. Further down, simply: 'do not travel'.\n\nHis account agrees with the dispatches reaching my court: at least half the independent realms are involved in wars. Even rulers far from the fighting are sending soldiers to their allies.\n\n'I used to sell fine cloth for weddings,' he says. 'These days, everyone asks whether it can be cut into bandages.'"
+ gen_world_events.0001.a: "Buy the bandages. We may need them."
+ gen_world_events.0001.a_war: "Send the bandages to our armies."
+ gen_world_events.0001.b: "Offer him safe lodging and provisions."
+ gen_world_events.0001.c: "We still have need of cloth."
+ gen_world_events.0001.c.tt: "You continue with ordinary business, without spending additional gold."
+ gen_world_medical_supplies_modifier: "Medical Supplies in Reserve"
+ gen_world_medical_supplies_modifier_desc: "A stock of bandages and clean cloth helps wounded levies return to service."

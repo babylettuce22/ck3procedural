@@ -162,7 +162,8 @@ public static class Provinces
                 List<MajorRiverPath>? majorRivers = null,
                 Drainage? drainage = null,
                 AzgaarImport? azgaar = null,
-                byte[]? riverChannel = null)
+                byte[]? riverChannel = null,
+                ImpassablePaint? impassablePaint = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -189,17 +190,20 @@ public static class Provinces
         // The hand-painted impassable mask, if any. Read before the domain field because in Snap
         // mode it *is* part of the domain field: the paint becomes a region the partition may not
         // cross, which is what makes the wall come out the shape it was drawn.
-        var painted = ImpassableMask.Load(cfg, width, height);
-        bool snap = painted is not null && cfg.ImpassableMaskMode == ImpassableMaskMode.Snap;
+        var cells = ImpassableMask.Load(cfg, width, height, impassablePaint);
+        bool combine = cells is not null && cfg.ImpassablePaintMode == ImpassablePaintMode.ManualPlusAuto;
+        var painted = cells is null ? null : ImpassableMask.Walls(cells);
+        bool snap = painted is not null && (combine || cfg.ImpassableMaskMode == ImpassableMaskMode.Snap);
 
         // Without a painted mask, the terrain draws one, and the partition is cut along it the same
-        // way. A painted mask always wins: it is the user saying where the walls go.
+        // way. A painted mask wins: it is the user saying where the walls go. In ManualPlusAuto
+        // the cut runs anyway and the paint is laid over it, white adding and black removing.
         AutoCutDiagnostics? autoCut = null;
-        if (painted is null && cfg.ImpassableAutoCut
+        if ((combine || (painted is null && cfg.ImpassableAutoCut))
             && Core.Stage.Detail("  · impassable auto-cut",
                 () => ImpassableAutoCut.Build(mask, elevation, width, height, cfg)) is { } cut)
         {
-            (painted, autoCut) = cut;
+            (painted, autoCut) = combine ? ImpassableMask.Combine(cut.Mask, cut.Diagnostics, cells!) : cut;
             snap = true;
         }
 
@@ -207,7 +211,8 @@ public static class Provinces
         // name; with one it is the export's provinces, and the partition below cannot cross them.
         var domain = Core.Stage.Detail("  · domain field",
             () => ProvinceDomain.Build(mask, azgaar, width, height, cfg, snap ? painted : null,
-                autoCut is not null ? "mountain auto-cut" : null, riverChannel));
+                autoCut is null ? null : combine ? "painted mask over the mountain auto-cut" : "mountain auto-cut",
+                riverChannel));
 
         foreach (var seed in seeds) seed.Domain = domain[seed.Y * width + seed.X];
 
@@ -248,7 +253,11 @@ public static class Provinces
         {
             // A painted mask replaces the relief scoring outright; the pocket fill and the range
             // fusing run either way, since a drawn wall can enclose land just as a ridge can.
-            if (autoCut is not null) MarkCutImpassable(map, autoCut);
+            if (autoCut is not null)
+            {
+                MarkCutImpassable(map, autoCut);
+                if (combine) CreditPaintedWalls(map, cells!);
+            }
             else if (snap) MarkSnappedImpassable(map);
             else if (painted is not null) MarkPaintedImpassable(map, painted, cfg);
             else MarkImpassable(map, elevation, mask, cfg);
@@ -1061,6 +1070,32 @@ public static class Provinces
         map.AutoCut = cut;
         int marked = MarkInsideCut(map, ImpassableCause.Cut, out int land, out long pixels);
         Console.WriteLine($"  impassable: {marked} of {land} land provinces cut to the mountains ({pixels} px)");
+    }
+
+    /// <summary>
+    /// ManualPlusAuto: a cut province mostly painted white is the user's wall, not the terrain's,
+    /// and the preview says so.
+    /// </summary>
+    private static void CreditPaintedWalls(ProvinceMap map, byte[] cells)
+    {
+        var area = new int[map.Count];
+        var white = new int[map.Count];
+        for (int i = 0; i < map.Label.Length; i++)
+        {
+            int label = map.Label[i];
+            area[label]++;
+            if (cells[i] == ImpassableMask.Wall) white[label]++;
+        }
+
+        int credited = 0;
+        for (int i = 0; i < map.Count; i++)
+        {
+            var seed = map.Seeds[i];
+            if (seed.ImpassableCause != ImpassableCause.Cut || white[i] * 2 <= area[i]) continue;
+            seed.ImpassableCause = ImpassableCause.Mask;
+            credited++;
+        }
+        Console.WriteLine($"  impassable: {credited} of them mostly painted white in the mask");
     }
 
     private static int MarkInsideCut(ProvinceMap map, ImpassableCause cause, out int land, out long pixels)

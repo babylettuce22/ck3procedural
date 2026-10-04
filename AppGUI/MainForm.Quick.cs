@@ -306,7 +306,7 @@ public sealed partial class MainForm
         _advanced.Checked = _options.Config.ShowAdvancedSettings;
         ApplyAzgaarChip();
         RefreshSettings();
-        _climate.InvalidateModel();
+        _masks.InvalidateModel();
         _calendar.Bind(_options.Config);
         SyncCalendarSection();
 

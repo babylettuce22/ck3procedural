@@ -1637,6 +1637,7 @@ public static class PreviewRenderer
                     $"impassable — cut to the steepest ground (slope score {cut.CutHeight:F2} and up), or above the ceiling",
                 ImpassableCause.Cut => $"impassable — cut to the mountains (ground above {cut.GateLine:F0} m" +
                     (float.IsNegativeInfinity(cut.CutHeight) ? ")" : $", highest first down to about {cut.CutHeight:F0} m)"),
+                ImpassableCause.Mask => "impassable — painted in the mask",
                 ImpassableCause.Trapped => "impassable — trapped (landlocked behind impassables)",
                 _ when seed.IsImpassable => "impassable",
                 _ => "passable — outside the mountain cut",

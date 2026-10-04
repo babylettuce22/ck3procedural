@@ -102,6 +102,16 @@ public sealed class GuiState
     public static string ClimatePaintAutosave => System.IO.Path.Combine(
         System.IO.Path.GetDirectoryName(Path_)!, "climate_paint.png");
 
+    /// <summary>Where the impassable page's import/export dialogs open.</summary>
+    public string? ImpassablePaintDir { get; set; }
+
+    /// <summary>Where the impassable page's paint is kept between sessions, beside this file.</summary>
+    public static string ImpassablePaintAutosave => System.IO.Path.Combine(
+        System.IO.Path.GetDirectoryName(Path_)!, "impassable_paint.png");
+
+    /// <summary>Which page of the Masks workspace was on screen.</summary>
+    public string? MasksPage { get; set; }
+
     public string? LaunchArgs { get; set; } = "-debug_mode -developer -skip";
     public bool CloseOnLaunch { get; set; } = true;
     /// <summary>

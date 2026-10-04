@@ -115,6 +115,23 @@ public enum ImpassableMaskMode : byte
 }
 
 /// <summary>
+/// How a three-state impassable paint (the Masks tab's, or an <see cref="MapConfig.ImpassableMaskPath"/>
+/// PNG with transparency) combines with the automatic walls. White is always a wall and black
+/// always passable; this decides what transparent, unpainted ground is.
+/// </summary>
+public enum ImpassablePaintMode : byte
+{
+    /// <summary>Only the paint: transparent is passable, as black is. The automatic walls do not run.</summary>
+    Manual,
+
+    /// <summary>
+    /// The auto-cut decides transparent ground; white adds walls and black removes them. Snaps the
+    /// partition to the result, so the auto-cut runs whatever <see cref="MapConfig.ImpassableAutoCut"/> says.
+    /// </summary>
+    ManualPlusAuto,
+}
+
+/// <summary>
 /// Whether permanent mountain snow follows local climate or manually selected height percentiles.
 /// </summary>
 public enum MountainSnowMode : byte
@@ -1265,6 +1282,16 @@ public sealed class MapConfig : CustomTypeDescriptor
     public ImpassableMaskMode ImpassableMaskMode { get; set; } = ImpassableMaskMode.Snap;
 
     /// <summary>
+    /// What unpainted (transparent) ground is under a hand-painted mask. See
+    /// <see cref="Config.ImpassablePaintMode"/>. Manual keeps the mask's old meaning; ManualPlusAuto
+    /// lets the auto-cut fill it in, white adding walls and black vetoing them, and always snaps.
+    /// </summary>
+    [Category("03 Provinces")]
+    [Description("Only with a painted mask (the Masks tab, or ImpassableMaskPath). Manual: only white is impassable. " +
+                 "ManualPlusAuto: the automatic walls fill in transparent ground; white adds walls, black removes them.")]
+    public ImpassablePaintMode ImpassablePaintMode { get; set; } = ImpassablePaintMode.Manual;
+
+    /// <summary>
     /// Touch mode only. How much of a land province the mask has to cover before the province
     /// counts as painted. 0 means a single white pixel is enough, which is what a drawn stroke
     /// wants: the wall it traces must not break at the provinces it only clips. Raise it towards 1
@@ -1337,8 +1364,8 @@ public sealed class MapConfig : CustomTypeDescriptor
     /// plateaus outside it), <see cref="ImpassableMinMountainGround"/>,
     /// <see cref="ImpassableGateHeight"/>, <see cref="ImpassableMountainPlateaus"/>, the mountain
     /// and steep lines, and the slope weight and score floors, which cap the share where the map's
-    /// mountains run out before it does, as they stop the scored pass. A painted
-    /// <see cref="ImpassableMaskPath"/> always takes precedence. Moves every province near a
+    /// mountains run out before it does, as they stop the scored pass. A painted mask takes
+    /// precedence, unless <see cref="ImpassablePaintMode"/> is ManualPlusAuto. Moves every province near a
     /// mountain, so a seed made with it off comes out differently with it on.
     /// Recommended: on.
     /// </summary>

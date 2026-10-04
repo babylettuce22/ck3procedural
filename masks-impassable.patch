@@ -1,0 +1,2118 @@
+diff --git a/AppGUI/Chrome/WorkspaceBar.cs b/AppGUI/Chrome/WorkspaceBar.cs
+index 32404f9..69d252f 100644
+--- a/AppGUI/Chrome/WorkspaceBar.cs
++++ b/AppGUI/Chrome/WorkspaceBar.cs
+@@ -1,7 +1,7 @@
+ namespace Ck3MapGen.AppGUI;
+ 
+ /// <summary>The things the window can be doing, in the order a world is made.</summary>
+-internal enum Workspace { Terrain, Climate, World, History }
++internal enum Workspace { Terrain, Masks, World, History }
+ 
+ /// <summary>
+ /// The window's top level: one row naming the workspaces, with the commands that act on the
+@@ -50,7 +50,7 @@ internal sealed class WorkspaceBar : Panel
+ 
+         Add(Workspace.Terrain, 1, "Terrain", "beta", "Build a heightmap from noise and paint (Ctrl+1)");
+         AddChevron();
+-        Add(Workspace.Climate, 2, "Climate", null, "Paint the climate over the heightmap (Ctrl+2)");
++        Add(Workspace.Masks, 2, "Masks", null, "Paint the climate and the impassable walls over the heightmap (Ctrl+2)");
+         AddChevron();
+         Add(Workspace.World, 3, "World", null, "Settings, preview and the finished map (Ctrl+3)");
+         AddChevron();
+@@ -85,7 +85,7 @@ internal sealed class WorkspaceBar : Panel
+     {
+         _single = single;
+         _items[Workspace.Terrain].Visible = !single;
+-        _items[Workspace.Climate].Visible = !single;
++        _items[Workspace.Masks].Visible = !single;
+         _items[Workspace.History].Visible = !single;
+         foreach (var chevron in _chevrons) chevron.Visible = !single;
+         foreach (var item in _items.Values) item.ShowStep = !single;
+diff --git a/AppGUI/GuiState.cs b/AppGUI/GuiState.cs
+index 73fad69..a63bc8b 100644
+--- a/AppGUI/GuiState.cs
++++ b/AppGUI/GuiState.cs
+@@ -102,6 +102,16 @@ public sealed class GuiState
+     public static string ClimatePaintAutosave => System.IO.Path.Combine(
+         System.IO.Path.GetDirectoryName(Path_)!, "climate_paint.png");
+ 
++    /// <summary>Where the impassable page's import/export dialogs open.</summary>
++    public string? ImpassablePaintDir { get; set; }
++
++    /// <summary>Where the impassable page's paint is kept between sessions, beside this file.</summary>
++    public static string ImpassablePaintAutosave => System.IO.Path.Combine(
++        System.IO.Path.GetDirectoryName(Path_)!, "impassable_paint.png");
++
++    /// <summary>Which page of the Masks workspace was on screen.</summary>
++    public string? MasksPage { get; set; }
++
+     public string? LaunchArgs { get; set; } = "-debug_mode -developer -skip";
+     public bool CloseOnLaunch { get; set; } = true;
+     /// <summary>
+diff --git a/AppGUI/MainForm.Azgaar.cs b/AppGUI/MainForm.Azgaar.cs
+index cba07b6..5cfe821 100644
+--- a/AppGUI/MainForm.Azgaar.cs
++++ b/AppGUI/MainForm.Azgaar.cs
+@@ -108,7 +108,7 @@ public sealed partial class MainForm
+         _advanced.Checked = _options.Config.ShowAdvancedSettings;
+         ApplyAzgaarChip();
+         RefreshSettings();
+-        _climate.InvalidateModel();
++        _masks.InvalidateModel();
+         _calendar.Bind(_options.Config);
+         SyncCalendarSection();
+ 
+diff --git a/AppGUI/MainForm.Quick.cs b/AppGUI/MainForm.Quick.cs
+index e5d5e32..26f1777 100644
+--- a/AppGUI/MainForm.Quick.cs
++++ b/AppGUI/MainForm.Quick.cs
+@@ -306,7 +306,7 @@ public sealed partial class MainForm
+         _advanced.Checked = _options.Config.ShowAdvancedSettings;
+         ApplyAzgaarChip();
+         RefreshSettings();
+-        _climate.InvalidateModel();
++        _masks.InvalidateModel();
+         _calendar.Bind(_options.Config);
+         SyncCalendarSection();
+ 
+diff --git a/AppGUI/MainForm.cs b/AppGUI/MainForm.cs
+index 71bcf7f..0dc2e5e 100644
+--- a/AppGUI/MainForm.cs
++++ b/AppGUI/MainForm.cs
+@@ -130,9 +130,15 @@ public sealed partial class MainForm : ChromeForm
+     /// <summary>The Terrain workspace: CK3 Heightmap Forge, embedded. See <see cref="Forge.ForgePanel"/>.</summary>
+     private readonly Forge.ForgePanel _forge = new() { Dock = DockStyle.Fill };
+ 
+-    /// <summary>The Climate workspace: paint the climate over the heightmap. See <see cref="ClimatePanel"/>.</summary>
++    /// <summary>The Masks workspace's climate page: paint the climate over the heightmap. See <see cref="ClimatePanel"/>.</summary>
+     private readonly ClimatePanel _climate = new() { Dock = DockStyle.Fill };
+ 
++    /// <summary>The Masks workspace's impassable page. See <see cref="ImpassablePanel"/>.</summary>
++    private readonly ImpassablePanel _impassable = new() { Dock = DockStyle.Fill };
++
++    /// <summary>The Masks workspace: both pages above, one at a time. See <see cref="MasksPanel"/>.</summary>
++    private readonly MasksPanel _masks;
++
+     /// <summary>The History workspace: the written world run on past its start date. See <see cref="HistoryPanel"/>.</summary>
+     private readonly HistoryPanel _history = new() { Dock = DockStyle.Fill };
+ 
+@@ -144,9 +150,9 @@ public sealed partial class MainForm : ChromeForm
+ 
+     private const string CalendarSection = "Calendar";
+ 
+-    /// <summary>Which source the Climate tab was last given terrain for; null when it needs a fresh one.</summary>
+-    private string? _climateStamp;
+-    private int _climateGeneration;
++    /// <summary>Which source the Masks workspace was last given terrain for; null when it needs a fresh one.</summary>
++    private string? _masksStamp;
++    private int _masksGeneration;
+ 
+     private readonly ImageView _viewer = new() { Dock = DockStyle.Fill };
+ 
+@@ -370,6 +376,7 @@ public sealed partial class MainForm : ChromeForm
+     public MainForm(GenerationOptions options)
+     {
+         _options = options;
++        _masks = new MasksPanel(_climate, _impassable) { Dock = DockStyle.Fill };
+ 
+         _source = options.Heightmap;
+         if (_source is null && File.Exists(_state.HeightmapPath))
+@@ -450,8 +457,11 @@ public sealed partial class MainForm : ChromeForm
+             if (changed is nameof(MapConfig.CalendarEnabled) or nameof(MapConfig.ContentSource)) SyncCalendarSection();
+             if (changed == nameof(MapConfig.StartYear)) _calendar.RefreshPreview();
+ 
+-            // The Climate tab's prediction runs on the same settings; its cached model is stale.
+-            _climate.InvalidateModel();
++            // The impassable page's mode switch mirrors the grid row.
++            if (changed == nameof(MapConfig.ImpassablePaintMode)) _impassable.Mode = _options.Config.ImpassablePaintMode;
++
++            // The Masks previews run on the same settings; their cached models are stale.
++            _masks.InvalidateModel();
+ 
+             if (!NormalizationSettings.Contains(changed)) return;
+             InvalidateProcessed();
+@@ -595,7 +605,7 @@ public sealed partial class MainForm : ChromeForm
+ 
+         // ---- View -----------------------------------------------------------------------
+         var terrain = MenuItem("Terrain", () => SelectWorkspace(Workspace.Terrain), "Ctrl+1");
+-        var climate = MenuItem("Climate", () => SelectWorkspace(Workspace.Climate), "Ctrl+2");
++        var masks = MenuItem("Masks", () => SelectWorkspace(Workspace.Masks), "Ctrl+2");
+         var world = MenuItem("World", () => SelectWorkspace(Workspace.World), "Ctrl+3");
+         var history = MenuItem("History", () => SelectWorkspace(Workspace.History), "Ctrl+4");
+         var mapView = MenuItem("Map", () => SelectWorldView(WorldView.Map));
+@@ -612,7 +622,7 @@ public sealed partial class MainForm : ChromeForm
+         });
+ 
+         var view = TopMenu(menu, "&View",
+-            terrain, climate, world, history, new ToolStripSeparator(),
++            terrain, masks, world, history, new ToolStripSeparator(),
+             mapView, solidView, titlesView, new ToolStripSeparator(),
+             showLog, new ToolStripSeparator(),
+             darkMode);
+@@ -620,10 +630,10 @@ public sealed partial class MainForm : ChromeForm
+         view.DropDownOpening += (_, _) =>
+         {
+             terrain.Visible = _workspaceBar.IsAvailable(Workspace.Terrain);
+-            climate.Visible = _workspaceBar.IsAvailable(Workspace.Climate);
++            masks.Visible = _workspaceBar.IsAvailable(Workspace.Masks);
+             history.Visible = _workspaceBar.IsAvailable(Workspace.History);
+             terrain.Checked = _workspace == Workspace.Terrain;
+-            climate.Checked = _workspace == Workspace.Climate;
++            masks.Checked = _workspace == Workspace.Masks;
+             world.Checked = _workspace == Workspace.World;
+             history.Checked = _workspace == Workspace.History;
+ 
+@@ -883,14 +893,24 @@ public sealed partial class MainForm : ChromeForm
+         _forge.UseForGeneration += UseForgeForGeneration;
+         _forge.PresetDir = _state.ForgePresetDir;
+ 
+-        // Climate paints over whatever heightmap is chosen. An unvisited workspace changes nothing
+-        // — see ClimatePanel.EffectivePaint — and a painted one says so in its label.
++        // Masks paint over whatever heightmap is chosen. An unvisited workspace changes nothing
++        // — see ClimatePanel.EffectivePaint and ImpassablePanel.EffectivePaint — and a painted one
++        // says so in its label.
+         _climate.PaintDir = _state.ClimatePaintDir;
+         _climate.UseAutomatic = _state.ClimateAutomatic;
+-        _climate.PaintChanged += RefreshClimateLabel;
++        _climate.PaintChanged += RefreshMasksLabel;
++        _impassable.PaintDir = _state.ImpassablePaintDir;
++        _impassable.Mode = _options.Config.ImpassablePaintMode;
++        _impassable.PaintChanged += RefreshMasksLabel;
++        _impassable.ModeChanged += mode =>
++        {
++            _options.Config.ImpassablePaintMode = mode;
++            _grid.Refresh();
++        };
++        if (Enum.TryParse(_state.MasksPage, out MasksPanel.Page masksPage)) _masks.Select(masksPage);
+ 
+         _workspacePages[Workspace.Terrain] = Page(_forge);
+-        _workspacePages[Workspace.Climate] = Page(_climate);
++        _workspacePages[Workspace.Masks] = Page(_masks);
+         _workspacePages[Workspace.World] = BuildWorld();
+         _workspacePages[Workspace.History] = Page(_history);
+         _history.ApplyRequested += applied => ApplyHistoryAsync(applied).Forget("apply history");
+@@ -1066,7 +1086,7 @@ public sealed partial class MainForm : ChromeForm
+         ResumeLayout();
+ 
+         if (workspace == Workspace.Terrain) _forge.EnsureStarted();
+-        if (workspace == Workspace.Climate) ShowClimateAsync().Forget("climate view");
++        if (workspace == Workspace.Masks) ShowMasksAsync().Forget("masks view");
+         if (workspace == Workspace.World && _worldView == WorldView.ThreeD) EnsureSourceShown();
+     }
+ 
+@@ -1572,8 +1592,10 @@ public sealed partial class MainForm : ChromeForm
+         SetLogOpen(_state.LogOpen);
+ 
+         // An opened mod can be adopted before the window is shown (--edit-world), and it has only
+-        // the World workspace; a saved Terrain or Climate would leave no page showing at all.
+-        var workspace = Enum.TryParse(_state.Workspace, out Workspace saved) && _workspaceBar.IsAvailable(saved)
++        // the World workspace; a saved Terrain or Masks would leave no page showing at all.
++        // "Climate" is what Masks was called before it held the impassable page too.
++        string? savedName = _state.Workspace == "Climate" ? nameof(Workspace.Masks) : _state.Workspace;
++        var workspace = Enum.TryParse(savedName, out Workspace saved) && _workspaceBar.IsAvailable(saved)
+             ? saved
+             : Workspace.World;
+         var worldView = Enum.TryParse(_state.WorldView, out WorldView savedView) ? savedView : WorldView.Map;
+@@ -1584,6 +1606,7 @@ public sealed partial class MainForm : ChromeForm
+ 
+         ReportFolders();
+         RestoreClimatePaint();
++        RestoreImpassablePaint();
+ 
+         // Last, once every splitter above has been placed against a visible page.
+         if (OpensToStartPage) OpenOnLaunch();
+@@ -1730,6 +1753,17 @@ public sealed partial class MainForm : ChromeForm
+         {
+             Console.WriteLine($"Could not save the climate paint: {ex.Message}");
+         }
++        _state.ImpassablePaintDir = _impassable.PaintDir;
++        _state.MasksPage = _masks.Current.ToString();
++        try
++        {
++            string autosave = GuiState.ImpassablePaintAutosave;
++            if (!_impassable.SavePaint(autosave) && File.Exists(autosave)) File.Delete(autosave);
++        }
++        catch (Exception ex)
++        {
++            Console.WriteLine($"Could not save the impassable paint: {ex.Message}");
++        }
+         _state.HeightmapPath = _lastHeightmapFile;
+         _state.View = _view;
+         _state.CategoryViews = new Dictionary<string, string>(_lastInCategory);
+@@ -1768,10 +1802,10 @@ public sealed partial class MainForm : ChromeForm
+                 return base.ProcessCmdKey(ref message, key);
+         }
+ 
+-        // Terrain and Climate own the brush keys while they are on screen, and say so by handling
++        // Terrain and Masks own the brush keys while they are on screen, and say so by handling
+         // them; anything they pass on falls through to the window's own shortcuts.
+         if (_workspace == Workspace.Terrain && !TypingInText() && _forge.HandleKey(key)) return true;
+-        if (_workspace == Workspace.Climate && !TypingInText() && _climate.HandleKey(key)) return true;
++        if (_workspace == Workspace.Masks && !TypingInText() && _masks.HandleKey(key)) return true;
+         if (_workspace == Workspace.History && !TypingInText() && _history.HandleKey(key)) return true;
+ 
+         bool onMap = _workspace == Workspace.World && _worldView == WorldView.Map;
+@@ -1783,7 +1817,7 @@ public sealed partial class MainForm : ChromeForm
+                 return true;
+ 
+             case Keys.Control | Keys.D2:
+-                SelectWorkspace(Workspace.Climate);
++                SelectWorkspace(Workspace.Masks);
+                 return true;
+ 
+             case Keys.Control | Keys.D3:
+@@ -2083,30 +2117,30 @@ public sealed partial class MainForm : ChromeForm
+         InvalidateProcessed();
+         if (_sourceShown) ShowSourceAsync().Forget("source view");
+ 
+-        // Climate paints over the source; a new one is read the next time the workspace is looked
++        // Masks paint over the source; a new one is read the next time the workspace is looked
+         // at, or now if it is the one on screen.
+-        _climateStamp = null;
+-        if (_workspace == Workspace.Climate) ShowClimateAsync().Forget("climate view");
++        _masksStamp = null;
++        if (_workspace == Workspace.Masks) ShowMasksAsync().Forget("masks view");
+     }
+ 
+     /// <summary>
+-    /// Hands the Climate tab the current source at province resolution, decoding it if no run has
++    /// Hands the Masks workspace the current source at province resolution, decoding it if no run has
+     /// yet. Shares the decode cache with the run and the 3D tab, so a heightmap already read is
+     /// not read again; only the province downsample and the land mask are computed here.
+     /// </summary>
+-    private async Task ShowClimateAsync()
++    private async Task ShowMasksAsync()
+     {
+         if (_source is not { } source)
+         {
+-            _climate.SetTerrain(null);
++            _masks.SetTerrain(null);
+             return;
+         }
+ 
+         var cfg = _options.Config;
+         string stamp = source.Stamp;
+-        if (_climateStamp == stamp)
++        if (_masksStamp == stamp)
+         {
+-            _climate.Activated();
++            _masks.Activated();
+             return;
+         }
+ 
+@@ -2115,12 +2149,12 @@ public sealed partial class MainForm : ChromeForm
+         // The stamp stays unset, so the tab is filled in when the run ends — see SetEnabled.
+         if (_busy)
+         {
+-            _status.Text = "Climate will load its heightmap when the current run finishes.";
++            _status.Text = "Masks will load the heightmap when the current run finishes.";
+             return;
+         }
+ 
+-        int generation = ++_climateGeneration;
+-        _status.Text = "Reading the heightmap for Climate…";
++        int generation = ++_masksGeneration;
++        _status.Text = "Reading the heightmap for Masks…";
+ 
+         try
+         {
+@@ -2138,25 +2172,26 @@ public sealed partial class MainForm : ChromeForm
+                 return (loaded, new ClimatePanel.Terrain(cfg, province, land, stamp));
+             });
+ 
+-            if (generation != _climateGeneration) return;
++            if (generation != _masksGeneration) return;
+ 
+             _loaded = image;
+             _loadedStamp = stamp;
+-            _climateStamp = stamp;
+-            _climate.SetTerrain(terrain);
+-            _status.Text = $"Climate ready — {source.Label}";
++            _masksStamp = stamp;
++            _masks.SetTerrain(terrain);
++            _status.Text = $"Masks ready — {source.Label}";
+         }
+         catch (Exception error)
+         {
+-            if (generation != _climateGeneration) return;
+-            Console.WriteLine($"Could not read the heightmap for Climate: {error.Message}");
+-            _status.Text = "Could not read the heightmap for Climate — see log";
++            if (generation != _masksGeneration) return;
++            Console.WriteLine($"Could not read the heightmap for Masks: {error.Message}");
++            _status.Text = "Could not read the heightmap for Masks — see log";
+         }
+     }
+ 
+     /// <summary>The workspace says when its paint will change the next run, the way editable map modes do.</summary>
+-    private void RefreshClimateLabel()
+-        => _workspaceBar.SetLabel(Workspace.Climate, _climate.EffectivePaint is not null ? "Climate ✎" : "Climate");
++    private void RefreshMasksLabel()
++        => _workspaceBar.SetLabel(Workspace.Masks,
++            _climate.EffectivePaint is not null || _impassable.EffectivePaint is not null ? "Masks ✎" : "Masks");
+ 
+     /// <summary>Where a preset's climate paint lives: beside it, named after it.</summary>
+     private static string ClimateSidecar(string presetPath)
+@@ -2188,6 +2223,31 @@ public sealed partial class MainForm : ChromeForm
+         }
+     }
+ 
++    /// <summary>Where a preset's impassable paint lives: beside it, named after it.</summary>
++    private static string ImpassableSidecar(string presetPath)
++        => Path.Combine(Path.GetDirectoryName(presetPath) ?? "",
++            Path.GetFileNameWithoutExtension(presetPath) + ".impassable.png");
++
++    /// <summary>Last session's impassable paint, as <see cref="RestoreClimatePaint"/>.</summary>
++    private void RestoreImpassablePaint()
++    {
++        string path = GuiState.ImpassablePaintAutosave;
++        if (!File.Exists(path)) return;
++
++        try
++        {
++            var paint = MapGen.ImpassablePaint.Load(path);
++            if (paint.IsEmpty) return;
++
++            _impassable.AdoptPaint(paint, "Impassable paint restored from last session.");
++            Console.WriteLine("Impassable paint restored from last session.");
++        }
++        catch (Exception ex)
++        {
++            Console.WriteLine($"Could not restore last session's impassable paint: {ex.Message}");
++        }
++    }
++
+     /// <summary>
+     /// The Heightmap tab's pipeline becomes the source. By reference: every later edit on that tab
+     /// changes the provider's stamp, so the next Preview or Write runs the pipeline again at full
+@@ -2655,6 +2715,19 @@ public sealed partial class MainForm : ChromeForm
+             note = " — climate paint could not be written, see log";
+         }
+ 
++        // The impassable paint likewise.
++        string wallSidecar = ImpassableSidecar(dialog.FileName);
++        try
++        {
++            if (_impassable.SavePaint(wallSidecar)) note += " and its impassable paint";
++            else if (File.Exists(wallSidecar)) { File.Delete(wallSidecar); note += " (removed its old impassable paint)"; }
++        }
++        catch (Exception ex)
++        {
++            Console.WriteLine($"Could not write {wallSidecar}: {ex.Message}");
++            note += " — impassable paint could not be written, see log";
++        }
++
+         _status.Text = $"Saved settings to {Path.GetFileName(dialog.FileName)}{note}";
+     }
+ 
+@@ -2682,7 +2755,8 @@ public sealed partial class MainForm : ChromeForm
+             _advanced.Checked = _options.Config.ShowAdvancedSettings;
+             ApplyAzgaarChip();
+             RefreshSettings();
+-            _climate.InvalidateModel();
++            _masks.InvalidateModel();
++            _impassable.Mode = _options.Config.ImpassablePaintMode;
+             _calendar.Bind(_options.Config);
+             SyncCalendarSection();
+ 
+@@ -2708,7 +2782,27 @@ public sealed partial class MainForm : ChromeForm
+             else if (_climate.HasPaint)
+             {
+                 _climate.ClearPaint();
+-                note = " — it carries no climate paint, so the painted climate was cleared (Undo in Climate restores it)";
++                note = " — it carries no climate paint, so the painted climate was cleared (Undo in Masks ▸ Climate restores it)";
++            }
++
++            string wallSidecar = ImpassableSidecar(dialog.FileName);
++            if (File.Exists(wallSidecar))
++            {
++                try
++                {
++                    _impassable.AdoptPaint(MapGen.ImpassablePaint.Load(wallSidecar), $"Impassable paint loaded with {Path.GetFileName(dialog.FileName)}.");
++                    note += " and its impassable paint";
++                }
++                catch (Exception ex)
++                {
++                    Console.WriteLine($"Could not read {wallSidecar}: {ex.Message}");
++                    note += " — its impassable paint could not be read, see log";
++                }
++            }
++            else if (_impassable.HasPaint)
++            {
++                _impassable.ClearPaint();
++                note += " — it carries no impassable paint, so the painted walls were cleared (Undo in Masks ▸ Impassable restores them)";
+             }
+ 
+             _status.Text = $"Loaded {applied} settings from {Path.GetFileName(dialog.FileName)}{note}";
+@@ -3369,9 +3463,10 @@ public sealed partial class MainForm : ChromeForm
+ 
+         // Read on the UI thread before the run, and cloned: the tab stays enabled for panning but
+         // the paint must not change under the model mid-run. A Quick world's climate is the one its
+-        // page chose, so paint left on the Climate workspace does not reach it; an Azgaar world's
+-        // climate is the export's, for the same reason.
++        // page chose, so paint left on the Masks workspace does not reach it; an Azgaar world's
++        // climate is the export's, for the same reason. Painted walls likewise skip a Quick world.
+         var climatePaint = _inLauncher ? null : _climate.EffectivePaint?.Clone();
++        var impassablePaint = _inLauncher ? null : _impassable.EffectivePaint?.Clone();
+ 
+         // Set inside the run when the applied history turns out not to fit the world just built.
+         MapGen.AppliedHistory? dropped = null;
+@@ -3403,7 +3498,7 @@ public sealed partial class MainForm : ChromeForm
+                     () => MapGen.TerrainData.FromElevation(_loaded!.ToElevation(cfg), cfg));
+ 
+                 var r = Generator.FromTerrain(terra, cfg, OnProgressivePreview,
+-                    climatePaint: climatePaint);
++                    climatePaint: climatePaint, impassablePaint: impassablePaint);
+ 
+                 // A history applied in the History workspace moves the start date, on a copy: the
+                 // grid keeps the user's own World Year, and discarding the history needs no undo.
+@@ -3672,12 +3767,12 @@ public sealed partial class MainForm : ChromeForm
+ 
+         _titles.Enabled = enabled;
+         _forge.Enabled = enabled;
+-        _climate.Enabled = enabled;
++        _masks.Enabled = enabled;
+         ShowPending();
+ 
+         // A Climate tab opened mid-run was told to wait; the run is over.
+-        if (enabled && _workspace == Workspace.Climate && _climateStamp is null)
+-            ShowClimateAsync().Forget("climate view");
++        if (enabled && _workspace == Workspace.Masks && _masksStamp is null)
++            ShowMasksAsync().Forget("masks view");
+ 
+         bool ready = enabled && _source is not null;
+         _writeMod.Enabled = ready;
+diff --git a/AppGUI/Map/PreviewRenderer.cs b/AppGUI/Map/PreviewRenderer.cs
+index 4e4ba76..90b90f2 100644
+--- a/AppGUI/Map/PreviewRenderer.cs
++++ b/AppGUI/Map/PreviewRenderer.cs
+@@ -1637,6 +1637,7 @@ public static class PreviewRenderer
+                     $"impassable — cut to the steepest ground (slope score {cut.CutHeight:F2} and up), or above the ceiling",
+                 ImpassableCause.Cut => $"impassable — cut to the mountains (ground above {cut.GateLine:F0} m" +
+                     (float.IsNegativeInfinity(cut.CutHeight) ? ")" : $", highest first down to about {cut.CutHeight:F0} m)"),
++                ImpassableCause.Mask => "impassable — painted in the mask",
+                 ImpassableCause.Trapped => "impassable — trapped (landlocked behind impassables)",
+                 _ when seed.IsImpassable => "impassable",
+                 _ => "passable — outside the mountain cut",
+diff --git a/AppGUI/Workspaces/ClimatePanel.cs b/AppGUI/Workspaces/ClimatePanel.cs
+index 536b0a1..79dd014 100644
+--- a/AppGUI/Workspaces/ClimatePanel.cs
++++ b/AppGUI/Workspaces/ClimatePanel.cs
+@@ -6,7 +6,7 @@ using Ck3MapGen.MapGen;
+ namespace Ck3MapGen.AppGUI;
+ 
+ /// <summary>
+-/// The Climate tab: paint the climate you want over the heightmap, in Koppen-map colours, and
++/// The Masks tab's climate page: paint the climate you want over the heightmap, in Koppen-map colours, and
+ /// watch the model's prediction follow.
+ ///
+ /// The palette on the left is a set of climate *profiles* — see <see cref="ClimateBrush"/> — not
+@@ -728,8 +728,8 @@ public sealed class ClimatePanel : UserControl
+ 
+     // ------------------------------------------------------------------ canvas image
+ 
+-    /// <summary>The heightmap as shaded relief at paint resolution, sea in blue so the coast reads.</summary>
+-    private static byte[] ShadedRelief(Terrain terrain, int w, int h)
++    /// <summary>The heightmap as shaded relief at paint resolution, sea in blue so the coast reads. Shared with <see cref="ImpassablePanel"/>.</summary>
++    internal static byte[] ShadedRelief(Terrain terrain, int w, int h)
+     {
+         var cfg = terrain.Config;
+         int pw = cfg.ProvinceWidth, ph = cfg.ProvinceHeight;
+diff --git a/AppGUI/Workspaces/ImpassablePanel.cs b/AppGUI/Workspaces/ImpassablePanel.cs
+new file mode 100644
+index 0000000..f999289
+--- /dev/null
++++ b/AppGUI/Workspaces/ImpassablePanel.cs
+@@ -0,0 +1,762 @@
++using System.Drawing.Imaging;
++using Ck3MapGen.Config;
++using Ck3MapGen.Core;
++using Ck3MapGen.MapGen;
++
++namespace Ck3MapGen.AppGUI;
++
++/// <summary>
++/// The Masks tab's impassable page: paint where the impassable mountains go, over the heightmap.
++///
++/// Three states, as in the file: wall (white), passable (black) and automatic (transparent). In
++/// <see cref="ImpassablePaintMode.Manual"/> automatic means passable; in
++/// <see cref="ImpassablePaintMode.ManualPlusAuto"/> the auto-cut decides it, and the canvas can
++/// show where it would put its walls so the paint can add to them or veto them. The mode lives on
++/// the config (<see cref="MapConfig.ImpassablePaintMode"/>) so presets and the command line share
++/// it; the host keeps the two in step.
++///
++/// As with the climate page, a page never painted on changes nothing: <see cref="EffectivePaint"/>
++/// is null until a stroke lands.
++/// </summary>
++public sealed class ImpassablePanel : UserControl
++{
++    private enum Tool { Wall, Passable, Auto }
++
++    // ------------------------------------------------------------------ state
++
++    private ClimatePanel.Terrain? _terrain;
++    private ImpassablePaint? _paint;
++    private ImpassablePaint? _pending;     // loaded before the terrain was known; adopted when it is
++    private readonly ImpassableHistory _history = new();
++    private ImpassablePaintMode _mode = ImpassablePaintMode.Manual;
++
++    private Tool _tool = Tool.Wall;
++    private ImpassableStroke? _stroke;
++
++    private byte[]? _baseRgb;              // shaded relief at paint resolution
++    private Bitmap? _bitmap;
++
++    private bool[]? _autoWalls;            // the auto-cut at paint resolution
++    private string? _autoKey;
++    private int _modelVersion;
++    private int _autoGeneration;
++    private bool _autoRunning;
++
++    // ------------------------------------------------------------------ controls
++
++    private readonly ImageView _canvas = new() { Dock = DockStyle.Fill, ViewName = "impassable" };
++    private readonly Button _wall = Theme.MakeButton("Wall", 200);
++    private readonly Button _passable = Theme.MakeButton("Passable", 200);
++    private readonly Button _auto = Theme.MakeButton("Automatic (erase)", 200);
++    private readonly TrackBar _size = new() { Minimum = 1, Maximum = 200, Value = 12, TickStyle = TickStyle.None, Width = Dpi.S(190), AutoSize = false, Height = Dpi.S(26) };
++    private readonly RadioButton _manual = new() { Text = "Manual", AutoSize = true, Margin = Dpi.Pad(8, 4, 0, 0) };
++    private readonly RadioButton _manualPlusAuto = new() { Text = "Manual + auto", AutoSize = true, Margin = Dpi.Pad(8, 2, 0, 0) };
++    private readonly CheckBox _showAuto = new() { Text = "Show automatic walls", AutoSize = true, Checked = true, Margin = Dpi.Pad(8, 6, 0, 4) };
++    private readonly Button _undo = Theme.MakeButton("Undo", 62);
++    private readonly Button _redo = Theme.MakeButton("Redo", 62);
++    private readonly Button _clear = Theme.MakeButton("Clear all", 70);
++    private readonly Button _import = Theme.MakeButton("Import…", 96);
++    private readonly Button _export = Theme.MakeButton("Export…", 96);
++    private readonly Label _status;
++    private readonly Label _readout;
++    private readonly WrappingToolTip _tips = new() { AutoPopDelay = 20000, InitialDelay = 400 };
++    private readonly SplitContainer _split;
++    private bool _splitPlaced;
++    private bool _syncingMode;
++
++    // Display colours: white walls would vanish against the relief's pale peaks.
++    private static readonly (byte R, byte G, byte B) WallColour = (214, 48, 49);
++    private static readonly (byte R, byte G, byte B) PassableColour = (40, 170, 90);
++    private static readonly (byte R, byte G, byte B) AutoWallColour = (240, 150, 40);
++
++    private static int LeftWidth => Dpi.S(236);
++
++    protected override void OnResize(EventArgs e)
++    {
++        base.OnResize(e);
++        if (_splitPlaced || _split is null || Width < LeftWidth * 2) return;
++        _splitPlaced = true;
++        _split.SplitterDistance = LeftWidth;
++    }
++
++    /// <summary>Where the import/export dialogs open. The host persists it.</summary>
++    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
++    public string? PaintDir { get; set; }
++
++    /// <summary>The paint changed — anything that changes what generation will get.</summary>
++    public event Action? PaintChanged;
++
++    /// <summary>The mode switch was flipped here; the host writes it to the config.</summary>
++    public event Action<ImpassablePaintMode>? ModeChanged;
++
++    public ImpassablePanel()
++    {
++        BackColor = Theme.Background;
++        ForeColor = Theme.Text;
++        Font = Theme.Ui;
++
++        _status = new Label
++        {
++            Dock = DockStyle.Bottom,
++            Height = Dpi.S(24),
++            TextAlign = ContentAlignment.MiddleLeft,
++            Padding = Dpi.Pad(8, 0, 8, 0),
++            BackColor = Theme.Surface,
++            ForeColor = Theme.TextDim,
++            AutoEllipsis = true,
++            Text = "Choose a heightmap first (World ▸ Choose heightmap, or Terrain) — walls are painted over it.",
++        };
++
++        _readout = new Label
++        {
++            Dock = DockStyle.Bottom,
++            Height = Dpi.S(22),
++            TextAlign = ContentAlignment.MiddleLeft,
++            Padding = Dpi.Pad(8, 0, 8, 0),
++            BackColor = Theme.Surface,
++            ForeColor = Theme.Text,
++            AutoEllipsis = true,
++        };
++
++        var split = _split = new SplitContainer { Dock = DockStyle.Fill, FixedPanel = FixedPanel.Panel1, BackColor = Theme.Border };
++        split.Panel1.BackColor = Theme.Surface;
++        split.Panel2.BackColor = Theme.Background;
++        split.Panel1.Controls.Add(BuildLeft());
++
++        var host = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Background };
++        host.Controls.Add(_canvas);
++        host.Controls.Add(_status);
++        host.Controls.Add(_readout);
++        split.Panel2.Controls.Add(host);
++
++        Controls.Add(split);
++        _canvas.EmptyText = "Choose a heightmap, then come back here to paint its impassable walls.";
++        _canvas.Mode = ImageView.Interaction.Paint;
++        _canvas.StrokeBegan += OnStrokeBegan;
++        _canvas.StrokeMoved += OnStrokeMoved;
++        _canvas.StrokeEnded += OnStrokeEnded;
++        _canvas.Overlay += DrawOverlay;
++        _canvas.ViewChanged += (_, cursor) => UpdateReadout(cursor);
++
++        SelectTool(Tool.Wall);
++        SyncModeButtons();
++        UpdateHistoryButtons();
++    }
++
++    // ------------------------------------------------------------------ layout
++
++    private Control BuildLeft()
++    {
++        var column = new Panel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Theme.Surface };
++
++        // Docked Top controls stack in reverse order of addition; build bottom-up.
++        var file = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = Dpi.Pad(4, 2, 4, 6) };
++        file.Controls.Add(_import);
++        file.Controls.Add(_export);
++        _tips.SetToolTip(_import, "Load a mask PNG: white = wall, black = passable, transparent = automatic");
++        _tips.SetToolTip(_export, "Save the paint as a PNG — usable with --impassable-mask on the command line");
++        _import.Click += (_, _) => ImportPaint();
++        _export.Click += (_, _) => ExportPaint();
++
++        var history = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, Padding = Dpi.Pad(4, 4, 4, 2) };
++        history.Controls.Add(_undo);
++        history.Controls.Add(_redo);
++        history.Controls.Add(_clear);
++        _undo.Click += (_, _) => ApplyHistory(undo: true);
++        _redo.Click += (_, _) => ApplyHistory(undo: false);
++        _clear.Click += (_, _) => ClearPaint();
++        _tips.SetToolTip(_undo, "Undo the last stroke (Ctrl+Z)");
++        _tips.SetToolTip(_redo, "Redo (Ctrl+Y)");
++        _tips.SetToolTip(_clear, "Erase every stroke, back to automatic everywhere");
++
++        var mode = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, Padding = Dpi.Pad(6, 4, 6, 0) };
++        mode.Controls.Add(Section("Mode"));
++        mode.Controls.Add(_manual);
++        mode.Controls.Add(_manualPlusAuto);
++        mode.Controls.Add(_showAuto);
++        _tips.SetToolTip(_manual, "Only your walls. Unpainted ground is passable and the automatic walls do not run.");
++        _tips.SetToolTip(_manualPlusAuto, "The automatic walls fill in unpainted ground; your walls add to them and passable paint removes them.");
++        _tips.SetToolTip(_showAuto, "Show where the automatic cut would put walls (Manual + auto only). Approximate: the run carves rivers first.");
++        _manual.CheckedChanged += (_, _) => OnModeButton();
++        _manualPlusAuto.CheckedChanged += (_, _) => OnModeButton();
++        _showAuto.CheckedChanged += (_, _) => { if (_showAuto.Checked) QueueAuto(); RecompositeAll(); };
++
++        var brush = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = Dpi.Pad(6, 4, 6, 0) };
++        brush.Controls.Add(Caption("Size"));
++        brush.Controls.Add(_size);
++        _tips.SetToolTip(_size, "Brush radius, as a share of the map's height ( [ and ] )");
++        _size.ValueChanged += (_, _) => _canvas.Invalidate();
++
++        var tools = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown, Padding = Dpi.Pad(6, 2, 6, 0) };
++        tools.Controls.Add(Section("Brush"));
++        foreach (var (button, tool, colour, tip) in new[]
++        {
++            (_wall, Tool.Wall, WallColour, "Impassable, whatever the terrain. White in the saved file."),
++            (_passable, Tool.Passable, PassableColour, "Never impassable — vetoes the automatic walls. Black in the saved file."),
++            (_auto, Tool.Auto, ((byte)0, (byte)0, (byte)0), "Back to unpainted: the mode decides. Transparent in the saved file."),
++        })
++        {
++            var captured = tool;
++            var c = colour;
++            button.TextAlign = ContentAlignment.MiddleLeft;
++            button.Padding = Dpi.Pad(30, 0, 0, 0);
++            if (tool != Tool.Auto) button.Paint += (s, e) => PaintSwatch((Button)s!, e.Graphics, c);
++            button.Click += (_, _) => SelectTool(captured);
++            _tips.SetToolTip(button, tip);
++            tools.Controls.Add(button);
++        }
++
++        var hint = new Label
++        {
++            Dock = DockStyle.Top,
++            AutoSize = false,
++            Height = Dpi.S(66),
++            Padding = Dpi.Pad(8, 6, 8, 0),
++            ForeColor = Theme.TextDim,
++            Text = "Paint walls where provinces should be impassable, and passable ground where they must not be. Paint at least a barony wide.",
++        };
++
++        column.Controls.Add(file);
++        column.Controls.Add(history);
++        column.Controls.Add(mode);
++        column.Controls.Add(brush);
++        column.Controls.Add(tools);
++        column.Controls.Add(hint);
++        return column;
++    }
++
++    private static void PaintSwatch(Button button, Graphics g, (byte R, byte G, byte B) colour)
++    {
++        using var fill = new SolidBrush(Color.FromArgb(colour.R, colour.G, colour.B));
++        var square = new Rectangle(Dpi.S(6), (button.Height - Dpi.S(16)) / 2, Dpi.S(18), Dpi.S(16));
++        g.FillRectangle(fill, square);
++        using var pen = new Pen(Color.FromArgb(90, 0, 0, 0));
++        g.DrawRectangle(pen, square);
++    }
++
++    private static Label Section(string text) => new()
++    {
++        Text = text,
++        AutoSize = true,
++        Font = Theme.UiBold,
++        ForeColor = Theme.Accent,
++        Margin = Dpi.Pad(0, 6, 0, 2),
++        Padding = Dpi.Pad(2, 0, 0, 0),
++    };
++
++    private static Label Caption(string text) => new()
++    {
++        Text = text,
++        AutoSize = true,
++        ForeColor = Theme.TextDim,
++        Margin = Dpi.Pad(4, 7, 3, 0),
++    };
++
++    // ------------------------------------------------------------------ host API
++
++    /// <summary>Paint as generation should receive it: null when nothing is painted.</summary>
++    public ImpassablePaint? EffectivePaint => Paint is { IsEmpty: false } p ? p : null;
++
++    /// <summary>The paint itself. Null before any terrain or file has sized it.</summary>
++    public ImpassablePaint? Paint => _paint ?? _pending;
++
++    public bool HasPaint => Paint is { IsEmpty: false };
++
++    /// <summary>Set by the host from the config; setting it raises no <see cref="ModeChanged"/>.</summary>
++    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
++    public ImpassablePaintMode Mode
++    {
++        get => _mode;
++        set
++        {
++            if (_mode == value) return;
++            _mode = value;
++            SyncModeButtons();
++            AfterModeChanged();
++        }
++    }
++
++    public void SetTerrain(ClimatePanel.Terrain? terrain)
++    {
++        _terrain = terrain;
++        _autoWalls = null;
++        _autoKey = null;
++
++        if (terrain is null)
++        {
++            _baseRgb = null;
++            ReplaceBitmap(null);
++            _canvas.SetImage(null);
++            _status.Text = "Choose a heightmap first (World ▸ Choose heightmap, or Terrain) — walls are painted over it.";
++            return;
++        }
++
++        var cfg = terrain.Config;
++        var (w, h) = ImpassablePaint.SizeFor(cfg.ProvinceWidth, cfg.ProvinceHeight);
++
++        string note = "";
++        var source = _paint ?? _pending;
++        if (source is null)
++        {
++            _paint = new ImpassablePaint(w, h);
++        }
++        else if (source.Width != w || source.Height != h)
++        {
++            _paint = source.Resampled(w, h);
++            if (!source.IsEmpty) note = $" — paint resampled from {source.Width}×{source.Height} to fit this map";
++        }
++        else
++        {
++            _paint = source;
++        }
++        _pending = null;
++        _history.Clear();
++        UpdateHistoryButtons();
++
++        _baseRgb = ClimatePanel.ShadedRelief(terrain, w, h);
++        ReplaceBitmap(new Bitmap(w, h, PixelFormat.Format32bppArgb));
++        RecompositeAll();
++        _canvas.SetImage(_bitmap);
++        _canvas.Mode = ImageView.Interaction.Paint;
++        _status.Text = $"Painting over {cfg.ProvinceWidth}×{cfg.ProvinceHeight} at {w}×{h}{note}.";
++
++        QueueAuto();
++        PaintChanged?.Invoke();
++    }
++
++    /// <summary>The settings changed: the automatic walls preview is stale.</summary>
++    public void InvalidateModel()
++    {
++        _modelVersion++;
++        if (_terrain is not null && Visible) QueueAuto();
++    }
++
++    /// <summary>The page came back on screen with the terrain it already had.</summary>
++    public void Activated() => QueueAuto();
++
++    /// <summary>Takes a paint loaded from disk. Replacing what was on the page is one undoable step.</summary>
++    public void AdoptPaint(ImpassablePaint paint, string note)
++    {
++        if (_terrain is null || _paint is null)
++        {
++            _pending = paint;
++            _status.Text = note;
++            PaintChanged?.Invoke();
++            return;
++        }
++
++        var incoming = paint.Width == _paint.Width && paint.Height == _paint.Height
++            ? paint
++            : paint.Resampled(_paint.Width, _paint.Height);
++
++        var before = (byte[])_paint.Cells.Clone();
++        Array.Copy(incoming.Cells, _paint.Cells, _paint.Cells.Length);
++        _paint.Touch();
++        _history.Push(ImpassableEdit.Capture(_paint, before, new Rectangle(0, 0, _paint.Width, _paint.Height)));
++
++        _status.Text = note;
++        AfterPaintChanged(new Rectangle(0, 0, _paint.Width, _paint.Height));
++    }
++
++    /// <summary>Erases everything, as an undoable step.</summary>
++    public void ClearPaint()
++    {
++        if (_paint is null || _paint.IsEmpty)
++        {
++            if (_pending is not null) { _pending = null; PaintChanged?.Invoke(); }
++            return;
++        }
++
++        var edit = ImpassableEdit.Fill(_paint, ImpassableMask.Auto);
++        edit.Redo(_paint);
++        _history.Push(edit);
++        _status.Text = "Cleared — automatic everywhere. Undo brings the paint back.";
++        AfterPaintChanged(new Rectangle(0, 0, _paint.Width, _paint.Height));
++    }
++
++    /// <summary>Saves the paint to <paramref name="path"/>. False when there is nothing to save.</summary>
++    public bool SavePaint(string path)
++    {
++        var paint = Paint;
++        if (paint is null || paint.IsEmpty) return false;
++        paint.Save(path);
++        return true;
++    }
++
++    public bool HandleKey(Keys key)
++    {
++        switch (key)
++        {
++            case Keys.OemOpenBrackets:
++                _size.Value = Math.Max(_size.Minimum, _size.Value - 2);
++                return true;
++            case Keys.OemCloseBrackets:
++                _size.Value = Math.Min(_size.Maximum, _size.Value + 2);
++                return true;
++            case Keys.Control | Keys.Z:
++                ApplyHistory(undo: true);
++                return true;
++            case Keys.Control | Keys.Y:
++                ApplyHistory(undo: false);
++                return true;
++            default:
++                return false;
++        }
++    }
++
++    // ------------------------------------------------------------------ tools and mode
++
++    private void SelectTool(Tool tool)
++    {
++        _tool = tool;
++        foreach (var (button, t) in new[] { (_wall, Tool.Wall), (_passable, Tool.Passable), (_auto, Tool.Auto) })
++        {
++            bool active = t == tool;
++            button.FlatAppearance.BorderColor = active ? Theme.Accent : Theme.Border;
++            button.FlatAppearance.BorderSize = active ? 2 : 1;
++            button.BackColor = active ? Theme.SurfaceHigh : Theme.Surface;
++            button.Font = active ? Theme.UiBold : Theme.Ui;
++        }
++        _canvas.Invalidate();
++    }
++
++    private void SyncModeButtons()
++    {
++        _syncingMode = true;
++        _manual.Checked = _mode == ImpassablePaintMode.Manual;
++        _manualPlusAuto.Checked = _mode == ImpassablePaintMode.ManualPlusAuto;
++        _showAuto.Enabled = _mode == ImpassablePaintMode.ManualPlusAuto;
++        _syncingMode = false;
++    }
++
++    private void OnModeButton()
++    {
++        if (_syncingMode) return;
++        var next = _manualPlusAuto.Checked ? ImpassablePaintMode.ManualPlusAuto : ImpassablePaintMode.Manual;
++        if (next == _mode) return;
++        _mode = next;
++        _showAuto.Enabled = _mode == ImpassablePaintMode.ManualPlusAuto;
++        ModeChanged?.Invoke(next);
++        AfterModeChanged();
++    }
++
++    private void AfterModeChanged()
++    {
++        QueueAuto();
++        RecompositeAll();
++        PaintChanged?.Invoke();
++    }
++
++    private bool ShowingAuto => _mode == ImpassablePaintMode.ManualPlusAuto && _showAuto.Checked;
++
++    // ------------------------------------------------------------------ painting
++
++    private float RadiusPixels => _paint is null ? 1f : _size.Value / 1000f * _paint.Height;
++
++    private byte ToolValue => _tool switch
++    {
++        Tool.Wall => ImpassableMask.Wall,
++        Tool.Passable => ImpassableMask.Passable,
++        _ => ImpassableMask.Auto,
++    };
++
++    private void OnStrokeBegan(PointF imagePoint)
++    {
++        if (_paint is null || _terrain is null) return;
++        _stroke = new ImpassableStroke(_paint, ToolValue, RadiusPixels);
++        Dab(imagePoint);
++    }
++
++    private void OnStrokeMoved(PointF imagePoint)
++    {
++        if (_stroke is not null) Dab(imagePoint);
++    }
++
++    private void Dab(PointF imagePoint)
++    {
++        if (_stroke?.MoveTo(imagePoint.X, imagePoint.Y) is { } rect) Composite(rect);
++        _canvas.Invalidate();
++    }
++
++    private void OnStrokeEnded()
++    {
++        if (_stroke is null) return;
++        var edit = _stroke.End();
++        _stroke = null;
++        if (edit is null) { _canvas.Invalidate(); return; }
++
++        _history.Push(edit);
++        AfterPaintChanged(edit.Area);
++    }
++
++    private void ApplyHistory(bool undo)
++    {
++        if (_paint is null) return;
++        if (!(undo ? _history.Undo(_paint) : _history.Redo(_paint))) return;
++        AfterPaintChanged(new Rectangle(0, 0, _paint.Width, _paint.Height));
++    }
++
++    private void UpdateHistoryButtons()
++    {
++        _undo.Enabled = _history.CanUndo;
++        _redo.Enabled = _history.CanRedo;
++        _clear.Enabled = HasPaint;
++    }
++
++    private void AfterPaintChanged(Rectangle area)
++    {
++        UpdateHistoryButtons();
++        Composite(area);
++        _canvas.Invalidate();
++        PaintChanged?.Invoke();
++    }
++
++    // ------------------------------------------------------------------ canvas image
++
++    private void RecompositeAll()
++    {
++        if (_paint is not null) Composite(new Rectangle(0, 0, _paint.Width, _paint.Height));
++        _canvas.Invalidate();
++    }
++
++    /// <summary>Recomposites the paint, and the automatic walls under it, over the relief inside <paramref name="area"/>.</summary>
++    private void Composite(Rectangle area)
++    {
++        if (_paint is null || _bitmap is null || _baseRgb is null) return;
++
++        int w = _paint.Width, h = _paint.Height;
++        area.Intersect(new Rectangle(0, 0, w, h));
++        if (area.Width <= 0 || area.Height <= 0) return;
++
++        var auto = ShowingAuto && _autoWalls is { } a && a.Length == _paint.Cells.Length ? a : null;
++        bool manualOnly = _mode == ImpassablePaintMode.Manual;
++
++        var data = _bitmap.LockBits(area, ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
++        try
++        {
++            var row = new byte[area.Width * 4];
++            for (int y = 0; y < area.Height; y++)
++            {
++                int py = area.Y + y;
++                for (int x = 0; x < area.Width; x++)
++                {
++                    int i = py * w + area.X + x;
++                    float r = _baseRgb[i * 3], g = _baseRgb[i * 3 + 1], b = _baseRgb[i * 3 + 2];
++
++                    (byte R, byte G, byte B)? tint = null;
++                    float alpha = 0f;
++                    switch (_paint.Cells[i])
++                    {
++                        case ImpassableMask.Wall:
++                            tint = WallColour; alpha = 0.72f;
++                            break;
++                        case ImpassableMask.Passable:
++                            // In Manual mode passable paint changes nothing; show it faintly.
++                            tint = PassableColour; alpha = manualOnly ? 0.25f : 0.5f;
++                            break;
++                        default:
++                            if (auto is not null && auto[i]) { tint = AutoWallColour; alpha = 0.45f; }
++                            break;
++                    }
++
++                    if (tint is { } c)
++                    {
++                        r += (c.R - r) * alpha; g += (c.G - g) * alpha; b += (c.B - b) * alpha;
++                    }
++
++                    row[x * 4] = (byte)b; row[x * 4 + 1] = (byte)g; row[x * 4 + 2] = (byte)r; row[x * 4 + 3] = 255;
++                }
++                System.Runtime.InteropServices.Marshal.Copy(row, 0, data.Scan0 + y * data.Stride, row.Length);
++            }
++        }
++        finally
++        {
++            _bitmap.UnlockBits(data);
++        }
++    }
++
++    private void ReplaceBitmap(Bitmap? next)
++    {
++        var old = _bitmap;
++        _bitmap = next;
++        old?.Dispose();
++    }
++
++    private void DrawOverlay(Graphics g, float zoom)
++    {
++        if (_paint is null || _canvas.CursorAt is not { } cursor) return;
++
++        float radius = RadiusPixels * zoom;
++        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
++        using var ring = new Pen(Color.FromArgb(220, 255, 255, 255), 1.5f);
++        using var shadow = new Pen(Color.FromArgb(120, 0, 0, 0), 3.5f);
++        g.DrawEllipse(shadow, cursor.X - radius, cursor.Y - radius, radius * 2, radius * 2);
++        g.DrawEllipse(ring, cursor.X - radius, cursor.Y - radius, radius * 2, radius * 2);
++    }
++
++    private void UpdateReadout(Point? cursor)
++    {
++        if (_paint is null || cursor is not { } at)
++        {
++            _readout.Text = "";
++            return;
++        }
++
++        var p = _canvas.ToImagePoint(at);
++        int x = (int)p.X, y = (int)p.Y;
++        if (x < 0 || y < 0 || x >= _paint.Width || y >= _paint.Height)
++        {
++            _readout.Text = "";
++            return;
++        }
++
++        int i = y * _paint.Width + x;
++        bool autoWall = _autoWalls is { } a && a.Length == _paint.Cells.Length && a[i];
++        _readout.Text = _paint.Cells[i] switch
++        {
++            ImpassableMask.Wall => "Painted: wall",
++            ImpassableMask.Passable => _mode == ImpassablePaintMode.Manual
++                ? "Painted: passable (same as unpainted in Manual mode)"
++                : "Painted: passable" + (autoWall ? " — vetoes an automatic wall" : ""),
++            _ => _mode == ImpassablePaintMode.Manual
++                ? "Unpainted: passable"
++                : "Unpainted: automatic" + (_autoWalls is null ? "" : autoWall ? " — wall" : " — passable"),
++        };
++    }
++
++    // ------------------------------------------------------------------ automatic walls preview
++
++    private void QueueAuto()
++    {
++        if (!ShowingAuto || _terrain is null || _paint is null) return;
++        string key = $"{_terrain.Stamp}|{_modelVersion}|{_paint.Width}x{_paint.Height}";
++        if (key == _autoKey || _autoRunning) return;
++        RunAutoAsync(key).Forget("impassable auto preview");
++    }
++
++    /// <summary>
++    /// The auto-cut on the terrain this page was given. The run cuts after the major rivers are
++    /// carved, so this is close but not exact near them.
++    /// </summary>
++    private async Task RunAutoAsync(string key)
++    {
++        var terrain = _terrain!;
++        var cfg = terrain.Config;
++        int w = _paint!.Width, h = _paint.Height;
++        int pw = cfg.ProvinceWidth, ph = cfg.ProvinceHeight;
++        int generation = ++_autoGeneration;
++
++        _autoRunning = true;
++        _status.Text = "Finding the automatic walls…";
++        try
++        {
++            var walls = await Task.Run(() =>
++            {
++                if (terrain.ProvinceElevation.Length != pw * ph) return null;
++                if (ImpassableAutoCut.Build(terrain.LandMask, terrain.ProvinceElevation, pw, ph, cfg) is not { } cut)
++                    return Array.Empty<bool>();
++
++                var sampled = new bool[w * h];
++                Parallel.For(0, h, y =>
++                {
++                    int sy = Math.Min(ph - 1, (int)(((long)y * 2 + 1) * ph / (2L * h)));
++                    for (int x = 0; x < w; x++)
++                    {
++                        int sx = Math.Min(pw - 1, (int)(((long)x * 2 + 1) * pw / (2L * w)));
++                        sampled[y * w + x] = cut.Mask[sy * pw + sx];
++                    }
++                });
++                return sampled;
++            });
++
++            if (generation != _autoGeneration || IsDisposed || walls is null) return;
++
++            _autoKey = key;
++            _autoWalls = walls.Length == 0 ? new bool[w * h] : walls;
++            _status.Text = walls.Length == 0
++                ? "The automatic cut finds no walls on this map — only painted walls will be impassable."
++                : "Automatic walls shown in orange. Paint walls to add to them, passable to remove them.";
++            RecompositeAll();
++            UpdateReadout(_canvas.CursorAt);
++        }
++        catch (Exception ex)
++        {
++            if (generation != _autoGeneration || IsDisposed) return;
++            Console.WriteLine($"Impassable preview failed: {ex}");
++            _status.Text = $"Automatic walls preview failed: {ex.Message}";
++        }
++        finally
++        {
++            _autoRunning = false;
++        }
++
++        // Settings or terrain moved while it ran.
++        QueueAuto();
++    }
++
++    // ------------------------------------------------------------------ files
++
++    private void ImportPaint()
++    {
++        using var dialog = new OpenFileDialog
++        {
++            Title = "Import impassable mask",
++            Filter = "Impassable mask (*.png)|*.png|All files (*.*)|*.*",
++            InitialDirectory = PaintDir ?? "",
++        };
++        if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
++
++        try
++        {
++            var paint = ImpassablePaint.Load(dialog.FileName);
++            PaintDir = Path.GetDirectoryName(dialog.FileName);
++            AdoptPaint(paint, $"Imported {Path.GetFileName(dialog.FileName)}.");
++        }
++        catch (Exception ex)
++        {
++            MessageBox.Show(FindForm(), $"Could not read {dialog.FileName}:\n\n{ex.Message}",
++                "Import failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
++        }
++    }
++
++    private void ExportPaint()
++    {
++        if (!HasPaint)
++        {
++            _status.Text = "Nothing painted yet — nothing to export.";
++            return;
++        }
++
++        using var dialog = new SaveFileDialog
++        {
++            Title = "Export impassable mask",
++            Filter = "Impassable mask (*.png)|*.png",
++            FileName = "impassable.png",
++            InitialDirectory = PaintDir ?? "",
++            OverwritePrompt = true,
++        };
++        if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
++
++        try
++        {
++            SavePaint(dialog.FileName);
++            PaintDir = Path.GetDirectoryName(dialog.FileName);
++            _status.Text = $"Exported to {Path.GetFileName(dialog.FileName)} — pass it to --impassable-mask to build from a terminal.";
++        }
++        catch (Exception ex)
++        {
++            MessageBox.Show(FindForm(), $"Could not write {dialog.FileName}:\n\n{ex.Message}",
++                "Export failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
++        }
++    }
++
++    protected override void Dispose(bool disposing)
++    {
++        if (disposing)
++        {
++            _tips.Dispose();
++            _bitmap?.Dispose();
++        }
++        base.Dispose(disposing);
++    }
++}
+diff --git a/AppGUI/Workspaces/MasksPanel.cs b/AppGUI/Workspaces/MasksPanel.cs
+new file mode 100644
+index 0000000..c6f14e0
+--- /dev/null
++++ b/AppGUI/Workspaces/MasksPanel.cs
+@@ -0,0 +1,108 @@
++namespace Ck3MapGen.AppGUI;
++
++/// <summary>
++/// The Masks workspace: the maps painted over the heightmap before a run. One page at a time,
++/// picked from a strip along the top — <see cref="ClimatePanel"/> and <see cref="ImpassablePanel"/>.
++/// Both are given the same terrain by the host; each keeps its own paint, undo and files.
++/// </summary>
++public sealed class MasksPanel : UserControl
++{
++    public enum Page { Climate, Impassable }
++
++    private readonly Dictionary<Page, Control> _pages;
++    private readonly Dictionary<Page, Button> _buttons = [];
++
++    public ClimatePanel Climate { get; }
++    public ImpassablePanel Impassable { get; }
++
++    public Page Current { get; private set; } = Page.Climate;
++
++    /// <summary>The page on screen changed.</summary>
++    public event Action<Page>? PageChanged;
++
++    public MasksPanel(ClimatePanel climate, ImpassablePanel impassable)
++    {
++        Climate = climate;
++        Impassable = impassable;
++        BackColor = Theme.Background;
++        _pages = new() { [Page.Climate] = climate, [Page.Impassable] = impassable };
++
++        var strip = new FlowLayoutPanel
++        {
++            Dock = DockStyle.Top,
++            Height = Dpi.S(34),
++            Padding = Dpi.Pad(6, 4, 4, 0),
++            BackColor = Theme.Surface,
++            WrapContents = false,
++        };
++
++        var tips = new WrappingToolTip { InitialDelay = 400 };
++        foreach (var (page, label, tip) in new[]
++        {
++            (Page.Climate, "Climate", "Paint the climate over the heightmap"),
++            (Page.Impassable, "Impassable", "Paint where the impassable mountains go"),
++        })
++        {
++            var button = Theme.MakeButton(label, 96);
++            var captured = page;
++            button.Click += (_, _) => Select(captured);
++            tips.SetToolTip(button, tip);
++            strip.Controls.Add(button);
++            _buttons[page] = button;
++        }
++        Disposed += (_, _) => tips.Dispose();
++
++        climate.Dock = DockStyle.Fill;
++        impassable.Dock = DockStyle.Fill;
++        Controls.Add(climate);
++        Controls.Add(impassable);
++        // Docked last-added first, so the strip sits on top and the rule under it.
++        Controls.Add(new Panel { Dock = DockStyle.Top, Height = 1, BackColor = Theme.Border });
++        Controls.Add(strip);
++
++        Select(Page.Climate, force: true);
++    }
++
++    public void Select(Page page, bool force = false)
++    {
++        if (page == Current && !force) return;
++        Current = page;
++
++        foreach (var (key, control) in _pages) control.Visible = key == page;
++        foreach (var (key, button) in _buttons)
++        {
++            bool active = key == page;
++            button.BackColor = active ? Theme.Accent : Theme.Surface;
++            button.ForeColor = active ? Theme.AccentText : Theme.Text;
++            button.FlatAppearance.BorderColor = active ? Theme.Accent : Theme.Border;
++        }
++
++        if (force) return;
++        // A hidden page skips its previews; catch it up.
++        if (page == Page.Climate) Climate.Activated();
++        else Impassable.Activated();
++        PageChanged?.Invoke(page);
++    }
++
++    /// <summary>Brush keys go to the page on screen.</summary>
++    public bool HandleKey(Keys key) => Current == Page.Climate ? Climate.HandleKey(key) : Impassable.HandleKey(key);
++
++    /// <summary>The workspace came back on screen with the terrain it already had.</summary>
++    public void Activated()
++    {
++        Climate.Activated();
++        Impassable.Activated();
++    }
++
++    public void SetTerrain(ClimatePanel.Terrain? terrain)
++    {
++        Climate.SetTerrain(terrain);
++        Impassable.SetTerrain(terrain);
++    }
++
++    public void InvalidateModel()
++    {
++        Climate.InvalidateModel();
++        Impassable.InvalidateModel();
++    }
++}
+diff --git a/Config/MapConfig.cs b/Config/MapConfig.cs
+index d2bb004..12c5fbe 100644
+--- a/Config/MapConfig.cs
++++ b/Config/MapConfig.cs
+@@ -114,6 +114,23 @@ public enum ImpassableMaskMode : byte
+     Touch,
+ }
+ 
++/// <summary>
++/// How a three-state impassable paint (the Masks tab's, or an <see cref="MapConfig.ImpassableMaskPath"/>
++/// PNG with transparency) combines with the automatic walls. White is always a wall and black
++/// always passable; this decides what transparent, unpainted ground is.
++/// </summary>
++public enum ImpassablePaintMode : byte
++{
++    /// <summary>Only the paint: transparent is passable, as black is. The automatic walls do not run.</summary>
++    Manual,
++
++    /// <summary>
++    /// The auto-cut decides transparent ground; white adds walls and black removes them. Snaps the
++    /// partition to the result, so the auto-cut runs whatever <see cref="MapConfig.ImpassableAutoCut"/> says.
++    /// </summary>
++    ManualPlusAuto,
++}
++
+ /// <summary>
+ /// Whether permanent mountain snow follows local climate or manually selected height percentiles.
+ /// </summary>
+@@ -1264,6 +1281,16 @@ public sealed class MapConfig : CustomTypeDescriptor
+                  "are laid out as usual and every land province the paint lands on turns impassable whole.")]
+     public ImpassableMaskMode ImpassableMaskMode { get; set; } = ImpassableMaskMode.Snap;
+ 
++    /// <summary>
++    /// What unpainted (transparent) ground is under a hand-painted mask. See
++    /// <see cref="Config.ImpassablePaintMode"/>. Manual keeps the mask's old meaning; ManualPlusAuto
++    /// lets the auto-cut fill it in, white adding walls and black vetoing them, and always snaps.
++    /// </summary>
++    [Category("03 Provinces")]
++    [Description("Only with a painted mask (the Masks tab, or ImpassableMaskPath). Manual: only white is impassable. " +
++                 "ManualPlusAuto: the automatic walls fill in transparent ground; white adds walls, black removes them.")]
++    public ImpassablePaintMode ImpassablePaintMode { get; set; } = ImpassablePaintMode.Manual;
++
+     /// <summary>
+     /// Touch mode only. How much of a land province the mask has to cover before the province
+     /// counts as painted. 0 means a single white pixel is enough, which is what a drawn stroke
+@@ -1337,8 +1364,8 @@ public sealed class MapConfig : CustomTypeDescriptor
+     /// plateaus outside it), <see cref="ImpassableMinMountainGround"/>,
+     /// <see cref="ImpassableGateHeight"/>, <see cref="ImpassableMountainPlateaus"/>, the mountain
+     /// and steep lines, and the slope weight and score floors, which cap the share where the map's
+-    /// mountains run out before it does, as they stop the scored pass. A painted
+-    /// <see cref="ImpassableMaskPath"/> always takes precedence. Moves every province near a
++    /// mountains run out before it does, as they stop the scored pass. A painted mask takes
++    /// precedence, unless <see cref="ImpassablePaintMode"/> is ManualPlusAuto. Moves every province near a
+     /// mountain, so a seed made with it off comes out differently with it on.
+     /// Recommended: on.
+     /// </summary>
+diff --git a/Core/Generator.cs b/Core/Generator.cs
+index 2b0d8bd..16aafd5 100644
+--- a/Core/Generator.cs
++++ b/Core/Generator.cs
+@@ -43,6 +43,12 @@ public sealed class GenerationOptions
+     /// </summary>
+     public MapGen.ClimatePaint? ClimatePaint { get; set; }
+ 
++    /// <summary>
++    /// The impassable mask painted on the Masks tab, or null. Takes precedence over
++    /// <see cref="MapConfig.ImpassableMaskPath"/>; see <see cref="MapGen.ImpassableMask"/>.
++    /// </summary>
++    public MapGen.ImpassablePaint? ImpassablePaint { get; set; }
++
+     /// <summary>
+     /// Realms run on in the History workspace, to be written as the start in place of the ones the
+     /// formation grows. Optional in the same way the climate paint is: with none, the realms are
+@@ -189,7 +195,7 @@ public static class Generator
+             () => TerrainData.FromElevation(image.ToElevation(cfg), cfg));
+ 
+         return FromTerrain(terra, cfg, azgaarJsonPath: options.AzgaarJsonPath,
+-            climatePaint: options.ClimatePaint);
++            climatePaint: options.ClimatePaint, impassablePaint: options.ImpassablePaint);
+     }
+ 
+     public static GenerationResult FromTerrain(
+@@ -197,7 +203,8 @@ public static class Generator
+             MapConfig cfg,
+             Action<string, PreviewRenderer.Image>? onPreview = null,
+             string? azgaarJsonPath = null,
+-            MapGen.ClimatePaint? climatePaint = null)
++            MapGen.ClimatePaint? climatePaint = null,
++            MapGen.ImpassablePaint? impassablePaint = null)
+     {
+         var sw = System.Diagnostics.Stopwatch.StartNew();
+         var rng = new Rng(cfg.Seed);
+@@ -261,7 +268,8 @@ public static class Generator
+         // 5. Partition provinces with river seeds
+         var provinces = Stage.Time("province partition",
+             () => Provinces.Build(landMask, provinceElevation, climate,
+-                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers, drainage, azgaar, riverChannel));
++                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers, drainage, azgaar, riverChannel,
++                impassablePaint));
+         Console.WriteLine($"  {provinces.Count} provinces total");
+ 
+         // --- PREVIEWS READY HERE ---
+diff --git a/MapGen/Provinces/Provinces.cs b/MapGen/Provinces/Provinces.cs
+index 729f36d..a1f5926 100644
+--- a/MapGen/Provinces/Provinces.cs
++++ b/MapGen/Provinces/Provinces.cs
+@@ -162,7 +162,8 @@ public static class Provinces
+                 List<MajorRiverPath>? majorRivers = null,
+                 Drainage? drainage = null,
+                 AzgaarImport? azgaar = null,
+-                byte[]? riverChannel = null)
++                byte[]? riverChannel = null,
++                ImpassablePaint? impassablePaint = null)
+     {
+         var sw = System.Diagnostics.Stopwatch.StartNew();
+ 
+@@ -189,17 +190,20 @@ public static class Provinces
+         // The hand-painted impassable mask, if any. Read before the domain field because in Snap
+         // mode it *is* part of the domain field: the paint becomes a region the partition may not
+         // cross, which is what makes the wall come out the shape it was drawn.
+-        var painted = ImpassableMask.Load(cfg, width, height);
+-        bool snap = painted is not null && cfg.ImpassableMaskMode == ImpassableMaskMode.Snap;
++        var cells = ImpassableMask.Load(cfg, width, height, impassablePaint);
++        bool combine = cells is not null && cfg.ImpassablePaintMode == ImpassablePaintMode.ManualPlusAuto;
++        var painted = cells is null ? null : ImpassableMask.Walls(cells);
++        bool snap = painted is not null && (combine || cfg.ImpassableMaskMode == ImpassableMaskMode.Snap);
+ 
+         // Without a painted mask, the terrain draws one, and the partition is cut along it the same
+-        // way. A painted mask always wins: it is the user saying where the walls go.
++        // way. A painted mask wins: it is the user saying where the walls go. In ManualPlusAuto
++        // the cut runs anyway and the paint is laid over it, white adding and black removing.
+         AutoCutDiagnostics? autoCut = null;
+-        if (painted is null && cfg.ImpassableAutoCut
++        if ((combine || (painted is null && cfg.ImpassableAutoCut))
+             && Core.Stage.Detail("  · impassable auto-cut",
+                 () => ImpassableAutoCut.Build(mask, elevation, width, height, cfg)) is { } cut)
+         {
+-            (painted, autoCut) = cut;
++            (painted, autoCut) = combine ? ImpassableMask.Combine(cut.Mask, cut.Diagnostics, cells!) : cut;
+             snap = true;
+         }
+ 
+@@ -207,7 +211,8 @@ public static class Provinces
+         // name; with one it is the export's provinces, and the partition below cannot cross them.
+         var domain = Core.Stage.Detail("  · domain field",
+             () => ProvinceDomain.Build(mask, azgaar, width, height, cfg, snap ? painted : null,
+-                autoCut is not null ? "mountain auto-cut" : null, riverChannel));
++                autoCut is null ? null : combine ? "painted mask over the mountain auto-cut" : "mountain auto-cut",
++                riverChannel));
+ 
+         foreach (var seed in seeds) seed.Domain = domain[seed.Y * width + seed.X];
+ 
+@@ -248,7 +253,11 @@ public static class Provinces
+         {
+             // A painted mask replaces the relief scoring outright; the pocket fill and the range
+             // fusing run either way, since a drawn wall can enclose land just as a ridge can.
+-            if (autoCut is not null) MarkCutImpassable(map, autoCut);
++            if (autoCut is not null)
++            {
++                MarkCutImpassable(map, autoCut);
++                if (combine) CreditPaintedWalls(map, cells!);
++            }
+             else if (snap) MarkSnappedImpassable(map);
+             else if (painted is not null) MarkPaintedImpassable(map, painted, cfg);
+             else MarkImpassable(map, elevation, mask, cfg);
+@@ -1063,6 +1072,32 @@ public static class Provinces
+         Console.WriteLine($"  impassable: {marked} of {land} land provinces cut to the mountains ({pixels} px)");
+     }
+ 
++    /// <summary>
++    /// ManualPlusAuto: a cut province mostly painted white is the user's wall, not the terrain's,
++    /// and the preview says so.
++    /// </summary>
++    private static void CreditPaintedWalls(ProvinceMap map, byte[] cells)
++    {
++        var area = new int[map.Count];
++        var white = new int[map.Count];
++        for (int i = 0; i < map.Label.Length; i++)
++        {
++            int label = map.Label[i];
++            area[label]++;
++            if (cells[i] == ImpassableMask.Wall) white[label]++;
++        }
++
++        int credited = 0;
++        for (int i = 0; i < map.Count; i++)
++        {
++            var seed = map.Seeds[i];
++            if (seed.ImpassableCause != ImpassableCause.Cut || white[i] * 2 <= area[i]) continue;
++            seed.ImpassableCause = ImpassableCause.Mask;
++            credited++;
++        }
++        Console.WriteLine($"  impassable: {credited} of them mostly painted white in the mask");
++    }
++
+     private static int MarkInsideCut(ProvinceMap map, ImpassableCause cause, out int land, out long pixels)
+     {
+         var area = new int[map.Count];
+diff --git a/MapGen/Terrain/ImpassableMask.cs b/MapGen/Terrain/ImpassableMask.cs
+index a902f18..ae01bb9 100644
+--- a/MapGen/Terrain/ImpassableMask.cs
++++ b/MapGen/Terrain/ImpassableMask.cs
+@@ -3,14 +3,17 @@ using Ck3MapGen.Config;
+ namespace Ck3MapGen.MapGen;
+ 
+ /// <summary>
+-/// A hand-painted impassable mask — <see cref="MapConfig.ImpassableMaskPath"/> — read onto the
+-/// province raster as one flag per pixel.
++/// A hand-painted impassable mask — the Masks tab's <see cref="ImpassablePaint"/>, or
++/// <see cref="MapConfig.ImpassableMaskPath"/> — read onto the province raster as one of three
++/// states per pixel.
+ ///
+ /// The contract is deliberately the simplest thing a paint program can produce: any image, white
+-/// for impassable and black for passable. Pixels are thresholded on brightness at mid grey, so an
+-/// anti-aliased brush edge, a grey stroke or a colour accidentally left on the layer all still read
+-/// as one of the two. Alpha is ignored: a transparent PNG exported from a layer with nothing under
+-/// it decodes as black, which is the passable default a painter expects.
++/// for impassable and black for passable, and transparent (alpha under half) for "no opinion",
++/// which <see cref="MapConfig.ImpassablePaintMode"/> resolves. Opaque pixels are thresholded on
++/// brightness at mid grey, so an anti-aliased brush edge, a grey stroke or a colour accidentally
++/// left on the layer all still read as one of the two. An image without alpha is all opaque, so an
++/// old black-and-white mask means exactly what it did; and in Manual mode transparent is passable,
++/// as black is.
+ ///
+ /// Size is forgiven as well. The mask is meant to be painted over provinces.png, but a user who
+ /// opened heightmap.png instead (twice the size) or a resized copy gets it nearest-sampled onto the
+@@ -19,13 +22,39 @@ namespace Ck3MapGen.MapGen;
+ /// </summary>
+ public static class ImpassableMask
+ {
++    /// <summary>Unpainted: the mode decides.</summary>
++    public const byte Auto = 0;
++
++    /// <summary>Painted black: never impassable.</summary>
++    public const byte Passable = 1;
++
++    /// <summary>Painted white: always impassable.</summary>
++    public const byte Wall = 2;
++
++    /// <summary>One pixel's state from its colour.</summary>
++    public static byte Classify(byte r, byte g, byte b, byte a)
++    {
++        if (a < 128) return Auto;
++        // Rec. 601 luma, integer, ≥128 is white.
++        int luma = (r * 299 + g * 587 + b * 114) / 1000;
++        return luma >= 128 ? Wall : Passable;
++    }
++
+     /// <summary>
+-    /// One flag per province-raster pixel, true where the mask is white; null when no mask is set.
+-    /// A path that is set but unreadable throws, as the Azgaar loader does — a user who has
+-    /// pointed at a mask wants the run stopped on a typo, not quietly given the relief scoring.
++    /// One state per province-raster pixel; null when no mask is set. An in-memory
++    /// <paramref name="paint"/> (the GUI's) wins over the path. A path that is set but unreadable
++    /// throws, as the Azgaar loader does — a user who has pointed at a mask wants the run stopped
++    /// on a typo, not quietly given the relief scoring.
+     /// </summary>
+-    public static bool[]? Load(MapConfig cfg, int width, int height)
++    public static byte[]? Load(MapConfig cfg, int width, int height, ImpassablePaint? paint = null)
+     {
++        if (paint is not null && !paint.IsEmpty)
++        {
++            var sampled = Sample(paint.Width, paint.Height, width, height, (sx, sy) => paint.Cells[sy * paint.Width + sx]);
++            Report("painted mask", $"{paint.Width}x{paint.Height}, resampled onto {width}x{height}", sampled, cfg);
++            return sampled;
++        }
++
+         string path = cfg.ImpassableMaskPath;
+         if (string.IsNullOrWhiteSpace(path)) return null;
+ 
+@@ -36,34 +65,80 @@ public static class ImpassableMask
+         var image = Io.DdsReader.Load(path)
+             ?? throw new InvalidDataException($"Impassable mask could not be decoded as an image: {path}");
+ 
+-        var painted = new bool[width * height];
+-        long white = 0;
++        // BGRA.
++        var cells = Sample(image.Width, image.Height, width, height, (sx, sy) =>
++        {
++            int p = (sy * image.Width + sx) * 4;
++            return Classify(image.Bgra[p + 2], image.Bgra[p + 1], image.Bgra[p], image.Bgra[p + 3]);
++        });
+ 
+-        bool sameSize = image.Width == width && image.Height == height;
+-        for (int y = 0; y < height; y++)
++        string size = image.Width == width && image.Height == height
++            ? $"{image.Width}x{image.Height}"
++            : $"{image.Width}x{image.Height}, resampled onto {width}x{height}";
++        Report(Path.GetFileName(path), size, cells, cfg);
++        return cells;
++    }
++
++    /// <summary>Nearest-neighbour: each pixel takes the source cell its centre falls on.</summary>
++    private static byte[] Sample(int sourceWidth, int sourceHeight, int width, int height, Func<int, int, byte> at)
++    {
++        var cells = new byte[width * height];
++        bool sameSize = sourceWidth == width && sourceHeight == height;
++        Parallel.For(0, height, y =>
+         {
+-            // Nearest-neighbour: pick the source row/column whose centre this pixel falls on.
+-            int sy = sameSize ? y : Math.Min(image.Height - 1, (int)((y + 0.5) * image.Height / height));
++            int sy = sameSize ? y : Math.Min(sourceHeight - 1, (int)((y + 0.5) * sourceHeight / height));
+             for (int x = 0; x < width; x++)
+             {
+-                int sx = sameSize ? x : Math.Min(image.Width - 1, (int)((x + 0.5) * image.Width / width));
+-                int p = (sy * image.Width + sx) * 4;
+-                // BGRA. Rec. 601 luma, integer, ≥128 is white.
+-                int luma = (image.Bgra[p + 2] * 299 + image.Bgra[p + 1] * 587 + image.Bgra[p] * 114) / 1000;
+-                if (luma < 128) continue;
+-                painted[y * width + x] = true;
+-                white++;
++                int sx = sameSize ? x : Math.Min(sourceWidth - 1, (int)((x + 0.5) * sourceWidth / width));
++                cells[y * width + x] = at(sx, sy);
+             }
++        });
++        return cells;
++    }
++
++    private static void Report(string name, string size, byte[] cells, MapConfig cfg)
++    {
++        long walls = 0, passable = 0;
++        foreach (byte c in cells)
++        {
++            if (c == Wall) walls++;
++            else if (c == Passable) passable++;
+         }
+ 
+-        string size = sameSize
+-            ? $"{image.Width}x{image.Height}"
+-            : $"{image.Width}x{image.Height}, resampled onto {width}x{height}";
+-        Console.WriteLine($"  impassable mask: {Path.GetFileName(path)} ({size}), " +
+-                          $"{white} white pixels ({100.0 * white / painted.Length:F2}% of the map)");
+-        if (white == 0)
++        bool combine = cfg.ImpassablePaintMode == ImpassablePaintMode.ManualPlusAuto;
++        Console.WriteLine($"  impassable mask: {name} ({size}), {walls} white / {passable} black / " +
++                          $"{cells.Length - walls - passable} transparent px, " +
++                          (combine ? "automatic walls fill the transparent ground" : "manual only"));
++        if (walls == 0 && !combine)
+             Console.WriteLine("  impassable mask: WARNING — no white pixels; nothing will be impassable");
++        if (combine && walls + passable == cells.Length)
++            Console.WriteLine("  impassable mask: WARNING — no transparent pixels, so the automatic walls have nowhere to go " +
++                              "(a mask without alpha is all black and white)");
++    }
++
++    /// <summary>The walls alone: white is impassable, everything else passable. Manual mode.</summary>
++    public static bool[] Walls(byte[] cells)
++    {
++        var walls = new bool[cells.Length];
++        for (int i = 0; i < cells.Length; i++) walls[i] = cells[i] == Wall;
++        return walls;
++    }
++
++    /// <summary>
++    /// ManualPlusAuto: the auto-cut where unpainted, white added, black removed. A pass whose
++    /// corridor was painted white is dropped — the user walled it — so no pinned seed lands in a wall.
++    /// </summary>
++    public static (bool[] Mask, AutoCutDiagnostics Diagnostics) Combine(bool[] auto, AutoCutDiagnostics diagnostics, byte[] cells)
++    {
++        var mask = new bool[cells.Length];
++        for (int i = 0; i < cells.Length; i++)
++            mask[i] = cells[i] == Wall || (cells[i] == Auto && auto[i]);
++
++        if (diagnostics.Passes is not { Count: > 0 } passes) return (mask, diagnostics);
+ 
+-        return painted;
++        var kept = passes.Where(p => !p.Corridor.Any(i => cells[i] == Wall)).ToList();
++        if (kept.Count < passes.Count)
++            Console.WriteLine($"  impassable mask: {passes.Count - kept.Count} mountain pass(es) painted over and dropped");
++        return (mask, diagnostics with { Passes = kept });
+     }
+ }
+diff --git a/MapGen/Terrain/ImpassablePaint.cs b/MapGen/Terrain/ImpassablePaint.cs
+new file mode 100644
+index 0000000..dda0ecf
+--- /dev/null
++++ b/MapGen/Terrain/ImpassablePaint.cs
+@@ -0,0 +1,309 @@
++using SixLabors.ImageSharp.PixelFormats;
++using SharpImage = SixLabors.ImageSharp.Image;
++
++namespace Ck3MapGen.MapGen;
++
++/// <summary>
++/// The impassable mask painted on the Masks tab: one three-state cell per pixel, at an authoring
++/// resolution of the province raster.
++///
++/// <see cref="ImpassableMask.Auto"/> (transparent) is unpainted, and what it means is
++/// <see cref="Config.MapConfig.ImpassablePaintMode"/>'s call; <see cref="ImpassableMask.Wall"/>
++/// (white) is impassable and <see cref="ImpassableMask.Passable"/> (black) is not, whatever the
++/// automatic walls say. Hard-edged on purpose: a wall either is or is not, and the partition snaps
++/// to the edge as drawn.
++///
++/// Saved as an RGBA PNG in exactly those colours, so the file is also a valid
++/// <see cref="Config.MapConfig.ImpassableMaskPath"/> for the command line.
++/// </summary>
++public sealed class ImpassablePaint
++{
++    public int Width { get; }
++    public int Height { get; }
++
++    /// <summary>One <see cref="ImpassableMask"/> state per pixel, row-major.</summary>
++    public byte[] Cells { get; }
++
++    /// <summary>Bumped on every change, so a cache can tell whether it is looking at this paint.</summary>
++    public int Version { get; private set; }
++
++    public ImpassablePaint(int width, int height)
++    {
++        Width = Math.Max(1, width);
++        Height = Math.Max(1, height);
++        Cells = new byte[Width * Height];
++    }
++
++    /// <summary>
++    /// The authoring size for a province raster this big: up to 2048 across, which is a few
++    /// province pixels per cell on the largest maps — finer than a barony, coarse enough to undo.
++    /// </summary>
++    public static (int Width, int Height) SizeFor(int provinceWidth, int provinceHeight)
++    {
++        int w = Math.Min(2048, Math.Max(1, provinceWidth));
++        int h = Math.Max(2, (int)((long)w * Math.Max(1, provinceHeight) / Math.Max(1, provinceWidth)));
++        return (w, h);
++    }
++
++    /// <summary>True when every cell is still automatic.</summary>
++    public bool IsEmpty => Array.IndexOf(Cells, ImpassableMask.Wall) < 0 && Array.IndexOf(Cells, ImpassableMask.Passable) < 0;
++
++    public (long Walls, long Passable) Counts()
++    {
++        long walls = 0, passable = 0;
++        foreach (byte c in Cells)
++        {
++            if (c == ImpassableMask.Wall) walls++;
++            else if (c == ImpassableMask.Passable) passable++;
++        }
++        return (walls, passable);
++    }
++
++    public void Touch() => Version++;
++
++    /// <summary>A copy at another size, resampled by nearest pixel. The same paint on a different map.</summary>
++    public ImpassablePaint Resampled(int width, int height)
++    {
++        if (width == Width && height == Height) return Clone();
++
++        var result = new ImpassablePaint(width, height);
++        for (int y = 0; y < height; y++)
++        {
++            int sy = Math.Min(Height - 1, (int)((long)y * Height / height));
++            for (int x = 0; x < width; x++)
++            {
++                int sx = Math.Min(Width - 1, (int)((long)x * Width / width));
++                result.Cells[y * width + x] = Cells[sy * Width + sx];
++            }
++        }
++        return result;
++    }
++
++    public ImpassablePaint Clone()
++    {
++        var copy = new ImpassablePaint(Width, Height);
++        Array.Copy(Cells, copy.Cells, Cells.Length);
++        return copy;
++    }
++
++    // ------------------------------------------------------------------ file
++
++    /// <summary>White = wall, black = passable, transparent = automatic.</summary>
++    public void Save(string path)
++    {
++        using var image = new SixLabors.ImageSharp.Image<Rgba32>(Width, Height);
++        image.ProcessPixelRows(accessor =>
++        {
++            for (int y = 0; y < Height; y++)
++            {
++                var row = accessor.GetRowSpan(y);
++                int src = y * Width;
++                for (int x = 0; x < Width; x++)
++                {
++                    row[x] = Cells[src + x] switch
++                    {
++                        ImpassableMask.Wall => new Rgba32(255, 255, 255, 255),
++                        ImpassableMask.Passable => new Rgba32(0, 0, 0, 255),
++                        _ => new Rgba32(0, 0, 0, 0),
++                    };
++                }
++            }
++        });
++
++        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
++        using var stream = File.Create(path);
++        image.Save(stream, new SixLabors.ImageSharp.Formats.Png.PngEncoder
++        {
++            ColorType = SixLabors.ImageSharp.Formats.Png.PngColorType.RgbWithAlpha,
++        });
++    }
++
++    /// <summary>
++    /// Reads any image as a paint, by <see cref="ImpassableMask.Classify"/>: an old black-and-white
++    /// mask with no alpha loads as black and white, which is what it always meant.
++    /// </summary>
++    public static ImpassablePaint Load(string path)
++    {
++        using var image = SharpImage.Load<Rgba32>(path);
++        var paint = new ImpassablePaint(image.Width, image.Height);
++        image.ProcessPixelRows(accessor =>
++        {
++            for (int y = 0; y < paint.Height; y++)
++            {
++                var row = accessor.GetRowSpan(y);
++                int dst = y * paint.Width;
++                for (int x = 0; x < paint.Width; x++)
++                    paint.Cells[dst + x] = ImpassableMask.Classify(row[x].R, row[x].G, row[x].B, row[x].A);
++            }
++        });
++        return paint;
++    }
++}
++
++/// <summary>
++/// A stroke in progress on an <see cref="ImpassablePaint"/>: one state laid down in hard round
++/// dabs along the mouse path.
++/// </summary>
++public sealed class ImpassableStroke
++{
++    private readonly ImpassablePaint _paint;
++    private readonly byte[] _before;
++    private readonly byte _value;
++    private readonly float _radius;   // in paint pixels
++    private float _lastX = float.NaN, _lastY = float.NaN;
++    private int _minX = int.MaxValue, _minY = int.MaxValue, _maxX = -1, _maxY = -1;
++
++    public ImpassableStroke(ImpassablePaint paint, byte value, float radiusPixels)
++    {
++        _paint = paint;
++        _value = value;
++        _radius = Math.Max(0.5f, radiusPixels);
++        _before = (byte[])paint.Cells.Clone();
++    }
++
++    /// <summary>Extends the stroke to a point in paint pixels; returns the pixels changed by this move.</summary>
++    public Rectangle? MoveTo(float x, float y)
++    {
++        int dMinX = int.MaxValue, dMinY = int.MaxValue, dMaxX = -1, dMaxY = -1;
++
++        if (float.IsNaN(_lastX))
++        {
++            Dab(x, y);
++        }
++        else
++        {
++            float dx = x - _lastX, dy = y - _lastY;
++            float spacing = Math.Max(0.75f, _radius * 0.3f);
++            int steps = Math.Max(1, (int)MathF.Ceiling(MathF.Sqrt(dx * dx + dy * dy) / spacing));
++            for (int s = 1; s <= steps; s++)
++                Dab(_lastX + dx * s / steps, _lastY + dy * s / steps);
++        }
++
++        _lastX = x;
++        _lastY = y;
++
++        void Dab(float cx, float cy)
++        {
++            int x0 = Math.Max(0, (int)MathF.Floor(cx - _radius)), x1 = Math.Min(_paint.Width - 1, (int)MathF.Ceiling(cx + _radius));
++            int y0 = Math.Max(0, (int)MathF.Floor(cy - _radius)), y1 = Math.Min(_paint.Height - 1, (int)MathF.Ceiling(cy + _radius));
++            if (x0 > x1 || y0 > y1) return;
++
++            float r2 = _radius * _radius;
++            for (int py = y0; py <= y1; py++)
++            {
++                for (int px = x0; px <= x1; px++)
++                {
++                    float ddx = px + 0.5f - cx, ddy = py + 0.5f - cy;
++                    if (ddx * ddx + ddy * ddy > r2) continue;
++
++                    int i = py * _paint.Width + px;
++                    if (_paint.Cells[i] == _value) continue;
++                    _paint.Cells[i] = _value;
++                    dMinX = Math.Min(dMinX, px); dMaxX = Math.Max(dMaxX, px);
++                    dMinY = Math.Min(dMinY, py); dMaxY = Math.Max(dMaxY, py);
++                }
++            }
++
++            _minX = Math.Min(_minX, x0); _maxX = Math.Max(_maxX, x1);
++            _minY = Math.Min(_minY, y0); _maxY = Math.Max(_maxY, y1);
++        }
++
++        if (dMaxX < 0) return null;
++        _paint.Touch();
++        return new Rectangle(dMinX, dMinY, dMaxX - dMinX + 1, dMaxY - dMinY + 1);
++    }
++
++    /// <summary>Finishes the stroke and returns what it changed, for the undo stack. Null if nothing changed.</summary>
++    public ImpassableEdit? End()
++    {
++        if (_maxX < 0) return null;
++        var area = new Rectangle(_minX, _minY, _maxX - _minX + 1, _maxY - _minY + 1);
++        var edit = ImpassableEdit.Capture(_paint, _before, area);
++        return edit.Changes ? edit : null;
++    }
++}
++
++/// <summary>One reversible change to an <see cref="ImpassablePaint"/>: the cells inside a rectangle, before and after.</summary>
++public sealed class ImpassableEdit
++{
++    public Rectangle Area { get; }
++    private readonly byte[] _before;
++    private readonly byte[] _after;
++
++    private ImpassableEdit(Rectangle area, byte[] before, byte[] after)
++    {
++        Area = area;
++        _before = before;
++        _after = after;
++    }
++
++    public bool Changes => !_before.AsSpan().SequenceEqual(_after);
++
++    public static ImpassableEdit Capture(ImpassablePaint paint, byte[] before, Rectangle area)
++        => new(area, Cut(before, paint.Width, area), Cut(paint.Cells, paint.Width, area));
++
++    /// <summary>Every cell set to <paramref name="value"/>, recorded so that it can be undone.</summary>
++    public static ImpassableEdit Fill(ImpassablePaint paint, byte value)
++    {
++        var after = new byte[paint.Cells.Length];
++        if (value != 0) Array.Fill(after, value);
++        return new(new Rectangle(0, 0, paint.Width, paint.Height), (byte[])paint.Cells.Clone(), after);
++    }
++
++    public void Undo(ImpassablePaint paint) => Paste(paint, _before);
++    public void Redo(ImpassablePaint paint) => Paste(paint, _after);
++
++    private void Paste(ImpassablePaint paint, byte[] cells)
++    {
++        for (int y = 0; y < Area.Height; y++)
++            Array.Copy(cells, y * Area.Width, paint.Cells, (Area.Y + y) * paint.Width + Area.X, Area.Width);
++        paint.Touch();
++    }
++
++    private static byte[] Cut(byte[] cells, int width, Rectangle area)
++    {
++        var result = new byte[area.Width * area.Height];
++        for (int y = 0; y < area.Height; y++)
++            Array.Copy(cells, (area.Y + y) * width + area.X, result, y * area.Width, area.Width);
++        return result;
++    }
++}
++
++/// <summary>Undo and redo over <see cref="ImpassableEdit"/>s.</summary>
++public sealed class ImpassableHistory
++{
++    private readonly List<ImpassableEdit> _edits = [];
++    private int _cursor;
++    private const int Limit = 64;
++
++    public bool CanUndo => _cursor > 0;
++    public bool CanRedo => _cursor < _edits.Count;
++
++    public void Push(ImpassableEdit edit)
++    {
++        if (_cursor < _edits.Count) _edits.RemoveRange(_cursor, _edits.Count - _cursor);
++        _edits.Add(edit);
++        if (_edits.Count > Limit) _edits.RemoveAt(0);
++        _cursor = _edits.Count;
++    }
++
++    public bool Undo(ImpassablePaint paint)
++    {
++        if (!CanUndo) return false;
++        _edits[--_cursor].Undo(paint);
++        return true;
++    }
++
++    public bool Redo(ImpassablePaint paint)
++    {
++        if (!CanRedo) return false;
++        _edits[_cursor++].Redo(paint);
++        return true;
++    }
++
++    public void Clear()
++    {
++        _edits.Clear();
++        _cursor = 0;
++    }
++}
+diff --git a/Program.cs b/Program.cs
+index 6177aa5..1faa04e 100644
+--- a/Program.cs
++++ b/Program.cs
+@@ -364,6 +364,12 @@ public static class Program
+                     cfg.ImpassableMaskMode = Enum.Parse<ImpassableMaskMode>(args[++i], ignoreCase: true);
+                     break;
+ 
++                // What the mask's transparent pixels mean; see ImpassablePaintMode. Manual (passable)
++                // is the default; ManualPlusAuto lets the auto-cut decide them.
++                case "--impassable-paint-mode" when i + 1 < args.Length:
++                    cfg.ImpassablePaintMode = Enum.Parse<ImpassablePaintMode>(args[++i], ignoreCase: true);
++                    break;
++
+                 // How big a barony is relative to vanilla's. 2 makes each one twice as wide and a
+                 // quarter as numerous; the rest of the title hierarchy follows.
+                 case "--county-scale" when i + 1 < args.Length:
+@@ -1006,9 +1012,11 @@ public static class Program
+             Console.Error.WriteLine(
+                 "       [--azgaar-terrain drawn|weathered]  drawn (default) builds the PNG as it stands; weathered adds hills, ridges and erosion");
+             Console.Error.WriteLine(
+-                "       [--impassable-mask <mask.png>]  optional; white = impassable, black = passable, painted over provinces.png");
++                "       [--impassable-mask <mask.png>]  optional; white = impassable, black = passable, transparent = automatic, painted over provinces.png");
+             Console.Error.WriteLine(
+                 "       [--impassable-mask-mode snap|touch]  snap (default) cuts provinces to the paint; touch turns whole provinces");
++            Console.Error.WriteLine(
++                "       [--impassable-paint-mode manual|manualplusauto]  manual (default): transparent is passable; manualplusauto: the auto-cut fills it in");
+             Console.Error.WriteLine(
+                 "       [--gender historical|mixed|femaledominated]  which way the world's laws and rulers lean; historical is the default");
+             Console.Error.WriteLine(

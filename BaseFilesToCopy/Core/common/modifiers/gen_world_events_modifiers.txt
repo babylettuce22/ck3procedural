@@ -1,0 +1,3 @@
+﻿gen_world_medical_supplies_modifier = {
+	levy_reinforcement_rate = 0.05
+}

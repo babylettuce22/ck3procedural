@@ -1,7 +1,7 @@
 namespace Ck3MapGen.AppGUI;
 
 /// <summary>The things the window can be doing, in the order a world is made.</summary>
-internal enum Workspace { Terrain, Climate, World, History }
+internal enum Workspace { Terrain, Masks, World, History }
 
 /// <summary>
 /// The window's top level: one row naming the workspaces, with the commands that act on the
@@ -50,7 +50,7 @@ internal sealed class WorkspaceBar : Panel
 
         Add(Workspace.Terrain, 1, "Terrain", "beta", "Build a heightmap from noise and paint (Ctrl+1)");
         AddChevron();
-        Add(Workspace.Climate, 2, "Climate", null, "Paint the climate over the heightmap (Ctrl+2)");
+        Add(Workspace.Masks, 2, "Masks", null, "Paint the climate and the impassable walls over the heightmap (Ctrl+2)");
         AddChevron();
         Add(Workspace.World, 3, "World", null, "Settings, preview and the finished map (Ctrl+3)");
         AddChevron();
@@ -85,7 +85,7 @@ internal sealed class WorkspaceBar : Panel
     {
         _single = single;
         _items[Workspace.Terrain].Visible = !single;
-        _items[Workspace.Climate].Visible = !single;
+        _items[Workspace.Masks].Visible = !single;
         _items[Workspace.History].Visible = !single;
         foreach (var chevron in _chevrons) chevron.Visible = !single;
         foreach (var item in _items.Values) item.ShowStep = !single;

@@ -1,0 +1,22 @@
+﻿# Realm = independent landed ruler of county rank or above. Counts each ruler
+# once, however many wars they have; allies and internal wars also count when
+# the independent ruler is personally participating. Excludes adventurers.
+gen_world_census_realm_trigger = {
+	is_landed = yes
+	highest_held_title_tier >= tier_county
+}
+
+# The two tunable thresholds live in script_values/gen_world_events_values.txt.
+gen_world_at_war_trigger = {
+	has_global_variable = gen_world_realm_count
+	has_global_variable = gen_world_war_percent
+	global_var:gen_world_realm_count >= gen_world_war_minimum_realms_value
+	global_var:gen_world_war_percent >= gen_world_war_threshold_percent_value
+}
+
+gen_world_events_recipient_trigger = {
+	is_ai = no
+	is_landed = yes
+	is_available_adult = yes
+	highest_held_title_tier >= tier_county
+}

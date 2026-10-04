@@ -44,6 +44,12 @@ public sealed class GenerationOptions
     public MapGen.ClimatePaint? ClimatePaint { get; set; }
 
     /// <summary>
+    /// The impassable mask painted on the Masks tab, or null. Takes precedence over
+    /// <see cref="MapConfig.ImpassableMaskPath"/>; see <see cref="MapGen.ImpassableMask"/>.
+    /// </summary>
+    public MapGen.ImpassablePaint? ImpassablePaint { get; set; }
+
+    /// <summary>
     /// Realms run on in the History workspace, to be written as the start in place of the ones the
     /// formation grows. Optional in the same way the climate paint is: with none, the realms are
     /// exactly what they were before the workspace existed. The config the world is generated with
@@ -189,7 +195,7 @@ public static class Generator
             () => TerrainData.FromElevation(image.ToElevation(cfg), cfg));
 
         return FromTerrain(terra, cfg, azgaarJsonPath: options.AzgaarJsonPath,
-            climatePaint: options.ClimatePaint);
+            climatePaint: options.ClimatePaint, impassablePaint: options.ImpassablePaint);
     }
 
     public static GenerationResult FromTerrain(
@@ -197,7 +203,8 @@ public static class Generator
             MapConfig cfg,
             Action<string, PreviewRenderer.Image>? onPreview = null,
             string? azgaarJsonPath = null,
-            MapGen.ClimatePaint? climatePaint = null)
+            MapGen.ClimatePaint? climatePaint = null,
+            MapGen.ImpassablePaint? impassablePaint = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var rng = new Rng(cfg.Seed);
@@ -261,7 +268,8 @@ public static class Generator
         // 5. Partition provinces with river seeds
         var provinces = Stage.Time("province partition",
             () => Provinces.Build(landMask, provinceElevation, climate,
-                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers, drainage, azgaar, riverChannel));
+                cfg.ProvinceWidth, cfg.ProvinceHeight, cfg, rng, majorRivers, drainage, azgaar, riverChannel,
+                impassablePaint));
         Console.WriteLine($"  {provinces.Count} provinces total");
 
         // --- PREVIEWS READY HERE ---

@@ -6,7 +6,7 @@ using Ck3MapGen.MapGen;
 namespace Ck3MapGen.AppGUI;
 
 /// <summary>
-/// The Climate tab: paint the climate you want over the heightmap, in Koppen-map colours, and
+/// The Masks tab's climate page: paint the climate you want over the heightmap, in Koppen-map colours, and
 /// watch the model's prediction follow.
 ///
 /// The palette on the left is a set of climate *profiles* — see <see cref="ClimateBrush"/> — not
@@ -728,8 +728,8 @@ public sealed class ClimatePanel : UserControl
 
     // ------------------------------------------------------------------ canvas image
 
-    /// <summary>The heightmap as shaded relief at paint resolution, sea in blue so the coast reads.</summary>
-    private static byte[] ShadedRelief(Terrain terrain, int w, int h)
+    /// <summary>The heightmap as shaded relief at paint resolution, sea in blue so the coast reads. Shared with <see cref="ImpassablePanel"/>.</summary>
+    internal static byte[] ShadedRelief(Terrain terrain, int w, int h)
     {
         var cfg = terrain.Config;
         int pw = cfg.ProvinceWidth, ph = cfg.ProvinceHeight;

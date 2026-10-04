@@ -1,0 +1,52 @@
+﻿namespace = gen_world_events
+
+# World-state one-offs. The annual global on_action takes one census and dispatches
+# this event to eligible players. No generated title, culture or faith IDs needed.
+gen_world_events.0001 = {
+	type = character_event
+	title = gen_world_events.0001.t
+	desc = gen_world_events.0001.desc
+	theme = realm
+
+	left_portrait = { character = root animation = worry }
+
+	trigger = {
+		gen_world_events_recipient_trigger = yes
+		gen_world_at_war_trigger = yes
+	}
+
+	immediate = {
+		# One occurrence in this world's campaign, including across succession.
+		# This is NOT an event trigger: every eligible multiplayer recipient must
+		# still receive the same occurrence after the first recipient sets it.
+		set_global_variable = { name = gen_world_season_of_swords_seen value = yes }
+	}
+
+	option = {
+		name = {
+			text = {
+				first_valid = {
+					triggered_desc = {
+						trigger = { is_at_war = yes }
+						desc = gen_world_events.0001.a_war
+					}
+					desc = gen_world_events.0001.a
+				}
+			}
+		}
+		trigger = { gold >= minor_gold_value }
+		gen_world_buy_medical_supplies_effect = yes
+		ai_chance = { base = 50 }
+	}
+	option = {
+		name = gen_world_events.0001.b
+		trigger = { gold >= tiny_gold_value }
+		gen_world_shelter_merchant_effect = yes
+		ai_chance = { base = 50 }
+	}
+	option = {
+		name = gen_world_events.0001.c
+		custom_tooltip = gen_world_events.0001.c.tt
+		ai_chance = { base = 100 }
+	}
+}

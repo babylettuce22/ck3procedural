@@ -1,0 +1,9 @@
+﻿gen_world_war_minimum_realms_value = 10
+gen_world_war_threshold_percent_value = 50
+
+# Only evaluated by the census when the denominator is positive.
+gen_world_war_percent_value = {
+	value = global_var:gen_world_warring_realm_count
+	divide = global_var:gen_world_realm_count
+	multiply = 100
+}
