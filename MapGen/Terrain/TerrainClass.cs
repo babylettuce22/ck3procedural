@@ -156,8 +156,9 @@ public static class TerrainClassifier
         int sea = cfg.Limits.SeaLevelUpper;
 
         // The export's biome table, or null for a generated world. Resolved once here rather than
-        // per pixel: it is a dozen entries and the per-pixel cost is one array index.
-        var biomeTable = azgaar is null ? null : AzgaarBiome.Table(azgaar.World);
+        // per pixel: it is a dozen entries and the per-pixel cost is one array index. Null too when
+        // the import's climate is ours (MapConfig.AzgaarUseClimate off): its biomes are that climate.
+        var biomeTable = azgaar is null || !cfg.AzgaarUseClimate ? null : AzgaarBiome.Table(azgaar.World);
         var biomeRaster = azgaar?.Raster;
         var imported = new int[height];
         var reconciled = new int[height];

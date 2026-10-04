@@ -62,6 +62,12 @@ public sealed class AzgaarChoices
     /// </summary>
     public AzgaarTerrain Terrain { get; set; } = AzgaarTerrain.Weathered;
 
+    /// <summary>
+    /// Azgaar: the export's temperature, rainfall and biomes (<see cref="MapConfig.AzgaarUseClimate"/>).
+    /// Off has our climate model work the whole map out from its relief, as on a generated world.
+    /// </summary>
+    public bool AzgaarClimate { get; set; } = true;
+
     public AzgaarChoices Clone() => (AzgaarChoices)MemberwiseClone();
 
     public double CountyScale => Density switch
@@ -97,6 +103,8 @@ public sealed class AzgaarChoices
         // override cuts everything at one size instead.
         cfg.AzgaarBaroniesFromTowns = Density is null;
         cfg.CountyScale = CountyScale;
+
+        cfg.AzgaarUseClimate = AzgaarClimate;
 
         cfg.EnableMagic = false;   // not a finished feature; see QuickChoices.ApplyTo
         cfg.EnableWilderness = Wilderness;

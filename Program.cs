@@ -95,6 +95,9 @@ public static class Program
                 case "--verify-adventurers":
                     return Tools.AdventurerChecks.Run();
 
+                case "--verify-mountain-snow":
+                    return Tools.MountainSnowChecks.Run();
+
                 case "--verify-tenets":
                     return Tools.TenetChecks.Run(options.GameDir);
 

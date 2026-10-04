@@ -896,14 +896,6 @@ public static class TerrainTextureWriter
     private const int SlopeStoneSpan = 3;
 
     /// <summary>
-    /// The land-height band snow can reach, as percentiles of this map's land: nothing below the
-    /// first, full height from the second. The mountain class is the real gate (see
-    /// TerrainPalette.RidgeSnow); these only grade it within the ranges.
-    /// </summary>
-    private const double SnowPeakLoPercentile = 0.95;
-    private const double SnowPeakHiPercentile = 0.993;
-
-    /// <summary>
     /// Height against the mean of two rings of eight neighbours, at <paramref name="inner"/> and
     /// <paramref name="outer"/> pixels: positive on a crest, negative in a hollow. A difference of
     /// two blurs, taken per pixel so no blurred copy of the heightmap is stored.
@@ -1003,7 +995,7 @@ public static class TerrainTextureWriter
     /// <see cref="TerrainClass.Sea"/> like the sea, but a riverbank is not a sea cliff.
     /// </param>
     public static void WriteAll(string modDir, MapConfig cfg, TerrainClass[] terrain,
-        KoppenClass[] climate, float[] elevation, Rng rng, byte[]? riverWater = null)
+        KoppenClass[] climate, float[] elevation, ClimateField climateField, Rng rng, byte[]? riverWater = null)
     {
         string dir = Path.Combine(modDir, "gfx", "map", "terrain");
         Directory.CreateDirectory(dir);
@@ -1158,15 +1150,22 @@ public static class TerrainTextureWriter
             : (float.MaxValue, float.MaxValue);
         float slopeRange = Math.Max(1e-4f, slopeHi - slopeLo);
 
-        // Where snow goes: how high among this map's land a pixel stands, and how much of a crest it
-        // sits on — see TerrainPalette.RidgeSnow. The ridge is height against the mean of two rings
+        // Manual snow uses a height ramp; Auto uses the local summer temperature below. Both
+        // keep the ridge shape — see TerrainPalette.RidgeSnow. It is height against two rings
         // of neighbours, a difference of two blurs taken without storing either, at roughly the
         // scale of the offline mock's sigma-2 minus sigma-8 (rings at ~3 and ~12 texels).
         int ridgeInner = Math.Max(1, (int)Math.Round(3 * toHeightX));
         int ridgeOuter = Math.Max(2, (int)Math.Round(12 * toHeightX));
+        var snow = MountainSnow.FromConfig(cfg);
+        double snowAmount = snow.Amount;
         var (peakLo, peakHi) = LandHeightPercentiles(elevation, hWidth, hHeight, IsLand,
-            SnowPeakLoPercentile, SnowPeakHiPercentile);
+            snow.Automatic ? 0.95 : snow.StartPercentile, snow.Automatic ? 0.993 : snow.FullPercentile);
         float peakRange = Math.Max(1e-4f, peakHi - peakLo);
+        Console.WriteLine(snow.Automatic
+            ? $"  mountain snow: Auto, amount {snowAmount:0.##}, summer {snow.SummerStartC:F1} to " +
+              $"{snow.SummerFullC:F1} C, precipitation influence {snow.PrecipitationInfluence:P0}"
+            : $"  mountain snow: Manual, amount {snowAmount:0.##}, land height percentiles " +
+              $"{snow.StartPercentile:P1}–{snow.FullPercentile:P1} (elevation {peakLo:F1}–{peakHi:F1})");
         float ridgeFull = RidgeFull(elevation, hWidth, hHeight,
             (x, y) => elevation[(long)y * hWidth + x] >= peakLo, ridgeInner, ridgeOuter);
 
@@ -1303,6 +1302,18 @@ public static class TerrainTextureWriter
                     int ex = Math.Clamp((int)hx, 0, hWidth - 1), ey = Math.Clamp((int)hy, 0, hHeight - 1);
                     float here = elevation[(long)ey * hWidth + ex];
                     double peak = Math.Clamp((here - peakLo) / peakRange, 0, 1);
+                    // Sample the physical field at the unwarped position, like elevation. The
+                    // reconciled biome family still chooses rock, but cannot veto a cold summit.
+                    double snowStrength = -1;
+                    if (snow.Automatic)
+                    {
+                        float cx = (float)(hx * climateField.Width / hWidth);
+                        float cy = (float)(hy * climateField.Height / hHeight);
+                        peak = snow.TemperaturePeak(Field.Sample(climateField.WarmC,
+                            climateField.Width, climateField.Height, cx, cy));
+                        snowStrength = snow.MoistureStrength(Field.Sample(climateField.AnnualMm,
+                            climateField.Width, climateField.Height, cx, cy));
+                    }
                     double ridge = peak > 0 && ridgeFull > 0
                         ? Math.Clamp(Ridge(elevation, hWidth, hHeight, ex, ey, ridgeInner, ridgeOuter)
                             / ridgeFull, 0, 1)
@@ -1320,7 +1331,7 @@ public static class TerrainTextureWriter
 
                     var blend = TerrainPalette.For(TerrainPalette.TerrainOf(self),
                         TerrainPalette.ClimateFromLabel(self), relief, nA, nB, nC,
-                        canopyDensity, zoneA, zoneB, rugged, slope, peak, ridge);
+                        canopyDensity, zoneA, zoneB, rugged, slope, peak, ridge, snowAmount, snowStrength);
 
                     // Distance from here to the nearest ground of a different class, measured
                     // inside its own region. A smooth function of a real distance is what makes a
@@ -1430,7 +1441,7 @@ public static class TerrainTextureWriter
                                 byte winner = boundaryOther[pSrc];
                                 var neighbour = TerrainPalette.For(TerrainPalette.TerrainOf(winner),
                                     TerrainPalette.ClimateFromLabel(winner), relief, nA, nB, nC,
-                                    canopyDensity, zoneA, zoneB, rugged, slope, peak, ridge);
+                                    canopyDensity, zoneA, zoneB, rugged, slope, peak, ridge, snowAmount, snowStrength);
 
                                 blend = TerrainPalette.Merge(blend, neighbour, a);
 
@@ -1440,7 +1451,7 @@ public static class TerrainTextureWriter
                                     var runnerUp = TerrainPalette.For(
                                         TerrainPalette.TerrainOf(second),
                                         TerrainPalette.ClimateFromLabel(second), relief, nA, nB, nC,
-                                        canopyDensity, zoneA, zoneB, rugged, slope, peak, ridge);
+                                        canopyDensity, zoneA, zoneB, rugged, slope, peak, ridge, snowAmount, snowStrength);
 
                                     blend = TerrainPalette.Merge(blend, runnerUp, b);
                                 }

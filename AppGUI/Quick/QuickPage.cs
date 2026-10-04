@@ -77,6 +77,9 @@ internal sealed class QuickPage : Panel
     // map step
     private readonly List<(QuickMapType Type, MapTile Tile)> _tiles = [];
     private readonly TileStrip _tileStrip = new() { Name = "quickTypes" };
+    private readonly MapTile _importTile = new() { Text = "Import heightmap", Name = "quickImportHeightmap", AccessibleName = "Import heightmap", PlaceholderGlyph = "" };
+    private readonly PillButton _changeHeightmap = new() { Text = "Choose another…", Name = "quickChangeHeightmap", Kind = PillKind.Secondary };
+    private bool _importReady;
     private readonly MapPreview _preview = new();
     private readonly Label _typeName = MakeLabel("", new Font("Segoe UI Semibold", 13f), Theme.Text);
     private readonly Label _typeBlurb = MakeLabel("", Body, Theme.TextDim, wrap: true);
@@ -290,6 +293,7 @@ internal sealed class QuickPage : Panel
     public void Begin(QuickChoices? remembered, bool gameFound, string gameDir, string modRoot, string? complexNote)
     {
         _choices = remembered?.Clone() ?? new QuickChoices();
+        if (_choices.ImportsHeightmap && !File.Exists(_choices.HeightmapPath)) _choices.HeightmapPath = "";
         if (_types.Count > 0 && !_types.Any(t => t.Key == _choices.MapType)) _choices.MapType = _types[0].Key;
         _choices.Seed = Random.Shared.Next(1, 1_000_000);
         _previousSeeds.Clear();
@@ -324,7 +328,7 @@ internal sealed class QuickPage : Panel
         var type = CurrentType;
         var (w, h) = _choices.Pixels;
         _run.ShowRunning("Making your world",
-            $"{type?.Title ?? _choices.MapType} · seed {_choices.Seed} · {w} × {h}. This takes a few minutes.",
+            $"{MapChip(type)} · {w} × {h}. This takes a few minutes.",
             _preview.Image is { } img ? new Bitmap(img) : null,
             "Raising the land",
             "Peoples, faiths, armies and treasures appear here as the world is made. The land comes first.");
@@ -623,6 +627,12 @@ internal sealed class QuickPage : Panel
     {
         using var dialog = new CustomSizeDialog(_choices.CustomWidth, _choices.CustomHeight);
         if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return false;
+        if (_choices.ImportsHeightmap && !MapGen.TileFit.Fits(dialog.Pixels.Width, dialog.Pixels.Height))
+        {
+            MessageBox.Show(FindForm(), "For an imported heightmap, choose a size known to render in CK3.",
+                "Heightmap size", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return false;
+        }
         (_choices.CustomWidth, _choices.CustomHeight) = dialog.Pixels;
         ShowCustomSize();
         return true;
@@ -640,9 +650,13 @@ internal sealed class QuickPage : Panel
     /// <summary>Puts every control in step with <see cref="_choices"/>.</summary>
     private void SyncControls()
     {
-        foreach (var (type, tile) in _tiles) tile.Selected = type.Key == _choices.MapType;
+        bool imported = _choices.ImportsHeightmap;
+        _importTile.Selected = imported;
+        foreach (var (type, tile) in _tiles) tile.Selected = !imported && type.Key == _choices.MapType;
+        if (imported) _tileStrip.EnsureVisible(_importTile);
         if (_tiles.FirstOrDefault(t => t.Tile.Selected).Tile is { } picked) _tileStrip.EnsureVisible(picked);
         _size.Value = _choices.Size;
+        ShowCustomSize();
         _era.Value = _choices.Era;
         _climate.Value = _choices.Climate;
         _density.Value = _choices.Density;
@@ -666,8 +680,16 @@ internal sealed class QuickPage : Panel
             button.Font = Small;
         }
         var type2 = CurrentType;
-        _typeName.Text = type2?.Title ?? "";
-        _typeBlurb.Text = type2?.Blurb ?? "";
+        _typeName.Text = imported ? "Imported heightmap" : type2?.Title ?? "";
+        _typeBlurb.Text = imported ? Path.GetFileName(_choices.HeightmapPath) + "\nChoose the output size in World. The image is fitted to that size." : type2?.Blurb ?? "";
+        foreach (var control in new Control[] { _seedCaption, _seedBox, _reroll, _previous, _reliefCaption, _mountainsCaption })
+            control.Visible = !imported;
+        if (_reliefTrack is { } reliefTrack) reliefTrack.Visible = !imported;
+        if (_mountainsTrack is { } mountainTrack) mountainTrack.Visible = !imported;
+        _changeHeightmap.Visible = imported;
+        _mapHint.Text = imported
+            ? "Black is deep water; lighter pixels are higher ground. Use a grayscale PNG. Rivers and climate are added when the world is made."
+            : "Every seed is a different world. This is the bare terrain: rivers, climate and erosion are added when the world is made.";
         _previous.Enabled = _previousSeeds.Count > 0;
         SuggestName();
         _mapPanel.PerformLayout();
@@ -680,8 +702,11 @@ internal sealed class QuickPage : Panel
     private void BuildMapStep()
     {
         var title = MakeLabel("Choose a map", Title, Theme.Text);
-        var subtitle = MakeLabel("Pick the shape of the land, then roll until the coastline feels right.", Subtitle, Theme.TextDim);
-        _mapPanel.Controls.AddRange([title, subtitle, _tileStrip, _preview, _typeName, _typeBlurb, _seedCaption, _seedBox, _reroll, _previous, _mapHint]);
+        var subtitle = MakeLabel("Import a heightmap, or pick a template and roll until the coastline feels right.", Subtitle, Theme.TextDim);
+        _mapPanel.Controls.AddRange([title, subtitle, _tileStrip, _preview, _typeName, _typeBlurb, _seedCaption, _seedBox, _reroll, _previous, _mapHint, _changeHeightmap]);
+        _importTile.Click += (_, _) => PickHeightmap();
+        _changeHeightmap.Click += (_, _) => PickHeightmap();
+        _tileStrip.Add(_importTile);
 
         // Relief: how rugged the land is, whatever its shape. Changes the preview and, through the
         // game's hill and mountain shares, how the world plays. See QuickTerrain.
@@ -732,6 +757,7 @@ internal sealed class QuickPage : Panel
             // A name too long for one line takes two, on every tile, so the row stays even.
             int stripH = _tileStrip.Measure(w);
             _tileStrip.Bounds = new Rectangle(x, y, w, stripH);
+            if (_choices.ImportsHeightmap) _tileStrip.EnsureVisible(_importTile, animate: false);
             if (_tiles.FirstOrDefault(t => t.Tile.Selected).Tile is { } chosen)
                 _tileStrip.EnsureVisible(chosen, animate: false);
             y += stripH + S(18);
@@ -749,6 +775,15 @@ internal sealed class QuickPage : Panel
             sy += _typeName.PreferredHeight + S(4);
             _typeBlurb.Bounds = new Rectangle(sx, sy, sw, Wrapped(_typeBlurb, sw));
             sy += _typeBlurb.Height + S(18);
+            if (_choices.ImportsHeightmap)
+            {
+                _changeHeightmap.MinWidth = sw * 96 / DeviceDpi;
+                _changeHeightmap.FitWidth();
+                _changeHeightmap.Location = new Point(sx, sy);
+                sy += _changeHeightmap.Height + S(14);
+                StepPanel.Place(_mapHint, sx, sy, sw);
+                return;
+            }
             _seedCaption.Location = new Point(sx, sy);
             sy += _seedCaption.PreferredHeight + S(3);
             _seedBox.Bounds = new Rectangle(sx, sy, sw, _seedBox.PreferredHeight);
@@ -814,10 +849,79 @@ internal sealed class QuickPage : Panel
 
     private void PickType(QuickMapType type)
     {
-        if (_choices.MapType == type.Key) return;
+        if (!_choices.ImportsHeightmap && _choices.MapType == type.Key) return;
+        _choices.HeightmapPath = "";
         _choices.MapType = type.Key;
         SyncControls();
         RenderPreview();
+    }
+
+    private void PickHeightmap()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Import a heightmap",
+            Filter = "Heightmap PNG (*.png)|*.png",
+            InitialDirectory = Path.GetDirectoryName(_choices.HeightmapPath) ?? "",
+        };
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+        try
+        {
+            // Identify before adopting: cancel or an unreadable image leaves the current map alone.
+            var (width, height) = MapGen.TileFit.Measure(dialog.FileName);
+            var target = MapGen.TileFit.Fits(width, height) ? (width, height) : MapGen.TileFit.Nearest(width, height);
+            _choices.HeightmapPath = dialog.FileName;
+            _choices.Size = QuickSize.Custom;
+            (_choices.CustomWidth, _choices.CustomHeight) = target;
+            ShowCustomSize();
+            SyncControls();
+            RenderPreview();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(FindForm(), $"Could not read this heightmap:\n\n{ex.Message}",
+                "Import heightmap", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void RenderImportedPreview()
+    {
+        _previewCts?.Cancel();
+        var cts = _previewCts = new CancellationTokenSource();
+        string path = _choices.HeightmapPath;
+        _importReady = false;
+        _preview.Image = null;
+        _reviewMap.Image = null;
+        _preview.Busy = "Reading heightmap…";
+        _preview.Chip = MapChip(null);
+        UpdateChrome();
+
+        Task.Run(() => AzgaarFiles.Draw(path, null, 1024, 512, cts.Token), cts.Token).ContinueWith(task =>
+        {
+            if (IsDisposed || !IsHandleCreated)
+            {
+                if (task.IsCompletedSuccessfully) task.Result?.Image.Dispose();
+                return;
+            }
+            BeginInvoke(() =>
+            {
+                if (cts.IsCancellationRequested)
+                {
+                    if (task.IsCompletedSuccessfully) task.Result?.Image.Dispose();
+                    return;
+                }
+                _importReady = task.IsCompletedSuccessfully && task.Result is not null;
+                _preview.Busy = _importReady ? null : "Could not read this heightmap. Choose another PNG.";
+                if (_importReady && task.Result is { } picture)
+                {
+                    _preview.Image = picture.Image;
+                    _reviewMap.Image = new Bitmap(picture.Image);
+                    _importTile.Thumbnail = new Bitmap(picture.Image);
+                }
+                UpdateChrome();
+            });
+        });
     }
 
     private void Reroll()
@@ -856,6 +960,11 @@ internal sealed class QuickPage : Panel
     /// </summary>
     private void RenderPreview()
     {
+        if (_choices.ImportsHeightmap)
+        {
+            RenderImportedPreview();
+            return;
+        }
         if (CurrentType is not { } type) return;
 
         _previewCts?.Cancel();
@@ -886,6 +995,7 @@ internal sealed class QuickPage : Panel
     /// <summary>The line on the map pictures: the type, whatever differs from the defaults, the seed.</summary>
     private string MapChip(QuickMapType? type)
     {
+        if (_choices.ImportsHeightmap) return "Imported  ·  " + Path.GetFileName(_choices.HeightmapPath);
         var parts = new List<string> { type?.Title ?? _choices.MapType };
         if (_choices.Relief != QuickRelief.Standard) parts.Add(_choices.Relief.ToString());
         if (_choices.Mountains == QuickMountains.Classic) parts.Add("Classic mountains");
@@ -1036,8 +1146,8 @@ internal sealed class QuickPage : Panel
         extras.Add(_choices.DetailedPaperMap ? "Detailed paper map" : "Plain paper map");
         return
         [
-            $"{CurrentType?.Title ?? _choices.MapType}  ·  seed {_choices.Seed}",
-            _choices.Relief switch
+            MapChip(CurrentType),
+            _choices.ImportsHeightmap ? "From the heightmap" : _choices.Relief switch
             {
                 QuickRelief.Lowlands => "Lowlands  ·  fewer hills and mountains",
                 QuickRelief.Highlands => "Highlands  ·  more hills and mountains",
@@ -1160,13 +1270,13 @@ internal sealed class QuickPage : Panel
     {
         if (_nameTouched) return;
         _settingName = true;
-        _name.Text = $"{CurrentType?.Title ?? "World"} {_choices.Seed}";
+        _name.Text = $"{(_choices.ImportsHeightmap ? Path.GetFileNameWithoutExtension(_choices.HeightmapPath) : CurrentType?.Title ?? "World")} {_choices.Seed}";
         _settingName = false;
     }
 
     private bool _nameOk;
 
-    private bool CanCreate => _nameOk && _gameFound;
+    private bool CanCreate => _nameOk && _gameFound && (!_choices.ImportsHeightmap || (_importReady && File.Exists(_choices.HeightmapPath)));
 
     /// <summary>The same checks the Write mod dialog makes, shown as the name is typed.</summary>
     private void UpdateNameState()

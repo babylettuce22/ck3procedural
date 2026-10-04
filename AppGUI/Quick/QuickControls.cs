@@ -256,6 +256,7 @@ internal static class LaunchUi
         private static readonly Font Mark = new(GlyphFamily, 7f);
         private bool _selected;
 
+
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Subtitle { get; set; } = "";
 
@@ -486,6 +487,8 @@ internal static class LaunchUi
         private static readonly Font Mark = new(GlyphFamily, 7f);
         private Bitmap? _image;
         private bool _selected;
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string PlaceholderGlyph { get; init; } = "";
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Bitmap? Thumbnail
@@ -540,6 +543,12 @@ internal static class LaunchUi
                 {
                     using var placeholder = new SolidBrush(Color.FromArgb(34, 70, 128));
                     g.FillPath(placeholder, clip);
+                    if (PlaceholderGlyph.Length > 0)
+                    {
+                        using var importFont = new Font(GlyphFamily, 24f);
+                        TextRenderer.DrawText(g, PlaceholderGlyph, importFont, Rectangle.Round(imageRect), Color.White,
+                            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                    }
                 }
             }
 

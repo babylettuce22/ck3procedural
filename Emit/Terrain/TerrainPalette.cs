@@ -395,12 +395,15 @@ public static class TerrainPalette
     /// classes still want that fine detail, so they keep <paramref name="rugged"/>. Negative means
     /// the caller has none, and <paramref name="rugged"/> stands in.
     /// </param>
-    /// <param name="peak">How high among this map's land the pixel stands, for <see cref="RidgeSnow"/>.</param>
+    /// <param name="peak">Snow ramp: local summer coldness in Auto, height percentile in Manual.</param>
     /// <param name="ridge">How much of a crest the pixel sits on, for <see cref="RidgeSnow"/>.</param>
+    /// <param name="snowAmount">Permanent mountain snow strength; 0 removes it, 1 preserves the default.</param>
+    /// <param name="snowStrength">Auto's moisture multiplier, or -1 for Manual's climate-family weighting.</param>
     public static Blend For(TerrainClass terrain, Climate climate, double relief,
         double nA, double nB, double nC,
         double canopyDensity = 0.5, double zoneA = 0.5, double zoneB = 0.5,
-        double rugged = 0.5, double slope = -1, double peak = 0, double ridge = 0)
+        double rugged = 0.5, double slope = -1, double peak = 0, double ridge = 0,
+        double snowAmount = 1, double snowStrength = -1)
     {
         var blend = Biome(terrain, climate, relief, nA, nB, nC, canopyDensity, zoneA, zoneB, rugged);
 
@@ -419,7 +422,7 @@ public static class TerrainPalette
         if (terrain is TerrainClass.Mountains or TerrainClass.DesertMountains)
         {
             var snowClimate = terrain is TerrainClass.DesertMountains ? Climate.Desert : climate;
-            double snow = RidgeSnow(snowClimate, peak, ridge, slope, nC);
+            double snow = Math.Clamp(RidgeSnow(snowClimate, peak, ridge, slope, nC, snowStrength) * snowAmount, 0, 0.97);
             if (snow > 0.01) blend = Merge(Normalized(blend), Single(Snow), snow);
         }
 
@@ -1158,14 +1161,16 @@ public static class TerrainPalette
     /// Only mountain ground asks for it — the class is the gate. Taken off a land-height percentile
     /// alone it freckled snow over forested hill country wherever a map has few real ranges.
     /// </summary>
-    /// <param name="peak">0 at the land's 95th height percentile, 1 at its 99.3rd and above — the
-    /// summit line, above which ground is always snow.</param>
+    /// <param name="peak">0 at the snow ramp's start, 1 at full strength: height in Manual,
+    /// summer coldness in Auto. At full strength flat ground can carry snow too.</param>
     /// <param name="ridge">0 in a hollow or on a flat, 1 on a crest as sharp as this map's high ground gets.</param>
     /// <param name="steep">The slope measure, 0..1.</param>
     /// <param name="nC">The fine selector, used as the breakup that turns a band into streaks.</param>
-    private static double RidgeSnow(Climate climate, double peak, double ridge, double steep, double nC)
+    /// <param name="strengthOverride">Auto's moisture multiplier, or -1 for climate-family weighting.</param>
+    private static double RidgeSnow(Climate climate, double peak, double ridge, double steep, double nC,
+        double strengthOverride = -1)
     {
-        double strength = climate switch
+        double strength = strengthOverride >= 0 ? strengthOverride : climate switch
         {
             // Tropical mountains carry no snow line — the sampled Sumatran face reads
             // gen_tropical_mountain from base to summit.

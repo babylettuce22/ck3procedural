@@ -366,7 +366,7 @@ public static partial class ContentWriter
         {
         // Full-resolution heightmap elevation passed to detail texture generator
         Core.Stage.Time("terrain textures", () => TerrainTextureWriter.WriteAll(modDir, cfg, terrain,
-            classified.Climate, terra.Elevation, rng, classified.RiverWater));
+            classified.Climate, terra.Elevation, classified.Field, rng, classified.RiverWater));
 
         Core.Stage.Time("terrain masks", () => TerrainMaskWriter.WriteAll(modDir, gameDir, cfg));
 

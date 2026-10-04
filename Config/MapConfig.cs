@@ -115,8 +115,15 @@ public enum ImpassableMaskMode : byte
 }
 
 /// <summary>
-/// What <see cref="MapGen.ImpassableAutoCut"/> ranks ground by when it picks the walls.
+/// Whether permanent mountain snow follows local climate or manually selected height percentiles.
 /// </summary>
+public enum MountainSnowMode : byte
+{
+    Auto,
+    Manual,
+}
+
+/// <summary>What the automatic impassability cut ranks ground by when picking walls.</summary>
 public enum ImpassableRanking : byte
 {
     /// <summary>
@@ -2245,6 +2252,45 @@ public sealed class MapConfig : CustomTypeDescriptor
     [Description("Global scale multiplier for environmental VFX billboards. 1.0 is vanilla size, which they are drawn at on every map size.")]
     public double EnvEffectScale { get; set; } = 0.9;
 
+    [Category("06 Map Objects")]
+    [DisplayName("Mountain Snow Mode")]
+    [RefreshProperties(RefreshProperties.All)]
+    [Description("Auto uses local warmest-month temperature and precipitation for permanent mountain snow. Manual uses the land-height percentile controls and the original climate-family weighting. Amount applies in both modes. Regenerate the map to apply.")]
+    public MountainSnowMode MountainSnowMode { get; set; } = MountainSnowMode.Auto;
+
+    [Category("06 Map Objects")]
+    [DisplayName("Mountain Snow Summer Start (C)")]
+    [Description("Auto mode: permanent mountain snow starts as the warmest-month temperature falls below this value. Default 5 C. Raise it to let snow reach warmer ground. Start and full temperatures are ordered automatically.")]
+    public double MountainSnowSummerStartC { get; set; } = 5;
+
+    [Category("06 Map Objects")]
+    [DisplayName("Mountain Snow Summer Full (C)")]
+    [Description("Auto mode: the snow temperature ramp reaches full strength when the warmest month is this cold or colder. Default -3 C. Ridge shape, slope, precipitation and Amount still affect the paint.")]
+    public double MountainSnowSummerFullC { get; set; } = -3;
+
+    [Category("06 Map Objects")]
+    [DisplayName("Mountain Snow Precipitation Influence")]
+    [Description("Auto mode: how much dry climates reduce mountain snow, from 0 to 1. Default 0.4 leaves at least 60% of the temperature-based strength. 0 ignores precipitation. The reduction fades out between 100 and 1000 mm annual precipitation.")]
+    public double MountainSnowPrecipitationInfluence { get; set; } = 0.4;
+
+    /// <summary>Strength of permanent snow painted onto mountain ground.</summary>
+    [Category("06 Map Objects")]
+    [DisplayName("Mountain Snow Amount")]
+    [Description("Permanent mountain snow strength in Auto and Manual: 0 removes it, 1 is the default amount, and values above 1 make it heavier (maximum 4). Applies to mountain terrain, with climate and ridge shape still controlling coverage. Does not change polar ground or seasonal winter snow. Regenerate the map to apply.")]
+    public double MountainSnowAmount { get; set; } = 1;
+
+    /// <summary>Land-height percentile where the mountain snow band begins.</summary>
+    [Category("06 Map Objects")]
+    [DisplayName("Mountain Snow Start Percentile")]
+    [Description("Manual mode only: land-height percentile where permanent mountain snow begins, from 0 to 1. Default 0.95 means the highest 5% of land can carry it. Lower values let snow reach farther down mountains. Mountain terrain and climate still gate coverage. Start and full percentiles are ordered automatically. Regenerate the map to apply.")]
+    public double MountainSnowStartPercentile { get; set; } = 0.95;
+
+    /// <summary>Land-height percentile where the mountain snow height ramp reaches full strength.</summary>
+    [Category("06 Map Objects")]
+    [DisplayName("Mountain Snow Full Percentile")]
+    [Description("Manual mode only: land-height percentile where permanent mountain snow reaches full height strength, from 0 to 1. Default 0.993 means the highest 0.7% of land. Lower values bring snowy summits farther down; ridge shape and climate still affect the paint. Start and full percentiles are ordered automatically. Regenerate the map to apply.")]
+    public double MountainSnowFullPercentile { get; set; } = 0.993;
+
     /// <summary>
     /// Inks the route network onto the parchment flat map: trunk routes heavier, roads into
     /// wilderness dashed, water crossings dotted, sea lanes as faint dots, markets marked.
@@ -2829,6 +2875,18 @@ public sealed class MapConfig : CustomTypeDescriptor
     // =========================================================================
     // 12 Climate
     // =========================================================================
+
+    /// <summary>
+    /// Whether an import's climate is the export's: its temperature and rainfall reanchor our model
+    /// (<see cref="MapGen.AzgaarClimate"/>) and its biomes decide the vegetation
+    /// (<see cref="MapGen.AzgaarBiome"/>). Off runs our model alone, as on a generated world. The
+    /// export's latitude framing is kept either way: it says where on the globe the map sits, which
+    /// is geography, and our model then works out the climate of that place. Only read with an export.
+    /// </summary>
+    [Category("8 Climate")]
+    [DisplayName("Azgaar: Use Its Climate")]
+    [Description("With an Azgaar export: take its temperature, rainfall and biomes, with our model adding the seasons and relief detail. Off generates the climate and vegetation with our own model from the map's relief, as on a generated world (the export's latitudes are still used). Only used with an export.")]
+    public bool AzgaarUseClimate { get; set; } = true;
 
     /// <summary>
     /// Where the equator line sits, as a fraction of map height. Everything about climate is
@@ -3912,6 +3970,13 @@ public sealed class MapConfig : CustomTypeDescriptor
 
             // The mix's shares mean nothing until the mix is switched on.
             if (!CustomRaceMix && IsRaceMixRow(property.Name)) continue;
+
+            // Show only the controls read by the selected mountain snow mode.
+            if (MountainSnowMode == MountainSnowMode.Auto && property.Name is
+                nameof(MountainSnowStartPercentile) or nameof(MountainSnowFullPercentile)) continue;
+            if (MountainSnowMode == MountainSnowMode.Manual && property.Name is
+                nameof(MountainSnowSummerStartC) or nameof(MountainSnowSummerFullC)
+                or nameof(MountainSnowPrecipitationInfluence)) continue;
 
             shown.Add(imported && property.Attributes[typeof(AzgaarIncompatAttribute)]
                           is AzgaarIncompatAttribute incompat

@@ -59,6 +59,10 @@ public enum QuickFantasy { None, Low, High }
 public sealed class QuickChoices
 {
     public string MapType { get; set; } = "continents";
+    /// <summary>A PNG used instead of a Forge template; empty for generated terrain.</summary>
+    public string HeightmapPath { get; set; } = "";
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool ImportsHeightmap => !string.IsNullOrWhiteSpace(HeightmapPath);
     public int Seed { get; set; } = 1;
     public QuickRelief Relief { get; set; } = QuickRelief.Standard;
     public QuickMountains Mountains { get; set; } = QuickMountains.Ranges;
@@ -134,7 +138,9 @@ public sealed class QuickChoices
     public string Summary()
     {
         var (w, h) = Pixels;
-        return $"Quick world: {MapType}, seed {Seed}, relief {Relief} ({(RegionalRelief ? "regional" : "map-wide")}), mountains {Mountains}, "
+        return (ImportsHeightmap
+                   ? $"Quick world: imported heightmap {HeightmapPath}, seed {Seed}, "
+                   : $"Quick world: {MapType}, seed {Seed}, relief {Relief} ({(RegionalRelief ? "regional" : "map-wide")}), mountains {Mountains}, ")
                + $"size {Size} ({w}x{h}{(SizeVerified ? "" : ", unverified")}), era {Era}, climate {Climate}, density {Density}, "
                + $"people {People}"
                + (InspirationInWorld is { } inspiration
@@ -282,13 +288,14 @@ public sealed class QuickChoices
         // mountains are handed out by rank at these shares, so without them a Highlands map would
         // look rugged and play like any other. Standard keeps the generator's own, which sit near
         // vanilla's 12% mountains and 19% hills.
-        var (mountains, hills, impassable) = TerrainShares;
+        var (mountains, hills, impassable) = ImportsHeightmap
+            ? (0.14, 0.19, 0.08) : TerrainShares;
         cfg.MountainProvinceShare = mountains;
         cfg.HillProvinceShare = hills;
         cfg.ImpassableShareOfLand = impassable;
 
         // A set-piece map type records what it drew, so the generator can find it again to name it.
-        cfg.SetPiece = QuickCatalogue.FeatureOf(MapType) == QuickFeature.None ? "" : $"{MapType}@{Seed}";
+        cfg.SetPiece = ImportsHeightmap || QuickCatalogue.FeatureOf(MapType) == QuickFeature.None ? "" : $"{MapType}@{Seed}";
 
         cfg.ContentSource = People == QuickPeople.RealCk3
             ? MapConfig.ContentSourceMode.VanillaWorld

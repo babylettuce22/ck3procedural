@@ -278,21 +278,25 @@ public sealed partial class MainForm
     /// </summary>
     private IReadOnlyList<string> PrepareQuickWorld(QuickChoices choices)
     {
-        var type = QuickCatalogue.All().FirstOrDefault(t => t.Key == choices.MapType)
-                   ?? throw new InvalidOperationException($"No map type called '{choices.MapType}' is installed.");
+        var type = choices.ImportsHeightmap ? null : (QuickCatalogue.All().FirstOrDefault(t => t.Key == choices.MapType)
+                   ?? throw new InvalidOperationException($"No map type called '{choices.MapType}' is installed."));
 
         var (width, height) = choices.ForgePixels;
         int upscale = choices.ForgeUpscale;
-        var switchedOff = _forge.AdoptPreset(type.PresetPathFor(choices.Mountains), choices.Seed, width, height, upscale);
+        IReadOnlyList<string> switchedOff = [];
+        if (type is not null)
+        {
+            switchedOff = _forge.AdoptPreset(type.PresetPathFor(choices.Mountains), choices.Seed, width, height, upscale);
 
-        // A set-piece map type draws its crater (or whatever it is built around) for this seed
-        // over the guide the preset shipped with; the Terrain workspace shows it as paint.
-        QuickFeatures.Draw(_forge.Session.Pipeline, type.Feature, choices.Seed);
+            // A set-piece map type draws its crater (or whatever it is built around) for this seed
+            // over the guide the preset shipped with; the Terrain workspace shows it as paint.
+            QuickFeatures.Draw(_forge.Session.Pipeline, type.Feature, choices.Seed);
 
-        // The relief choice bends the preset's own relief stages; the Terrain workspace shows the
-        // result as ordinary parameter values, so it can be tuned further from there.
-        QuickTerrain.Apply(_forge.Session.Pipeline, choices.Relief);
-        _forge.Session.Pipeline.NotifyChanged();
+            // The relief choice bends the preset's own relief stages; the Terrain workspace shows the
+            // result as ordinary parameter values, so it can be tuned further from there.
+            QuickTerrain.Apply(_forge.Session.Pipeline, choices.Relief);
+            _forge.Session.Pipeline.NotifyChanged();
+        }
 
         Preset.Reset(_options.Config);
         choices.ApplyTo(_options.Config);
@@ -310,6 +314,14 @@ public sealed partial class MainForm
         _options.AppliedHistory = null;
         _history.ShowApplied(null);
 
+        if (choices.ImportsHeightmap)
+        {
+            if (!choices.SizeVerified)
+                throw new InvalidOperationException("Choose a size known to render in CK3 for an imported heightmap.");
+            AdoptHeightmapFile(choices.HeightmapPath, choices.Pixels, unverified: false);
+            return switchedOff;
+        }
+
         // Only a Custom size can be one CK3 is not known to render; the page warned before the run.
         bool unverified = !choices.SizeVerified;
         UseForgeForGeneration(allowUnverifiedSize: unverified);
@@ -317,7 +329,7 @@ public sealed partial class MainForm
         // The workspace holds the choice map-wide, the only form one pipeline can; the world itself
         // is built with it region by region. See RegionalRelief.
         if (choices.RegionalRelief)
-            SetSource(new QuickReliefProvider(type.PresetPathFor(choices.Mountains), choices.Seed, width, height,
+            SetSource(new QuickReliefProvider(type!.PresetPathFor(choices.Mountains), choices.Seed, width, height,
                 type.Feature, choices.Relief, type.Key, upscale, unverified));
         return switchedOff;
     }
