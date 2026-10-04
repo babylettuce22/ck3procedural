@@ -99,6 +99,7 @@ internal sealed class AzgaarPage : Panel
     private readonly ChoiceGroup<bool> _wilderness;
     private readonly ChoiceGroup<bool> _races;
     private readonly ChoiceGroup<AzgaarTerrain> _terrain;
+    private readonly ChoiceGroup<bool> _climate;
     private readonly ChoiceCard _advancementAzgaar;
     private readonly ChoiceCard _densityAzgaar;
     private readonly ChoiceCard _racesAzgaar;
@@ -148,6 +149,9 @@ internal sealed class AzgaarPage : Panel
         _terrain = new ChoiceGroup<AzgaarTerrain>("Terrain", "How the land between its coasts and ranges is shaped.", AzgaarTerrain.Weathered)
             .Add(AzgaarTerrain.Weathered, "Weathered", "Its coasts, ranges and uplands · hills and valleys like the map types", "azgaarTerrainWeathered")
             .Add(AzgaarTerrain.AsDrawn, "As drawn", "The exported heightmap exactly · flat terraces and all", "azgaarTerrainDrawn");
+        _climate = new ChoiceGroup<bool>("Climate", "Where it is hot, cold, wet and dry, and what grows.", true)
+            .Add(true, "Azgaar", "Its temperature, rainfall and biomes", "azgaarClimateAzgaar")
+            .Add(false, "Our model", "Worked out from the land's relief", "azgaarClimateOurs");
         _advancementAzgaar = _advancement.Cards.First();
         _densityAzgaar = _density.Cards.First();
         _racesAzgaar = _races.Cards.First();
@@ -157,6 +161,7 @@ internal sealed class AzgaarPage : Panel
         _wilderness.Changed += v => _choices.Wilderness = v;
         _races.Changed += v => _choices.FantasyRaces = v;
         _terrain.Changed += v => _choices.Terrain = v;
+        _climate.Changed += v => _choices.ExportClimate = v;
 
         BuildChrome();
         BuildFilesStep();
@@ -410,6 +415,7 @@ internal sealed class AzgaarPage : Panel
         _wilderness.Value = _choices.Wilderness;
         _races.Value = _choices.FantasyRaces;
         _terrain.Value = _choices.Terrain;
+        _climate.Value = _choices.ExportClimate;
         SyncOverrides();
     }
 
@@ -841,6 +847,7 @@ internal sealed class AzgaarPage : Panel
         var wilderness = Group(_wilderness);
         var races = Group(_races);
         var terrain = Group(_terrain);
+        var climate = Group(_climate);
 
         _optionsPanel.Arrange = p =>
         {
@@ -873,17 +880,24 @@ internal sealed class AzgaarPage : Panel
 
             y += Place(advancement, x, w, y) + S(18);
             y += Place(density, x, w, y) + S(18);
-            y += Place(terrain, x, w, y) + S(18);
 
-            // The two two-way choices share a row, each in half the column, their cards level
-            // even when one hint has to wrap under its title and the other does not.
+            // The two-way choices go in pairs, each in half the column, their cards level even
+            // when one hint has to wrap under its title and the other does not.
             int half = (w - S(24)) / 2;
             int rightX = x + half + S(24), rightW = w - half - S(24);
-            int rowY = Math.Max(StepPanel.TitleAndHint(wilderness.Title, wilderness.Hint, x, y, half),
-                                StepPanel.TitleAndHint(races.Title, races.Hint, rightX, y, rightW)) + S(6);
-            int rowH = Math.Max(CardsHeight(wilderness.Cards, half), CardsHeight(races.Cards, rightW));
-            Cards(wilderness.Cards, x, half, rowY, rowH);
-            Cards(races.Cards, rightX, rightW, rowY, rowH);
+            int Pair((Label Title, Label Hint, List<ChoiceCard> Cards) left,
+                     (Label Title, Label Hint, List<ChoiceCard> Cards) right, int py)
+            {
+                int rowY = Math.Max(StepPanel.TitleAndHint(left.Title, left.Hint, x, py, half),
+                                    StepPanel.TitleAndHint(right.Title, right.Hint, rightX, py, rightW)) + S(6);
+                int rowH = Math.Max(CardsHeight(left.Cards, half), CardsHeight(right.Cards, rightW));
+                Cards(left.Cards, x, half, rowY, rowH);
+                Cards(right.Cards, rightX, rightW, rowY, rowH);
+                return rowY - py + rowH;
+            }
+
+            y += Pair(terrain, climate, y) + S(18);
+            Pair(wilderness, races, y);
         };
     }
 
@@ -896,7 +910,7 @@ internal sealed class AzgaarPage : Panel
     private static readonly (string Key, int Step)[] SummaryRows =
     [
         ("World", FilesStep), ("Heightmap", FilesStep), ("Calendar", FilesStep),
-        ("Advancement", OptionsStep), ("Provinces", OptionsStep), ("Terrain", OptionsStep), ("Unclaimed land", OptionsStep),
+        ("Advancement", OptionsStep), ("Provinces", OptionsStep), ("Terrain", OptionsStep), ("Climate", OptionsStep), ("Unclaimed land", OptionsStep),
         ("Peoples", OptionsStep),
     ];
 
@@ -911,6 +925,7 @@ internal sealed class AzgaarPage : Panel
             AdvancementLine(),
             ProvincesLine(),
             _choices.Terrain == AzgaarTerrain.Weathered ? "Weathered  ·  hills and valleys added" : "As drawn",
+            _choices.ExportClimate ? "Azgaar  ·  its climate and biomes" : "Our model  ·  from the relief",
             _choices.Wilderness ? "Azgaar  ·  starts wild" : "Settled",
             !_choices.FantasyRaces ? "Humans only"
                 : HasRaceTags ? $"Azgaar  ·  {string.Join(", ", e!.Races).ToLowerInvariant()}" : "Azgaar  ·  all human",

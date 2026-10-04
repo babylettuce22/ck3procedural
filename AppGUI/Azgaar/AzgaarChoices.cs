@@ -8,8 +8,8 @@ namespace Ck3MapGen.AppGUI;
 ///
 /// Every override starts on "Azgaar", meaning the export's own answer: how advanced its peoples
 /// are, a barony per town with each of its provinces kept whole as one county, its unclaimed land left
-/// wild, its race tags drawn. What the export decides outright (countries, cultures, faiths, names,
-/// climate, the calendar) is not asked at all.
+/// wild, its race tags drawn, its climate and biomes. What the export decides outright (countries,
+/// cultures, faiths, names, the calendar) is not asked at all.
 ///
 /// Like <see cref="QuickChoices"/> it is a way of filling in the normal settings, not an importer of
 /// its own. <see cref="ApplyTo"/> writes these onto a config just reset to defaults; the export's
@@ -66,7 +66,7 @@ public sealed class AzgaarChoices
     /// Azgaar: the export's temperature, rainfall and biomes (<see cref="MapConfig.AzgaarUseClimate"/>).
     /// Off has our climate model work the whole map out from its relief, as on a generated world.
     /// </summary>
-    public bool AzgaarClimate { get; set; } = true;
+    public bool ExportClimate { get; set; } = true;
 
     public AzgaarChoices Clone() => (AzgaarChoices)MemberwiseClone();
 
@@ -104,7 +104,7 @@ public sealed class AzgaarChoices
         cfg.AzgaarBaroniesFromTowns = Density is null;
         cfg.CountyScale = CountyScale;
 
-        cfg.AzgaarUseClimate = AzgaarClimate;
+        cfg.AzgaarUseClimate = ExportClimate;
 
         cfg.EnableMagic = false;   // not a finished feature; see QuickChoices.ApplyTo
         cfg.EnableWilderness = Wilderness;
