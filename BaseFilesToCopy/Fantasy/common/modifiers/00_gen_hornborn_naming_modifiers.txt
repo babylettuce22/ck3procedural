@@ -1,0 +1,35 @@
+﻿# Horns at the Naming: character modifiers. Map of the system: events/gen_hornborn_naming_events.txt.
+# Sized against the Hornborn trait's own general_opinion -10 (00_hornborn_trait.txt).
+
+# Embrace at the naming (5 years).
+gen_hb_nursery_whispers_modifier = {
+	icon = prestige_negative
+	general_opinion = -5
+}
+
+# ...when the child is the heir (5 years, instead of the above).
+gen_hb_heir_whispers_modifier = {
+	icon = prestige_negative
+	general_opinion = -10
+}
+
+# Embraced, coming of age (0052): grown up in front of the court. Offsets half the trait's stigma.
+gen_hb_familiar_face_modifier = {
+	icon = social_positive
+	general_opinion = 5
+	attraction_opinion = 5
+}
+
+# Embraced, coming of age (0052): learned to make them flinch.
+gen_hb_fearsome_modifier = {
+	icon = prowess_positive
+	dread_baseline_add = 10
+	prowess = 1
+}
+
+# Fostered, coming of age (0053), going home.
+gen_hb_highland_raised_modifier = {
+	icon = martial_positive
+	prowess = 2
+	martial = 1
+}

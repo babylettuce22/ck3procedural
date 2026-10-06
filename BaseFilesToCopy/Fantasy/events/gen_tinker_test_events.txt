@@ -61,6 +61,11 @@ gen_tinker.0010 = {
 					has_trait = gregarious
 				}
 			}
+			# Same cap as the commission: an AI tinkerer who already owns a curio builds something else.
+			modifier = {
+				factor = 0
+				gen_tk_owns_curio_trigger = yes
+			}
 		}
 	}
 

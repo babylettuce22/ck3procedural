@@ -1,0 +1,47 @@
+﻿# The march: when the march modifiers are put on and taken off. Appends to vanilla on_actions; see
+# the note at the top of 00_colonization_on_actions.txt.
+
+# Day one, after the lobby, so history has finished seating the dummies on their counties.
+on_game_start_after_lobby = {
+	on_actions = {
+		gen_march_full_sweep
+	}
+}
+
+# And once a year, for whatever no hook below sees: a county destroyed, a holder dying out, a ruin
+# reached by a route that does not pass through on_title_gain.
+yearly_global_pulse = {
+	on_actions = {
+		gen_march_full_sweep
+	}
+}
+
+gen_march_full_sweep = {
+	effect = {
+		every_county = {
+			gen_march_refresh_county_effect = yes
+		}
+	}
+}
+
+# The moment it changes: a county passing to or from a wilderness-government holder, which is how
+# colonising, abandoning and ruining all move a county. The neighbours are refreshed with it, so a
+# march lifts the day the colony is founded rather than at the next yearly sweep.
+on_title_gain = {
+	on_actions = {
+		gen_march_on_title_gain
+	}
+}
+
+gen_march_on_title_gain = {
+	trigger = {
+		scope:title ?= { tier = tier_county }
+		OR = {
+			government_has_flag = government_is_wilderness
+			scope:previous_holder ?= { government_has_flag = government_is_wilderness }
+		}
+	}
+	effect = {
+		scope:title = { gen_march_refresh_neighbourhood_effect = yes }
+	}
+}

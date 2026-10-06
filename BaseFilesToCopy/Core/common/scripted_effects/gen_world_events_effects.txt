@@ -15,8 +15,24 @@ gen_world_war_census_effect = {
 		limit = { global_var:gen_world_realm_count > 0 }
 		set_global_variable = { name = gen_world_war_percent value = gen_world_war_percent_value }
 	}
+	# How many census years in a row have been quiet. Reset by any year that is not, so it
+	# measures an unbroken stretch rather than a total.
+	if = {
+		limit = { NOT = { has_global_variable = gen_world_quiet_years } }
+		set_global_variable = { name = gen_world_quiet_years value = 0 }
+	}
+	if = {
+		limit = {
+			global_var:gen_world_realm_count >= gen_world_war_minimum_realms_value
+			global_var:gen_world_war_percent < gen_world_quiet_threshold_percent_value
+		}
+		change_global_variable = { name = gen_world_quiet_years add = 1 }
+	}
+	else = {
+		set_global_variable = { name = gen_world_quiet_years value = 0 }
+	}
 	# Debug-mode telemetry lets observed campaigns establish whether 50% occurs.
-	debug_log = "GEN_WORLD_WAR year=[GetCurrentDate.GetYear] realms=[GetGlobalVariable('gen_world_realm_count').GetValue] warring=[GetGlobalVariable('gen_world_warring_realm_count').GetValue] percent=[GetGlobalVariable('gen_world_war_percent').GetValue]"
+	debug_log = "GEN_WORLD_WAR year=[GetCurrentDate.GetYear] realms=[GetGlobalVariable('gen_world_realm_count').GetValue] warring=[GetGlobalVariable('gen_world_warring_realm_count').GetValue] percent=[GetGlobalVariable('gen_world_war_percent').GetValue] quiet_years=[GetGlobalVariable('gen_world_quiet_years').GetValue]"
 }
 
 gen_world_buy_medical_supplies_effect = {
@@ -27,4 +43,18 @@ gen_world_buy_medical_supplies_effect = {
 gen_world_shelter_merchant_effect = {
 	remove_short_term_gold = tiny_gold_value
 	add_prestige = minor_prestige_gain
+}
+
+gen_world_quiet_roads_effect = {
+	remove_short_term_gold = minor_gold_value
+	add_character_modifier = { modifier = gen_world_quiet_roads_modifier years = 5 }
+}
+
+gen_world_quiet_drill_effect = {
+	add_character_modifier = { modifier = gen_world_quiet_drill_modifier years = 5 }
+}
+
+gen_world_quiet_feast_effect = {
+	remove_short_term_gold = tiny_gold_value
+	add_stress = minor_stress_impact_loss
 }

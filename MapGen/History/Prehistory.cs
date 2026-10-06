@@ -350,6 +350,12 @@ public sealed partial class PrehistoryMap
             }
         }
 
+        // 5c. The relations an export states between its countries, in place of the invented
+        // ones between those rulers. Before the internal drama, which is within a realm and stays.
+        var statedEnemies = realms.StatedRelations is { } stated
+            ? ApplyStatedRelations(map, stated, rulerCounties, realms, governments, faiths, cfg)
+            : null;
+
         // 6. Internal Realm Drama & Sibling Cadet Branches
         BuildInternalDrama(map, rulerCounties, realms, faiths, cfg);
 
@@ -396,6 +402,13 @@ public sealed partial class PrehistoryMap
         // left, in place of the invented ones: the start date opens on the history's own quarrels.
         if (diplomacy is { CarriesWars: true })
             AddSimulatedDiplomacy(map, diplomacy, rulerCounties, realms, cfg);
+        // An export that states its relations also states who is at war: its Enemy pairs, and
+        // nobody else. Peace where it says peace, so no invented war is added beside them.
+        else if (statedEnemies is not null)
+        {
+            if (cfg.EnableStartingWars)
+                AddStatedWars(map, statedEnemies, realms.CountyAdjacency ?? countyNeighbors, realms, rulerCounties, cfg);
+        }
         else if (cfg.EnableStartingWars && topLiegeNeighbors.Count > 0)
         {
             GenerateActiveWars(map, topLiegeNeighbors, realms, faiths, cfg, rng);
@@ -1715,6 +1728,231 @@ public sealed partial class PrehistoryMap
                 Description = $"{char.ToUpperInvariant(war.Name[0])}{war.Name[1..]}, begun {war.Started} (war score {war.Score:+0;-0;0} when history stopped)",
             });
         }
+    }
+
+    /// <summary>House relation level for each Azgaar word that has one.</summary>
+    private static string? StatedHouseLevel(string relation) => relation switch
+    {
+        "Enemy" => "feud",
+        "Rival" => "rivalry",
+        "Suspicion" => "quarrel",
+        "Friendly" => "cordial",
+        "Ally" => "friendly",
+        _ => null,
+    };
+
+    /// <summary>
+    /// More alliances per ruler than the invented ones get (3), because these are the export's
+    /// own and dropping one contradicts it. Still a cap: an export that allies one state with a
+    /// dozen others would otherwise drag the whole map into its first war.
+    /// </summary>
+    private const int MaxStatedAlliancesPerRuler = 6;
+
+    /// <summary>
+    /// An export's diplomacy between its countries, over whatever was invented between their
+    /// rulers. For every pair it names (indifference included), the invented alliance, rivalry,
+    /// friendship, truce, cross-border claim and house relation between the two are removed, then
+    /// the stated one is written:
+    /// <list type="bullet">
+    /// <item>Ally: an alliance, and the two houses friendly.</item>
+    /// <item>Friendly: a friendship (within the usual two a ruler may have), houses cordial.</item>
+    /// <item>Suspicion: the houses quarrelling, nothing personal.</item>
+    /// <item>Rival: rivals (within the usual two), houses in rivalry.</item>
+    /// <item>Enemy: all of Rival with a feud instead, plus whatever war <see cref="AddStatedWars"/> makes.</item>
+    /// <item>Neutral, Unknown: nothing, which is the point of clearing first.</item>
+    /// </list>
+    /// Only rulers that are independent at the start date take part: a country made a vassal or a
+    /// tributary still has its relations with its own lord settled by that. Returns the Enemy pairs.
+    /// </summary>
+    private static List<(Title A, Title B)> ApplyStatedRelations(PrehistoryMap map,
+        List<(Title A, Title B, string Relation)> stated, List<Title> rulerCounties, RealmMap realms,
+        GovernmentMap governments, FaithMap faiths, MapConfig cfg)
+    {
+        var rulers = rulerCounties.ToHashSet();
+        var enemies = new List<(Title, Title)>();
+        var tally = new Dictionary<string, int>();
+        int cleared = 0, skipped = 0;
+
+        Title? Seat(Title top) => realms.HolderCounty.TryGetValue(top, out var seat) && rulers.Contains(seat)
+            && TopLiegeCounty(seat, realms) == seat ? seat : null;
+
+        var pairs = new List<(Title A, Title B, string Relation)>();
+        var seen = new HashSet<(Title, Title)>();
+        foreach (var (ta, tb, relation) in stated)
+        {
+            var a = Seat(ta);
+            var b = Seat(tb);
+            if (a is null || b is null || a == b) { skipped++; continue; }
+            if (a.Index > b.Index) (a, b) = (b, a);
+            if (!seen.Add((a, b))) continue;
+            pairs.Add((a, b, relation));
+        }
+
+        // ---- Clear what was invented between every named pair ----
+        string? House(Title seat) => map.CharacterHouseMap.TryGetValue(seat, out var h) ? h : null;
+
+        foreach (var (a, b, _) in pairs)
+        {
+            foreach (var (x, y) in new[] { (a, b), (b, a) })
+            {
+                if (map.Alliances.TryGetValue(x, out var al)) cleared += al.RemoveAll(l => l.PartnerCounty == y);
+                if (map.Rivals.TryGetValue(x, out var rv)) cleared += rv.RemoveAll(r => r.TargetCounty == y);
+                if (map.Friends.TryGetValue(x, out var fr)) cleared += fr.RemoveAll(r => r.TargetCounty == y);
+                if (map.Truces.TryGetValue(x, out var tr)) cleared += tr.RemoveAll(t => t.TargetCounty == y);
+                if (map.Claims.TryGetValue(x, out var cl))
+                    cleared += cl.RemoveAll(c => realms.HolderCounty.TryGetValue(c.TargetTitle, out var holder)
+                                                 && TopLiegeCounty(holder, realms) == y);
+            }
+
+            if (House(a) is { } ha && House(b) is { } hb && ha != hb)
+                cleared += map.HouseRelations.RemoveAll(r =>
+                    (r.HouseA == ha && r.HouseB == hb) || (r.HouseA == hb && r.HouseB == ha));
+        }
+
+        // ---- Write what the export says ----
+        foreach (var (a, b, relation) in pairs)
+        {
+            var rng = Rng.For(cfg.Seed, 0x5A7E, a.Index * 7919 + b.Index);
+            int year = Math.Max(1, cfg.StartYear - rng.Int(2, 12));
+            string date = $"{year}.{rng.Int(1, 12)}.{rng.Int(1, 28)}";
+            bool written = false;
+
+            switch (relation)
+            {
+                case "Ally":
+                {
+                    int countA = map.Alliances.TryGetValue(a, out var la) ? la.Count : 0;
+                    int countB = map.Alliances.TryGetValue(b, out var lb) ? lb.Count : 0;
+                    // The same two vetoes the simulated alliances honour: a theocracy will not ally
+                    // across faiths, and neither ruler can sign before coming of age.
+                    bool theocracyBlocks = (HistorySim.IsTheocracy(governments.For(a)) || HistorySim.IsTheocracy(governments.For(b)))
+                                           && faiths.For(a).Key != faiths.For(b).Key;
+                    int earliest = Math.Max(HistoryWriter.GetRulerBirthYear(a, cfg), HistoryWriter.GetRulerBirthYear(b, cfg)) + 16;
+                    if (countA < MaxStatedAlliancesPerRuler && countB < MaxStatedAlliancesPerRuler
+                        && !theocracyBlocks && earliest <= cfg.StartYear)
+                    {
+                        AddDirectAlliance(map, a, b, $"{Math.Max(earliest, year)}.1.1");
+                        written = true;
+                    }
+                    break;
+                }
+                case "Friendly":
+                    if (CanAddFriend(map, a, b)) { AddFriendship(map, a, b, date); written = true; }
+                    break;
+                case "Rival":
+                case "Enemy":
+                    if (CanAddRival(map, a, b)) { AddRivalry(map, a, b, date); written = true; }
+                    if (relation == "Enemy") enemies.Add((a, b));
+                    break;
+            }
+
+            if (StatedHouseLevel(relation) is { } level && House(a) is { } ha && House(b) is { } hb && ha != hb)
+            {
+                map.HouseRelations.Add(new HouseRelationDef { HouseA = ha, HouseB = hb, Level = level, StartDate = date });
+                written = true;
+            }
+
+            if (written) tally[relation] = tally.GetValueOrDefault(relation) + 1;
+        }
+
+        Console.WriteLine($"  pre-history: azgaar diplomacy between {pairs.Count} pairs of independent rulers "
+            + $"replaced {cleared} invented relations — "
+            + (tally.Count == 0 ? "all indifferent" : string.Join(", ", tally.OrderBy(kv => kv.Key).Select(kv => $"{kv.Value} {kv.Key.ToLowerInvariant()}")))
+            + (skipped > 0 ? $"; {skipped} pairs skipped (a side not independent at the start)" : ""));
+
+        return enemies;
+    }
+
+    /// <summary>
+    /// The wars the export says are being fought on its present day (<see cref="RealmMap.StatedWars"/>,
+    /// Azgaar's open campaigns), each with its own attacker, defender and name, begun as many years
+    /// before the start date as it had been running.
+    ///
+    /// Its Enemy pairs are not wars by themselves: Azgaar marks everyone fighting on the other side
+    /// of a war as an enemy, so one war with a dozen co-belligerents is a dozen Enemy pairs, most of
+    /// them nowhere near each other. Those are written as the war's allies instead: a ruler at
+    /// enmity with exactly one of the two leaders fights beside the other.
+    ///
+    /// The war is over a county of the defender's bordering the attacker (land or a short sea
+    /// crossing, as the realm map counts them), else the defender's own seat, with a pressed claim
+    /// so the casus belli holds for any government. Each ruler fights in one war at most, as
+    /// everywhere else the start date opens on wars; where that forces a choice, the war with the
+    /// most rulers in it is kept. Leaders must be independent at the start date.
+    /// </summary>
+    private static void AddStatedWars(PrehistoryMap map, List<(Title A, Title B)> enemies,
+        Dictionary<Title, HashSet<Title>> countyNeighbors, RealmMap realms, List<Title> rulerCounties,
+        MapConfig cfg)
+    {
+        var rulers = rulerCounties.ToHashSet();
+        Title? Seat(Title top) => realms.HolderCounty.TryGetValue(top, out var seat) && rulers.Contains(seat)
+            && TopLiegeCounty(seat, realms) == seat ? seat : null;
+
+        var enemyOf = new Dictionary<Title, HashSet<Title>>();
+        foreach (var (a, b) in enemies)
+        {
+            (enemyOf.TryGetValue(a, out var ea) ? ea : enemyOf[a] = []).Add(b);
+            (enemyOf.TryGetValue(b, out var eb) ? eb : enemyOf[b] = []).Add(a);
+        }
+        bool Enemies(Title x, Title y) => enemyOf.TryGetValue(x, out var e) && e.Contains(y);
+
+        var owner = new Dictionary<Title, Title>();
+        foreach (var county in countyNeighbors.Keys)
+            if (realms.HolderCounty.TryGetValue(county, out var holder))
+                owner[county] = TopLiegeCounty(holder, realms);
+
+        var wars = new List<(Title Attacker, Title Defender, StatedWar War, List<Title> ForA, List<Title> ForD)>();
+        foreach (var war in realms.StatedWars)
+        {
+            var attacker = Seat(war.Attacker);
+            var defender = Seat(war.Defender);
+            if (attacker is null || defender is null || attacker == defender) continue;
+
+            var all = enemyOf.Keys.Where(s => s != attacker && s != defender).OrderBy(s => s.Index).ToList();
+            var forAttacker = all.Where(s => Enemies(s, defender) && !Enemies(s, attacker)).ToList();
+            var forDefender = all.Where(s => Enemies(s, attacker) && !Enemies(s, defender)).ToList();
+            wars.Add((attacker, defender, war, forAttacker, forDefender));
+        }
+
+        var busy = new HashSet<Title>();
+        int written = 0, dropped = 0, allies = 0;
+
+        foreach (var (attacker, defender, war, forA, forD) in wars
+                     .OrderByDescending(w => w.ForA.Count + w.ForD.Count).ThenBy(w => w.Attacker.Index))
+        {
+            if (busy.Contains(attacker) || busy.Contains(defender)) { dropped++; continue; }
+
+            var target = countyNeighbors
+                .Where(kv => owner.GetValueOrDefault(kv.Key) == defender
+                             && kv.Value.Any(n => owner.GetValueOrDefault(n) == attacker))
+                .Select(kv => kv.Key)
+                .OrderBy(c => c.Index)
+                .FirstOrDefault() ?? defender;
+
+            busy.Add(attacker);
+            busy.Add(defender);
+            var joinA = forA.Where(busy.Add).ToList();
+            var joinD = forD.Where(busy.Add).ToList();
+            allies += joinA.Count + joinD.Count;
+
+            AddClaim(map, attacker, target, pressed: true);
+            map.ActiveWars.Add(new ActiveWar
+            {
+                StartDate = $"{Math.Max(1, cfg.StartYear - war.Years)}.1.1",
+                TargetTitle = target,
+                CasusBelli = "claim_cb",
+                AttackerCounty = attacker,
+                DefenderCounty = defender,
+                ClaimantCounty = attacker,
+                AttackingAllies = joinA,
+                DefendingAllies = joinD,
+                Description = war.Name.Length > 0 ? war.Name : "An open war the map's own history records",
+            });
+            written++;
+        }
+
+        Console.WriteLine($"  pre-history: {written} of {realms.StatedWars.Count} azgaar wars open on the start date, "
+            + $"{allies} allies drawn in from its enemy pairs"
+            + (dropped > 0 ? $"; {dropped} left out, a leader already fighting a larger one" : ""));
     }
 
     private static void GenerateActiveWars(

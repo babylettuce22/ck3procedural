@@ -57,6 +57,7 @@ public static class HistoryWriter
             prehistory.Eras);
         WriteWildernessHolder(modDir, cfg, wild, wilderness);
         WriteHouseRelationsOnAction(modDir, cfg, prehistory);
+        WriteTributariesOnAction(modDir, cfg, realms, wilderness);
         ContentWriter.WriteNobleFamilyTitles(modDir, prehistory);
         WriteTitleHistory(modDir, cfg, empires, development, realms, governments, faiths, wilderness, wild, prehistory);
         WriteSees(modDir, cfg, faiths, cultures, ethnicities, realms, governments, wilderness, prehistory.Eras);
@@ -1054,6 +1055,84 @@ public static class HistoryWriter
 
             b.Blank();
         }
+    }
+
+    private const string TributariesFile = "00_generated_tributaries.txt";
+
+    /// <summary>
+    /// The tribute an export states between countries of the same rank (<see cref="RealmMap.Tributaries"/>),
+    /// started on day one the way vanilla starts its own bookmarks' tributaries
+    /// (<c>common/scripted_effects/00_tributary_setup_effects.txt</c>):
+    /// <c>break_subject_contract_and_establish_tributary_effect</c>, which frees the tributary if it
+    /// has a liege and then picks the contract its government takes. Title history cannot state a
+    /// tributary, so this has to be an effect.
+    ///
+    /// <c>on_game_start</c>, as vanilla's is, and kept to the start date's own bookmark: the
+    /// characters it names are the start date's. Both sides must still be independent rulers when
+    /// it runs; a tributary that became somebody's vassal in a later pass is left alone rather than
+    /// torn out of that realm. Removed when there are none, so a re-emit does not keep a stale one.
+    /// </summary>
+    private static void WriteTributariesOnAction(string modDir, MapConfig cfg, RealmMap realms,
+        WildernessMap wilderness)
+    {
+        string path = Path.Combine(modDir, "common", "on_action", TributariesFile);
+
+        var pairs = new List<(Title Tributary, Title Suzerain)>();
+        foreach (var (tributary, suzerain) in realms.Tributaries)
+            if (realms.HolderCounty.TryGetValue(tributary, out var t) && realms.HolderCounty.TryGetValue(suzerain, out var s)
+                && t != s && !wilderness.Contains(t) && !wilderness.Contains(s))
+                pairs.Add((t, s));
+
+        if (pairs.Count == 0)
+        {
+            if (File.Exists(path)) File.Delete(path);
+            return;
+        }
+
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        var b = new JominiBuilder();
+        b.Comment("Tributaries the map's source states between countries of the same rank, started on day 1.");
+        b.Comment("Written by Emit/History/HistoryWriter.cs (WriteTributariesOnAction).");
+        b.Blank();
+
+        using (b.Block("on_game_start"))
+        using (b.Block("on_actions"))
+            b.Token("gen_start_tributaries");
+
+        b.Blank();
+
+        using (b.Block("gen_start_tributaries"))
+        using (b.Block("effect"))
+        using (StartGate.LatestOnly(b, cfg))
+            foreach (var (tributary, suzerain) in pairs.OrderBy(p => p.Suzerain.Index).ThenBy(p => p.Tributary.Index))
+            {
+                using (b.Block($"character:{CharacterId(suzerain)}"))
+                {
+                    b.Field("save_scope_as", "gen_suzerain");
+
+                    using (b.Block($"character:{CharacterId(tributary)}"))
+                    using (b.Block("if"))
+                    {
+                        using (b.Block("limit"))
+                        {
+                            b.Field("is_alive", "yes");
+                            b.Field("is_independent_ruler", "yes");
+                            b.Field("scope:gen_suzerain.is_independent_ruler", "yes");
+                            using (b.Block("NOT")) b.Field("this", "scope:gen_suzerain");
+                        }
+
+                        using (b.Block("break_subject_contract_and_establish_tributary_effect"))
+                        {
+                            b.Field("SUZERAIN", "scope:gen_suzerain");
+                            b.Field("TRIBUTARY", "this");
+                        }
+                    }
+                }
+            }
+
+        ParadoxText.WriteBom(path, b.ToString());
+        Console.WriteLine($"  history: {pairs.Count} stated tributar{(pairs.Count == 1 ? "y" : "ies")} started at game start");
     }
 
     private static void WriteHouseRelationsOnAction(string modDir, MapConfig cfg, PrehistoryMap prehistory)

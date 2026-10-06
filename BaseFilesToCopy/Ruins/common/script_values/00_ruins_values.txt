@@ -272,3 +272,8 @@ gen_ruin_save_gold_cost_comfortable = {
 	value = gen_ruin_save_gold_cost
 	multiply = 3
 }
+
+# How long a county's last-chance offer counts as unanswered before the yearly tick may send another.
+# Answering it clears the flag straight away, so this only matters for a window nobody ever answers.
+# Five years is long enough that a player who leaves the letter open is never sent a duplicate.
+gen_ruin_offer_pending_years = 5

@@ -1,0 +1,40 @@
+﻿# Horns at the Naming: when to ask. Map of the system: events/gen_hornborn_naming_events.txt.
+#
+# Both entries append (on_actions list only), never override — see 00_phenotype_on_actions.txt.
+
+# Birth. Listed in its own file, so it may run before or after gen_phenotype_birth_on_action;
+# that does not matter, because 0001 is delayed a week and the race and Hornborn trait are settled
+# by then.
+on_birth_child = {
+	on_actions = { gen_hornborn_birth_on_action }
+}
+
+gen_hornborn_birth_on_action = {
+	effect = {
+		# Cheap gate. The horned-parent case too, since the birth hook that adds Hornborn for it may
+		# run after this one. 0001 re-checks everything.
+		if = {
+			limit = {
+				OR = {
+					has_trait = hornborn
+					mother ?= { has_trait = phenotype_horned }
+					real_father ?= { has_trait = phenotype_horned }
+				}
+			}
+			trigger_event = { id = gen_hornborn.0001 days = 7 }
+		}
+	}
+}
+
+# Coming of age. Vanilla finishes its education cleanup two days after the birthday, so wait three
+# (as zz_gen_head_education_on_actions.txt does).
+on_16th_birthday = {
+	on_actions = { gen_hornborn_coming_of_age_on_action }
+}
+
+gen_hornborn_coming_of_age_on_action = {
+	trigger = { gen_hb_has_path_trigger = yes }
+	effect = {
+		trigger_event = { id = gen_hornborn.0050 days = 3 }
+	}
+}

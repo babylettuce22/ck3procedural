@@ -142,6 +142,63 @@ public static class TerrainTextureWriter
     private static bool IsForest(byte label) =>
         TerrainPalette.TerrainOf(label) is TerrainClass.Forest or TerrainClass.Jungle or TerrainClass.Taiga;
 
+    /// <summary>
+    /// How much of one Koppen step an ecotone spans. A step is ~8 C of warm- or cold-month
+    /// temperature, or a halving of annual rain (the steppe/desert threshold is half the
+    /// steppe one), so the band is as wide as the ground the climate takes to move that far:
+    /// broad where a plain warms slowly over a thousand pixels, tight behind a rain shadow.
+    ///
+    /// 0.7 measured against vanilla (2026-10-05, 10%-90% family share across the boundary,
+    /// length-weighted): vanilla 69 world units, our fixed band 35, this 67. 0.25 left most land
+    /// clamped at the band and moved nothing.
+    /// </summary>
+    private const double EcotoneStep = 0.7;
+
+    /// <summary>Ceiling on an ecotone, as a multiple of the biome band.</summary>
+    private const double EcotoneMaxFactor = 4.0;
+
+    /// <summary>
+    /// Ecotone reach per cell of a coarse grid over the province map, in province pixels: the
+    /// distance over which the climate moves <see cref="EcotoneStep"/> of a Koppen step, clamped
+    /// between the biome band and <see cref="EcotoneMaxFactor"/> times it.
+    /// </summary>
+    private static (float[] Reach, int Width, int Height) EcotoneReach(ClimateField c,
+        int pWidth, int pHeight, float blendReach)
+    {
+        const int cell = 16;
+        int w = Math.Max(2, pWidth / cell), h = Math.Max(2, pHeight / cell);
+        var reach = new float[w * h];
+        float sx = (float)c.Width / w, sy = (float)c.Height / h;
+        // Province pixels per field unit, for turning a per-field-pixel gradient into per-pixel.
+        double perPx = (double)c.Width / pWidth;
+        double step = EcotoneStep, max = blendReach * EcotoneMaxFactor;
+
+        float At(float[] f, float x, float y) => Field.Sample(f, c.Width, c.Height,
+            Math.Clamp(x, 0, c.Width - 1), Math.Clamp(y, 0, c.Height - 1));
+        float LnP(float x, float y) => MathF.Log(1f + At(c.AnnualMm, x, y));
+
+        Parallel.For(0, h, y =>
+        {
+            for (int x = 0; x < w; x++)
+            {
+                float fx = (x + 0.5f) * sx, fy = (y + 0.5f) * sy;
+                double Grad(Func<float, float, float> f)
+                {
+                    double gx = (f(fx + sx, fy) - f(fx - sx, fy)) / (2 * sx);
+                    double gy = (f(fx, fy + sy) - f(fx, fy - sy)) / (2 * sy);
+                    return Math.Sqrt(gx * gx + gy * gy) * perPx;
+                }
+
+                double g = Math.Max(Math.Max(
+                        Grad((a, b) => At(c.WarmC, a, b)) / 8.0,
+                        Grad((a, b) => At(c.ColdC, a, b)) / 8.0),
+                    Grad(LnP) / 0.69);
+                reach[y * w + x] = (float)Math.Clamp(step / Math.Max(g, 1e-9), blendReach, max);
+            }
+        });
+        return (reach, w, h);
+    }
+
     /// <summary>Orthogonal step cost in the chamfer distance transform; diagonal is 4.</summary>
     private const int ChamferOrthogonal = 3;
     private const int ChamferDiagonal = 4;
@@ -1076,6 +1133,16 @@ public static class TerrainTextureWriter
         float shoreReach = (float)Math.Max(1.0, cfg.Scaled(ShoreBlendReach));
         float forestReach = (float)Math.Max(1.0, cfg.Scaled(ForestBlendReach));
 
+        // How wide each climate family fades into the next, from how fast the climate changes.
+        var (ecoReach, ecoW, ecoH) = EcotoneReach(climateField, pWidth, pHeight, blendReach);
+        {
+            // Over the whole grid, sea included, so a read rather than a calibration.
+            var sorted = (float[])ecoReach.Clone();
+            Array.Sort(sorted);
+            Console.WriteLine($"  terrain: ecotone reach p10/p50/p90 {sorted[sorted.Length / 10]:F0}/" +
+                $"{sorted[sorted.Length / 2]:F0}/{sorted[sorted.Length * 9 / 10]:F0} px (band {blendReach:F0})");
+        }
+
         // The scale the band's own edge wanders at, and the scale it is dithered at. Deliberately
         // far apart: the first decides where one biome fingers into the next, which happens over
         // kilometres; the second is fine enough to break up the last few pixels so the outer edge
@@ -1309,8 +1376,16 @@ public static class TerrainTextureWriter
                     {
                         float cx = (float)(hx * climateField.Width / hWidth);
                         float cy = (float)(hy * climateField.Height / hHeight);
-                        peak = snow.TemperaturePeak(Field.Sample(climateField.WarmC,
-                            climateField.Width, climateField.Height, cx, cy));
+                        // This pixel's own height, not the blurred relief the climate was run on:
+                        // otherwise every summit is averaged with its valleys and no temperate
+                        // range is ever cold enough to hold snow.
+                        //
+                        // Temperature alone still left temperate ranges with flecks (the tallest
+                        // summit is only PeakElevationMetres, ~4 km, so their tops sit just above
+                        // freezing), so the height ramp stays and summer warmth only fades it out:
+                        // full on a summit whose warm month is cool, gone where it is hot.
+                        double summitWarm = climateField.SummitWarmC(cx, cy, here);
+                        peak = Math.Max(snow.TemperaturePeak(summitWarm), peak * snow.HeightGate(summitWarm));
                         snowStrength = snow.MoistureStrength(Field.Sample(climateField.AnnualMm,
                             climateField.Width, climateField.Height, cx, cy));
                     }
@@ -1360,12 +1435,56 @@ public static class TerrainTextureWriter
                     // biome edge should still get the biome's full band.
                     bool shoreSelf = IsShore(self);
                     bool forestSelf = IsForest(self);
+                    float eco = Field.Sample(ecoReach, ecoW, ecoH,
+                        Math.Clamp((float)(srcPx * ecoW / pWidth - 0.5), 0, ecoW - 1),
+                        Math.Clamp((float)(srcPy * ecoH / pHeight - 0.5), 0, ecoH - 1));
                     float reach = fieldEdge ? fieldReach
                         : shoreSelf || IsShore(boundaryOther[pSrc]) ? shoreReach
                         : forestSelf != IsForest(boundaryOther[pSrc]) ? forestReach : blendReach;
                     float reach2 = fieldEdge ? fieldReach
                         : shoreSelf || IsShore(boundaryOther2[pSrc]) ? shoreReach
                         : forestSelf != IsForest(boundaryOther2[pSrc]) ? forestReach : blendReach;
+
+                    // Ecotone: the climate fades across the *ground*, whatever class edge it happens
+                    // to change on. This pixel's own class, painted in the neighbour's family, is
+                    // mixed in over a band as wide as the climate is slow — so a forest running into
+                    // a steppe keeps its crisp edge, but its floor and its hills have already been
+                    // drying toward steppe for a hundred pixels.
+                    //
+                    // A smooth share, not interfingered patches: patches were tried (2026-10-05) and
+                    // read as leopard spots, or as camo over broken hills.
+                    if (!fieldEdge && !shoreSelf)
+                    {
+                        // The nearest label of another *family*: the nearest label outright may be
+                        // the same climate's hills, with the steppe a few pixels behind it.
+                        var selfFamily = TerrainPalette.PaintedFamilyOf(self);
+                        byte other = boundaryOther[pSrc];
+                        var dist = boundaryDistance;
+                        if (TerrainPalette.PaintedFamilyOf(other) == selfFamily || IsShore(other))
+                        {
+                            other = boundaryOther2[pSrc];
+                            dist = boundaryDistance2;
+                        }
+                        var otherFamily = TerrainPalette.PaintedFamilyOf(other);
+                        float ecoEdge = (detailScale > 1
+                            ? DistanceAt(dist, pWidth, pHeight, srcPx, srcPy)
+                            : dist[pSrc]) * (1f / ChamferOrthogonal);
+                        if (selfFamily != otherFamily && !IsShore(other) && ecoEdge < eco * 1.4f)
+                        {
+                            double ragged = Field.Fbm(bandField, sx * bandFrequency, sy * bandFrequency, 4);
+                            ecoEdge += (float)(ragged * 0.35) * eco;
+                            double te = Falloff(ecoEdge, eco);
+                            if (te > 0)
+                            {
+                                var ground = TerrainPalette.EcotoneGround(TerrainPalette.TerrainOf(self));
+                                var shifted = TerrainPalette.For(ground, otherFamily, relief, nA, nB, nC,
+                                    canopyDensity, zoneA, zoneB, rugged, slope, peak, ridge, snowAmount, snowStrength);
+                                double take = Math.Min(0.5, 0.5 * te *
+                                    (0.78 + 0.44 * shareField.Unit(sx * fB + 41.3, sy * fB - 9.9)));
+                                if (take > 0.002) blend = TerrainPalette.Merge(blend, shifted, take);
+                            }
+                        }
+                    }
 
                     float edge = (detailScale > 1
                         ? DistanceAt(boundaryDistance, pWidth, pHeight, srcPx, srcPy)

@@ -301,60 +301,9 @@ public static class HeightfieldRenderer
         var samples = field.Samples;
 
         const double water = MapDataWriter.WaterLevel16;
-        double zScale = field.Cols * ReliefFraction / 65535.0 * Math.Max(0.05, view.Exaggeration);
-        double landSpan = Math.Max(1.0, RampTop * MapDataWriter.Step255 - water);
-
-        // Both offsets are in units of the field's width — see HeightfieldView — and the map's own
-        // extent is what bounds them, a quarter of a map's overscroll past each edge.
-        double focusX = Math.Clamp(cols * 0.5 + cols * view.PanX, -cols * 0.25, cols * 1.25);
-        double focusY = Math.Clamp(rows * 0.5 + cols * view.PanY, -rows * 0.25, rows * 1.25);
-
-        double focusZ = water * zScale;
-        double baseZ = focusZ - cols * BlockThickness;
-
-        double dirX = Math.Sin(view.Yaw), dirY = Math.Cos(view.Yaw);
-        double rightX = Math.Cos(view.Yaw), rightY = -Math.Sin(view.Yaw);
-
-        double sinP = Math.Sin(view.Pitch), cosP = Math.Cos(view.Pitch);
-        double focal = sw * 0.5 / Math.Tan(HorizontalFov * 0.5);
-        double cy = sh * 0.5;
-
-        double extent = 0.5 * Math.Sqrt((double)cols * cols + (double)rows * rows);
-        double radius = OrbitRadius(extent, focal, sw, sh) * Math.Max(0.05, view.Distance);
-
-        double camHoriz = radius * cosP;
-        double camZ = focusZ + radius * sinP;
-        double camX = focusX - dirX * camHoriz;
-        double camY = focusY - dirY * camHoriz;
-
-        // Camera height over the water plane. Sets the marching pace below, and the lateral spread
-        // of each column's ground track.
-        double above = Math.Max(1.0, camZ - focusZ);
-
-        // Nothing nearer than this can be on screen even at the map's highest point: solve the
-        // projection for the screen's bottom row at the height of the tallest land. Negative at a
-        // steep pitch, and deliberately so — a camera looking nearly straight down sees ground
-        // *behind* its own footprint, so the march has to be allowed to start back there. How far
-        // back is bounded by the map itself, there being nothing beyond it to hit.
-        double topClear = camZ - field.LandMax * zScale;
-        double bottomHalf = sh - 1 - cy;
-        double zNear = topClear <= 0 ? 0.5 : Math.Max(-(camHoriz + extent * 2.0),
-            topClear * (focal * cosP - bottomHalf * sinP) / (focal * sinP + bottomHalf * cosP));
-
-        // And past the farthest corner the map can reach there is nothing left to hit. When the
-        // pitch is steep enough to push the horizon off the top of the screen, the water plane
-        // leaves the screen earlier than that — and everything above it leaves even sooner.
-        double zFar = camHoriz + extent * 2.0;
-        double steep = focal * sinP - cy * cosP;
-        if (steep > 0)
-            zFar = Math.Min(zFar, above * (focal * cosP + cy * sinP) / steep);
-
-        // Haze by distance from the *camera*, not by march position: the march can start behind
-        // the camera's footprint, and at a steep pitch the whole map is roughly equidistant — it
-        // should read uniformly crisp from above, and recede only where it actually recedes.
-        double fogNear = radius;
-        double fogSpan = Math.Max(1.0, extent * 1.6);
-
+        var (zScale, landSpan, dirX, dirY, rightX, rightY, sinP, cosP, focal, cy,
+            camZ, camX, camY, baseZ, above, zNear, zFar, fogNear, fogSpan)
+            = Project(field, view, sw, sh);
         Sky(rgb, sw, sh);
 
         Parallel.For(0, sw, sx =>
@@ -447,6 +396,73 @@ public static class HeightfieldRenderer
         return supersample <= 1
             ? new PreviewRenderer.Image(rgb, sw, sh)
             : Downscale(rgb, sw, width, height, supersample);
+    }
+
+    /// <summary>Shared camera calibration for the CPU march and GPU shader.</summary>
+    internal static (double ZScale, double LandSpan, double DirX, double DirY,
+        double RightX, double RightY, double SinP, double CosP, double Focal, double Cy,
+        double CamZ, double CamX, double CamY, double BaseZ, double Above,
+        double Near, double Far, double FogNear, double FogSpan)
+        Project(Heightfield field, HeightfieldView view, int sw, int sh)
+    {
+        int cols = field.Cols, rows = field.Rows;
+        const double water = MapDataWriter.WaterLevel16;
+        double zScale = field.Cols * ReliefFraction / 65535.0 * Math.Max(0.05, view.Exaggeration);
+        double landSpan = Math.Max(1.0, RampTop * MapDataWriter.Step255 - water);
+
+        // Both offsets are in units of the field's width — see HeightfieldView — and the map's own
+        // extent is what bounds them, a quarter of a map's overscroll past each edge.
+        double focusX = Math.Clamp(cols * 0.5 + cols * view.PanX, -cols * 0.25, cols * 1.25);
+        double focusY = Math.Clamp(rows * 0.5 + cols * view.PanY, -rows * 0.25, rows * 1.25);
+
+        double focusZ = water * zScale;
+        double baseZ = focusZ - cols * BlockThickness;
+
+        double dirX = Math.Sin(view.Yaw), dirY = Math.Cos(view.Yaw);
+        double rightX = Math.Cos(view.Yaw), rightY = -Math.Sin(view.Yaw);
+
+        double sinP = Math.Sin(view.Pitch), cosP = Math.Cos(view.Pitch);
+        double focal = sw * 0.5 / Math.Tan(HorizontalFov * 0.5);
+        double cy = sh * 0.5;
+
+        double extent = 0.5 * Math.Sqrt((double)cols * cols + (double)rows * rows);
+        double radius = OrbitRadius(extent, focal, sw, sh) * Math.Max(0.05, view.Distance);
+
+        double camHoriz = radius * cosP;
+        double camZ = focusZ + radius * sinP;
+        double camX = focusX - dirX * camHoriz;
+        double camY = focusY - dirY * camHoriz;
+
+        // Camera height over the water plane. Sets the marching pace below, and the lateral spread
+        // of each column's ground track.
+        double above = Math.Max(1.0, camZ - focusZ);
+
+        // Nothing nearer than this can be on screen even at the map's highest point: solve the
+        // projection for the screen's bottom row at the height of the tallest land. Negative at a
+        // steep pitch, and deliberately so — a camera looking nearly straight down sees ground
+        // *behind* its own footprint, so the march has to be allowed to start back there. How far
+        // back is bounded by the map itself, there being nothing beyond it to hit.
+        double topClear = camZ - field.LandMax * zScale;
+        double bottomHalf = sh - 1 - cy;
+        double zNear = topClear <= 0 ? 0.5 : Math.Max(-(camHoriz + extent * 2.0),
+            topClear * (focal * cosP - bottomHalf * sinP) / (focal * sinP + bottomHalf * cosP));
+
+        // And past the farthest corner the map can reach there is nothing left to hit. When the
+        // pitch is steep enough to push the horizon off the top of the screen, the water plane
+        // leaves the screen earlier than that — and everything above it leaves even sooner.
+        double zFar = camHoriz + extent * 2.0;
+        double steep = focal * sinP - cy * cosP;
+        if (steep > 0)
+            zFar = Math.Min(zFar, above * (focal * cosP + cy * sinP) / steep);
+
+        // Haze by distance from the *camera*, not by march position: the march can start behind
+        // the camera's footprint, and at a steep pitch the whole map is roughly equidistant — it
+        // should read uniformly crisp from above, and recede only where it actually recedes.
+        double fogNear = radius;
+        double fogSpan = Math.Max(1.0, extent * 1.6);
+
+        return (zScale, landSpan, dirX, dirY, rightX, rightY, sinP, cosP, focal, cy,
+            camZ, camX, camY, baseZ, above, zNear, zFar, fogNear, fogSpan);
     }
 
     private static PreviewRenderer.Image Downscale(byte[] src, int srcWidth,

@@ -83,6 +83,30 @@ public sealed class RealmMap
     /// </summary>
     public Dictionary<Faith, Title> HeadSeats { get; } = [];
 
+    /// <summary>
+    /// Tribute the source states between two countries that CK3 cannot seat as liege and vassal:
+    /// a "vassal" of its lord's own rank or higher. Top titles, resolved to their holders when the
+    /// game-start effect is written (HistoryWriter), which makes the tributary independent and then
+    /// starts the contract the way vanilla's own bookmarks do. Empty unless an export said so.
+    /// </summary>
+    public List<(Title Tributary, Title Suzerain)> Tributaries { get; } = [];
+
+    /// <summary>
+    /// How the source says each pair of countries regards the other, by top title, one entry per
+    /// unordered pair: Azgaar's "Ally", "Friendly", "Neutral", "Suspicion", "Rival", "Enemy" or
+    /// "Unknown". Vassalage is not here; it is <see cref="Liege"/> or <see cref="Tributaries"/>.
+    /// Null when the countries were not stated by a source that has diplomacy, which leaves the
+    /// prehistory to invent its relations as before; see Prehistory.ApplyStatedRelations.
+    /// </summary>
+    public List<(Title A, Title B, string Relation)>? StatedRelations { get; set; }
+
+    /// <summary>
+    /// The wars the source says are still being fought on its present day, by top title, with the
+    /// war's own name and how many years it has run. Read with <see cref="StatedRelations"/>; see
+    /// Prehistory.AddStatedWars.
+    /// </summary>
+    public List<StatedWar> StatedWars { get; } = [];
+
     /// <summary>Records that <paramref name="vassal"/> answers to <paramref name="lord"/>.</summary>
     public void SetLiege(Title vassal, Title lord, LiegeOrigin origin)
     {
@@ -487,13 +511,17 @@ public static class Realms
             }
         }
 
+        List<(Title, Title)>? boundTributaries = null;
+        List<(Title, Title, string)>? boundRelations = null;
+        var boundWars = new List<StatedWar>();
+
         if (stateTitles is not null)
         {
             // Azgaar's own vassalage, which is the only liege relation the export actually states.
             // Applied after the de jure walk so it overrides it rather than competing with it.
             int vassals = 0;
-            int outranked = 0;
             var suzerained = new HashSet<Title>();
+            var tributaries = new List<(Title Tributary, Title Suzerain)>();
 
             foreach (var (vassalId, suzerain) in stated!.Vassalage)
             {
@@ -504,21 +532,24 @@ public static class Realms
                 if (!holderCounty.TryGetValue(suzerainTitle, out var suzerainSeat)) continue;
                 if (!holderCounty.TryGetValue(vassalTitle, out var vassalSeat)) continue;
                 if (vassalSeat == suzerainSeat) continue;
-                if (countyAdj is not null && !IsReachable(vassalSeat, suzerainSeat, countyAdj)) continue;
+
+                // No contiguity test here, unlike the de jure walk's heuristic above. The export
+                // states this homage outright, and an overseas vassal is a thing CK3 seats happily;
+                // dropping it for want of a land bridge left the vassal independent for no reason
+                // the export would recognise.
 
                 // CK3 will not seat a vassal at his lord's own rank, and the export is perfectly
                 // happy to call one kingdom the vassal of another — Ondrerol states six such pairs.
                 // Written through unchecked they produce `k_a = { liege = k_b }`, which is not a
                 // relation the game can represent.
                 //
-                // The homage is dropped rather than repaired, because both repairs are worse: the
-                // tiers here are the export's own ranking of its states, so promoting the lord needs
-                // an empire title it never asked for, and demoting the vassal contradicts the rank
-                // the export drew. An independent neighbour is at least something the export would
-                // recognise.
+                // Tribute is: a tributary keeps its own rank and realm and pays its suzerain, which
+                // is what a kingdom bowing to a kingdom is. Neither repair of the liege link would
+                // be better — promoting the lord needs an empire the export never drew, demoting
+                // the vassal contradicts the rank it did. Started at game start, see Tributaries.
                 if (Rank(suzerainTitle) <= Rank(vassalTitle))
                 {
-                    outranked++;
+                    tributaries.Add((vassalTitle, suzerainTitle));
                     continue;
                 }
 
@@ -555,12 +586,15 @@ public static class Realms
             if (shared > 0)
                 Console.WriteLine($"  realms: {shared} states still share a ruler with a neighbour");
 
-            if (outranked > 0)
-                Console.WriteLine($"  realms: {outranked} states the export made vassals of a realm " +
-                                  "of their own rank — left independent, CK3 cannot seat them");
-
             Console.WriteLine($"  realms: bound to {stateTitles.Count} {stated.Source} — " +
-                              $"{independent} independent, {vassals} vassal to a suzerain");
+                              $"{independent} independent, {vassals} vassal to a suzerain, "
+                              + $"{tributaries.Count} tributary (a \"vassal\" of its lord's own rank)");
+
+            boundTributaries = tributaries;
+            boundRelations = StatedRelationsByTitle(stated, stateTitles);
+            foreach (var (attacker, defender, name, years) in stated.Wars)
+                if (stateTitles.TryGetValue(attacker, out var ta) && stateTitles.TryGetValue(defender, out var td) && ta != td)
+                    boundWars.Add(new StatedWar(ta, td, name, years));
         }
 
         var greatest = primary
@@ -572,14 +606,36 @@ public static class Realms
 
         Report(primary, liege);
 
-        return new RealmMap
+        var map = new RealmMap
         {
             HolderCounty = holderCounty,
             Liege = liege,
             Origin = origin,
             Greatest = greatest,
             CountyAdjacency = countyAdj,
+            StatedRelations = boundRelations,
         };
+
+        if (boundTributaries is not null) map.Tributaries.AddRange(boundTributaries);
+        map.StatedWars.AddRange(boundWars);
+        return map;
+    }
+
+    /// <summary>
+    /// The source's relations between countries, moved from its country ids onto their top
+    /// titles. Null when the source states no relations at all (vanilla realms), so the
+    /// prehistory keeps inventing them; an empty list means it stated only indifference.
+    /// </summary>
+    private static List<(Title, Title, string)>? StatedRelationsByTitle(StatedCountries stated,
+        IReadOnlyDictionary<int, Title> stateTitles)
+    {
+        if (stated.Relations is null) return null;
+
+        var result = new List<(Title, Title, string)>();
+        foreach (var (a, b, relation) in stated.Relations)
+            if (stateTitles.TryGetValue(a, out var ta) && stateTitles.TryGetValue(b, out var tb) && ta != tb)
+                result.Add((ta, tb, relation));
+        return result;
     }
 
     // =================================================================================================
@@ -1848,6 +1904,24 @@ public sealed class StatedCountries
     public List<(int Vassal, int Suzerain)> Vassalage { get; init; } = [];
 
     /// <summary>
+    /// How each pair of countries regards the other, one entry per unordered pair (A &lt; B), or
+    /// null when the source has no diplomacy. Azgaar's words, unchanged; see RelationPriority for
+    /// how a pair the two sides describe differently is settled.
+    /// </summary>
+    public List<(int A, int B, string Relation)>? Relations { get; init; }
+
+    /// <summary>Wars still running on the source's present day: (attacker, defender, name, years running).</summary>
+    public List<(int Attacker, int Defender, string Name, int Years)> Wars { get; init; } = [];
+
+    /// <summary>
+    /// When two countries describe each other differently, the stronger word is the one that
+    /// shapes the start date: a grudge one side holds is still a grudge. Words not listed (Vassal,
+    /// Suzerain, "x") are not diplomacy and are skipped.
+    /// </summary>
+    private static readonly string[] RelationPriority =
+        ["Enemy", "Rival", "Suspicion", "Ally", "Friendly", "Neutral", "Unknown"];
+
+    /// <summary>
     /// Titles the source says were held by someone under a country's ruler — a duke inside a
     /// kingdom. Null when the source does not say, and most duchies are then given a duke by chance.
     /// </summary>
@@ -1869,18 +1943,57 @@ public sealed class StatedCountries
         if (azgaar is null) return null;
 
         var vassalage = new List<(int, int)>();
+        var said = new Dictionary<(int, int), string>();
+
         foreach (var state in azgaar.World.RealStates)
         {
-            int suzerain = Array.IndexOf(state.Relations, "Vassal");
+            var relations = state.Relations;
+
+            int suzerain = Array.IndexOf(relations, "Vassal");
             if (suzerain > 0) vassalage.Add((state.I, suzerain));
+
+            for (int other = 1; other < relations.Length; other++)
+            {
+                if (other == state.I) continue;
+                int rank = Array.IndexOf(RelationPriority, relations[other]);
+                if (rank < 0) continue;
+
+                var key = (Math.Min(state.I, other), Math.Max(state.I, other));
+                if (!said.TryGetValue(key, out var had) || rank < Array.IndexOf(RelationPriority, had))
+                    said[key] = relations[other];
+            }
         }
+
+        // Each war is listed under every state that fought it; once is enough.
+        int present = azgaar.World.Settings.Options.Year;
+        var wars = azgaar.World.RealStates
+            .SelectMany(state => state.Campaigns)
+            .Where(c => c.IsOngoing && c.Attacker > 0 && c.Defender > 0 && c.Attacker != c.Defender)
+            .GroupBy(c => (c.Attacker, c.Defender, c.Start))
+            .Select(g => g.First())
+            .OrderBy(c => c.Start).ThenBy(c => c.Attacker)
+            .Select(c => (c.Attacker, c.Defender, c.Name, Math.Max(1, present - c.Start)))
+            .ToList();
+
+        var stated = said.OrderBy(kv => kv.Key.Item1).ThenBy(kv => kv.Key.Item2)
+            .Select(kv => (kv.Key.Item1, kv.Key.Item2, kv.Value)).ToList();
+
+        if (stated.Count > 0)
+            Console.WriteLine("  realms: azgaar diplomacy — " + string.Join(", ",
+                stated.GroupBy(r => r.Item3).OrderBy(g => Array.IndexOf(RelationPriority, g.Key))
+                    .Select(g => $"{g.Count()} {g.Key.ToLowerInvariant()}")));
 
         return new StatedCountries
         {
             Titles = azgaar.StateTitles,
             CountryOf = county => azgaar.For(county)?.State.Id,
             Vassalage = vassalage,
+            Relations = stated,
+            Wars = wars,
             Source = "azgaar states",
         };
     }
 }
+
+/// <summary>An open war the map's source states: its two leaders' top titles, its name, years running.</summary>
+public sealed record StatedWar(Title Attacker, Title Defender, string Name, int Years);

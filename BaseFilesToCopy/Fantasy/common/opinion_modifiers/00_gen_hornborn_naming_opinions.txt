@@ -1,0 +1,105 @@
+﻿# Horns at the Naming: opinions. Map of the system: events/gen_hornborn_naming_events.txt.
+
+# Hornborn and horned courtiers and vassals, of a parent who showed the child at the naming.
+gen_hb_stood_by_hornborn_opinion = {
+	opinion = 20
+	years = 20
+}
+
+# Vassals, of a parent whose hidden child was found out.
+gen_hb_lied_about_child_opinion = {
+	opinion = -10
+	decaying = yes
+	years = 5
+}
+
+# The foster lord, of the parent who sent the child.
+gen_hb_entrusted_child_opinion = {
+	opinion = 30
+	years = 16
+}
+
+# The parent, of the foster lord.
+gen_hb_fosterage_bond_opinion = {
+	opinion = 20
+	years = 16
+}
+
+# The foster lord, of a parent who sent gifts (0031).
+gen_hb_fosterage_gifts_opinion = {
+	opinion = 15
+	decaying = yes
+	years = 5
+}
+
+# The foster lord, of a parent who took the child back early (0031).
+gen_hb_took_child_back_opinion = {
+	opinion = -30
+	decaying = yes
+	years = 10
+}
+
+# The other parent, of the one who sent the child away (0010).
+gen_hb_sent_child_away_opinion = {
+	opinion = -30
+	decaying = yes
+	years = 10
+}
+
+# ...unless the other parent is horned themselves.
+gen_hb_sent_to_our_own_opinion = {
+	opinion = 15
+	decaying = yes
+	years = 10
+}
+
+# The hidden child, of the parent (0041).
+gen_hb_kept_in_cap_opinion = {
+	opinion = -15
+}
+
+gen_hb_told_me_truth_opinion = {
+	opinion = 15
+}
+
+# The hidden child, of the parent, at sixteen (0051).
+gen_hb_hid_me_away_opinion = {
+	opinion = -25
+}
+
+gen_hb_kept_me_safe_opinion = {
+	opinion = 10
+}
+
+# ...and on top, if the parent made up a story (0041 c).
+gen_hb_lied_to_me_opinion = {
+	opinion = -15
+}
+
+# The chaplain, of a parent who refused the blessing (0021).
+gen_hb_refused_blessing_opinion = {
+	opinion = -30
+	decaying = yes
+	years = 5
+}
+
+# The chaplain, of a parent who threatened them (0021).
+gen_hb_threatened_chaplain_opinion = {
+	opinion = -60
+	decaying = yes
+	years = 10
+}
+
+# The legal father, of the mother, when the horns are not his (0003).
+gen_hb_whose_horns_opinion = {
+	opinion = -20
+	decaying = yes
+	years = 10
+}
+
+# The parent, of a fostered child who stayed with the horned people (0053).
+gen_hb_chose_highlands_opinion = {
+	opinion = -15
+	decaying = yes
+	years = 10
+}

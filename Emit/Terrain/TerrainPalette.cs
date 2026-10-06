@@ -436,6 +436,24 @@ public static class TerrainPalette
     /// from the climate, a Steppe slope under a Desert climate drew dark desert hill rock across
     /// green steppe, in a lattice along every rill (rendered 2026-09-29).
     /// </summary>
+    /// <summary>The family a label's ground is actually painted from — see <see cref="PaintedFamily"/>.</summary>
+    public static Climate PaintedFamilyOf(byte label) => TerrainOf(label) == TerrainClass.DesertMountains
+        ? Climate.Desert
+        : PaintedFamily(TerrainOf(label), ClimateFromLabel(label));
+
+    /// <summary>
+    /// The class to paint this ground as when it is shown in another climate's family. The
+    /// fixed-family classes ignore the climate they are given, so they stand in as the open or
+    /// wooded ground that does follow it.
+    /// </summary>
+    public static TerrainClass EcotoneGround(TerrainClass terrain) => terrain switch
+    {
+        TerrainClass.Steppe or TerrainClass.Drylands or TerrainClass.Desert => TerrainClass.Plains,
+        TerrainClass.Jungle or TerrainClass.Taiga => TerrainClass.Forest,
+        TerrainClass.DesertMountains => TerrainClass.Mountains,
+        _ => terrain,
+    };
+
     private static Climate PaintedFamily(TerrainClass terrain, Climate climate) => terrain switch
     {
         TerrainClass.Steppe => Climate.Steppe,

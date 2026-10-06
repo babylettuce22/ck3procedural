@@ -50,3 +50,52 @@ gen_world_events.0001 = {
 		ai_chance = { base = 100 }
 	}
 }
+
+# The counterpart: a stretch of years with fewer wars than anyone remembers.
+gen_world_events.0002 = {
+	type = character_event
+	title = gen_world_events.0002.t
+	desc = gen_world_events.0002.desc
+	theme = realm
+
+	left_portrait = { character = root animation = happiness }
+
+	trigger = {
+		gen_world_events_recipient_trigger = yes
+		gen_world_quiet_trigger = yes
+	}
+
+	immediate = {
+		# Once per campaign, as gen_world_events.0001 and for the same reason.
+		set_global_variable = { name = gen_world_quiet_years_seen value = yes }
+	}
+
+	# Spend now, earn over five years.
+	option = {
+		name = gen_world_events.0002.a
+		trigger = { gold >= minor_gold_value }
+		gen_world_quiet_roads_effect = yes
+		ai_chance = { base = 40 }
+	}
+	# Free in gold, paid for in taxes: the peace will not last.
+	option = {
+		name = gen_world_events.0002.b
+		gen_world_quiet_drill_effect = yes
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = wrathful }
+			modifier = { add = 30 has_trait = paranoid }
+		}
+	}
+	option = {
+		name = gen_world_events.0002.c
+		trigger = { gold >= tiny_gold_value }
+		gen_world_quiet_feast_effect = yes
+		ai_chance = { base = 30 }
+	}
+	option = {
+		name = gen_world_events.0002.d
+		custom_tooltip = gen_world_events.0002.d.tt
+		ai_chance = { base = 100 }
+	}
+}

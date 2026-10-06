@@ -1,0 +1,58 @@
+﻿# Horns at the Naming: triggers. Map of the system: events/gen_hornborn_naming_events.txt.
+
+# Root: a newborn. Hornborn among a people who are not horned, and not yet seen to.
+gen_hb_naming_eligible_trigger = {
+	is_alive = yes
+	has_trait = hornborn
+	NOT = { has_trait = phenotype_horned }
+	NOT = { has_character_flag = gen_hb_named }
+}
+
+# Root: the newborn. The horns are the real father's, the legal father has none, and the legal father
+# is the one deciding — so the horns tell him something. (A mother deciding already knows.)
+gen_hb_horns_not_his_trigger = {
+	exists = father
+	exists = real_father
+	NOT = { father = { this = root.real_father } }
+	real_father = { gen_has_horns_trigger = yes }
+	father = { NOT = { gen_has_horns_trigger = yes } }
+	mother ?= { NOT = { gen_has_horns_trigger = yes } }
+	scope:gen_hb_parent = { this = root.father }
+}
+
+# Root: a candidate foster lord. Needs scope:gen_hb_parent and scope:gen_hb_child.
+gen_hb_valid_foster_trigger = {
+	has_trait = phenotype_horned
+	is_adult = yes
+	is_landed = yes
+	highest_held_title_tier >= tier_county
+	is_imprisoned = no
+	NOT = { this = scope:gen_hb_parent }
+	NOT = { scope:gen_hb_child = { is_child_of = prev } }	# not the child's own other parent
+	NOT = { is_at_war_with = scope:gen_hb_parent }
+}
+
+# Root: the child. Went down one of the three paths at the naming.
+gen_hb_has_path_trigger = {
+	OR = {
+		has_character_flag = gen_hb_path_hidden
+		has_character_flag = gen_hb_path_embraced
+		has_character_flag = gen_hb_path_fostered
+	}
+}
+
+# Root: the deciding parent. Is the child their primary heir?
+gen_hb_child_is_heir_trigger = {
+	primary_heir ?= { this = scope:gen_hb_child }
+}
+
+# Root: whoever hid a Hornborn child (the secret's owner). Someone who sees no shame in the hiding:
+# the paranoid call it prudence, the deceitful call it ordinary, the callous never thought of the
+# child's side. Their secret_gen_hidden_horns is not shunned, so it cannot be used to blackmail them.
+gen_hb_unashamed_hider_trigger = {
+	OR = {
+		has_trait = paranoid
+		has_trait = deceitful
+		has_trait = callous
+	}
+}

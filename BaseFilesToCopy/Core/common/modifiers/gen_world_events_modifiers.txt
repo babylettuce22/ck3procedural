@@ -1,3 +1,17 @@
 ﻿gen_world_medical_supplies_modifier = {
 	levy_reinforcement_rate = 0.05
 }
+
+# The Quiet Years. Five years each.
+gen_world_quiet_roads_modifier = {
+	icon = economy_positive
+	domain_tax_mult = 0.05
+	development_growth_factor = 0.05
+}
+
+# Men in the yard, not in the fields.
+gen_world_quiet_drill_modifier = {
+	icon = martial_positive
+	levy_size = 0.15
+	domain_tax_mult = -0.05
+}

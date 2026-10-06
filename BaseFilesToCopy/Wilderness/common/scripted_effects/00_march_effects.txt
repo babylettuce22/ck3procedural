@@ -1,0 +1,59 @@
+﻿# The march: keeping gen_wild_march_modifier / gen_deep_march_modifier on exactly the counties that
+# border the wild. See common/modifiers/00_march_modifiers.txt for what they do and why.
+#
+# Land neighbours only (`neighboring_county`, not the across-water variant): the wild across a strait
+# does not send wolves over it.
+
+# Title scope (a county). Gives it the right march modifier, or takes it off.
+gen_march_refresh_county_effect = {
+	if = {
+		limit = {
+			gen_march_can_be_march_trigger = yes
+			any_neighboring_county = {
+				count >= 2
+				gen_march_wild_county_trigger = yes
+			}
+		}
+		if = {
+			limit = { has_county_modifier = gen_wild_march_modifier }
+			remove_county_modifier = gen_wild_march_modifier
+		}
+		if = {
+			limit = { NOT = { has_county_modifier = gen_deep_march_modifier } }
+			add_county_modifier = gen_deep_march_modifier
+		}
+	}
+	else_if = {
+		limit = {
+			gen_march_can_be_march_trigger = yes
+			any_neighboring_county = { gen_march_wild_county_trigger = yes }
+		}
+		if = {
+			limit = { has_county_modifier = gen_deep_march_modifier }
+			remove_county_modifier = gen_deep_march_modifier
+		}
+		if = {
+			limit = { NOT = { has_county_modifier = gen_wild_march_modifier } }
+			add_county_modifier = gen_wild_march_modifier
+		}
+	}
+	else = {
+		if = {
+			limit = { has_county_modifier = gen_wild_march_modifier }
+			remove_county_modifier = gen_wild_march_modifier
+		}
+		if = {
+			limit = { has_county_modifier = gen_deep_march_modifier }
+			remove_county_modifier = gen_deep_march_modifier
+		}
+	}
+}
+
+# Title scope (a county). The county and everything around it: what to run when this county has
+# just become wild or stopped being wild, since that changes its neighbours' answer, not only its own.
+gen_march_refresh_neighbourhood_effect = {
+	gen_march_refresh_county_effect = yes
+	every_neighboring_county = {
+		gen_march_refresh_county_effect = yes
+	}
+}

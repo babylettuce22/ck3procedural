@@ -368,6 +368,18 @@ gen_ruin_tick_county_effect = {
 			var:ruin_decay >= gen_ruin_decay_threshold
 			gen_ruin_can_fall_trigger = yes
 			gen_ruin_timing_allows_fall_trigger = yes
+			NOT = { has_variable = ruin_offer_pending }
+		}
+
+		# One offer at a time. The AI answers on the spot, but a player's window stays open until
+		# they click it, and without this the next yearly tick sent a second "last year" letter for
+		# the same county, then a third. Cleared by the reprieve and by the collapse (through the
+		# forget effect); the expiry is only a backstop for a window that never gets answered, such
+		# as one whose event trigger refused it because the county changed hands in between.
+		set_variable = {
+			name = ruin_offer_pending
+			value = yes
+			years = gen_ruin_offer_pending_years
 		}
 
 		save_scope_as = gen_ruin_target
@@ -454,6 +466,7 @@ gen_ruin_forget_county_effect = {
 
 		if = { limit = { has_variable = ruin_decay }    remove_variable = ruin_decay }
 		if = { limit = { has_variable = ruin_warned }   remove_variable = ruin_warned }
+		if = { limit = { has_variable = ruin_offer_pending } remove_variable = ruin_offer_pending }
 		if = { limit = { has_variable = ruin_last_dev } remove_variable = ruin_last_dev }
 		if = { limit = { has_variable = ruin_last_ctl } remove_variable = ruin_last_ctl }
 
@@ -529,6 +542,10 @@ gen_ruin_reprieve_effect = {
 		# county leaves the watchlist and money would simply repeal the mechanic.
 		set_variable = { name = ruin_decay value = gen_ruin_reprieve_setback }
 
+		# The offer is answered. Without this the county could not be offered again until the
+		# pending flag's backstop expiry, even after it climbs back to the threshold.
+		if = { limit = { has_variable = ruin_offer_pending } remove_variable = ruin_offer_pending }
+
 		# ---- And the three years ----
 		#
 		# The modifier is the veto — gen_ruin_timing_allows_fall_trigger refuses any county carrying
@@ -538,6 +555,31 @@ gen_ruin_reprieve_effect = {
 			modifier = ruin_reprieve
 			years = gen_ruin_reprieve_years
 		}
+	}
+}
+
+# Tooltip only. What a reprieve buys that CK3 cannot draw by itself. The modifier draws itself; the
+# setback to the warning line, the next offer's price and the way out do not, and without them the
+# three paying options of gen_ruins.0005 read as "pay to make it go away" (writing review 2026-10-05).
+#
+# Two price lines because the escalation caps: gen_ruin_save_escalation is 1 + ruin_saves, max 3,
+# so from the third save on the next offer costs the same, and "dearer" would be a lie.
+#
+# Called from inside the options, before gen_ruin_reprieve_effect, so the `if` reads ruin_saves as
+# it stands when the player is choosing. Needs scope:gen_ruin_target.
+gen_ruin_reprieve_tooltip_effect = {
+	custom_tooltip = gen_ruins.0005.reprieve_tt
+	if = {
+		limit = {
+			scope:gen_ruin_target = {
+				has_variable = ruin_saves
+				var:ruin_saves >= 2
+			}
+		}
+		custom_tooltip = gen_ruins.0005.reprieve_same_price_tt
+	}
+	else = {
+		custom_tooltip = gen_ruins.0005.reprieve_dearer_tt
 	}
 }
 

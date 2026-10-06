@@ -41,6 +41,10 @@ See [docs/features.md](docs/features.md) for details on each system.
 - Windows
 - Crusader Kings III, version 1.20. Exporting a mod reads the installed game's data.
 
+The 3D previews use a Direct3D 11 compute renderer when compatible hardware is available,
+and automatically fall back to the CPU renderer if initialization or rendering fails. Both
+paths keep the same camera controls, terrain shading and presentation.
+
 ## Getting started
 
 Download a release, extract the whole folder, and run `Ck3MapGen.exe`. Keep the bundled
@@ -78,6 +82,12 @@ dotnet run -- --gui
 ```
 
 To keep the Forge elsewhere, pass `-p:NoiseToolDir="C:\Source\noisetool\"` to the build.
+
+To compare hardware rendering with the CPU reference and exercise fallback handling, run
+`dotnet run -c Release -- --verify-gpu-renderer`. An optional generated mod directory adds
+comparisons using its written CK3 ground. The check saves comparison PNGs beside the build
+and reports frame timings. Set the environment variable `CK3MAPGEN_RENDERER=cpu` to force
+the software path when troubleshooting the app.
 
 ### Project layout
 

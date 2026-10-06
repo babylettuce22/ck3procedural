@@ -1,0 +1,172 @@
+﻿# Horns at the Naming: effects. Map of the system: events/gen_hornborn_naming_events.txt.
+#
+# The chain runs for sixteen years, so the cast is kept as variables on the CHILD, not as saved
+# scopes: every follow-up is a hidden event on the child that reloads them (gen_hb_load_cast_effect),
+# checks they are still alive, and only then sends the visible event to the parent.
+
+# Root: the child. Store the cast for the follow-ups.
+gen_hb_store_cast_effect = {
+	set_variable = { name = gen_hb_parent value = scope:gen_hb_parent }
+	if = {
+		limit = { exists = scope:gen_hb_other_parent }
+		set_variable = { name = gen_hb_other_parent value = scope:gen_hb_other_parent }
+	}
+}
+
+# Root: the child. Reload the cast as scopes.
+gen_hb_load_cast_effect = {
+	save_scope_as = gen_hb_child
+	if = {
+		limit = { exists = var:gen_hb_parent }
+		var:gen_hb_parent = { save_scope_as = gen_hb_parent }
+	}
+	if = {
+		limit = { exists = var:gen_hb_other_parent }
+		var:gen_hb_other_parent = { save_scope_as = gen_hb_other_parent }
+	}
+	if = {
+		limit = { exists = var:gen_hb_foster }
+		var:gen_hb_foster = { save_scope_as = gen_hb_foster }
+	}
+}
+
+# Root: the child. The nearest horned ruler who could take them, as scope:gen_hb_foster.
+# A world scan, but only for the rare Hornborn birth (cf. 00_cult_charge_effects.txt).
+gen_hb_find_foster_effect = {
+	scope:gen_hb_parent = {
+		location ?= { save_scope_as = gen_hb_parent_location }
+	}
+	if = {
+		limit = { exists = scope:gen_hb_parent_location }
+		ordered_ruler = {
+			limit = { gen_hb_valid_foster_trigger = yes }
+			order_by = {
+				value = "capital_province.squared_distance(scope:gen_hb_parent_location)"
+				multiply = -1
+			}
+			save_scope_as = gen_hb_foster
+		}
+	}
+}
+
+# =====================================================================================
+#  The three paths (0002). Root: the deciding parent.
+# =====================================================================================
+
+# A — Hide. The buds trimmed and capped until sixteen (the portrait draws gen_horns_filed as stumps,
+# and gen_hornborn_horns_showing_trigger reads false, so the AI's marriage reluctance lapses — an
+# early betrothal is easier). gen_filed_horns_modifier cancels the trait's stares and dread, as it
+# does for an adult who files (gen_file_horns_effect), timed with the flag. The parent carries the
+# secret.
+gen_hb_hide_child_effect = {
+	scope:gen_hb_child = {
+		add_character_flag = gen_hb_path_hidden
+		add_character_flag = {
+			flag = gen_horns_filed
+			years = 16
+		}
+		add_character_modifier = {
+			modifier = gen_filed_horns_modifier
+			years = 16
+		}
+		trigger_event = { id = gen_hornborn.0040 days = { 2800 3100 } }	# about age 8
+	}
+	add_secret = {
+		type = secret_gen_hidden_horns
+		target = scope:gen_hb_child
+	}
+}
+
+# B — Embrace. A few years of whispers; every Hornborn and horned person of the court and realm
+# remembers it.
+gen_hb_embrace_child_effect = {
+	scope:gen_hb_child = {
+		add_character_flag = gen_hb_path_embraced
+		trigger_event = { id = gen_hornborn.0020 days = { 730 1460 } }
+	}
+	if = {
+		limit = { gen_hb_child_is_heir_trigger = yes }
+		add_character_modifier = {
+			modifier = gen_hb_heir_whispers_modifier
+			years = 5
+		}
+	}
+	else = {
+		add_character_modifier = {
+			modifier = gen_hb_nursery_whispers_modifier
+			years = 5
+		}
+	}
+	every_courtier = {
+		limit = {
+			gen_has_horns_trigger = yes
+			NOT = { this = scope:gen_hb_child }
+		}
+		add_opinion = {
+			target = scope:gen_hb_parent
+			modifier = gen_hb_stood_by_hornborn_opinion
+		}
+	}
+	every_vassal = {
+		limit = { gen_has_horns_trigger = yes }
+		add_opinion = {
+			target = scope:gen_hb_parent
+			modifier = gen_hb_stood_by_hornborn_opinion
+		}
+	}
+}
+
+# C — Foster. The child joins the foster lord's court now; the ward relation waits for 0030 (age
+# ~6), since vanilla guardianship is for children past infancy.
+gen_hb_foster_child_effect = {
+	scope:gen_hb_child = {
+		add_character_flag = gen_hb_path_fostered
+		set_variable = { name = gen_hb_foster value = scope:gen_hb_foster }
+		trigger_event = { id = gen_hornborn.0030 days = { 2190 2400 } }	# about age 6
+	}
+	scope:gen_hb_foster = {
+		add_courtier = scope:gen_hb_child
+		add_opinion = {
+			target = scope:gen_hb_parent
+			modifier = gen_hb_entrusted_child_opinion
+		}
+	}
+	add_opinion = {
+		target = scope:gen_hb_foster
+		modifier = gen_hb_fosterage_bond_opinion
+	}
+	scope:gen_hb_other_parent ?= {
+		if = {
+			limit = {
+				is_alive = yes
+				NOT = { this = scope:gen_hb_parent }
+			}
+			trigger_event = { id = gen_hornborn.0010 days = 1 }
+		}
+	}
+}
+
+# Root: the child. Switch from hidden or fostered to embraced (0031 brought home, 0041 told the truth,
+# or the secret was exposed, or the fosterage fell through). No whispers modifier: those were for
+# the naming.
+gen_hb_switch_to_embraced_effect = {
+	remove_character_flag = gen_hb_path_hidden
+	remove_character_flag = gen_hb_path_fostered
+	remove_character_flag = gen_horns_filed
+	remove_character_modifier = gen_filed_horns_modifier
+	add_character_flag = gen_hb_path_embraced
+}
+
+# Root: the child, coming of age. Tell the parent what was decided.
+gen_hb_coming_of_age_toast_effect = {
+	scope:gen_hb_parent ?= {
+		if = {
+			limit = { is_alive = yes }
+			send_interface_toast = {
+				type = event_toast_effect_neutral
+				title = gen_hb_coming_of_age_toast
+				left_icon = scope:gen_hb_child
+			}
+		}
+	}
+}

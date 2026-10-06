@@ -62,3 +62,10 @@ gen_tk_is_working_for_actor_trigger = {
 		var:gen_tk_patron = scope:actor
 	}
 }
+
+# Character scope. Already owns a clockwork curio made by a tinkerer (stamped on the artifact by
+# gen_tk_deliver_curio_effect). The AI stops asking for another once it has one: without this a king
+# near any gnome collected orrery after orrery, since nothing else capped the curio.
+gen_tk_owns_curio_trigger = {
+	any_character_artifact = { has_variable = gen_tk_curio }
+}

@@ -950,6 +950,8 @@ public static partial class ContentWriter
             Duchies = all.Count(t => t.Tier == "d") + faithHeads,
             LandlessDuchies = faithHeads,
             Counties = counties.Count,
+            // Any county will do; see Facts.AnchorCounty.
+            AnchorCounty = counties.Count > 0 ? counties[0].Key : "",
 
             Cultures = cultures.Cultures.Count,
             Heritages = cultures.Heritages.Count,

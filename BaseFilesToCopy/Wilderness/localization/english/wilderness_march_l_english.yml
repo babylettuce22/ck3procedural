@@ -1,0 +1,5 @@
+﻿l_english:
+ gen_wild_march_modifier:0 "Wild March"
+ gen_wild_march_modifier_desc:0 "Unsettled wilds or ruins border this county. Beasts take the herds, outlaws use the treeline as cover, and no one builds where the next raid will come from.\n\n#high Settle or rebuild the neighbouring land#! to lift this."
+ gen_deep_march_modifier:0 "Deep March"
+ gen_deep_march_modifier_desc:0 "Wilds or ruins press on this county from more than one side. Men stay home to watch the edges instead of answering the levy, and little here outlasts a bad season.\n\n#high Settle or rebuild the neighbouring land#! to ease this. With only one wild neighbour left, it becomes a Wild March."

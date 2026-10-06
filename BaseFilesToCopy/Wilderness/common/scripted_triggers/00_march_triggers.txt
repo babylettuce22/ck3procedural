@@ -1,0 +1,23 @@
+﻿# The march: which counties count as wild for it, and which can be a march.
+
+# Title scope. Wild, as far as its neighbours are concerned: unsettled wilderness, a ruin, or a
+# county nobody holds.
+#
+# is_wilderness_county_trigger already covers ruins: both dummies sit on wilderness_government and
+# the trigger reads its flag. A colony is NOT wild here; somebody has claimed the ground, and that is
+# the thing the march modifier asks for.
+gen_march_wild_county_trigger = {
+	OR = {
+		NOT = { exists = holder }
+		is_wilderness_county_trigger = yes
+	}
+}
+
+# Title scope. A county that can carry a march modifier: an ordinary settled county with a real
+# holder. Colonies are left out on purpose: a control-growth penalty could tip a struggling colony
+# into wilderness_yearly_control_check's collapse, which punishes the very ruler doing the work.
+gen_march_can_be_march_trigger = {
+	exists = holder
+	is_settled_county_trigger = yes
+	gen_march_wild_county_trigger = no
+}

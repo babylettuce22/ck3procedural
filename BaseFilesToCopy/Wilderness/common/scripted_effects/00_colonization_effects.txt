@@ -266,6 +266,24 @@ wilderness_pick_adjacent_effect = {
 				limit = { holder = root }
 				add = 2
 			}
+
+			# ---- The wild that is costing them ----
+			#
+			# Each of root's own march counties beside this one (00_march_modifiers.txt). Per
+			# neighbour like the terms around it, so a wild county pressing on three of root's
+			# marches scores 45: a little over two well-integrated neighbours, the same weight a
+			# ruin gets. Nothing here changes how often the AI colonises, only that when it does it
+			# goes where the march penalty is, which is what the penalty is there to encourage.
+			every_neighboring_county = {
+				limit = {
+					holder = root
+					OR = {
+						has_county_modifier = gen_wild_march_modifier
+						has_county_modifier = gen_deep_march_modifier
+					}
+				}
+				add = 15
+			}
 			every_neighboring_county = {
 				limit = { holder = root  duchy ?= prev.duchy }
 				add = 16

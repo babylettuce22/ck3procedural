@@ -378,6 +378,12 @@ gen_tk_commission_interaction = {
 				}
 			}
 		}
+		# One curio is a showpiece; a shelf of them is a glitch. A player can still order more.
+		modifier = {
+			factor = 0
+			scope:gen_tk_opt_curio ?= yes
+			scope:actor = { gen_tk_owns_curio_trigger = yes }
+		}
 		modifier = {
 			factor = 0
 			scope:actor.gold < {

@@ -17,13 +17,45 @@ public sealed class ClimateField
 
     /// <summary>Where the user painted the climate, or null when none was. See <see cref="ClimatePaintInfluence"/>.</summary>
     public ClimatePaintInfluence? Painted { get; init; }
+
+    /// <summary>
+    /// The elevation, in km, that the temperatures above were computed for: the heightmap blurred
+    /// over <c>ReliefBlurPixels</c>. Null when the field was not built by the model (test fixtures).
+    ///
+    /// The blur is right for climate — a lone peak does not make its province alpine — but it
+    /// averages a summit down with its valleys, so a 4 km top reads as 1-1.5 km and stays 15 C
+    /// too warm. Anything that cares about a single summit (permanent mountain snow) has to cool
+    /// the temperature back down by the gap. See <see cref="SummitWarmC"/>.
+    /// </summary>
+    public float[]? ReliefKm { get; init; }
+
+    /// <summary>Metres per heightmap unit above <see cref="SeaLevel"/>, matching <see cref="ReliefKm"/>.</summary>
+    public double MetresPerUnit { get; init; }
+
+    /// <summary>Heightmap value of the sea surface, in the same units as <see cref="MetresPerUnit"/>.</summary>
+    public float SeaLevel { get; init; }
+
+    /// <summary>
+    /// Warmest-month temperature at a point whose own (unblurred) heightmap value is
+    /// <paramref name="elevation"/>, sampled at field coordinates (<paramref name="x"/>, <paramref name="y"/>).
+    /// Applies the model's lapse rate to the gap between that height and the blurred relief the
+    /// field was computed for. Falls back to the plain sample when the field carries no relief.
+    /// </summary>
+    public double SummitWarmC(float x, float y, float elevation)
+    {
+        double warm = Field.Sample(WarmC, Width, Height, x, y);
+        if (ReliefKm is null || MetresPerUnit <= 0) return warm;
+        double actualKm = Math.Max(0, elevation - SeaLevel) * MetresPerUnit / 1000.0;
+        double reliefKm = Field.Sample(ReliefKm, Width, Height, x, y);
+        return warm - ClimateModel.LapseCPerKm * (actualKm - reliefKm);
+    }
 }
 
 public static class ClimateModel
 {
     private const int GridWidth = 1024;
     private const int Sweeps = 6;
-    private const double LapseCPerKm = 6.5;
+    public const double LapseCPerKm = 6.5;
     private const double ItczShiftDeg = 6.0;
 
     // Subsidence drying is now modulated by continentality so coasts stay humid
@@ -51,6 +83,8 @@ public static class ClimateModel
     {
         public required MapConfig Config { get; init; }
         public required float[] PixelKm { get; init; }
+        public required double MetresPerUnit { get; init; }
+        public required float SeaLevel { get; init; }
         public required float[] CoarseKm { get; init; }
         public required byte[] LandMask { get; init; }
         public required byte[] CoarseWater { get; init; }
@@ -85,7 +119,7 @@ public static class ClimateModel
 
         var field = Assemble(b.Config, b.PixelKm, b.CoarseKm, b.LandMask, b.July, b.January, b.AnnualC,
             b.SeasonalRange, b.CoarseWidth, b.CoarseHeight, b.Width, b.Height, b.Imported, b.Framing,
-            targets);
+            targets, b.MetresPerUnit, b.SeaLevel);
 
         if (!report) return field;
 
@@ -187,6 +221,8 @@ public static class ClimateModel
         {
             Config = cfg,
             PixelKm = pixelKm,
+            MetresPerUnit = metresPerUnit,
+            SeaLevel = sea,
             CoarseKm = kilometres,
             LandMask = landMask,
             CoarseWater = water,
@@ -475,7 +511,8 @@ public static class ClimateModel
     private static ClimateField Assemble(MapConfig cfg, float[] pixelKm, float[] coarseKm,
         byte[] landMask, float[] julyRain, float[] januaryRain, float[] annualC,
         float[] seasonalRange, int cw, int ch, int pw, int ph, bool imported,
-        AzgaarClimate.Framing? framing, ClimatePaintTargets? paint = null)
+        AzgaarClimate.Framing? framing, ClimatePaintTargets? paint = null,
+        double metresPerUnit = 0, float seaLevel = 0)
     {
         // The blur is there to take the grain off our own advection sweeps, which resolve rainfall
         // cell by cell and come out noisy. An imported field has no such grain — it arrives off a
@@ -601,6 +638,9 @@ public static class ClimateModel
             SummerMm = summer,
             WinterMm = winter,
             LatitudeDeg = latitude,
+            ReliefKm = pixelKm,
+            MetresPerUnit = metresPerUnit,
+            SeaLevel = seaLevel,
         };
     }
 

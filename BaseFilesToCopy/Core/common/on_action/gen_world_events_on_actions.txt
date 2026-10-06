@@ -16,5 +16,17 @@ gen_world_events_yearly = {
 				trigger_event = { id = gen_world_events.0001 }
 			}
 		}
+		# Exclusive with the above by construction: a quiet year resets nothing a war year needs,
+		# but no year can be both under the quiet threshold and over the war one.
+		if = {
+			limit = {
+				gen_world_quiet_trigger = yes
+				NOT = { has_global_variable = gen_world_quiet_years_seen }
+			}
+			every_player = {
+				limit = { gen_world_events_recipient_trigger = yes }
+				trigger_event = { id = gen_world_events.0002 }
+			}
+		}
 	}
 }

@@ -14,6 +14,13 @@ gen_world_at_war_trigger = {
 	global_var:gen_world_war_percent >= gen_world_war_threshold_percent_value
 }
 
+# The Quiet Years: an unbroken stretch of census years with little war. Thresholds in
+# script_values/gen_world_events_values.txt.
+gen_world_quiet_trigger = {
+	has_global_variable = gen_world_quiet_years
+	global_var:gen_world_quiet_years >= gen_world_quiet_years_needed_value
+}
+
 gen_world_events_recipient_trigger = {
 	is_ai = no
 	is_landed = yes

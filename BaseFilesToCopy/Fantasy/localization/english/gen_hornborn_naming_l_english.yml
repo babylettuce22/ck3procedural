@@ -1,0 +1,116 @@
+﻿l_english:
+ # ============ 0002 Horns at the Naming ============
+ gen_hornborn.0002.t:0 "Horns at the Naming"
+ gen_hornborn.0002.desc.intro:0 "At first the midwife says nothing. She turns [gen_hb_child.GetFirstName] toward the window so you can see for yourself: two small, hard buds at the brow, one on each side, already pressing against the skin.\n\n"
+ gen_hornborn.0002.desc.self_hornborn:0 "You know those buds. You had them yourself, before they grew, and you remember everything that came after: the stares, the jokes behind hands, the matches that fell through without anyone saying why. You had hoped your child would be spared all of that."
+ gen_hornborn.0002.desc.self_horned:0 "Among your own people this would mean nothing at all. But in every other way the child has come out [gen_hb_other_parent.GetFirstName]'s kind, and among them horns mean a great deal."
+ gen_hornborn.0002.desc.other_horned:0 "[gen_hb_other_parent.GetFirstName] is of the horned people, so you always knew this could happen. In every other way the child takes after your side of the family. Just not in this."
+ gen_hornborn.0002.desc.other_hornborn:0 "[gen_hb_other_parent.GetFirstName] is Hornborn, and now so is your child. Horned blood does not let go of a family easily."
+ gen_hornborn.0002.desc.resurfaced:0 "No one on either side of the family has had horns in living memory. Your oldest servants are already whispering about horned blood from long ago, and the younger ones are whispering worse things."
+ gen_hornborn.0002.desc.outro:0 "\n\nThe naming is in three days, and every guest in the hall will want to see the child. Whatever you decide now, they will remember it."
+ gen_hornborn.0002.desc.heir:0 "\n\nThe naming is in three days. Every guest in the hall will want to see your heir, the child who will one day sit where you sit, and whatever you decide now, the realm will remember it."
+ gen_hornborn.0002.a:0 "Trim the buds and keep [gen_hb_child.GetHerHim] capped."
+ gen_hornborn.0002.a.tt:0 "[gen_hb_child.GetFirstName]'s horns are hidden until [gen_hb_child.GetSheHe] comes of age, and an early match will be easier to make. You will carry a #N secret#! the whole time."
+ gen_hornborn.0002.b:0 "Let them look. This is my child."
+ gen_hornborn.0002.b.tt:0 "The court will whisper for a few years. Every Hornborn and horned person at your court and among your vassals will remember that you stood by [gen_hb_child.GetHerHim]."
+ gen_hornborn.0002.c:0 "Send [gen_hb_child.GetHerHim] to [gen_hb_foster.GetTitledFirstName], where no one will stare."
+ gen_hornborn.0002.c.tt:0 "[gen_hb_child.GetFirstName] grows up at [gen_hb_foster.GetFirstName]'s court, and becomes [gen_hb_foster.GetHerHis] ward when old enough. [gen_hb_foster.GetFirstName] will not forget the trust you showed."
+
+ # ============ 0003 Whose Horns? ============
+ gen_hornborn.0003.t:0 "Whose Horns?"
+ gen_hornborn.0003.desc:0 "Neither you nor [gen_hb_other_parent.GetFirstName] has ever had horns, and there are none in either family that anyone remembers. The midwife will not meet your eyes.\n\nYou are not a fool. Horns do not come from nowhere, and you can think of who might have given them."
+ gen_hornborn.0003.a:0 "I will have the truth."
+ gen_hornborn.0003.b:0 "Enough. The child is mine."
+
+ # ============ 0010 An Empty Cradle ============
+ gen_hornborn.0010.t:0 "An Empty Cradle"
+ gen_hornborn.0010.desc:0 "You come back to the nursery and find the cradle empty and the nurse in tears. [gen_hb_parent.GetFirstName] sent [gen_hb_child.GetFirstName] away at dawn, to [gen_hb_foster.GetTitledFirstName]'s court, with a guard of riders and a letter you were not shown.\n\n\"Among [gen_hb_foster.GetHerHis] people no one will stare,\" [gen_hb_parent.GetFirstName] tells you. As if that were the only thing that mattered."
+ gen_hornborn.0010.desc.horned:0 "[gen_hb_parent.GetFirstName] has sent [gen_hb_child.GetFirstName] to [gen_hb_foster.GetTitledFirstName], to be raised among your own people. You will miss the child terribly. But you also know there is no better place for [gen_hb_child.GetHerHim] to grow up."
+ gen_hornborn.0010.a:0 "How could you?"
+ gen_hornborn.0010.b:0 "[gen_hb_child.GetSheHe|U] will be among [gen_hb_child.GetHerHis] own."
+
+ # ============ 0021 The Chaplain's Omen ============
+ gen_hornborn.0021.t:0 "The Chaplain's Omen"
+ gen_hornborn.0021.desc:0 "[gen_hb_chaplain.GetFirstName] has been preaching about signs again. No one is named from the pulpit, but everyone knows whose child has horns, and every head in the hall turned toward [gen_hb_child.GetFirstName] at the word \"mark\".\n\nAfterwards [gen_hb_chaplain.GetSheHe] comes to you privately. A blessing, [gen_hb_chaplain.GetSheHe] suggests, would quiet the talk."
+ gen_hornborn.0021.a:0 "My child needs no blessing to be [gen_hb_child.GetHerHis] own self."
+ gen_hornborn.0021.b:0 "Bless [gen_hb_child.GetHerHim], then, and let that be the end of it."
+ gen_hornborn.0021.c:0 "Preach about horns again and you will meet mine."
+
+ # ============ 0031 A Letter from the Highlands ============
+ gen_hornborn.0031.t:0 "A Letter from the Highlands"
+ gen_hornborn.0031.desc:0 "A letter has come from [gen_hb_foster.GetTitledFirstName]'s court. [gen_hb_child.GetFirstName] is well. [gen_hb_child.GetSheHe|U] has learned to herd and climb and swear in a language you do not speak, and [gen_hb_child.GetHerHis] horns are growing in proudly. No one there has ever looked at them twice."
+ gen_hornborn.0031.desc.match:0 "\n\nAt the end, almost as an afterthought, [gen_hb_foster.GetFirstName] writes that [gen_hb_match.GetFirstName], a child of [gen_hb_foster.GetHerHis] own house, is of an age with yours."
+ gen_hornborn.0031.desc.no_match:0 "\n\n[gen_hb_foster.GetFirstName] closes with good wishes for your house, and asks nothing in return."
+ gen_hornborn.0031.a:0 "Send gifts, and my thanks."
+ gen_hornborn.0031.b:0 "It is time [gen_hb_child.GetSheHe] came home."
+ gen_hornborn.0031.c:0 "Then let us bind our houses."
+
+ # ============ 0041 Why Must I Wear the Cap? ============
+ gen_hornborn.0041.t:0 "Why Must I Wear the Cap?"
+ gen_hornborn.0041.desc:0 "[gen_hb_child.GetFirstName] has come to you with the cap balled up in both hands and [gen_hb_child.GetHerHis] chin set.\n\n\"The other children don't have to wear one,\" [gen_hb_child.GetSheHe] says. \"Not even in summer. Why do I?\""
+ gen_hornborn.0041.a:0 "Because I say so. Put it back on."
+ gen_hornborn.0041.b:0 "Sit down. There is something you should know."
+ gen_hornborn.0041.b.tt:0 "[gen_hb_child.GetFirstName] stops hiding [gen_hb_child.GetHerHis] horns, and your secret no longer matters."
+ gen_hornborn.0041.c:0 "Your head catches cold easily, that's all."
+ gen_hornborn.0041.c.tt:0 "If [gen_hb_child.GetFirstName] ever stops hiding, [gen_hb_child.GetSheHe] will also know you lied."
+
+ # ============ 0045 The secret is out ============
+ gen_hornborn.0045.t:0 "The Cap Is Off"
+ gen_hornborn.0045.desc:0 "Everyone knows now. Someone saw [gen_hb_child.GetFirstName] without the cap, or found the file, or simply talked, and by evening the whole court had heard that the child was born Hornborn and that you hid it.\n\nThe horns no one minds as much as you feared. The lie, they mind."
+ gen_hornborn.0045.a:0 "Then there is nothing left to hide."
+
+ # ============ 0051–0053 Coming of age (on the child) ============
+ gen_hornborn.0051.t:0 "The Cap Comes Off"
+ gen_hornborn.0051.desc:0 "You are grown now, and no one can make you wear the cap anymore. Underneath it the horns have kept growing, filed and trimmed and hidden your whole life, and your whole life you have known why.\n\nWhat you do with them now is your own decision."
+ gen_hornborn.0051.a:0 "I have hidden this long. I can hide a while longer."
+ gen_hornborn.0051.b:0 "No more. Let them grow."
+ gen_hornborn.0052.t:0 "Raised Unashamed"
+ gen_hornborn.0052.desc:0 "You grew up with horns where everyone could see them. The court stared, then got used to you, and some of them grew fond of you. The question now is what you want people to see when they look at you."
+ gen_hornborn.0052.a:0 "Let them see something to be afraid of."
+ gen_hornborn.0052.b:0 "Let them see one of their own."
+ gen_hornborn.0053.t:0 "Two Homes"
+ gen_hornborn.0053.desc:0 "You have spent your whole life at [gen_hb_foster.GetTitledFirstName]'s court, among people whose horns are like yours. "
+ gen_hornborn.0053.desc.parent:0 "Now a letter has come from [gen_hb_parent.GetFirstName]: you are of age, and you are expected home.\n\nHome. You are not sure anymore which place that word means."
+ gen_hornborn.0053.desc.no_parent:0 "Now you are of age, and your family's lands are still there, waiting, though the parent who sent you away is not.\n\nHome. You are not sure anymore which place that word means."
+ gen_hornborn.0053.a:0 "I will go back to my family."
+ gen_hornborn.0053.b:0 "My home is here, among the horned people."
+
+ # ============ Modifiers ============
+ gen_hb_nursery_whispers_modifier:0 "Whispers About the Nursery"
+ gen_hb_nursery_whispers_modifier_desc:0 "This character showed a Hornborn child at the naming, and the court has not stopped talking about it."
+ gen_hb_heir_whispers_modifier:0 "An Heir with Horns"
+ gen_hb_heir_whispers_modifier_desc:0 "This character's heir is Hornborn and shown openly. Some vassals wonder what kind of ruler that child will grow up to be."
+ gen_hb_familiar_face_modifier:0 "A Familiar Face"
+ gen_hb_familiar_face_modifier_desc:0 "Raised in the open, this Hornborn grew up in front of the whole court, and the court got used to the horns."
+ gen_hb_fearsome_modifier:0 "Horned and Unbowed"
+ gen_hb_fearsome_modifier_desc:0 "This Hornborn has never hidden, and has learned to make others flinch."
+ gen_hb_highland_raised_modifier:0 "Raised in the Highlands"
+ gen_hb_highland_raised_modifier_desc:0 "This character was fostered among the horned people and came home hardened by it."
+
+ # ============ Opinions ============
+ gen_hb_stood_by_hornborn_opinion:0 "Stood by a Hornborn Child"
+ gen_hb_lied_about_child_opinion:0 "Lied About the Child"
+ gen_hb_entrusted_child_opinion:0 "Entrusted with a Child"
+ gen_hb_fosterage_bond_opinion:0 "Fosterage Bond"
+ gen_hb_fosterage_gifts_opinion:0 "Generous Foster Kin"
+ gen_hb_took_child_back_opinion:0 "Took the Child Back"
+ gen_hb_sent_child_away_opinion:0 "Sent Our Child Away"
+ gen_hb_sent_to_our_own_opinion:0 "Sent to Our Own"
+ gen_hb_kept_in_cap_opinion:0 "Kept Me in a Cap"
+ gen_hb_told_me_truth_opinion:0 "Told Me the Truth"
+ gen_hb_hid_me_away_opinion:0 "Hid Me Away"
+ gen_hb_kept_me_safe_opinion:0 "Kept Me Safe"
+ gen_hb_lied_to_me_opinion:0 "Lied to Me"
+ gen_hb_refused_blessing_opinion:0 "Refused the Blessing"
+ gen_hb_threatened_chaplain_opinion:0 "Threatened Me"
+ gen_hb_whose_horns_opinion:0 "Whose Horns?"
+ gen_hb_chose_highlands_opinion:0 "Stayed in the Highlands"
+
+ # ============ Secret ============
+ secret_gen_hidden_horns:0 "Hidden Horns"
+ secret_gen_hidden_horns_desc:0 "[secret_owner.GetFirstName] has been hiding that [TARGET_CHARACTER.GetFirstName] was born Hornborn: the buds trimmed, the cap never off."
+ secret_gen_hidden_horns_tooltip_desc:0 "This character is hiding that a child of theirs was born Hornborn."
+ secret_gen_hidden_horns_type_desc:0 "$secret_gen_hidden_horns_tooltip_desc$"
+
+ # ============ Toast ============
+ gen_hb_coming_of_age_toast:0 "[gen_hb_child.GetFirstName] Comes of Age"

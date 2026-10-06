@@ -92,6 +92,9 @@ public static class Program
                 case "--verify-world-editor":
                     return Tools.WorldEditorChecks.Run(i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : null);
 
+                case "--verify-gpu-renderer":
+                    return Tools.GpuRendererChecks.Run(i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[++i] : null);
+
                 case "--verify-adventurers":
                     return Tools.AdventurerChecks.Run();
 

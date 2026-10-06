@@ -1,0 +1,972 @@
+﻿namespace = gen_hornborn
+
+# Horns at the Naming: a Hornborn child is born among a people who are not horned, and a parent
+# decides how the child grows up. The system around it:
+#   common/on_action/00_gen_hornborn_naming_on_actions.txt       — birth and 16th-birthday hooks
+#   common/scripted_effects/00_gen_hornborn_naming_effects.txt   — the three paths, the cast
+#   common/scripted_triggers/00_gen_hornborn_naming_triggers.txt
+#   common/secret_types/00_gen_hornborn_secrets.txt              — hiding the child
+#   common/modifiers/, common/opinion_modifiers/                 — 00_gen_hornborn_naming_*
+#
+#   0001        hidden, on the child a week after birth: picks the parent, sends 0003 or 0002
+#   0002        Horns at the Naming — Hide / Embrace / Foster
+#   0003        Whose Horns? — the real father is horned and the legal father is not; leads to 0002
+#   0010        An Empty Cradle — the other parent learns the child was fostered
+#   0020/0021   Embrace:  hidden dispatcher / The Chaplain's Omen (2–4 years on)
+#   0030/0031   Foster:   hidden dispatcher (sets the ward) / A Letter from the Highlands (age ~6)
+#   0040/0041   Hide:     hidden dispatcher / Why Must I Wear the Cap? (age ~8)
+#   0045        Hide:     the secret is exposed
+#   0050        hidden, on the child at 16: sends one of
+#   0051–0053   The Cap Comes Off / Raised Unashamed / Two Homes — on the child
+#
+# Path flags on the child: gen_hb_path_hidden / gen_hb_path_embraced / gen_hb_path_fostered.
+# The cast lives as variables on the child (gen_hb_store_cast_effect); every follow-up reloads it
+# in a hidden event on the child and re-checks who is still alive before anything is shown.
+#
+# Twins each get their own naming: the parent may choose differently for each.
+# A birth with no player parent and no landed parent gets nothing — the horns just show.
+
+# =====================================================================================
+#  0001 — who decides (hidden, on the child)
+# =====================================================================================
+gen_hornborn.0001 = {
+	type = character_event
+	hidden = yes
+
+	trigger = { gen_hb_naming_eligible_trigger = yes }
+
+	immediate = {
+		add_character_flag = gen_hb_named
+		save_scope_as = gen_hb_child
+
+		# A player parent first, then the landed parent of the higher tier.
+		if = {
+			limit = { mother ?= { is_alive = yes is_ai = no } }
+			mother = { save_scope_as = gen_hb_parent }
+		}
+		else_if = {
+			limit = { father ?= { is_alive = yes is_ai = no } }
+			father = { save_scope_as = gen_hb_parent }
+		}
+		else_if = {
+			limit = {
+				mother ?= {
+					is_alive = yes
+					is_landed = yes
+					OR = {
+						NOT = { exists = root.father }
+						root.father = { is_alive = no }
+						root.father = { is_landed = no }
+						highest_held_title_tier >= root.father.highest_held_title_tier
+					}
+				}
+			}
+			mother = { save_scope_as = gen_hb_parent }
+		}
+		else_if = {
+			limit = { father ?= { is_alive = yes is_landed = yes } }
+			father = { save_scope_as = gen_hb_parent }
+		}
+
+		if = {
+			limit = { exists = scope:gen_hb_parent }
+
+			if = {
+				limit = {
+					exists = mother
+					scope:gen_hb_parent = { this = root.father }
+				}
+				mother = { save_scope_as = gen_hb_other_parent }
+			}
+			else_if = {
+				limit = {
+					exists = father
+					scope:gen_hb_parent = { this = root.mother }
+				}
+				father = { save_scope_as = gen_hb_other_parent }
+			}
+
+			gen_hb_find_foster_effect = yes
+			gen_hb_store_cast_effect = yes
+
+			if = {
+				limit = { gen_hb_horns_not_his_trigger = yes }
+				scope:gen_hb_parent = { trigger_event = gen_hornborn.0003 }
+			}
+			else = {
+				scope:gen_hb_parent = { trigger_event = gen_hornborn.0002 }
+			}
+		}
+	}
+}
+
+# =====================================================================================
+#  0002 — Horns at the Naming
+# =====================================================================================
+gen_hornborn.0002 = {
+	type = character_event
+	title = gen_hornborn.0002.t
+	desc = {
+		desc = gen_hornborn.0002.desc.intro
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_trait = hornborn }
+				desc = gen_hornborn.0002.desc.self_hornborn
+			}
+			triggered_desc = {
+				trigger = {
+					has_trait = phenotype_horned
+					exists = scope:gen_hb_other_parent
+				}
+				desc = gen_hornborn.0002.desc.self_horned
+			}
+			triggered_desc = {
+				trigger = { scope:gen_hb_other_parent ?= { has_trait = phenotype_horned } }
+				desc = gen_hornborn.0002.desc.other_horned
+			}
+			triggered_desc = {
+				trigger = { scope:gen_hb_other_parent ?= { has_trait = hornborn } }
+				desc = gen_hornborn.0002.desc.other_hornborn
+			}
+			desc = gen_hornborn.0002.desc.resurfaced
+		}
+		first_valid = {
+			triggered_desc = {
+				trigger = { gen_hb_child_is_heir_trigger = yes }
+				desc = gen_hornborn.0002.desc.heir
+			}
+			desc = gen_hornborn.0002.desc.outro
+		}
+	}
+	theme = family
+	override_background = { reference = bedchamber }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:gen_hb_child
+	}
+	lower_right_portrait = {
+		character = scope:gen_hb_foster
+		trigger = { exists = scope:gen_hb_foster }
+	}
+
+	trigger = {
+		scope:gen_hb_child = {
+			is_alive = yes
+			has_trait = hornborn
+		}
+	}
+
+	# A — Hide.
+	option = {
+		name = gen_hornborn.0002.a
+		custom_tooltip = gen_hornborn.0002.a.tt
+		gen_hb_hide_child_effect = yes
+		stress_impact = {
+			honest = medium_stress_impact_gain
+			hornborn = medium_stress_impact_gain
+		}
+		ai_chance = {
+			base = 20
+			modifier = { add = 25 has_trait = craven }
+			modifier = { add = 20 has_trait = paranoid }
+			modifier = { add = 20 has_trait = deceitful }
+			modifier = { add = 15 gen_hb_child_is_heir_trigger = yes }
+			modifier = { factor = 0.2 has_trait = hornborn }
+			modifier = { factor = 0 has_trait = phenotype_horned }
+		}
+	}
+
+	# B — Embrace.
+	option = {
+		name = gen_hornborn.0002.b
+		custom_tooltip = gen_hornborn.0002.b.tt
+		gen_hb_embrace_child_effect = yes
+		stress_impact = {
+			hornborn = medium_stress_impact_loss
+			paranoid = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 25 has_trait = brave }
+			modifier = { add = 20 has_trait = honest }
+			modifier = { add = 15 has_trait = arrogant }
+			modifier = { add = 60 has_trait = hornborn }
+			modifier = { add = 60 has_trait = phenotype_horned }
+		}
+	}
+
+	# C — Foster.
+	option = {
+		name = gen_hornborn.0002.c
+		trigger = { exists = scope:gen_hb_foster }
+		custom_tooltip = gen_hornborn.0002.c.tt
+		gen_hb_foster_child_effect = yes
+		stress_impact = {
+			base = medium_stress_impact_gain
+			compassionate = medium_stress_impact_gain
+			callous = medium_stress_impact_loss
+		}
+		ai_chance = {
+			base = 15
+			modifier = { add = 20 has_trait = callous }
+			modifier = { add = 15 has_trait = ambitious }
+			modifier = { add = 25 scope:gen_hb_other_parent ?= { has_trait = phenotype_horned } }
+			modifier = { factor = 0.3 gen_hb_child_is_heir_trigger = yes }
+		}
+	}
+}
+
+# =====================================================================================
+#  0003 — Whose Horns? (the legal father)
+# =====================================================================================
+# Both options go on to the naming. "The truth" exposes vanilla's disputed-heritage secret when the
+# child has one.
+gen_hornborn.0003 = {
+	type = character_event
+	title = gen_hornborn.0003.t
+	desc = gen_hornborn.0003.desc
+	theme = secret
+	override_background = { reference = bedchamber }
+
+	left_portrait = {
+		character = root
+		animation = disbelief
+	}
+	right_portrait = {
+		character = scope:gen_hb_other_parent
+		animation = shame
+	}
+
+	trigger = {
+		scope:gen_hb_child = { is_alive = yes }
+	}
+
+	option = {
+		name = gen_hornborn.0003.a
+		# Vanilla gives the disputed-heritage secret to the mother, with the child as its target
+		# (00_pregnancy_effects.txt). Exposing it brings vanilla's own bastardy fallout with it.
+		scope:gen_hb_other_parent ?= {
+			random_secret = {
+				type = secret_disputed_heritage
+				limit = { secret_target = scope:gen_hb_child }
+				expose_secret = root
+			}
+		}
+		scope:gen_hb_other_parent ?= {
+			save_scope_as = gen_hb_suspected
+		}
+		if = {
+			limit = { exists = scope:gen_hb_suspected }
+			add_opinion = {
+				target = scope:gen_hb_suspected
+				modifier = gen_hb_whose_horns_opinion
+			}
+		}
+		trigger_event = gen_hornborn.0002
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = wrathful }
+			modifier = { add = 30 has_trait = paranoid }
+			modifier = { add = 20 has_trait = vengeful }
+			modifier = { factor = 0.3 has_trait = forgiving }
+		}
+	}
+
+	option = {
+		name = gen_hornborn.0003.b
+		stress_impact = {
+			base = medium_stress_impact_gain
+			forgiving = medium_stress_impact_loss
+		}
+		trigger_event = gen_hornborn.0002
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = forgiving }
+			modifier = { add = 20 has_trait = content }
+		}
+	}
+}
+
+# =====================================================================================
+#  0010 — An Empty Cradle (the other parent, after Foster)
+# =====================================================================================
+gen_hornborn.0010 = {
+	type = character_event
+	title = gen_hornborn.0010.t
+	desc = {
+		first_valid = {
+			triggered_desc = {
+				trigger = { has_trait = phenotype_horned }
+				desc = gen_hornborn.0010.desc.horned
+			}
+			desc = gen_hornborn.0010.desc
+		}
+	}
+	theme = family
+	override_background = { reference = bedchamber }
+
+	left_portrait = {
+		character = root
+		triggered_animation = {
+			trigger = { has_trait = phenotype_horned }
+			animation = sadness
+		}
+		animation = grief
+	}
+	right_portrait = {
+		character = scope:gen_hb_parent
+		animation = personality_callous
+	}
+
+	trigger = {
+		is_alive = yes
+		scope:gen_hb_parent ?= { is_alive = yes }
+	}
+
+	option = {
+		name = gen_hornborn.0010.a
+		trigger = { NOT = { has_trait = phenotype_horned } }
+		add_opinion = {
+			target = scope:gen_hb_parent
+			modifier = gen_hb_sent_child_away_opinion
+		}
+		stress_impact = {
+			base = medium_stress_impact_gain
+			callous = medium_stress_impact_loss
+		}
+	}
+
+	option = {
+		name = gen_hornborn.0010.b
+		trigger = { has_trait = phenotype_horned }
+		add_opinion = {
+			target = scope:gen_hb_parent
+			modifier = gen_hb_sent_to_our_own_opinion
+		}
+		stress_impact = {
+			compassionate = minor_stress_impact_gain
+		}
+	}
+}
+
+# =====================================================================================
+#  0020/0021 — Embrace: The Chaplain's Omen
+# =====================================================================================
+gen_hornborn.0020 = {
+	type = character_event
+	hidden = yes
+
+	trigger = {
+		is_alive = yes
+		has_character_flag = gen_hb_path_embraced
+	}
+
+	immediate = {
+		gen_hb_load_cast_effect = yes
+		if = {
+			limit = {
+				scope:gen_hb_parent ?= {
+					is_alive = yes
+					cp:councillor_court_chaplain ?= {
+						NOT = { gen_has_horns_trigger = yes }
+						NOT = { this = scope:gen_hb_parent }
+					}
+				}
+			}
+			scope:gen_hb_parent = {
+				cp:councillor_court_chaplain = { save_scope_as = gen_hb_chaplain }
+				trigger_event = gen_hornborn.0021
+			}
+		}
+	}
+}
+
+gen_hornborn.0021 = {
+	type = character_event
+	title = gen_hornborn.0021.t
+	desc = gen_hornborn.0021.desc
+	theme = faith
+	override_background = { reference = temple }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:gen_hb_chaplain
+		animation = personality_zealous
+	}
+	lower_right_portrait = scope:gen_hb_child
+
+	trigger = {
+		scope:gen_hb_chaplain = { is_alive = yes }
+		scope:gen_hb_child = { is_alive = yes }
+	}
+
+	# Defend the child.
+	option = {
+		name = gen_hornborn.0021.a
+		add_prestige = minor_prestige_gain
+		scope:gen_hb_chaplain = {
+			add_opinion = {
+				target = root
+				modifier = gen_hb_refused_blessing_opinion
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = 20 has_trait = cynical }
+			modifier = { add = 40 has_trait = hornborn }
+		}
+	}
+
+	# Have the child blessed.
+	option = {
+		name = gen_hornborn.0021.b
+		add_piety = medium_piety_loss
+		scope:gen_hb_child = { add_character_flag = gen_hb_blessed }
+		stress_impact = {
+			hornborn = minor_stress_impact_gain
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = zealous }
+			modifier = { add = 20 has_trait = craven }
+		}
+	}
+
+	# Threaten the chaplain.
+	option = {
+		name = gen_hornborn.0021.c
+		trigger = {
+			OR = {
+				has_trait = arrogant
+				has_trait = wrathful
+			}
+		}
+		add_dread = minor_dread_gain
+		scope:gen_hb_chaplain = {
+			add_opinion = {
+				target = root
+				modifier = gen_hb_threatened_chaplain_opinion
+			}
+		}
+		stress_impact = {
+			wrathful = medium_stress_impact_loss
+		}
+		ai_chance = {
+			base = 30
+		}
+	}
+}
+
+# =====================================================================================
+#  0030/0031 — Foster: A Letter from the Highlands (age ~6)
+# =====================================================================================
+gen_hornborn.0030 = {
+	type = character_event
+	hidden = yes
+
+	trigger = {
+		is_alive = yes
+		has_character_flag = gen_hb_path_fostered
+	}
+
+	immediate = {
+		gen_hb_load_cast_effect = yes
+		if = {
+			limit = {
+				scope:gen_hb_foster ?= { is_alive = yes }
+				is_courtier_of = scope:gen_hb_foster
+			}
+			scope:gen_hb_foster = { set_relation_ward = scope:gen_hb_child }	# vanilla's direction
+
+			# A match in the foster lord's own house, for the betrothal option. The foster lord is
+			# often the horned parent's own kin, so their children can be the child's aunt, uncle or
+			# cousin.
+			scope:gen_hb_foster = {
+				random_child = {
+					limit = {
+						is_alive = yes
+						NOT = { this = scope:gen_hb_child }
+						NOT = { is_close_or_extended_family_of = scope:gen_hb_child }
+						age <= 12
+						is_married = no
+						is_betrothed = no
+						sex_opposite_of = scope:gen_hb_child
+					}
+					save_scope_as = gen_hb_match
+				}
+			}
+
+			if = {
+				limit = { scope:gen_hb_parent ?= { is_alive = yes } }
+				scope:gen_hb_parent = { trigger_event = gen_hornborn.0031 }
+			}
+		}
+		# The fosterage fell through: the foster lord died, or the child was moved (a guardian assigned
+		# elsewhere). From here the child grows up in the open wherever they are, so 0050 sends
+		# 0052, not Two Homes.
+		else = {
+			gen_hb_switch_to_embraced_effect = yes
+		}
+	}
+}
+
+gen_hornborn.0031 = {
+	type = character_event
+	title = gen_hornborn.0031.t
+	desc = {
+		desc = gen_hornborn.0031.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { exists = scope:gen_hb_match }
+				desc = gen_hornborn.0031.desc.match
+			}
+			desc = gen_hornborn.0031.desc.no_match
+		}
+	}
+	theme = family
+	override_background = { reference = sitting_room }
+
+	left_portrait = {
+		character = root
+		animation = reading
+	}
+	right_portrait = {
+		character = scope:gen_hb_child
+		animation = happiness
+	}
+	lower_right_portrait = scope:gen_hb_foster
+
+	trigger = {
+		scope:gen_hb_child = { is_alive = yes }
+		scope:gen_hb_foster = { is_alive = yes }
+	}
+
+	# Send gifts.
+	option = {
+		name = gen_hornborn.0031.a
+		pay_short_term_gold = {
+			target = scope:gen_hb_foster
+			gold = minor_gold_value
+		}
+		scope:gen_hb_foster = {
+			add_opinion = {
+				target = root
+				modifier = gen_hb_fosterage_gifts_opinion
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = generous }
+			modifier = { factor = 0.2 has_trait = greedy }
+		}
+	}
+
+	# Bring the child home.
+	option = {
+		name = gen_hornborn.0031.b
+		trigger = {
+			scope:gen_hb_child = { is_courtier_of = scope:gen_hb_foster }	# not moved while the letter sat
+		}
+		scope:gen_hb_foster = {
+			remove_relation_ward = scope:gen_hb_child
+			add_opinion = {
+				target = root
+				modifier = gen_hb_took_child_back_opinion
+			}
+		}
+		add_courtier = scope:gen_hb_child
+		scope:gen_hb_child = { gen_hb_switch_to_embraced_effect = yes }
+		stress_impact = {
+			compassionate = medium_stress_impact_loss
+		}
+		ai_chance = {
+			base = 15
+			modifier = { add = 30 has_trait = compassionate }
+			modifier = { add = 30 gen_hb_child_is_heir_trigger = yes }
+		}
+	}
+
+	# Bind the houses.
+	option = {
+		name = gen_hornborn.0031.c
+		trigger = { exists = scope:gen_hb_match }
+		scope:gen_hb_child = { create_betrothal = scope:gen_hb_match }
+		scope:gen_hb_foster = {
+			add_opinion = {
+				target = root
+				modifier = gen_hb_fosterage_gifts_opinion
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 30 has_trait = ambitious }
+			modifier = { factor = 0.5 gen_hb_child_is_heir_trigger = yes }
+		}
+	}
+}
+
+# =====================================================================================
+#  0040/0041 — Hide: Why Must I Wear the Cap? (age ~8)
+# =====================================================================================
+gen_hornborn.0040 = {
+	type = character_event
+	hidden = yes
+
+	trigger = {
+		is_alive = yes
+		has_character_flag = gen_hb_path_hidden
+		has_character_flag = gen_horns_filed
+	}
+
+	immediate = {
+		gen_hb_load_cast_effect = yes
+		if = {
+			limit = { scope:gen_hb_parent ?= { is_alive = yes } }
+			scope:gen_hb_parent = { trigger_event = gen_hornborn.0041 }
+		}
+	}
+}
+
+gen_hornborn.0041 = {
+	type = character_event
+	title = gen_hornborn.0041.t
+	desc = gen_hornborn.0041.desc
+	theme = family
+	override_background = { reference = sitting_room }
+
+	left_portrait = {
+		character = root
+		animation = worry
+	}
+	right_portrait = {
+		character = scope:gen_hb_child
+		animation = disapproval
+	}
+
+	trigger = {
+		scope:gen_hb_child = {
+			is_alive = yes
+			has_character_flag = gen_hb_path_hidden
+		}
+	}
+
+	# Keep hiding.
+	option = {
+		name = gen_hornborn.0041.a
+		scope:gen_hb_child = {
+			add_opinion = {
+				target = root
+				modifier = gen_hb_kept_in_cap_opinion
+			}
+		}
+		ai_chance = {
+			base = 40
+			modifier = { add = 20 has_trait = stubborn }
+			modifier = { add = 20 has_trait = paranoid }
+		}
+	}
+
+	# Tell the truth and stop hiding. The secret lapses with the flag.
+	option = {
+		name = gen_hornborn.0041.b
+		custom_tooltip = gen_hornborn.0041.b.tt
+		scope:gen_hb_child = {
+			gen_hb_switch_to_embraced_effect = yes
+			add_opinion = {
+				target = root
+				modifier = gen_hb_told_me_truth_opinion
+			}
+		}
+		stress_impact = {
+			honest = medium_stress_impact_loss
+			hornborn = medium_stress_impact_loss
+		}
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = honest }
+			modifier = { add = 30 has_trait = compassionate }
+			modifier = { add = 40 has_trait = hornborn }
+		}
+	}
+
+	# Make something up.
+	option = {
+		name = gen_hornborn.0041.c
+		custom_tooltip = gen_hornborn.0041.c.tt
+		scope:gen_hb_child = { add_character_flag = gen_hb_lied_to }
+		stress_impact = {
+			honest = major_stress_impact_gain
+			deceitful = minor_stress_impact_loss
+		}
+		ai_chance = {
+			base = 10
+			modifier = { add = 40 has_trait = deceitful }
+			modifier = { factor = 0 has_trait = honest }
+		}
+	}
+}
+
+# =====================================================================================
+#  0045 — Hide: the secret is out (secret_gen_hidden_horns on_expose)
+# =====================================================================================
+gen_hornborn.0045 = {
+	type = character_event
+	title = gen_hornborn.0045.t
+	desc = gen_hornborn.0045.desc
+	theme = secret
+	override_background = { reference = throne_room }
+
+	left_portrait = {
+		character = root
+		animation = shame
+	}
+	right_portrait = scope:gen_hb_child
+
+	trigger = {
+		scope:gen_hb_child ?= { is_alive = yes }
+	}
+
+	option = {
+		name = gen_hornborn.0045.a
+		# Only a hider who felt the lie feels the exposure (gen_hb_unashamed_hider_trigger).
+		stress_impact = {
+			honest = medium_stress_impact_gain
+			compassionate = minor_stress_impact_gain
+			hornborn = minor_stress_impact_loss
+		}
+	}
+}
+
+# =====================================================================================
+#  0050 — coming of age (hidden, on the child)
+# =====================================================================================
+gen_hornborn.0050 = {
+	type = character_event
+	hidden = yes
+
+	trigger = {
+		is_alive = yes
+		gen_hb_has_path_trigger = yes
+		NOT = { has_character_flag = gen_hb_came_of_age }
+	}
+
+	immediate = {
+		add_character_flag = gen_hb_came_of_age	# lapses the secret (is_valid)
+		gen_hb_load_cast_effect = yes
+		if = {
+			limit = {
+				has_character_flag = gen_hb_path_hidden
+				has_character_flag = gen_horns_filed
+			}
+			trigger_event = gen_hornborn.0051
+		}
+		else_if = {
+			limit = {
+				has_character_flag = gen_hb_path_fostered
+				scope:gen_hb_foster ?= { is_alive = yes }
+				is_courtier_of = scope:gen_hb_foster
+			}
+			trigger_event = gen_hornborn.0053
+		}
+		else = {
+			# Moved away from the foster court after 0030, or the foster lord died since.
+			if = {
+				limit = { has_character_flag = gen_hb_path_fostered }
+				gen_hb_switch_to_embraced_effect = yes
+			}
+			trigger_event = gen_hornborn.0052
+		}
+	}
+}
+
+# =====================================================================================
+#  0051 — The Cap Comes Off (hidden child)
+# =====================================================================================
+gen_hornborn.0051 = {
+	type = character_event
+	title = gen_hornborn.0051.t
+	desc = gen_hornborn.0051.desc
+	theme = family
+	override_background = { reference = bedchamber }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+
+	# Keep hiding: the ordinary filing from here on (gen_file_horns_effect).
+	option = {
+		name = gen_hornborn.0051.a
+		remove_character_flag = gen_horns_filed
+		remove_character_modifier = gen_filed_horns_modifier	# the childhood one; refiled for 5 years below
+		gen_file_horns_effect = yes
+		if = {
+			limit = { scope:gen_hb_parent ?= { is_alive = yes } }
+			add_opinion = {
+				target = scope:gen_hb_parent
+				modifier = gen_hb_kept_me_safe_opinion
+			}
+		}
+		gen_hb_coming_of_age_toast_effect = yes
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = craven }
+			modifier = { add = 30 has_trait = shy }
+			modifier = { add = 20 has_trait = deceitful }
+		}
+	}
+
+	# Let them grow.
+	option = {
+		name = gen_hornborn.0051.b
+		remove_character_flag = gen_horns_filed
+		remove_character_modifier = gen_filed_horns_modifier
+		if = {
+			limit = { scope:gen_hb_parent ?= { is_alive = yes } }
+			add_opinion = {
+				target = scope:gen_hb_parent
+				modifier = gen_hb_hid_me_away_opinion
+			}
+			if = {
+				limit = { has_character_flag = gen_hb_lied_to }
+				add_opinion = {
+					target = scope:gen_hb_parent
+					modifier = gen_hb_lied_to_me_opinion
+				}
+			}
+		}
+		stress_impact = {
+			honest = medium_stress_impact_loss
+			brave = minor_stress_impact_loss
+		}
+		gen_hb_coming_of_age_toast_effect = yes
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = brave }
+			modifier = { add = 20 has_trait = honest }
+			modifier = { add = 20 has_trait = arrogant }
+			modifier = { add = 20 has_trait = wrathful }
+		}
+	}
+}
+
+# =====================================================================================
+#  0052 — Raised Unashamed (embraced child, or one brought home or found out)
+# =====================================================================================
+gen_hornborn.0052 = {
+	type = character_event
+	title = gen_hornborn.0052.t
+	desc = gen_hornborn.0052.desc
+	theme = family
+	override_background = { reference = courtyard }
+
+	left_portrait = {
+		character = root
+		animation = personality_bold
+	}
+
+	option = {
+		name = gen_hornborn.0052.a
+		add_character_modifier = { modifier = gen_hb_fearsome_modifier }
+		gen_hb_coming_of_age_toast_effect = yes
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = wrathful }
+			modifier = { add = 30 has_trait = arrogant }
+			modifier = { add = 30 has_trait = sadistic }
+			modifier = { add = 20 has_trait = ambitious }
+		}
+	}
+
+	option = {
+		name = gen_hornborn.0052.b
+		add_character_modifier = { modifier = gen_hb_familiar_face_modifier }
+		gen_hb_coming_of_age_toast_effect = yes
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = gregarious }
+			modifier = { add = 30 has_trait = compassionate }
+			modifier = { add = 20 has_trait = honest }
+		}
+	}
+}
+
+# =====================================================================================
+#  0053 — Two Homes (fostered child)
+# =====================================================================================
+gen_hornborn.0053 = {
+	type = character_event
+	title = gen_hornborn.0053.t
+	desc = {
+		desc = gen_hornborn.0053.desc
+		first_valid = {
+			triggered_desc = {
+				trigger = { scope:gen_hb_parent ?= { is_alive = yes } }
+				desc = gen_hornborn.0053.desc.parent
+			}
+			desc = gen_hornborn.0053.desc.no_parent
+		}
+	}
+	theme = family
+	override_background = { reference = wilderness_mountains }
+
+	left_portrait = {
+		character = root
+		animation = thinking
+	}
+	right_portrait = {
+		character = scope:gen_hb_foster
+		trigger = { scope:gen_hb_foster ?= { is_alive = yes } }
+	}
+
+	# Go home.
+	option = {
+		name = gen_hornborn.0053.a
+		add_character_modifier = { modifier = gen_hb_highland_raised_modifier }
+		if = {
+			limit = {
+				is_landed = no
+				scope:gen_hb_parent ?= {
+					is_alive = yes
+					is_landed = yes
+				}
+			}
+			scope:gen_hb_parent = { add_courtier = root }
+		}
+		gen_hb_coming_of_age_toast_effect = yes
+		ai_chance = {
+			base = 50
+			modifier = { add = 50 scope:gen_hb_parent ?= { primary_heir ?= { this = root } } }
+		}
+	}
+
+	# Stay with the horned people.
+	option = {
+		name = gen_hornborn.0053.b
+		trigger = { scope:gen_hb_foster ?= { is_alive = yes } }
+		set_culture = scope:gen_hb_foster.culture
+		scope:gen_hb_parent ?= {
+			if = {
+				limit = { is_alive = yes }
+				add_opinion = {
+					target = root
+					modifier = gen_hb_chose_highlands_opinion
+				}
+			}
+		}
+		gen_hb_coming_of_age_toast_effect = yes
+		ai_chance = {
+			base = 30
+			modifier = { add = 30 has_trait = content }
+			modifier = { factor = 0.2 scope:gen_hb_parent ?= { primary_heir ?= { this = root } } }
+		}
+	}
+}

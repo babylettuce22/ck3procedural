@@ -5,7 +5,8 @@ namespace Ck3MapGen.AppGUI;
 /// <summary>
 /// The interactive 3D view of a loaded heightmap: drag to orbit, right-drag to pan, wheel to zoom.
 ///
-/// Rendering runs off the UI thread, plain while the mouse is down and 2x supersampled once it
+/// Rendering uses a hardware compute shader when available, with the software march as fallback.
+/// It runs off the UI thread, plain while the mouse is down and 2x supersampled once it
 /// settles. A supersampled frame costs four times as much, which is the wrong trade mid-drag,
 /// where frames are disposable; the antialiased frame arrives a few tens of milliseconds after
 /// the drag stops and nobody sees the seam.
@@ -16,6 +17,8 @@ namespace Ck3MapGen.AppGUI;
 /// </summary>
 public sealed class HeightfieldPanel : Control
 {
+    private readonly HeightfieldRenderBackend _renderer = new();
+    internal bool UsingGpu => _renderer.UsingGpu;
     private Heightfield? _source;
     private Heightfield? _packed;
     private HeightfieldView _view = HeightfieldView.Default;
@@ -28,6 +31,7 @@ public sealed class HeightfieldPanel : Control
     private bool _running;
     private bool _dirty;
     private bool _draft;
+    private TaskScheduler? _renderScheduler;
 
     private Point _drag;
     private MouseButtons _dragging;
@@ -135,11 +139,14 @@ public sealed class HeightfieldPanel : Control
 
     private void Pump()
     {
-        if (_running || !_dirty) return;
+        if (IsDisposed || Disposing || _running || !_dirty) return;
 
         var field = Active;
         if (field is null || Width < 24 || Height < 24) return;
 
+        // Keep the UI scheduler across frames. A posted completion can run with no current
+        // SynchronizationContext (including during teardown); re-querying it there can fault.
+        _renderScheduler ??= TaskScheduler.FromCurrentSynchronizationContext();
         _dirty = false;
         _running = true;
 
@@ -154,12 +161,21 @@ public sealed class HeightfieldPanel : Control
         int ss = _draft ? 1 : 2;
         var drape = _drape;
 
-        Task.Run(() => HeightfieldRenderer.Render(field, view, w, h, ss, drape))
+        Task.Run(() => _renderer.Render(field, view, w, h, ss, drape))
             .ContinueWith(task =>
             {
                 _running = false;
 
-                if (task.IsCompletedSuccessfully)
+                if (task.IsFaulted)
+                {
+                    // Closing the panel can dispose the backend before a queued worker starts.
+                    // Observe its fault even when the UI has gone, so it cannot become a crash log.
+                    var error = task.Exception!.GetBaseException();
+                    if (!IsDisposed && !Disposing) Console.WriteLine($"3D render: {error.Message}");
+                }
+                if (IsDisposed || Disposing) return;
+
+                if (task.IsCompletedSuccessfully && ReferenceEquals(field, Active) && drape == _drape)
                 {
                     _frame?.Dispose();
                     _frame = PreviewRenderer.ToBitmap(task.Result);
@@ -169,7 +185,7 @@ public sealed class HeightfieldPanel : Control
 
                 Pump();
             }, CancellationToken.None, TaskContinuationOptions.None,
-               TaskScheduler.FromCurrentSynchronizationContext());
+               _renderScheduler);
     }
 
     protected override void OnResize(EventArgs e)
@@ -339,6 +355,7 @@ public sealed class HeightfieldPanel : Control
     {
         if (disposing)
         {
+            _renderer.Dispose();
             _frame?.Dispose();
             _sharpen.Dispose();
         }

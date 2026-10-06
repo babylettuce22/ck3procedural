@@ -1,0 +1,375 @@
+﻿namespace = gen_world_debug_events
+
+# Manual only: event gen_world_debug_events.0001 through .0010.
+# Character-scoped menus are discovered by the generator debug panel.
+
+gen_world_debug_events.0001 = {
+	type = character_event
+	title = gen_world_debug_events.0001.t
+	desc = gen_world_debug_events.0001.desc
+	theme = realm
+	trigger = { is_ai = no }
+	option = {
+		name = gen_world_debug_events.0001.o1
+		custom_tooltip = gen_world_debug_events.0001.o1.tt
+		hidden_effect = {
+			gen_world_debug_collapse_effect = { TIER = tier_kingdom }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0001.o2
+		custom_tooltip = gen_world_debug_events.0001.o2.tt
+		hidden_effect = {
+			gen_world_debug_collapse_effect = { TIER = tier_duchy }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0001.o3
+		custom_tooltip = gen_world_debug_events.0001.o3.tt
+		hidden_effect = {
+			gen_world_debug_collapse_effect = { TIER = tier_county }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0001.o4
+		custom_tooltip = gen_world_debug_events.0001.o4.tt
+		hidden_effect = {
+			gen_world_debug_independent_counties_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_cancel
+		custom_tooltip = gen_world_debug_cancel_tt
+		ai_chance = { base = 100 }
+	}
+}
+
+gen_world_debug_events.0002 = {
+	type = character_event
+	title = gen_world_debug_events.0002.t
+	desc = gen_world_debug_events.0002.desc
+	theme = realm
+	trigger = { is_ai = no }
+	option = {
+		name = gen_world_debug_events.0002.o1
+		trigger = { debug_only = yes }
+		custom_tooltip = gen_world_debug_events.0002.o1.tt
+		hidden_effect = {
+			gen_world_debug_random_war_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0002.o2
+		trigger = { debug_only = yes }
+		custom_tooltip = gen_world_debug_events.0002.o2.tt
+		hidden_effect = {
+			gen_world_debug_war_wave_effect = { ATTACKER_FILTER = "always = yes" TARGET_FILTER = "always = yes" }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0002.o3
+		trigger = { debug_only = yes }
+		custom_tooltip = gen_world_debug_events.0002.o3.tt
+		hidden_effect = {
+			gen_world_debug_war_wave_effect = { ATTACKER_FILTER = "is_at_war = no" TARGET_FILTER = "always = yes" }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0002.o4
+		trigger = { debug_only = yes }
+		custom_tooltip = gen_world_debug_events.0002.o4.tt
+		hidden_effect = {
+			gen_world_debug_war_wave_effect = { ATTACKER_FILTER = "always = yes" TARGET_FILTER = "current_military_strength < scope:gen_world_debug_attacker.current_military_strength" }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_cancel
+		custom_tooltip = gen_world_debug_cancel_tt
+		ai_chance = { base = 100 }
+	}
+}
+
+gen_world_debug_events.0003 = {
+	type = character_event
+	title = gen_world_debug_events.0003.t
+	desc = gen_world_debug_events.0003.desc
+	theme = realm
+	trigger = { is_ai = no }
+	option = {
+		name = gen_world_debug_events.0003.o1
+		custom_tooltip = gen_world_debug_events.0003.o1.tt
+		hidden_effect = {
+			gen_world_debug_white_peace_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_cancel
+		custom_tooltip = gen_world_debug_cancel_tt
+		ai_chance = { base = 100 }
+	}
+}
+
+gen_world_debug_events.0004 = {
+	type = character_event
+	title = gen_world_debug_events.0004.t
+	desc = gen_world_debug_events.0004.desc
+	theme = realm
+	trigger = { is_ai = no }
+	option = {
+		name = gen_world_debug_events.0004.o1
+		custom_tooltip = gen_world_debug_events.0004.o1.tt
+		hidden_effect = {
+			gen_world_debug_release_vassals_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_cancel
+		custom_tooltip = gen_world_debug_cancel_tt
+		ai_chance = { base = 100 }
+	}
+}
+
+gen_world_debug_events.0005 = {
+	type = character_event
+	title = gen_world_debug_events.0005.t
+	desc = gen_world_debug_events.0005.desc
+	theme = realm
+	trigger = { is_ai = no }
+	option = {
+		name = gen_world_debug_events.0005.o1
+		custom_tooltip = gen_world_debug_events.0005.o1.tt
+		hidden_effect = {
+			gen_world_debug_consolidate_effect = { TITLE_SCOPE = de_jure_liege }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0005.o2
+		custom_tooltip = gen_world_debug_events.0005.o2.tt
+		hidden_effect = {
+			gen_world_debug_consolidate_effect = { TITLE_SCOPE = de_jure_liege.de_jure_liege }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_cancel
+		custom_tooltip = gen_world_debug_cancel_tt
+		ai_chance = { base = 100 }
+	}
+}
+
+gen_world_debug_events.0006 = {
+	type = character_event
+	title = gen_world_debug_events.0006.t
+	desc = gen_world_debug_events.0006.desc
+	theme = realm
+	trigger = { is_ai = no }
+	option = {
+		name = gen_world_debug_events.0006.o1
+		custom_tooltip = gen_world_debug_events.0006.o1.tt
+		hidden_effect = {
+			gen_world_debug_gold_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0006.o2
+		custom_tooltip = gen_world_debug_events.0006.o2.tt
+		hidden_effect = {
+			gen_world_debug_refill_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0006.o3
+		custom_tooltip = gen_world_debug_events.0006.o3.tt
+		hidden_effect = {
+			gen_world_debug_gold_effect = yes
+			gen_world_debug_refill_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_cancel
+		custom_tooltip = gen_world_debug_cancel_tt
+		ai_chance = { base = 100 }
+	}
+}
+
+gen_world_debug_events.0007 = {
+	type = character_event
+	title = gen_world_debug_events.0007.t
+	desc = gen_world_debug_events.0007.desc
+	theme = realm
+	trigger = { is_ai = no }
+	option = {
+		name = gen_world_debug_events.0007.o1
+		custom_tooltip = gen_world_debug_events.0007.o1.tt
+		hidden_effect = {
+			gen_world_debug_faith_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0007.o2
+		custom_tooltip = gen_world_debug_events.0007.o2.tt
+		hidden_effect = {
+			gen_world_debug_culture_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0007.o3
+		custom_tooltip = gen_world_debug_events.0007.o3.tt
+		hidden_effect = {
+			gen_world_debug_faith_effect = yes
+			gen_world_debug_culture_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_cancel
+		custom_tooltip = gen_world_debug_cancel_tt
+		ai_chance = { base = 100 }
+	}
+}
+
+gen_world_debug_events.0008 = {
+	type = character_event
+	title = gen_world_debug_events.0008.t
+	desc = gen_world_debug_events.0008.desc
+	theme = realm
+	trigger = { is_ai = no }
+	option = {
+		name = gen_world_debug_events.0008.o1
+		custom_tooltip = gen_world_debug_events.0008.o1.tt
+		hidden_effect = {
+			gen_world_debug_control_effect = { AMOUNT = -100 }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0008.o2
+		custom_tooltip = gen_world_debug_events.0008.o2.tt
+		hidden_effect = {
+			gen_world_debug_control_effect = { AMOUNT = 100 }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0008.o3
+		custom_tooltip = gen_world_debug_events.0008.o3.tt
+		hidden_effect = {
+			gen_world_debug_unrest_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0008.o4
+		custom_tooltip = gen_world_debug_events.0008.o4.tt
+		hidden_effect = {
+			gen_world_debug_clear_unrest_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_cancel
+		custom_tooltip = gen_world_debug_cancel_tt
+		ai_chance = { base = 100 }
+	}
+}
+
+gen_world_debug_events.0009 = {
+	type = character_event
+	title = gen_world_debug_events.0009.t
+	desc = gen_world_debug_events.0009.desc
+	theme = realm
+	trigger = { is_ai = no }
+	option = {
+		name = gen_world_debug_events.0009.o1
+		custom_tooltip = gen_world_debug_events.0009.o1.tt
+		hidden_effect = {
+			gen_world_debug_random_succession_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0009.o2
+		custom_tooltip = gen_world_debug_events.0009.o2.tt
+		hidden_effect = {
+			gen_world_debug_succession_effect = { FILTER = "is_independent_ruler = yes" }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0009.o3
+		custom_tooltip = gen_world_debug_events.0009.o3.tt
+		hidden_effect = {
+			gen_world_debug_succession_effect = { FILTER = "always = yes" }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_cancel
+		custom_tooltip = gen_world_debug_cancel_tt
+		ai_chance = { base = 100 }
+	}
+}
+
+gen_world_debug_events.0010 = {
+	type = character_event
+	title = gen_world_debug_events.0010.t
+	desc = gen_world_debug_events.0010.desc
+	theme = realm
+	trigger = { is_ai = no }
+	option = {
+		name = gen_world_debug_events.0010.o1
+		trigger = { NOT = { has_game_rule = epidemic_frequency_disabled } }
+		custom_tooltip = gen_world_debug_events.0010.o1.tt
+		hidden_effect = {
+			gen_world_debug_outbreak_effect = { INTENSITY = minor }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0010.o2
+		trigger = { NOT = { has_game_rule = epidemic_frequency_disabled } }
+		custom_tooltip = gen_world_debug_events.0010.o2.tt
+		hidden_effect = {
+			gen_world_debug_outbreak_effect = { INTENSITY = major }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0010.o3
+		trigger = { NOT = { has_game_rule = epidemic_frequency_disabled } }
+		custom_tooltip = gen_world_debug_events.0010.o3.tt
+		hidden_effect = {
+			gen_world_debug_outbreak_effect = { INTENSITY = apocalyptic }
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_events.0010.o4
+		custom_tooltip = gen_world_debug_events.0010.o4.tt
+		hidden_effect = {
+			gen_world_debug_reduce_epidemics_effect = yes
+		}
+		ai_chance = { base = 0 }
+	}
+	option = {
+		name = gen_world_debug_cancel
+		custom_tooltip = gen_world_debug_cancel_tt
+		ai_chance = { base = 100 }
+	}
+}

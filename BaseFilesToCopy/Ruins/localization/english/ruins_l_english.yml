@@ -16,12 +16,21 @@
 
  # ---- 0001, the warning ----
  #
- # Deliberately concrete about what is wrong and what fixes it. A warning that only says "things are
- # bad" is a warning the player cannot act on, and the whole reason this event exists a year or two
- # ahead of the collapse is so that acting on it is still possible.
- gen_ruins.0001.t:0 "[gen_ruin_target.GetName] Is Failing"
- gen_ruins.0001.desc:0 "The reports out of [gen_ruin_target.GetName] have stopped being about harvests and started being about who has left.\n\nThe fields nearest the road are being worked and the rest are not. Two of the mills are down and nobody has been sent to look at them. Your reeve there writes that he can raise a tally of what is owed or he can raise men to collect it, and he no longer believes he can do both.\n\nHe is not asking for money. He is telling you that if the next few years look like the last few, there will be nothing left there to hold — and that the thing which would fix it is your #V control#! over the county, not your generosity."
- gen_ruins.0001.a:0 "Then it will not look like the last few."
+ # Rewritten 2026-10-05 in the plain voice (event-prose-tone): what is wrong, why, how long is left,
+ # and what counts as a good year. The old letter was atmosphere with no levers, and promised the
+ # reeve was "not asking for money" one event before he asked for money.
+ #
+ # The cause lines are shared with 0005. Each starts with its own line break so any of the three can
+ # be shown alone or together. Which ones show is decided in the event (see the note on 0001).
+ gen_ruins.0001.t:0 "[gen_ruin_target.GetNameNoTier] Is Failing"
+ gen_ruins.0001.desc_intro:0 "A letter has come from your reeve in [gen_ruin_target.GetNameNoTier]. People are leaving. Half the fields have gone unworked this year, two of the mills have stopped, and the reeve can no longer collect what is owed.\n\nThe reeve lays out what is wrong:"
+ gen_ruins.0001.desc_levers:0 "\n\nIf things go on like this for about #V [gen_ruin_years_left|0] more years#!, the last families will leave and [gen_ruin_target.GetNameNoTier] will be lost.\n\nOne good year ends the danger. Get [county_control|E] there up to #V [gen_ruin_recover_ctl|0]#! or more, or get its [county_development|E] growing again. Setting your [marshal|E] to #V Increase Control in County#! there is the surest way, and every siege or occupation sets it back. A quiet year that is neither good nor bad eases things a little but does not end it."
+ gen_ruins.0001.a:0 "I will see to it."
+ gen_ruins.0001.a.tt:0 "If [gen_ruin_target.GetNameNoTier] is still failing when the time runs out, you will get #V one chance to pay#! to keep it. Refuse, and the county is #N lost#!."
+
+ gen_ruins.cause_control:0 "\n\n#N Your hold is slipping.#! [county_control|E] in [gen_ruin_target.GetNameNoTier] is very low and is not recovering on its own."
+ gen_ruins.cause_opinion:0 "\n\n#N The people hate their lord.#! [county_opinion|E] in [gen_ruin_target.GetNameNoTier] has fallen far below zero."
+ gen_ruins.cause_poorer:0 "\n\n#N It is getting poorer.#! The [county_development|E] of [gen_ruin_target.GetNameNoTier] has been falling, year after year."
 
  # ---- The reprieve modifier ----
  #
@@ -37,18 +46,33 @@
  # They are printed in the description as well as on the buttons on purpose: an option whose trigger
  # fails is not drawn at all, so a holder who can afford none of the three would otherwise see one
  # button and no explanation of what the others would have cost.
- gen_ruins.0005.t:0 "The Last Year of [gen_ruin_target.GetName]"
- gen_ruins.0005.desc:0 "Your reeve in [gen_ruin_target.GetName] has stopped writing letters and come in person, which tells you most of it before he opens his mouth.\n\nHe has a list. The names on it are the households still there, and it is short enough to read aloud. He says that if nothing arrives before the spring they will go the way the others went — not driven out, not burned out, simply gone one cart at a time to kin elsewhere — and that after that there is no county to save, only a place on the map where one used to be.\n\nHe is asking for a great deal, and he knows it. What he is offering in return is #V [gen_ruin_reprieve_n|0] years#! in which the thing is not decided yet.\n\nGold would do it: @gold_icon![gen_ruin_gold_cost|0] into the mills, the roads and the wages. So would going yourself and spending what your name is worth — @prestige_icon![gen_ruin_prestige_cost|0]. So would asking the faith for relief, at @piety_icon![gen_ruin_piety_cost|0].\n\nOr you can tell him to bring the last of them out and stop pretending."
+ #
+ # Rewritten 2026-10-05: the description says why, what is at stake, what paying buys and what it
+ # does not. The option tooltips repeat the parts CK3 cannot draw (gen_ruin_reprieve_tooltip_effect),
+ # in words rather than scope values, because a number in an option tooltip is the one place the
+ # tooltip-traps note says can render blank.
+ gen_ruins.0005.t:0 "Last Chance for [gen_ruin_target.GetNameNoTier]"
+ gen_ruins.0005.desc_intro:0 "Your reeve in [gen_ruin_target.GetNameNoTier] has come to court in person. The list of households still living there is short enough to read aloud, and if nothing changes before spring, they will leave too."
+ gen_ruins.0005.desc_offer:0 "\n\nIf you do nothing, #N [gen_ruin_target.GetNameNoTier] will be abandoned.#! It will no longer be yours or anyone's, and only ruins will be left.\n\nYou can pay to hold it together for #V [gen_ruin_reprieve_n|0] years#!, with gold, prestige or piety. It cannot fall while that lasts. This buys time, not a cure: if the bad years go on, about #V [gen_ruin_setback_years|0] more#! will bring you back here, and the price goes up each time.\n\nWhat actually saves the county is one good year: [county_control|E] at #V [gen_ruin_recover_ctl|0]#! or more, or its [county_development|E] growing again."
 
- gen_ruins.0005.a_gold:0 "Open the treasury. (@gold_icon![gen_ruin_gold_cost|0])"
- gen_ruins.0005.b_prestige:0 "I will go myself, and call in what I am owed. (@prestige_icon![gen_ruin_prestige_cost|0])"
- gen_ruins.0005.c_piety:0 "Ask the faith for relief. (@piety_icon![gen_ruin_piety_cost|0])"
- gen_ruins.0005.d_decline:0 "Bring the last of them out. It is finished."
+ gen_ruins.0005.a_gold:0 "Pay for repairs and wages. (@gold_icon![gen_ruin_gold_cost|0])"
+ gen_ruins.0005.b_prestige:0 "I will go there myself and call in favours. (@prestige_icon![gen_ruin_prestige_cost|0])"
+ gen_ruins.0005.c_piety:0 "Ask the faith to send relief. (@piety_icon![gen_ruin_piety_cost|0])"
+ gen_ruins.0005.d_decline:0 "Let it go."
+ gen_ruins.0005.d_decline.tt:0 "#N [gen_ruin_target.GetNameNoTier] is abandoned.#! It becomes ruins and passes out of your hands for good. It can be settled again later by colonising it."
+
+ gen_ruins.0005.reprieve_tt:0 "[gen_ruin_target.GetNameNoTier] #P cannot fall#! while this lasts, and the help makes a good year easier to reach. The danger is #N pushed back, not ended#!: if the bad years go on, you will face this choice again."
+ gen_ruins.0005.reprieve_dearer_tt:0 "The next offer for [gen_ruin_target.GetNameNoTier] will cost #N more#! than this one."
+ gen_ruins.0005.reprieve_same_price_tt:0 "The next offer for [gen_ruin_target.GetNameNoTier] will cost #V the same#! as this one."
 
  # ---- 0010, the fall ----
- gen_ruins.0010.t:0 "[gen_ruin_target.GetName] Is Gone"
- gen_ruins.0010.desc:0 "There was no final calamity. That is somehow the worst of it.\n\nThe last families out of [gen_ruin_target.GetName] went the way the others had gone, in ones and twos, over a season, to kin in other counties or to whatever town would take them. Somebody pulled the good timber off the roofs before they left. The rest came down on its own.\n\nWhat is left is walls, and the wood is already going. In a generation the road in will be gone too, and it will be a place people warn each other about rather than a place anyone has been.\n\nIt is not yours any more. It is not anybody's."
- gen_ruins.0010.a:0 "We should have gone ourselves, years ago."
+ #
+ # Rewritten 2026-10-05: says what happened mechanically (no longer yours, development gone, ruins,
+ # can be resettled). It used to be mood only and charged prestige with no choice; the prestige now
+ # sits on 0005's decline option, where it shows before the click.
+ gen_ruins.0010.t:0 "[gen_ruin_target.GetNameNoTier] Is Abandoned"
+ gen_ruins.0010.desc:0 "The last families have left [gen_ruin_target.GetNameNoTier]. No army took it. People simply went, a few at a time, to kin elsewhere or to whatever town would take them, and nobody came to replace them.\n\n#N You no longer hold [gen_ruin_target.GetNameNoTier].#! Its [county_development|E] is gone, its land has gone back to the wild, and only ruins are left standing. Nobody holds it now.\n\nIt can be settled again. Whoever colonises it will have to clear the ruins first, and may find something worth having among them."
+ gen_ruins.0010.a:0 "We should have done more, sooner."
 
  # ---- What the lords above are told ----
  #

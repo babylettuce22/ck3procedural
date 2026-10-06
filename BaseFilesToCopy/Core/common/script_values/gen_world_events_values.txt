@@ -1,5 +1,11 @@
 ﻿gen_world_war_minimum_realms_value = 10
-gen_world_war_threshold_percent_value = 50
+gen_world_war_threshold_percent_value = 25
+
+# The Quiet Years: fewer than this share of realms at war, for this many census years running.
+# Measured on one 1178-1308 campaign: median 18.6%, a quarter of years under 16%; under 14% two years
+# running first came in 1204, then 1273, 1278 and 1306. Roughly one realm in seven.
+gen_world_quiet_threshold_percent_value = 14
+gen_world_quiet_years_needed_value = 2
 
 # Only evaluated by the census when the denominator is positive.
 gen_world_war_percent_value = {

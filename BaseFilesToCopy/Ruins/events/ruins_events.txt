@@ -32,12 +32,45 @@
 # a year or more of margin left, and raising control is what spends it.
 #
 # No option that fixes anything. A button here that restored control would make the whole mechanic
-# a formality — the fix is the ordinary game, played in the ordinary way.
+# a formality — the fix is the ordinary game, played in the ordinary way. What the letter DOES owe
+# the player is the information to play it: why the county is failing, roughly how long is left,
+# and what counts as a good year. Rewritten 2026-10-05 for that; the old letter was all mood and
+# no levers.
+#
+# ---- Why the causes are read from the county's state now ----
+#
+# The tick does not record which arm made the year bad (only the debug tally does), and by the time
+# this window renders, ruin_last_dev has been stamped with this year's value, so the development
+# arm reads false. So the description asks the two LEVELS directly — control under 10, opinion
+# under -45 — and when neither holds, the only arm left that could have scored is falling
+# development. Shared with 0005 through the gen_ruins.cause_* keys.
 
 gen_ruins.0001 = {
 	type = character_event
 	title = gen_ruins.0001.t
-	desc = gen_ruins.0001.desc
+	desc = {
+		desc = gen_ruins.0001.desc_intro
+		triggered_desc = {
+			trigger = { scope:gen_ruin_target = { county_control < 10 } }
+			desc = gen_ruins.cause_control
+		}
+		triggered_desc = {
+			trigger = { scope:gen_ruin_target = { county_opinion < -45 } }
+			desc = gen_ruins.cause_opinion
+		}
+		triggered_desc = {
+			trigger = {
+				scope:gen_ruin_target = {
+					NOR = {
+						county_control < 10
+						county_opinion < -45
+					}
+				}
+			}
+			desc = gen_ruins.cause_poorer
+		}
+		desc = gen_ruins.0001.desc_levers
+	}
 	theme = realm
 	override_background = { reference = wilderness }
 
@@ -53,11 +86,43 @@ gen_ruins.0001 = {
 	# that tab. Use gen_ruins.9000 to reach this deliberately.
 	trigger = {
 		exists = scope:gen_ruin_target
+		# A county that is already a ruin has nothing left to warn about, offer or lose. This stops
+		# a stale window (two letters crossing, or an older save) from collapsing it a second time.
+		scope:gen_ruin_target = { gen_county_has_ruins_trigger = no }
 	}
 
+	immediate = {
+		# How far is left, and what a good year needs, as scope values for the description — a .yml
+		# cannot read a script value (see the note on gen_ruins.9000). `has_variable` in an outer
+		# `if`, because `?=` does not guard `var:` (generated-ruins-system).
+		if = {
+			limit = { scope:gen_ruin_target = { has_variable = ruin_decay } }
+			save_scope_value_as = {
+				name = gen_ruin_years_left
+				value = {
+					value = gen_ruin_decay_threshold
+					scope:gen_ruin_target = { subtract = var:ruin_decay }
+					min = 1
+				}
+			}
+		}
+		else = {
+			save_scope_value_as = {
+				name = gen_ruin_years_left
+				value = {
+					value = gen_ruin_decay_threshold
+					subtract = gen_ruin_decay_warning
+				}
+			}
+		}
+		save_scope_value_as = { name = gen_ruin_recover_ctl value = gen_ruin_recovering_control_level }
+	}
+
+	# The old option charged stress for reading a letter. A cost with no choice attached is a
+	# penalty for being told, so it is gone; the tooltip carries what happens next instead.
 	option = {
 		name = gen_ruins.0001.a
-		add_stress = minor_stress_impact_gain
+		custom_tooltip = gen_ruins.0001.a.tt
 	}
 }
 
@@ -106,7 +171,30 @@ gen_ruins.0001 = {
 gen_ruins.0005 = {
 	type = character_event
 	title = gen_ruins.0005.t
-	desc = gen_ruins.0005.desc
+	desc = {
+		desc = gen_ruins.0005.desc_intro
+		# Why, the same three lines as 0001 (see the note there on reading levels, not arms).
+		triggered_desc = {
+			trigger = { scope:gen_ruin_target = { county_control < 10 } }
+			desc = gen_ruins.cause_control
+		}
+		triggered_desc = {
+			trigger = { scope:gen_ruin_target = { county_opinion < -45 } }
+			desc = gen_ruins.cause_opinion
+		}
+		triggered_desc = {
+			trigger = {
+				scope:gen_ruin_target = {
+					NOR = {
+						county_control < 10
+						county_opinion < -45
+					}
+				}
+			}
+			desc = gen_ruins.cause_poorer
+		}
+		desc = gen_ruins.0005.desc_offer
+	}
 	theme = realm
 	override_background = { reference = wilderness }
 
@@ -120,6 +208,9 @@ gen_ruins.0005 = {
 	# a decline option that calls the collapse. Use gen_ruins.9000 to reach it deliberately.
 	trigger = {
 		exists = scope:gen_ruin_target
+		# A county that is already a ruin has nothing left to warn about, offer or lose. This stops
+		# a stale window (two letters crossing, or an older save) from collapsing it a second time.
+		scope:gen_ruin_target = { gen_county_has_ruins_trigger = no }
 	}
 
 	immediate = {
@@ -136,6 +227,17 @@ gen_ruins.0005 = {
 		save_scope_value_as = { name = gen_ruin_prestige_cost value = gen_ruin_save_prestige_cost }
 		save_scope_value_as = { name = gen_ruin_piety_cost value = gen_ruin_save_piety_cost }
 		save_scope_value_as = { name = gen_ruin_reprieve_n value = gen_ruin_reprieve_years }
+
+		# How many more bad years a reprieve buys after the modifier: the counter goes back to the
+		# warning line, not to zero. Printed in the description so the setback is stated, not implied.
+		save_scope_value_as = {
+			name = gen_ruin_setback_years
+			value = {
+				value = gen_ruin_decay_threshold
+				subtract = gen_ruin_reprieve_setback
+			}
+		}
+		save_scope_value_as = { name = gen_ruin_recover_ctl value = gen_ruin_recovering_control_level }
 	}
 
 	# ---- Pay for it ----
@@ -150,6 +252,7 @@ gen_ruins.0005 = {
 		}
 
 		remove_short_term_gold = gen_ruin_save_gold_cost
+		gen_ruin_reprieve_tooltip_effect = yes
 		gen_ruin_reprieve_effect = { COUNTY = scope:gen_ruin_target }
 
 		ai_chance = {
@@ -194,6 +297,7 @@ gen_ruins.0005 = {
 		}
 
 		add_prestige = gen_ruin_save_prestige_cost_neg
+		gen_ruin_reprieve_tooltip_effect = yes
 		gen_ruin_reprieve_effect = { COUNTY = scope:gen_ruin_target }
 
 		# A little stress, because this is the option where the ruler personally goes and deals with
@@ -233,6 +337,7 @@ gen_ruins.0005 = {
 		}
 
 		add_piety = gen_ruin_save_piety_cost_neg
+		gen_ruin_reprieve_tooltip_effect = yes
 		gen_ruin_reprieve_effect = { COUNTY = scope:gen_ruin_target }
 
 		ai_chance = {
@@ -260,9 +365,15 @@ gen_ruins.0005 = {
 	# The only option with no trigger on it, so this window can never be a dead end: a holder who can
 	# afford nothing sees one button, and it is this one. It fires the collapse rather than doing it,
 	# so that gen_ruins.0010 stays the single place a county is lost and its letter is still read.
+	#
+	# The prestige loss lives HERE, not on 0010's option (moved 2026-10-05). A bare trigger_event
+	# draws nothing on the tooltip, so the old decline button looked free and the cost only appeared
+	# afterwards, on a window with one button. Now the loss and the county both show before the click.
 	option = {
 		name = gen_ruins.0005.d_decline
 
+		custom_tooltip = gen_ruins.0005.d_decline.tt
+		add_prestige = medium_prestige_loss
 		trigger_event = gen_ruins.0010
 
 		ai_chance = {
@@ -311,6 +422,9 @@ gen_ruins.0010 = {
 	# console's "Collapse it now" is the deliberate way in.
 	trigger = {
 		exists = scope:gen_ruin_target
+		# A county that is already a ruin has nothing left to warn about, offer or lose. This stops
+		# a stale window (two letters crossing, or an older save) from collapsing it a second time.
+		scope:gen_ruin_target = { gen_county_has_ruins_trigger = no }
 	}
 
 	immediate = {
@@ -331,9 +445,10 @@ gen_ruins.0010 = {
 		gen_ruin_county_effect = { COUNTY = scope:gen_ruin_target }
 	}
 
+	# No effect: the prestige was charged on 0005's decline option, where the player could see it
+	# before choosing. This window reports what already happened.
 	option = {
 		name = gen_ruins.0010.a
-		add_prestige = medium_prestige_loss
 	}
 }
 

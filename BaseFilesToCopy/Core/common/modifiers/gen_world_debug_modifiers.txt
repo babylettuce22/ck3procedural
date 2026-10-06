@@ -1,0 +1,1 @@
+﻿gen_world_debug_unrest_modifier = { county_opinion_add = -50 }

@@ -79,15 +79,19 @@ public static partial class CompatibilityWriter
     /// permissive: a widened range still contains vanilla's resting angle at every step, so nothing
     /// looks different until the player actually tilts, and the engine never has to clamp a resting
     /// angle that fell outside its own bounds.
+    ///
+    /// Was 15 until 2026-10-05. That let the close camera drop to 25 degrees, which read as a
+    /// different game from vanilla's 40 and nearly doubled the shadow strip at the map edge; 8
+    /// keeps some freedom (32 degrees up close) while staying close to the base game's feel.
     /// </summary>
-    private const int TiltWidening = 15;
+    private const int TiltWidening = 8;
 
     /// <summary>
     /// Floor on the oblique end. Below roughly this the camera is flat enough to look past the map
     /// entirely, and on a generated map — which is smaller than vanilla's — that means the far edge
     /// and the surround plane in frame.
     ///
-    /// Slack at the current widening: vanilla's tightest min is 40, so 25 is the real floor. It is
+    /// Slack at the current widening: vanilla's tightest min is 40, so 32 is the real floor. It is
     /// here so that raising <see cref="TiltWidening"/> runs into a documented limit rather than
     /// walking the near steps down to zero.
     /// </summary>
@@ -168,9 +172,9 @@ public static partial class CompatibilityWriter
     /// into the ground on a small map.
     ///
     /// <c>NCamera.ZNEAR</c> is 10, and at the most oblique angle this writer allows — step 0's
-    /// widened minimum tilt, 25 degrees — a step of S puts the camera S*sin(25) = 0.42*S above the
-    /// point it looks at. 40 gives 16.9 world units, clear of the near plane with terrain relief to
-    /// spare. Unfloored, a 0.222-scale map would open step 0 at 16 world units, which is 6.8 above
+    /// widened minimum tilt, 32 degrees — a step of S puts the camera S*sin(32) = 0.53*S above the
+    /// point it looks at. 40 gives 21.2 world units, clear of the near plane with terrain relief to
+    /// spare. Unfloored, a 0.222-scale map would open step 0 at 16 world units, which is 8.5 above
     /// ground: the near plane would start cutting away the hillside in front of the camera.
     ///
     /// It binds only below half scale — at MapScale 0.5 step 0 lands on 35 and is nudged to 40, at

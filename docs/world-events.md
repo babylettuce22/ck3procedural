@@ -12,7 +12,7 @@ counts once if `is_at_war = yes`, including participation as an ally or in an
 internal war. Wars fought only by their vassals do not count for that ruler.
 Landless adventurers and independent barons are excluded from both counts.
 
-At least 10 eligible realms and a war share of at least 50% dispatch the event to
+At least 10 eligible realms and a war share of at least 25% dispatch the event to
 all currently available adult landed players of county rank or above, including
 vassals. This is one occurrence per world campaign, preserved across succession
 by `gen_world_season_of_swords_seen`. The first actual delivery marks it seen;
@@ -29,7 +29,35 @@ Tune the minimum realm count and percentage in
 `common/script_values/gen_world_events_values.txt`.
 Annual `GEN_WORLD_WAR` entries in debug.log record year, realm count, warring
 realm count and percentage, even after the event has occurred. These measurements
-are needed before making claims about how often a generated campaign reaches 50%.
+were the basis for the threshold: one 1178-1308 campaign (Oct 2026) never passed
+31%, sat at 11-22% most years, and reached 25% or more in 7 of 131 years. The
+original 50% gate therefore never fired; 25% marks an unusually warlike year.
+
+## The Quiet Years — gen_world_events.0002
+
+The counterpart to A Season of Swords, read off the same census. Each census year
+with at least 10 eligible realms and fewer than 14% of them at war adds one to
+`gen_world_quiet_years`; any other year resets it to 0. When it reaches 2, the event
+goes to the same recipients as 0001, once per campaign
+(`gen_world_quiet_years_seen`). The two cannot fire in the same year.
+
+The thresholds are relative to how much war these worlds actually have. On the
+measured 1178-1308 campaign the median year had 18.6% of realms at war and a quarter
+of years were under 16%. Under 14% two years running first happened in 1204, then
+1273, 1278 and 1306. An absolute "under 8% for three years" never happened.
+
+Options, each showing its trade-off:
+- Mend the roads and markets: `minor_gold_value` now, then +5% domain tax and +5%
+  development growth for five years.
+- Keep the levies drilling: free, +15% levy size and -5% domain tax for five years.
+- Let the court celebrate: `tiny_gold_value`, a minor stress loss.
+- Peace needs no help from us: nothing.
+
+The `GEN_WORLD_WAR` debug.log line now also prints `quiet_years`. Tune both numbers
+in `common/script_values/gen_world_events_values.txt`.
+
+To force it: `effect set_global_variable = { name = gen_world_quiet_years value = 2 }`,
+then `event gen_world_events.0002` (disposable save: this marks it seen).
 
 ## In-game checks
 
@@ -39,13 +67,13 @@ Use a freshly generated world in debug mode. In a landed adult player's console:
    debug.log for `GEN_WORLD_WAR`.
 2. To test the event window without waiting for widespread wars, run
    `effect set_global_variable = { name = gen_world_realm_count value = 10 }`, then
-   `effect set_global_variable = { name = gen_world_war_percent value = 50 }`, then
+   `effect set_global_variable = { name = gen_world_war_percent value = 25 }`, then
    `event gen_world_events.0001`. Use a disposable save: this marks the event seen.
 3. Check all options and the supplies wording at peace and at war. Check that
    insufficient funds hide the paid options and that the free option stays usable.
 4. For trigger boundaries, test the scripted trigger with a census of 10 realms
-   and war percentages below/at 50, then a census of 9 realms at 100. Only the
-   10-realms/50% case should pass. A census with zero realms must stay at 0%.
+   and war percentages below/at 25, then a census of 9 realms at 100. Only the
+   10-realms/25% case should pass. A census with zero realms must stay at 0%.
 5. Test dispatch with `effect trigger_event = { on_action = gen_world_events_yearly }`:
    it recomputes the real census. It must not recur after delivery or succession.
    In multiplayer, each eligible player must receive the same first occurrence.

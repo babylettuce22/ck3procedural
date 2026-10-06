@@ -1,0 +1,32 @@
+﻿# The march: a settled county that borders unsettled wilds or a ruin.
+#
+# No upside on purpose. The wild next door is a problem to be solved, by colonising it or by
+# rebuilding the ruin, and the modifier lifts the moment that happens (gen_march_refresh_*, in
+# common/scripted_effects/00_march_effects.txt). Development growth is the real cost: it compounds
+# over decades, while the tax and opinion terms are what make it visible on day one.
+#
+# Sized against vanilla's own steps (development growth +-0.10..0.20, control growth +-0.1..0.3,
+# tax +-0.05..0.10, travel danger +-5..10) and the clearing modifiers beside this file. The two are
+# exclusive: a county carries one or the other, never both. Measured 2026-10-05 on seven worlds: 4-10%
+# of settled counties border the wild, about a third of those border two or more wild counties.
+
+# One wild neighbour.
+gen_wild_march_modifier = {
+	icon = outdoors_negative
+	development_growth_factor = -0.15
+	monthly_county_control_growth_add = -0.2
+	tax_mult = -0.05
+	travel_danger = 5
+	county_opinion_add = -5
+}
+
+# Two or more. Men kept home to watch the treeline as well.
+gen_deep_march_modifier = {
+	icon = outdoors_negative
+	development_growth_factor = -0.25
+	monthly_county_control_growth_add = -0.3
+	tax_mult = -0.10
+	levy_size = -0.10
+	travel_danger = 10
+	county_opinion_add = -10
+}

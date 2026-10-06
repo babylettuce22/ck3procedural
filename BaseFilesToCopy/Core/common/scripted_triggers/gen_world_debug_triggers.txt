@@ -1,0 +1,13 @@
+﻿# Ordinary on-map rulers only; preserve the generator's wilderness owner.
+gen_world_debug_ruler_trigger = {
+	is_alive = yes
+	is_landed = yes
+	is_landless_ruler = no
+	NOT = { has_trait = wilderness }
+	primary_title = {
+		tier >= tier_county
+		is_landless_type_title = no
+		is_holy_order = no
+		is_mercenary_company = no
+	}
+}

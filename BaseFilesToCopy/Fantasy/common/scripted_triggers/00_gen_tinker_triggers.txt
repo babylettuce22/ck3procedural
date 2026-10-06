@@ -51,6 +51,17 @@ gen_tk_event_is_current_trigger = {
 	var:gen_tk_serial = scope:gen_tk_serial_token
 }
 
+# Curios (gen_tk_deliver_curio_effect), in the receiver's scope. Court pieces need a throne room to
+# stand in; and a kind they already own is rarely made again.
+gen_tk_curio_court_eligible_trigger = {
+	has_dlc_feature = royal_court
+	has_royal_court = yes
+}
+
+gen_tk_owns_curio_kind_trigger = {
+	any_character_artifact = { var:gen_tk_curio_kind ?= flag:$KIND$ }
+}
+
 # Which project is on the bench.
 gen_tk_project_is_trigger = {
 	exists = var:gen_tk_project

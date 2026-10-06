@@ -59,8 +59,14 @@
   <ItemGroup>
     <PackageReference Include="SixLabors.ImageSharp" Version="4.0.0" />
     <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="3.0.0" />
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
     <ProjectReference Include="$(NoiseToolDir)NoiseTool.Core\NoiseTool.Core.csproj" />
     <ProjectReference Include="$(NoiseToolDir)NoiseTool.Ui\NoiseTool.Ui.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="AppGUI\Map\HeightfieldGpu.hlsl" />
   </ItemGroup>
 
   <ItemGroup>

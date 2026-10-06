@@ -3,23 +3,67 @@
 # "works" and a stronger "masterwork" version. See 00_gen_tinker_triggers.txt for the map of the system.
 
 # ---------------------------------------------------------------- Curio (artifact modifiers)
-# The trinket (a clockwork songbird), for anyone: a charming toy that soothes its owner and delights
-# visitors.
-gen_tk_curio_trinket_modifier = {
+# Ten contraptions, each with a "works" and a stronger masterwork version (gen_tk_deliver_curio_effect
+# picks one). Trinkets go in a personal slot and anyone can have them; court pieces need a royal court.
+# Each leans on one thing, so two curios rarely do the same job.
+
+# --- Trinkets
+# Clockwork Songbird: a charming toy that soothes its owner and delights visitors.
+gen_tk_curio_songbird_modifier = {
 	learning = 1
 	monthly_prestige = 0.1
 	stress_loss_mult = 0.1
 	attraction_opinion = 5
 }
-gen_tk_curio_trinket_masterwork_modifier = {
+gen_tk_curio_songbird_masterwork_modifier = {
 	learning = 2
 	monthly_prestige = 0.25
 	stress_loss_mult = 0.15
 	attraction_opinion = 10
 }
 
-# The court piece (a clockwork orrery), for a ruler with a royal court: the heavens turning in brass,
-# something to study.
+# Clockwork Dancer: a little figure that bows and turns; a fine thing to set on a table between guests.
+gen_tk_curio_dancer_modifier = {
+	diplomacy = 1
+	attraction_opinion = 5
+}
+gen_tk_curio_dancer_masterwork_modifier = {
+	diplomacy = 2
+	attraction_opinion = 10
+	monthly_prestige = 0.1
+}
+
+# Clockwork Music Box: one tune, played well, whenever it's needed.
+gen_tk_curio_musicbox_modifier = {
+	stress_loss_mult = 0.15
+}
+gen_tk_curio_musicbox_masterwork_modifier = {
+	stress_loss_mult = 0.25
+	monthly_prestige = 0.1
+}
+
+# Brass Hound: it growls at strangers. Mostly.
+gen_tk_curio_hound_modifier = {
+	prowess = 2
+	dread_baseline_add = 5
+}
+gen_tk_curio_hound_masterwork_modifier = {
+	prowess = 3
+	dread_baseline_add = 10
+}
+
+# Pocket Clock: the owner is never late, and nor are their stewards.
+gen_tk_curio_pocketclock_modifier = {
+	stewardship = 1
+	domain_tax_mult = 0.03
+}
+gen_tk_curio_pocketclock_masterwork_modifier = {
+	stewardship = 2
+	domain_tax_mult = 0.05
+}
+
+# --- Court pieces (royal court only)
+# Clockwork Orrery: the heavens turning in brass, something to study.
 gen_tk_curio_orrery_modifier = {
 	court_grandeur_baseline_add = 2
 	learning = 1
@@ -30,6 +74,53 @@ gen_tk_curio_orrery_masterwork_modifier = {
 	learning = 2
 	monthly_prestige = 0.2
 	monthly_learning_lifestyle_xp_gain_mult = 0.2
+}
+
+# Singing Brass Tree: birds on brass branches that sing on the hour; envoys stop mid-sentence.
+gen_tk_curio_tree_modifier = {
+	court_grandeur_baseline_add = 2
+	diplomacy = 1
+}
+gen_tk_curio_tree_masterwork_modifier = {
+	court_grandeur_baseline_add = 4
+	diplomacy = 1
+	monthly_prestige = 0.25
+}
+
+# Steam Organ: water, fire and a great many pipes; feasts are louder and the court calmer.
+gen_tk_curio_organ_modifier = {
+	court_grandeur_baseline_add = 2
+	stress_loss_mult = 0.1
+}
+gen_tk_curio_organ_masterwork_modifier = {
+	court_grandeur_baseline_add = 4
+	stress_loss_mult = 0.15
+	monthly_prestige = 0.2
+}
+
+# Clockwork Knight: a brass champion that drills with the household knights.
+gen_tk_curio_knight_modifier = {
+	court_grandeur_baseline_add = 1
+	martial = 1
+	knight_effectiveness_mult = 0.05
+}
+gen_tk_curio_knight_masterwork_modifier = {
+	court_grandeur_baseline_add = 2
+	martial = 2
+	knight_effectiveness_mult = 0.1
+}
+
+# Chess Automaton: a brass player that wins more than it should.
+gen_tk_curio_chess_modifier = {
+	court_grandeur_baseline_add = 1
+	intrigue = 1
+	learning = 1
+}
+gen_tk_curio_chess_masterwork_modifier = {
+	court_grandeur_baseline_add = 2
+	intrigue = 2
+	learning = 1
+	monthly_prestige = 0.1
 }
 
 # ---------------------------------------------------------------- Waterworks (county, 20 years)

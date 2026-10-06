@@ -45,6 +45,10 @@ namespace Ck3MapGen.Emit;
 /// variable and a scripted_gui that owns both directions of the open state. What is new here is the
 /// tab strip — <c>GetVariableSystem.Set</c>/<c>HasValue</c>, which is vanilla's own pattern for
 /// "which of these panels is showing" and the first use of it in a window this project writes.
+///
+/// There are two windows: the player's, and an observer copy for global observe, where there is
+/// no player to root anything on. The observer one roots on a generated county and keeps its open
+/// state in a GUI variable; see <see cref="Mode"/>.
 /// </summary>
 public static class DebugPanel
 {
@@ -92,6 +96,33 @@ public static class DebugPanel
     private const string RealmTab = "realm";
     private const string ToolsTab = "tools";
     private const string EventsTab = "events";
+
+    /// <summary>
+    /// The observer window's open state: a GUI variable, because in global observe there is no
+    /// character to hold the one the player's window uses. Only the launcher and the close button
+    /// write it, and both live in the GUI layer, so nothing needs script to reach it.
+    /// </summary>
+    private const string ObserverOpenVariable = "gen_debug_panel_observer_open";
+
+    /// <summary>
+    /// Which of the two windows a piece of the panel is being built for.
+    ///
+    /// <b>Player</b>: everything roots on <c>GetPlayer</c>, as it always has. <b>Observer</b>
+    /// (global observe, <c>GetPlayer</c> invalid): everything roots on the anchor county instead,
+    /// the Live tab drops the rows about "you", and the Events tab is not offered. A character
+    /// event fired at an AI is answered on the spot by the AI and never shows a window, so the
+    /// menu events would do nothing visible; their effects are on the Tools tab as buttons instead.
+    /// </summary>
+    private sealed record Mode(bool Observer, GuiScope Actor, string Suffix, string ActorData)
+    {
+        public static Mode Player { get; } = new(false, GuiScope.Root("GetPlayer"), "", "GetPlayer");
+
+        public static Mode ObserverOn(string anchorCounty)
+        {
+            string anchor = $"GetTitleByKey( '{anchorCounty}' )";
+            return new(true, GuiScope.Root(anchor), "_obs", anchor);
+        }
+    }
 
     // ===========================================================================================
     // What the generator knows
@@ -167,6 +198,17 @@ public static class DebugPanel
         /// button opening a window that was never written is a button that does nothing.
         /// </summary>
         public bool HasWonderIndex { get; init; }
+
+        /// <summary>
+        /// A county key the observer-mode panel roots every button on. Empty when the world has no
+        /// counties, which leaves observer mode without a panel rather than with a broken one.
+        ///
+        /// Global observe has no player, and a <c>.gui</c> has nothing else that always exists:
+        /// <c>GetTitleByKey</c> on a county does, because nothing ever destroys a county title
+        /// (collapse stops at the duchy, ruination revokes the holder and keeps the title). Any
+        /// county would do; the counts the gather leaves on it are the only state it carries.
+        /// </summary>
+        public string AnchorCounty { get; init; } = "";
     }
 
     // ===========================================================================================
@@ -277,84 +319,49 @@ public static class DebugPanel
     {
         var doc = GuiDocument.Create("debug panel", "gui", "gen_debug_panel.gui");
 
-        var player = GuiScope.Root("GetPlayer");
-        var window = new ScriptedGui("gen_debug_panel_window", player);
-        var gather = new ScriptedGui("gen_debug_panel_gather", player);
+        var host = GuiBuilder.Type("gen_debug_panel_host", "window")
+            .Name("gen_debug_panel_host")
+            .AllowOutside()
+            .ParentAnchor("center")
+            .Size(0, 0)
+            // The host is always instantiated, so it carries the conditions under which no
+            // custom window should be on screen at all -- plus, here, the one condition the
+            // other three windows have no reason to ask.
+            //
+            // InDebugMode is belt and braces. The decision is already `debug_only`, so a
+            // release player cannot open the window in the first place; this makes it true that
+            // the window cannot be on screen outside debug mode even if some future surface
+            // sets the flag another way.
+            .Gap().Visible(GuiExpr.And(
+                GuiExpr.Raw("InDebugMode"),
+                GuiExpr.Raw("Not( IsPauseMenuShown )"),
+                GuiExpr.Raw("IsDefaultGUIMode")))
 
-        doc.Add(GuiBuilder.Types("gen_debug_panel").Add(
-
-            GuiBuilder.Type("gen_debug_panel_host", "window")
-                .Name("gen_debug_panel_host")
-                .AllowOutside()
-                .ParentAnchor("center")
+            // One window per mode, each behind a parent that is hidden in the other. The parent
+            // is what makes this safe rather than the windows' own `visible`: `And`/`Or` do not
+            // short-circuit, so a player window asked whether it is open with no player logs an
+            // invalid-scope error every frame. A hidden parent stops its children being
+            // evaluated at all.
+            .Gap().Add(GuiBuilder.Widget()
                 .Size(0, 0)
-                // The host is always instantiated, so it carries the conditions under which no
-                // custom window should be on screen at all -- plus, here, the one condition the
-                // other three windows have no reason to ask.
-                //
-                // InDebugMode is belt and braces. The decision is already `debug_only`, so a
-                // release player cannot open the window in the first place; this makes it true that
-                // the window cannot be on screen outside debug mode even if some future surface
-                // sets the flag another way.
-                .Gap().Visible(GuiExpr.And(
-                    GuiExpr.Raw("InDebugMode"),
-                    GuiExpr.Raw("Not( IsPauseMenuShown )"),
-                    GuiExpr.Raw("Or( Not( IsObserver ), GetPlayer.IsValid )"),
-                    GuiExpr.Raw("IsDefaultGUIMode")))
-                .Gap().Add(GuiBuilder.Of("gen_debug_panel_window")),
-
-            GuiBuilder.Type("gen_debug_panel_window", "window")
-                .Gapped()
-                .Name("gen_debug_panel_window")
                 .AllowOutside()
-                .Movable()
-                .ParentAnchor("center")
-                .Position(0, -40)
-                .Size(WindowWidth, WindowHeight)
-                .Using("Window_Background", "Window_Decoration_Spike")
-                .Gap().Visible(window.IsShown())
+                .Visible(GuiExpr.Raw("GetPlayer.IsValid"))
+                .Add(GuiBuilder.Of("gen_debug_panel_window")));
 
-                // Two things on show, and the order does not matter because they touch nothing in
-                // common. The gather fills the live column; the Set picks the tab.
-                //
-                // The tab is reset on every open rather than remembered. For a debug panel that is
-                // the right default: the first thing you want after opening it is the summary, and
-                // a window that reopens on whichever tab you last poked a button from is a window
-                // that looks broken the first time it happens.
-                .Gap().Add(GuiBuilder.State("_show")
-                    .Using("Animation_FadeIn_Quick", "Sound_WindowShow_Standard")
-                    .Quoted("on_start", gather.Execute().ToString())
-                    .Quoted("on_start", GuiExpr.VariableSet(TabVariable, WorldTab).ToString()))
+        if (facts.AnchorCounty.Length > 0)
+            host.Gap().Add(GuiBuilder.Widget()
+                .Size(0, 0)
+                .AllowOutside()
+                .Visible(GuiExpr.Raw("Not( GetPlayer.IsValid )"))
+                .Add(GuiBuilder.Of("gen_debug_panel_window_obs")));
 
-                .Gap().Add(GuiBuilder.State("_hide")
-                    .Using("Animation_FadeOut_Quick", "Sound_WindowHide_Standard"))
+        var types = GuiBuilder.Types("gen_debug_panel").Add(host,
+            WindowType(facts, labels, Mode.Player));
 
-                .Gap().Add(GuiBuilder.VBox()
-                    .Using("Window_Margins")
+        if (facts.AnchorCounty.Length > 0)
+            types.Gap().Add(WindowType(facts, labels, Mode.ObserverOn(facts.AnchorCounty)));
 
-                    .Gap().Add(GuiBuilder.Of("header_standard")
-                        .ExpandingH()
-                        .Gap().Add(GuiBuilder.BlockOverride("header_text")
-                            .Text("GEN_DEBUG_PANEL_TITLE"))
-                        .Gap().Add(GuiBuilder.BlockOverride("button_close")
-                            .DataContext(GuiExpr.Raw("GetScriptedGui( 'gen_debug_panel_window' )"))
-                            .OnClick(GuiExpr.Raw($"ScriptedGui.Execute( {player} )"))))
-
-                    .Gap().Add(Tabs())
-
-                    .Gap().Add(GuiBuilder.ScrollBox()
-                        .Expanding()
-                        .Gap().Add(GuiBuilder.BlockOverride("scrollbox_content")
-                            .Add(GuiBuilder.VBox()
-                                .ExpandingH()
-                                // Without this the two hidden tabs still reserve their height and
-                                // the visible one starts two screens down. A hidden widget is not
-                                // a widget of no size unless the parent is told to skip it.
-                                .IgnoreInvisible()
-                                .Gap().Add(WorldPanel(facts, labels))
-                                .Gap().Add(RealmPanel(facts, labels))
-                                .Gap().Add(ToolsPanel(facts))
-                                .Gap().Add(GuiBuilder.Of(EventsTabType))))))));
+        doc.Add(types);
 
         // The bare instantiation the registry resolves. Without it the file loads clean and then
         // "Could not find widget 'gen_debug_panel_host'", with nothing else to distinguish that
@@ -372,6 +379,88 @@ public static class DebugPanel
             + "# Names the HOST type, not the window itself, for the reason spelled out in\n"
             + "# gui/scripted_widgets/gen_artifact_index.txt.\n"
             + "gui/gen_debug_panel.gui = gen_debug_panel_host\n");
+    }
+
+    /// <summary>
+    /// One mode's window. The two differ only in where they keep their open state, what they
+    /// root on, and which tabs they offer: see <see cref="Mode"/>.
+    /// </summary>
+    private static GuiBuilder WindowType(Facts facts, LabelSet labels, Mode mode)
+    {
+        var gather = new ScriptedGui("gen_debug_panel_gather" + mode.Suffix, mode.Actor);
+
+        GuiExpr shown;
+        GuiBuilder close;
+
+        if (mode.Observer)
+        {
+            shown = GuiExpr.VariableExists(ObserverOpenVariable);
+            close = GuiBuilder.BlockOverride("button_close")
+                .OnClick(GuiExpr.VariableClear(ObserverOpenVariable));
+        }
+        else
+        {
+            var window = new ScriptedGui("gen_debug_panel_window", mode.Actor);
+            shown = window.IsShown();
+            close = GuiBuilder.BlockOverride("button_close")
+                .DataContext(GuiExpr.Raw("GetScriptedGui( 'gen_debug_panel_window' )"))
+                .OnClick(GuiExpr.Raw($"ScriptedGui.Execute( {mode.Actor} )"));
+        }
+
+        var content = GuiBuilder.VBox()
+            .ExpandingH()
+            // Without this the hidden tabs still reserve their height and the visible one
+            // starts two screens down. A hidden widget is not a widget of no size unless the
+            // parent is told to skip it.
+            .IgnoreInvisible()
+            .Gap().Add(WorldPanel(facts, labels, mode))
+            .Gap().Add(RealmPanel(facts, labels, mode))
+            .Gap().Add(ToolsPanel(facts, mode));
+
+        if (!mode.Observer)
+            content.Gap().Add(GuiBuilder.Of(EventsTabType));
+
+        return GuiBuilder.Type("gen_debug_panel_window" + mode.Suffix, "window")
+            .Gapped()
+            .Name("gen_debug_panel_window" + mode.Suffix)
+            .AllowOutside()
+            .Movable()
+            .ParentAnchor("center")
+            .Position(0, -40)
+            .Size(WindowWidth, WindowHeight)
+            .Using("Window_Background", "Window_Decoration_Spike")
+            .Gap().Visible(shown)
+
+            // Two things on show, and the order does not matter because they touch nothing in
+            // common. The gather fills the live column; the Set picks the tab.
+            //
+            // The tab is reset on every open rather than remembered. For a debug panel that is
+            // the right default: the first thing you want after opening it is the summary, and
+            // a window that reopens on whichever tab you last poked a button from is a window
+            // that looks broken the first time it happens.
+            .Gap().Add(GuiBuilder.State("_show")
+                .Using("Animation_FadeIn_Quick", "Sound_WindowShow_Standard")
+                .Quoted("on_start", gather.Execute().ToString())
+                .Quoted("on_start", GuiExpr.VariableSet(TabVariable, WorldTab).ToString()))
+
+            .Gap().Add(GuiBuilder.State("_hide")
+                .Using("Animation_FadeOut_Quick", "Sound_WindowHide_Standard"))
+
+            .Gap().Add(GuiBuilder.VBox()
+                .Using("Window_Margins")
+
+                .Gap().Add(GuiBuilder.Of("header_standard")
+                    .ExpandingH()
+                    .Gap().Add(GuiBuilder.BlockOverride("header_text")
+                        .Text(mode.Observer ? "GEN_DEBUG_PANEL_TITLE_OBSERVER" : "GEN_DEBUG_PANEL_TITLE"))
+                    .Gap().Add(close))
+
+                .Gap().Add(Tabs(mode))
+
+                .Gap().Add(GuiBuilder.ScrollBox()
+                    .Expanding()
+                    .Gap().Add(GuiBuilder.BlockOverride("scrollbox_content")
+                        .Add(content))));
     }
 
     /// <summary>
@@ -408,6 +497,21 @@ public static class DebugPanel
                     .Tooltip("GEN_DEBUG_LAUNCHER_TT")
                     .Down(window.IsShown())
                     .Runs(toggle))
+                .Node);
+
+        // The same button in global observe, where there is no player for the one above to ask.
+        // It flips a GUI variable instead, the observer window's whole open state, so nothing in
+        // it touches script. On a mod generated before the observer window existed it toggles a
+        // variable nothing reads, which is harmless.
+        hud.Unique("debug map modes", n => n.IsBlock && n.Key == "map_modes_debug")
+            .Append(GuiBuilder.FlowContainer()
+                .Visible(GuiExpr.Raw("Not( GetPlayer.IsValid )"))
+                .IgnoreInvisible()
+                .Add(GuiBuilder.Of("button_round")
+                    .Text("GEN_DEBUG_LAUNCHER")
+                    .Tooltip("GEN_DEBUG_LAUNCHER_TT")
+                    .Down(GuiExpr.VariableExists(ObserverOpenVariable))
+                    .OnClick(GuiExpr.VariableToggle(ObserverOpenVariable)))
                 .Node);
 
         string guis = Path.Combine(modDir, "common", "scripted_guis");
@@ -458,19 +562,23 @@ public static class DebugPanel
     /// clicked again). All three read the same variable, which is what makes the tabs exclusive
     /// without anything having to clear the others.
     /// </summary>
-    private static GuiBuilder Tabs()
+    private static GuiBuilder Tabs(Mode mode)
     {
         // No `align` on a box: hbox/vbox do not take it (none of vanilla's 6,105 boxes does), and it
         // logged "Property 'align' not handled" plus "Error setting properties" per box per load.
-        return GuiBuilder.HBox()
+        var strip = GuiBuilder.HBox()
             .ExpandingH()
             .Spacing(6)
             .MarginBottom(6)
             .Add(Tab(WorldTab, "GEN_DEBUG_PANEL_TAB_WORLD"),
                  Tab(RealmTab, "GEN_DEBUG_PANEL_TAB_REALM"),
-                 Tab(ToolsTab, "GEN_DEBUG_PANEL_TAB_TOOLS"),
-                 Tab(EventsTab, "GEN_DEBUG_PANEL_TAB_EVENTS"),
-                 GuiBuilder.Expand());
+                 Tab(ToolsTab, "GEN_DEBUG_PANEL_TAB_TOOLS"));
+
+        // No Events tab when observing: see Mode for why those buttons could not do anything.
+        if (!mode.Observer)
+            strip.Add(Tab(EventsTab, "GEN_DEBUG_PANEL_TAB_EVENTS"));
+
+        return strip.Add(GuiBuilder.Expand());
     }
 
     private static GuiBuilder Tab(string value, string label)
@@ -489,8 +597,10 @@ public static class DebugPanel
     // Tab one: what the generator wrote
     // ===========================================================================================
 
-    private static GuiBuilder WorldPanel(Facts facts, LabelSet labels)
+    private static GuiBuilder WorldPanel(Facts facts, LabelSet labels, Mode mode)
     {
+        GuiExpr Counter(string name) => DebugPanel.Counter(name, mode);
+
         return Panel(WorldTab)
 
             .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_RUN"))
@@ -567,28 +677,25 @@ public static class DebugPanel
     /// walk fifteen hundred counties sixty times a second. The gather does it once, when the
     /// window appears.
     /// </summary>
-    private static GuiBuilder RealmPanel(Facts facts, LabelSet labels)
+    private static GuiBuilder RealmPanel(Facts facts, LabelSet labels, Mode mode)
     {
-        return Panel(RealmTab)
+        GuiExpr Counter(string name) => DebugPanel.Counter(name, mode);
 
-            .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_PLAYER"))
-            .Add(Row(labels, "name", GuiExpr.Raw("GetPlayer.GetNameNoTooltip")),
-                 Row(labels, "id", GuiExpr.Raw("GetPlayer.GetID")),
-                 Row(labels, "primary title", GuiExpr.Raw("GetPlayer.GetPrimaryTitle.GetNameNoTooltip")),
-                 Row(labels, "culture", GuiExpr.Raw("GetPlayer.GetCulture.GetName")),
-                 Row(labels, "faith", GuiExpr.Raw("GetPlayer.GetFaith.GetName")),
-                 // GetNameNoTooltip, not GetName. A government has no GetName -- vanilla writes
-                 // this spelling and never the short one, and the wrong name would have resolved
-                 // to a blank line with nothing logged and ck3-tiger passing it. Caught by the
-                 // preview's "calls vanilla never makes" report, which is the only check in the
-                 // toolchain that distinguishes a wrong datafunction from a right one.
-                 Row(labels, "government", GuiExpr.Raw("GetPlayer.GetGovernment.GetNameNoTooltip")),
-                 Row(labels, "gold", GuiExpr.Raw("GetPlayer.GetGold|0")))
+        var panel = Panel(RealmTab);
 
-            .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_LIVE"))
-            .Add(Row(labels, "counties held", Counter("held")),
-                 Row(labels, "vassals", Counter("vassals")),
-                 Row(labels, "rulers alive", Counter("rulers")),
+        // Everything about "you" is the player's alone; an observer has no character to describe,
+        // and the gather does not count holdings or vassals for one.
+        if (!mode.Observer)
+            panel.Gap().Add(PlayerRows(labels));
+
+        panel.Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_LIVE"));
+
+        if (!mode.Observer)
+            panel.Add(Row(labels, "counties held", Counter("held")),
+                      Row(labels, "vassals", Counter("vassals")));
+
+        return panel
+            .Add(Row(labels, "rulers alive", Counter("rulers")),
                  Row(labels, "independent rulers", Counter("independent")),
                  Row(labels, "counties with no holder", Counter("wilderness")),
                  Row(labels, "artifacts in the world", Counter("artifacts")))
@@ -611,7 +718,28 @@ public static class DebugPanel
                     .Text("GEN_DEBUG_PANEL_WILDERNESS_NOTE")
                 : GuiBuilder.Of("widget").Size(0, 0))
 
-            .Gap().Add(facts.FantasyRaces ? RaceCensus(labels) : GuiBuilder.Of("widget").Size(0, 0));
+            .Gap().Add(facts.FantasyRaces ? RaceCensus(labels, mode) : GuiBuilder.Of("widget").Size(0, 0));
+    }
+
+    /// <summary>The player's own state, as straight datafunctions. Player mode only.</summary>
+    private static GuiBuilder PlayerRows(LabelSet labels)
+    {
+        return GuiBuilder.VBox()
+            .ExpandingH()
+            .Spacing(2)
+            .Add(Heading("GEN_DEBUG_PANEL_HEAD_PLAYER"))
+            .Add(Row(labels, "name", GuiExpr.Raw("GetPlayer.GetNameNoTooltip")),
+                 Row(labels, "id", GuiExpr.Raw("GetPlayer.GetID")),
+                 Row(labels, "primary title", GuiExpr.Raw("GetPlayer.GetPrimaryTitle.GetNameNoTooltip")),
+                 Row(labels, "culture", GuiExpr.Raw("GetPlayer.GetCulture.GetName")),
+                 Row(labels, "faith", GuiExpr.Raw("GetPlayer.GetFaith.GetName")),
+                 // GetNameNoTooltip, not GetName. A government has no GetName -- vanilla writes
+                 // this spelling and never the short one, and the wrong name would have resolved
+                 // to a blank line with nothing logged and ck3-tiger passing it. Caught by the
+                 // preview's "calls vanilla never makes" report, which is the only check in the
+                 // toolchain that distinguishes a wrong datafunction from a right one.
+                 Row(labels, "government", GuiExpr.Raw("GetPlayer.GetGovernment.GetNameNoTooltip")),
+                 Row(labels, "gold", GuiExpr.Raw("GetPlayer.GetGold|0")));
     }
 
     /// <summary>
@@ -624,8 +752,11 @@ public static class DebugPanel
     /// A doubled character counts once, under the race the sanitizer would keep, so the nine race
     /// rows plus the undecided row add up to everyone alive.
     /// </summary>
-    private static GuiBuilder RaceCensus(LabelSet labels)
-        => GuiBuilder.VBox()
+    private static GuiBuilder RaceCensus(LabelSet labels, Mode mode)
+    {
+        GuiExpr Counter(string name) => DebugPanel.Counter(name, mode);
+
+        return GuiBuilder.VBox()
             .ExpandingH()
             .Spacing(2)
 
@@ -649,24 +780,34 @@ public static class DebugPanel
                  Row(labels, "human trait, fantasy ethnicity", Counter("race_contradicts")))
 
             .Gap().Add(Note("GEN_DEBUG_PANEL_RACE_CHECKS_NOTE"));
+    }
 
     // ===========================================================================================
     // Tab three: the levers
     // ===========================================================================================
 
-    private static GuiBuilder ToolsPanel(Facts facts)
+    private static GuiBuilder ToolsPanel(Facts facts, Mode mode)
     {
-        var player = GuiScope.Root("GetPlayer");
-
         var panel = Panel(ToolsTab)
 
             .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_INSPECT"))
-            .Add(Action("gen_debug_panel_gather", player,
+            .Add(Action("gen_debug_panel_gather" + mode.Suffix, mode.Actor,
                      "GEN_DEBUG_PANEL_REFRESH", "GEN_DEBUG_PANEL_REFRESH_TT"),
-                 Action("gen_debug_panel_log", player,
-                     "GEN_DEBUG_PANEL_LOG", "GEN_DEBUG_PANEL_LOG_TT"))
+                 Action("gen_debug_panel_log" + mode.Suffix, mode.Actor,
+                     "GEN_DEBUG_PANEL_LOG", "GEN_DEBUG_PANEL_LOG_TT"));
 
-            .Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_RESOURCES"))
+        // The world tools need the anchor county for their root in both modes. A world with no
+        // counties has nothing for them to act on anyway.
+        if (facts.AnchorCounty.Length > 0)
+            panel.Gap().Add(WorldTools(facts.AnchorCounty, mode));
+
+        // Everything below acts on the player: their purse, or a window opened through a
+        // character variable. Nothing for an observer.
+        if (mode.Observer) return panel;
+
+        var player = mode.Actor;
+
+        panel.Gap().Add(Heading("GEN_DEBUG_PANEL_HEAD_RESOURCES"))
             .Add(Action("gen_debug_panel_gold", player,
                      "GEN_DEBUG_PANEL_GOLD", "GEN_DEBUG_PANEL_GOLD_TT"),
                  Action("gen_debug_panel_prestige", player,
@@ -695,6 +836,161 @@ public static class DebugPanel
                 "GEN_DEBUG_PANEL_WONDERS", "GEN_DEBUG_PANEL_WONDERS_TT"));
 
         return panel;
+    }
+
+    /// <summary>
+    /// One button per choice in the world debug menus (<c>gen_world_debug_events.0001</c>-<c>0010</c>),
+    /// running that choice's effect directly instead of through the menu event.
+    ///
+    /// This is what makes the panel useful in global observe, where those events cannot be shown:
+    /// fired at an AI, an event is answered by the AI on the spot. It is offered to a player too,
+    /// as one click instead of two. The labels and tooltips are the events' own option keys, so the
+    /// wording lives in one place (gen_world_debug_l_english.yml).
+    ///
+    /// The effects walk the world and do not care what they run on, so every button roots on the
+    /// anchor county in both modes. The exception is conversion, which converts the world to the
+    /// faith or culture of the character running it: player mode only, rooted on the player.
+    /// </summary>
+    private sealed record WorldTool(string Key, string Menu, string Option, string Effect,
+        string? Valid = null, bool NeedsCharacter = false)
+    {
+        public string Label => $"gen_world_debug_events.{Menu}.{Option}";
+
+        public string ScriptedGui => $"gen_dbg_world_{Key}";
+    }
+
+    private const string DebugModeOnly = "debug_only = yes";
+    private const string EpidemicsOn = "NOT = { has_game_rule = epidemic_frequency_disabled }";
+
+    private static readonly WorldTool[] WorldToolList =
+    [
+        new("collapse_kingdom", "0001", "o1", "gen_world_debug_collapse_effect = { TIER = tier_kingdom }"),
+        new("collapse_duchy", "0001", "o2", "gen_world_debug_collapse_effect = { TIER = tier_duchy }"),
+        new("collapse_county", "0001", "o3", "gen_world_debug_collapse_effect = { TIER = tier_county }"),
+        new("independent_counties", "0001", "o4", "gen_world_debug_independent_counties_effect = yes"),
+
+        new("war_random", "0002", "o1", "gen_world_debug_random_war_effect = yes", DebugModeOnly),
+        new("war_all", "0002", "o2",
+            "gen_world_debug_war_wave_effect = { ATTACKER_FILTER = \"always = yes\" TARGET_FILTER = \"always = yes\" }",
+            DebugModeOnly),
+        new("war_peaceful", "0002", "o3",
+            "gen_world_debug_war_wave_effect = { ATTACKER_FILTER = \"is_at_war = no\" TARGET_FILTER = \"always = yes\" }",
+            DebugModeOnly),
+        new("war_weaker", "0002", "o4",
+            "gen_world_debug_war_wave_effect = { ATTACKER_FILTER = \"always = yes\" TARGET_FILTER = "
+            + "\"current_military_strength < scope:gen_world_debug_attacker.current_military_strength\" }",
+            DebugModeOnly),
+
+        new("white_peace", "0003", "o1", "gen_world_debug_white_peace_effect = yes"),
+        new("release_vassals", "0004", "o1", "gen_world_debug_release_vassals_effect = yes"),
+
+        new("consolidate_duchies", "0005", "o1",
+            "gen_world_debug_consolidate_effect = { TITLE_SCOPE = de_jure_liege }"),
+        new("consolidate_kingdoms", "0005", "o2",
+            "gen_world_debug_consolidate_effect = { TITLE_SCOPE = de_jure_liege.de_jure_liege }"),
+
+        new("gold", "0006", "o1", "gen_world_debug_gold_effect = yes"),
+        new("refill", "0006", "o2", "gen_world_debug_refill_effect = yes"),
+        new("gold_refill", "0006", "o3", "gen_world_debug_gold_effect = yes\n\t\tgen_world_debug_refill_effect = yes"),
+
+        new("faith", "0007", "o1", "gen_world_debug_faith_effect = yes", NeedsCharacter: true),
+        new("culture", "0007", "o2", "gen_world_debug_culture_effect = yes", NeedsCharacter: true),
+        new("faith_culture", "0007", "o3",
+            "gen_world_debug_faith_effect = yes\n\t\tgen_world_debug_culture_effect = yes", NeedsCharacter: true),
+
+        new("control_zero", "0008", "o1", "gen_world_debug_control_effect = { AMOUNT = -100 }"),
+        new("control_full", "0008", "o2", "gen_world_debug_control_effect = { AMOUNT = 100 }"),
+        new("unrest", "0008", "o3", "gen_world_debug_unrest_effect = yes"),
+        new("clear_unrest", "0008", "o4", "gen_world_debug_clear_unrest_effect = yes"),
+
+        new("kill_one", "0009", "o1", "gen_world_debug_random_succession_effect = yes"),
+        new("kill_independent", "0009", "o2",
+            "gen_world_debug_succession_effect = { FILTER = \"is_independent_ruler = yes\" }"),
+        new("kill_all", "0009", "o3", "gen_world_debug_succession_effect = { FILTER = \"always = yes\" }"),
+
+        new("outbreak_minor", "0010", "o1", "gen_world_debug_outbreak_effect = { INTENSITY = minor }", EpidemicsOn),
+        new("outbreak_major", "0010", "o2", "gen_world_debug_outbreak_effect = { INTENSITY = major }", EpidemicsOn),
+        new("outbreak_apocalyptic", "0010", "o3",
+            "gen_world_debug_outbreak_effect = { INTENSITY = apocalyptic }", EpidemicsOn),
+        new("reduce_epidemics", "0010", "o4", "gen_world_debug_reduce_epidemics_effect = yes"),
+    ];
+
+    private static GuiBuilder WorldTools(string anchorCounty, Mode mode)
+    {
+        var world = GuiScope.Root($"GetTitleByKey( '{anchorCounty}' )");
+
+        var section = GuiBuilder.VBox()
+            .ExpandingH()
+            .Spacing(2)
+            .Add(Heading("GEN_DEBUG_PANEL_HEAD_WORLD_TOOLS"))
+            .Add(Note(mode.Observer ? "GEN_DEBUG_PANEL_WORLD_TOOLS_NOTE_OBSERVER" : "GEN_DEBUG_PANEL_WORLD_TOOLS_NOTE"));
+
+        foreach (var menu in WorldToolList.GroupBy(t => t.Menu))
+        {
+            var tools = menu.Where(t => !t.NeedsCharacter || !mode.Observer).ToList();
+            if (tools.Count == 0) continue;
+
+            section.Add(GuiBuilder.TextSingle()
+                .ExpandingH()
+                .Align("left")
+                .MarginBottom(2)
+                .Format("#high")
+                .Text($"gen_world_debug_events.{menu.Key}.t"));
+
+            foreach (var tool in tools)
+            {
+                var gui = new ScriptedGui(tool.ScriptedGui, tool.NeedsCharacter ? mode.Actor : world);
+                var button = GuiBuilder.Of("button_standard")
+                    .Size(360, 28)
+                    .MarginBottom(2)
+                    .MarginLeft(12)
+                    .Text(tool.Label)
+                    .Tooltip(tool.Label + ".tt")
+                    .Runs(gui);
+
+                // Greyed rather than hidden when its condition fails (debug mode for the wars, the
+                // epidemic game rule for outbreaks), so the menu reads the same as the event's.
+                if (tool.Valid is not null)
+                    button.Enabled(gui.IsValid());
+
+                section.Add(button);
+            }
+        }
+
+        return section;
+    }
+
+    /// <summary>The world tools' script side: one scripted_gui per button.</summary>
+    private static string WorldToolEntries()
+    {
+        var b = new System.Text.StringBuilder();
+
+        b.Append("""
+
+
+            # ===========================================================================
+            # The world tools on the Tools tab: each runs one choice of the world debug
+            # menus (events/gen_world_debug_events.txt) directly. Rooted on the anchor
+            # county, so they work in global observe; conversion is rooted on the player.
+            # ===========================================================================
+
+            """);
+
+        foreach (var tool in WorldToolList)
+        {
+            b.Append('\n')
+             .Append(tool.ScriptedGui).Append(" = {\n")
+             .Append("\tscope = ").Append(tool.NeedsCharacter ? "character" : "landed_title").Append("\n\n")
+             .Append("\tis_shown = { always = yes }\n");
+
+            if (tool.Valid is not null)
+                b.Append("\n\tis_valid = { ").Append(tool.Valid).Append(" }\n");
+
+            b.Append("\n\teffect = {\n\t\t").Append(tool.Effect).Append("\n\t}\n")
+             .Append("}\n");
+        }
+
+        return b.ToString();
     }
 
     /// <summary>
@@ -1025,8 +1321,8 @@ public static class DebugPanel
     /// never. <c>|0</c> is the format suffix for a whole number, without which a count prints with
     /// the decimals a CFixedPoint carries.
     /// </summary>
-    private static GuiExpr Counter(string name)
-        => GuiExpr.Raw($"GetPlayer.MakeScope.Var('gen_dbg_{name}').GetValue|0");
+    private static GuiExpr Counter(string name, Mode mode)
+        => GuiExpr.Raw($"{mode.ActorData}.MakeScope.Var('gen_dbg_{name}').GetValue|0");
 
     private static string OnOff(bool value) => value ? "on" : "off";
 
@@ -1145,6 +1441,23 @@ public static class DebugPanel
 
             	effect = {
             		gen_debug_panel_gather_effect = yes
+            		gen_debug_panel_gather_player_effect = yes
+            	}
+            }
+
+
+            # The observer window's gather, rooted on the anchor county: global observe has no
+            # player to leave the counts on. The world walk is the same effect; only the player's
+            # own holdings and vassals are left out, since there is nobody to count them for.
+            gen_debug_panel_gather_obs = {
+            	scope = landed_title
+
+            	is_shown = {
+            		always = yes
+            	}
+
+            	effect = {
+            		gen_debug_panel_gather_effect = yes
             	}
             }
 
@@ -1167,22 +1480,22 @@ public static class DebugPanel
 
             	effect = {
             		gen_debug_panel_gather_effect = yes
+            		gen_debug_panel_log_effect = yes
+            	}
+            }
 
-            		save_scope_value_as = { name = gen_counties value = var:gen_dbg_counties }
-            		save_scope_value_as = { name = gen_wilderness value = var:gen_dbg_wilderness }
-            		save_scope_value_as = { name = gen_duchies value = var:gen_dbg_duchies }
-            		save_scope_value_as = { name = gen_kingdoms value = var:gen_dbg_kingdoms }
-            		save_scope_value_as = { name = gen_empires value = var:gen_dbg_empires }
-            		save_scope_value_as = { name = gen_cultures value = var:gen_dbg_cultures }
-            		save_scope_value_as = { name = gen_faiths value = var:gen_dbg_faiths }
-            		save_scope_value_as = { name = gen_religions value = var:gen_dbg_religions }
-            		save_scope_value_as = { name = gen_rulers value = var:gen_dbg_rulers }
-            		save_scope_value_as = { name = gen_independent value = var:gen_dbg_independent }
-            		save_scope_value_as = { name = gen_artifacts value = var:gen_dbg_artifacts }
-            RACELOG
 
-            		debug_log = "=== generated world: counts follow as saved scopes ==="
-            		debug_log_scopes = yes
+            # The same dump from the observer window, counted on the anchor county.
+            gen_debug_panel_log_obs = {
+            	scope = landed_title
+
+            	is_shown = {
+            		always = yes
+            	}
+
+            	effect = {
+            		gen_debug_panel_gather_effect = yes
+            		gen_debug_panel_log_effect = yes
             	}
             }
 
@@ -1265,8 +1578,8 @@ public static class DebugPanel
             }
             WONDERS
 
-            """.Replace("\r\n", "\n") // a raw literal takes the source file's line endings, CRLF on a Windows checkout (CI), where RACELOG\n would never match
-               .Replace("WONDERS", wonders).Replace("RACELOG\n", RaceLog(facts)) + FireEntries(events));
+            """.Replace("\r\n", "\n") // a raw literal takes the source file's line endings, CRLF on a Windows checkout (CI); normalised so the file is the same everywhere
+               .Replace("WONDERS", wonders) + WorldToolEntries() + FireEntries(events));
 
         WriteGatherEffect(modDir, facts);
     }
@@ -1385,8 +1698,6 @@ public static class DebugPanel
             	set_variable = { name = gen_dbg_rulers value = 0 }
             	set_variable = { name = gen_dbg_independent value = 0 }
             	set_variable = { name = gen_dbg_artifacts value = 0 }
-            	set_variable = { name = gen_dbg_held value = 0 }
-            	set_variable = { name = gen_dbg_vassals value = 0 }
             	set_variable = { name = gen_dbg_landless value = 0 }
 
             	save_scope_as = gen_dbg_root
@@ -1463,6 +1774,17 @@ public static class DebugPanel
             		scope:gen_dbg_root = { change_variable = { name = gen_dbg_artifacts add = 1 } }
             	}
 
+            RACES}
+
+            # The player's own share of the count: what they hold and who holds of them. A
+            # separate effect because it needs a character, and the observer window counts the
+            # world on a county.
+            gen_debug_panel_gather_player_effect = {
+            	set_variable = { name = gen_dbg_held value = 0 }
+            	set_variable = { name = gen_dbg_vassals value = 0 }
+
+            	save_scope_as = gen_dbg_root
+
             	every_held_title = {
             		limit = { tier = tier_county }
             		scope:gen_dbg_root = { change_variable = { name = gen_dbg_held add = 1 } }
@@ -1471,9 +1793,44 @@ public static class DebugPanel
             	every_vassal = {
             		scope:gen_dbg_root = { change_variable = { name = gen_dbg_vassals add = 1 } }
             	}
-            RACES}
+            }
 
-            """.Replace("RACES", facts.FantasyRaces ? RaceCensusCall : ""));
+            # The log button's dump, shared by both windows. `debug_log` takes a literal string
+            # and nothing else, so each figure is saved as a named scope value first and
+            # `debug_log_scopes` prints them all.
+            gen_debug_panel_log_effect = {
+            LOGBODY}
+
+            """.Replace("\r\n", "\n")
+               .Replace("LOGBODY", LogBody(facts))
+               .Replace("RACES", facts.FantasyRaces ? RaceCensusCall : ""));
+    }
+
+    /// <summary>
+    /// The body of <c>gen_debug_panel_log_effect</c>: every gathered figure as a named scope value,
+    /// then the dump. The race figures join it on a map with races.
+    /// </summary>
+    private static string LogBody(Facts facts)
+    {
+        string body = """
+            		save_scope_value_as = { name = gen_counties value = var:gen_dbg_counties }
+            		save_scope_value_as = { name = gen_wilderness value = var:gen_dbg_wilderness }
+            		save_scope_value_as = { name = gen_duchies value = var:gen_dbg_duchies }
+            		save_scope_value_as = { name = gen_kingdoms value = var:gen_dbg_kingdoms }
+            		save_scope_value_as = { name = gen_empires value = var:gen_dbg_empires }
+            		save_scope_value_as = { name = gen_cultures value = var:gen_dbg_cultures }
+            		save_scope_value_as = { name = gen_faiths value = var:gen_dbg_faiths }
+            		save_scope_value_as = { name = gen_religions value = var:gen_dbg_religions }
+            		save_scope_value_as = { name = gen_rulers value = var:gen_dbg_rulers }
+            		save_scope_value_as = { name = gen_independent value = var:gen_dbg_independent }
+            		save_scope_value_as = { name = gen_artifacts value = var:gen_dbg_artifacts }
+            RACELOG
+            		debug_log = "=== generated world: counts follow as saved scopes ==="
+            		debug_log_scopes = yes
+
+            """.Replace("\r\n", "\n");
+
+        return body.Replace("RACELOG\n", RaceLog(facts));
     }
 
     /// <summary>
@@ -1576,6 +1933,7 @@ public static class DebugPanel
         loc.Add("gen_debug_panel_decision_confirm", "Open the panel");
 
         loc.Add("GEN_DEBUG_PANEL_TITLE", "Generated World");
+        loc.Add("GEN_DEBUG_PANEL_TITLE_OBSERVER", "Generated World (observing)");
 
         loc.Add("GEN_DEBUG_PANEL_TAB_WORLD", "World");
         loc.Add("GEN_DEBUG_PANEL_TAB_REALM", "Live");
@@ -1630,6 +1988,14 @@ public static class DebugPanel
             + "they are.");
 
         loc.Add("GEN_DEBUG_PANEL_HEAD_INSPECT", "Inspect");
+        loc.Add("GEN_DEBUG_PANEL_HEAD_WORLD_TOOLS", "World tools");
+        loc.Add("GEN_DEBUG_PANEL_WORLD_TOOLS_NOTE",
+            "The world debug menus, one click per choice instead of opening the menu event. Each "
+            + "acts on the whole world at once and cannot be undone: use a disposable save.");
+        loc.Add("GEN_DEBUG_PANEL_WORLD_TOOLS_NOTE_OBSERVER",
+            "The world debug menus, one click per choice. Each acts on the whole world at once and "
+            + "cannot be undone: use a disposable save. #high Conversion#! is not offered while "
+            + "observing, since it converts the world to the faith or culture of the player.");
         loc.Add("GEN_DEBUG_PANEL_HEAD_RESOURCES", "Testing resources");
         loc.Add("GEN_DEBUG_PANEL_HEAD_WINDOWS", "The other generated windows");
 

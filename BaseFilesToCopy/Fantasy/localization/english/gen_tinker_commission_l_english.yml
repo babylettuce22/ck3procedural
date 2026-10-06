@@ -9,7 +9,7 @@
  gen_tk_commission_interaction_notification: "I hear you are clever with springs and gears. I would like to hire you to build something for me."
  gen_tk_commission_options_heading: "What to build"
  gen_tk_commission_option_curio: "A clockwork curio (#V $PRICE_CURIO|0$#! gold)"
- gen_tk_commission_option_curio_desc: "A ticking marvel for your court: a mechanical songbird, or an orrery for a royal court (with Fate of Iberia)"
+ gen_tk_commission_option_curio_desc: "A ticking marvel: a clockwork trinket, or with a royal court a court piece such as a singing tree or a steam organ"
  gen_tk_commission_option_mill: "Waterworks (#V $PRICE_MILL|0$#! gold)"
  gen_tk_commission_option_mill_desc: "Wheels, pumps and sluices for your capital county. They last twenty years"
  gen_tk_commission_option_engine: "A war engine (#V $PRICE_ENGINE|0$#! gold)"

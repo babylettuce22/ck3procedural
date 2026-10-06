@@ -21,6 +21,20 @@ internal static class MountainSnowChecks
             Check(Math.Abs(snow.TemperaturePeak(1) - 0.5) < 1e-8, "Smooth temperature midpoint");
             Check(Math.Abs(snow.MoistureStrength(0) - 0.6) < 1e-8 && snow.MoistureStrength(1000) == 1,
                 "Approved precipitation endpoints");
+            Check(snow.HeightGate(10) == 1 && snow.HeightGate(20) == 0, "Height ramp kept on cool summits, gone on hot ones");
+
+            // The 2026-10-03 regression: the climate model blurs relief, so a 4 km summit was read at
+            // the ~1.2 km its province averages to and stayed 18 C too warm to hold snow.
+            float[] Flat(float v) => [v, v, v, v];
+            var summit = new ClimateField
+            {
+                Width = 2, Height = 2, MeanC = Flat(8), WarmC = Flat(15), ColdC = Flat(0),
+                AnnualMm = Flat(800), SummerMm = Flat(400), WinterMm = Flat(400), LatitudeDeg = Flat(45),
+                ReliefKm = Flat(1.2f), MetresPerUnit = 4000.0 / 100, SeaLevel = 20,
+            };
+            Check(Math.Abs(summit.SummitWarmC(0.5f, 0.5f, 120) - (15 - 6.5 * (4 - 1.2))) < 1e-4
+                  && Math.Abs(summit.SummitWarmC(0.5f, 0.5f, 50) - 15) < 1e-4,
+                "Summit temperature cooled from the pixel's own height, not the blurred relief");
             var view = new SettingsView(cfg) { Section = "06 Map Objects" };
             Check(view.GetProperties()[nameof(cfg.MountainSnowSummerStartC)] is not null
                 && view.GetProperties()[nameof(cfg.MountainSnowStartPercentile)] is null, "Auto editor rows");

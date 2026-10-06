@@ -168,89 +168,112 @@ gen_tk_deliver_curio_effect = {
 			save_scope_value_as = { name = quality value = 50 }
 			save_scope_value_as = { name = wealth value = 35 }
 		}
-		if = {
-			limit = {
-				has_dlc_feature = royal_court
-				has_royal_court = yes
-				has_fp2_dlc_trigger = yes
+		# Which contraption: ten kinds, all vanilla art in the base game. A ruler with a royal court
+		# mostly gets a court piece, anyone else a trinket. A masterwork leans to the grandest pieces;
+		# a kind the owner already has is rarely made twice.
+		random_list = {
+			# --- Trinkets (personal slot)
+			20 = {
+				modifier = { factor = 0.25 gen_tk_curio_court_eligible_trigger = yes }
+				modifier = { factor = 0.1 gen_tk_owns_curio_kind_trigger = { KIND = songbird } }
+				gen_tk_make_curio_effect = { KIND = songbird TYPE = miscellaneous VISUALS = pocket_toy }
 			}
-			if = {
-				limit = { scope:gen_tk_result ?= flag:masterwork }
-				create_artifact = {
-					name = gen_tk_curio_orrery_masterwork_name
-					description = gen_tk_curio_orrery_desc
-					type = scientific_apparatus
-					visuals = fp2_armillary_sphere
-					creator = root
-					quality = scope:quality
-					wealth = scope:wealth
-					modifier = gen_tk_curio_orrery_masterwork_modifier
-					history = {
-						type = created
-						actor = root
-						recipient = scope:owner
-					}
-					save_scope_as = gen_tk_new_curio
-				}
+			20 = {
+				modifier = { factor = 0.25 gen_tk_curio_court_eligible_trigger = yes }
+				modifier = { factor = 0.1 gen_tk_owns_curio_kind_trigger = { KIND = dancer } }
+				gen_tk_make_curio_effect = { KIND = dancer TYPE = miscellaneous VISUALS = pocket_figurine }
 			}
-			else = {
-				create_artifact = {
-					name = gen_tk_curio_orrery_name
-					description = gen_tk_curio_orrery_desc
-					type = scientific_apparatus
-					visuals = fp2_armillary_sphere
-					creator = root
-					quality = scope:quality
-					wealth = scope:wealth
-					modifier = gen_tk_curio_orrery_modifier
-					history = {
-						type = created
-						actor = root
-						recipient = scope:owner
-					}
-					save_scope_as = gen_tk_new_curio
-				}
+			20 = {
+				modifier = { factor = 0.25 gen_tk_curio_court_eligible_trigger = yes }
+				modifier = { factor = 0.1 gen_tk_owns_curio_kind_trigger = { KIND = musicbox } }
+				gen_tk_make_curio_effect = { KIND = musicbox TYPE = miscellaneous VISUALS = small_box }
 			}
-		}
-		else = {
-			if = {
-				limit = { scope:gen_tk_result ?= flag:masterwork }
-				create_artifact = {
-					name = gen_tk_curio_songbird_masterwork_name
-					description = gen_tk_curio_songbird_desc
-					type = miscellaneous
-					visuals = pocket_toy
-					creator = root
-					quality = scope:quality
-					wealth = scope:wealth
-					modifier = gen_tk_curio_trinket_masterwork_modifier
-					history = {
-						type = created
-						actor = root
-						recipient = scope:owner
-					}
-					save_scope_as = gen_tk_new_curio
-				}
+			20 = {
+				modifier = { factor = 0.25 gen_tk_curio_court_eligible_trigger = yes }
+				modifier = { factor = 0.1 gen_tk_owns_curio_kind_trigger = { KIND = hound } }
+				gen_tk_make_curio_effect = { KIND = hound TYPE = miscellaneous VISUALS = animal_figurine }
 			}
-			else = {
-				create_artifact = {
-					name = gen_tk_curio_songbird_name
-					description = gen_tk_curio_songbird_desc
-					type = miscellaneous
-					visuals = pocket_toy
-					creator = root
-					quality = scope:quality
-					wealth = scope:wealth
-					modifier = gen_tk_curio_trinket_modifier
-					history = {
-						type = created
-						actor = root
-						recipient = scope:owner
-					}
-					save_scope_as = gen_tk_new_curio
-				}
+			20 = {
+				modifier = { factor = 0.25 gen_tk_curio_court_eligible_trigger = yes }
+				modifier = { factor = 0.1 gen_tk_owns_curio_kind_trigger = { KIND = pocketclock } }
+				gen_tk_make_curio_effect = { KIND = pocketclock TYPE = miscellaneous VISUALS = pocket_fancy_case }
+			}
+			# --- Court pieces (royal court only)
+			15 = {
+				trigger = { gen_tk_curio_court_eligible_trigger = yes }
+				modifier = { factor = 0.1 gen_tk_owns_curio_kind_trigger = { KIND = orrery } }
+				gen_tk_make_curio_effect = { KIND = orrery TYPE = scientific_apparatus VISUALS = fp2_armillary_sphere }
+			}
+			15 = {
+				trigger = { gen_tk_curio_court_eligible_trigger = yes }
+				modifier = { add = 15 scope:gen_tk_result ?= flag:masterwork }
+				modifier = { factor = 0.1 gen_tk_owns_curio_kind_trigger = { KIND = tree } }
+				gen_tk_make_curio_effect = { KIND = tree TYPE = pedestal VISUALS = tree_automa }
+			}
+			15 = {
+				trigger = { gen_tk_curio_court_eligible_trigger = yes }
+				modifier = { add = 15 scope:gen_tk_result ?= flag:masterwork }
+				modifier = { factor = 0.1 gen_tk_owns_curio_kind_trigger = { KIND = organ } }
+				gen_tk_make_curio_effect = { KIND = organ TYPE = sculpture VISUALS = hydraulic_organ }
+			}
+			15 = {
+				trigger = { gen_tk_curio_court_eligible_trigger = yes }
+				modifier = { factor = 0.1 gen_tk_owns_curio_kind_trigger = { KIND = knight } }
+				gen_tk_make_curio_effect = { KIND = knight TYPE = pedestal VISUALS = statuette }
+			}
+			15 = {
+				trigger = { gen_tk_curio_court_eligible_trigger = yes }
+				modifier = { factor = 0.1 gen_tk_owns_curio_kind_trigger = { KIND = chess } }
+				gen_tk_make_curio_effect = { KIND = chess TYPE = miscellaneous_when_not_court VISUALS = fp2_2p_chess_board }
 			}
 		}
+	}
+}
+
+# One contraption of a kind, for scope:owner (the beneficiary; this effect runs in their scope). The
+# masterwork gets its own name and the stronger modifier. Marked on the artifact: gen_tk_curio (any
+# curio — the AI won't commission a second) and gen_tk_curio_kind (which one, so the next pick varies).
+gen_tk_make_curio_effect = {
+	if = {
+		limit = { scope:gen_tk_result ?= flag:masterwork }
+		create_artifact = {
+			name = gen_tk_curio_$KIND$_masterwork_name
+			description = gen_tk_curio_$KIND$_desc
+			type = $TYPE$
+			visuals = $VISUALS$
+			creator = root
+			quality = scope:quality
+			wealth = scope:wealth
+			modifier = gen_tk_curio_$KIND$_masterwork_modifier
+			history = {
+				type = created
+				actor = root
+				recipient = scope:owner
+			}
+			save_scope_as = gen_tk_new_curio
+		}
+	}
+	else = {
+		create_artifact = {
+			name = gen_tk_curio_$KIND$_name
+			description = gen_tk_curio_$KIND$_desc
+			type = $TYPE$
+			visuals = $VISUALS$
+			creator = root
+			quality = scope:quality
+			wealth = scope:wealth
+			modifier = gen_tk_curio_$KIND$_modifier
+			history = {
+				type = created
+				actor = root
+				recipient = scope:owner
+			}
+			save_scope_as = gen_tk_new_curio
+		}
+	}
+	scope:gen_tk_new_curio ?= {
+		set_variable = { name = gen_tk_curio value = yes }
+		set_variable = { name = gen_tk_curio_kind value = flag:$KIND$ }
 	}
 }
 

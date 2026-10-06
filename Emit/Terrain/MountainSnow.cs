@@ -4,7 +4,7 @@ using Ck3MapGen.MapGen;
 namespace Ck3MapGen.Emit;
 
 /// <summary>
-/// Permanent mountain snow controls, sanitised once per texture write. Auto replaces the height
+/// Permanent mountain snow controls, sanitised once per texture write. Auto gates the height
 /// ramp with summer temperature; precipitation gently reduces its strength. Ridge shape and the
 /// summit breakup remain TerrainPalette's job. This is an artistic coverage model, not a glacier
 /// simulation, and does not control CK3's seasonal snow mask or the Arctic terrain palette.
@@ -31,6 +31,16 @@ public readonly record struct MountainSnow(
         if (SummerStartC == SummerFullC) return warmestC < SummerStartC ? 1 : 0;
         return 1 - Field.SmoothStep(SummerFullC, SummerStartC, warmestC);
     }
+
+    /// <summary>
+    /// How much of the height ramp survives at this summit temperature: all of it up to
+    /// <see cref="SummerStartC"/> + 5, none of it by + 15 (10 to 20 C at the defaults). Keeps
+    /// temperate ranges capped and still strips desert and tropical peaks.
+    /// </summary>
+    public double HeightGate(double warmestC)
+        => double.IsFinite(warmestC)
+            ? 1 - Field.SmoothStep(SummerStartC + 5, SummerStartC + 15, warmestC)
+            : 0;
 
     public double MoistureStrength(double annualMm)
         => 1 - PrecipitationInfluence * (1 - Field.SmoothStep(100, 1000,
