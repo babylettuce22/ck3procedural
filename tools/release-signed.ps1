@@ -24,7 +24,13 @@ Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $signer = Join-Path $PSScriptRoot 'sign-release.ps1'
 $thumb = 'BA24D3E74FC554E003D28DE18F1E1418B1E68C9F'
 
-function Gh { & gh @args; if ($LASTEXITCODE -ne 0) { throw "gh $($args -join ' ') failed" } }
+# Not named "gh": PowerShell names are case-insensitive, so the function would call itself.
+# gh writes progress to stderr, which PowerShell 5.1 turns into a terminating error under Stop; judge by exit code.
+function Invoke-Gh {
+    $ErrorActionPreference = 'Continue'
+    & gh.exe @args
+    if ($LASTEXITCODE -ne 0) { throw "gh $($args -join ' ') failed" }
+}
 
 # Fail before anything is published if signing can't work.
 if (-not (Get-ChildItem Cert:\CurrentUser\My | Where-Object Thumbprint -eq $thumb)) {
@@ -36,31 +42,34 @@ elseif (-not $Tag) { throw 'Pass -Tag (or -LocalZip).' }
 else {
 
 # 1. Create the release (fires release.yml through the new tag) unless it already exists.
-& gh release view $Tag --json tagName 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) {
+$ErrorActionPreference = 'Continue'
+& gh.exe release view $Tag --json tagName 2>$null | Out-Null
+$exists = $LASTEXITCODE -eq 0
+$ErrorActionPreference = 'Stop'
+if (-not $exists) {
     if (-not $NotesFile) { throw "Release $Tag doesn't exist. Pass -NotesFile (and -Title) to create it." }
     $create = @('release', 'create', $Tag, '--target', 'main', '--notes-file', $NotesFile)
     if ($Title) { $create += @('--title', $Title) }
     if ($Prerelease) { $create += '--prerelease' }
-    Gh @create
+    Invoke-Gh @create
     Write-Host "Created release $Tag."
 }
 
 # 2. Wait for release.yml's run on that tag to finish (it attaches the zip).
 $run = $null
 for ($i = 0; $i -lt 30 -and -not $run; $i++) {
-    $run = (Gh run list --workflow release.yml --branch $Tag -L 1 --json databaseId -q '.[0].databaseId')
+    $run = (Invoke-Gh run list --workflow release.yml --branch $Tag -L 1 --json databaseId -q '.[0].databaseId')
     if (-not $run) { Start-Sleep 10 }
 }
 if (-not $run) { throw "No release.yml run found for $Tag." }
 Write-Host "Waiting for release.yml run $run ..."
-Gh run watch $run --exit-status --interval 30 | Out-Null
+Invoke-Gh run watch $run --exit-status --interval 30 | Out-Null
 
 # 3. Download the attached zip.
 $work = Join-Path $env:TEMP "release-signed-$Tag"
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory $work | Out-Null
-Gh release download $Tag -p 'Ck3MapGen-*-win-x64.zip' -D $work
+Invoke-Gh release download $Tag -p 'Ck3MapGen-*-win-x64.zip' -D $work
 $zipPath = (Get-ChildItem $work -Filter *.zip | Select-Object -First 1).FullName
 }
 
@@ -88,11 +97,11 @@ Write-Host "Signed $($staged.Count) binaries inside $(Split-Path $zipPath -Leaf)
 if ($LocalZip) { return }
 
 # 5. Replace the unsigned asset with the signed one (same name).
-Gh release upload $Tag $zipPath --clobber
+Invoke-Gh release upload $Tag $zipPath --clobber
 Write-Host "Uploaded signed zip to $Tag."
 
 # 6. Send it to Nexus (nexus.yml re-checks it with VirusTotal first).
 if (-not $NoNexus) {
-    Gh workflow run nexus.yml -f tag=$Tag
+    Invoke-Gh workflow run nexus.yml -f tag=$Tag
     Write-Host 'Dispatched nexus.yml. Follow it with: gh run list --workflow nexus.yml -L 1'
 }
