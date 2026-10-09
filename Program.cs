@@ -25,6 +25,7 @@ public static class Program
         string? modDir = null;
         List<int> historyYears = [];
         MapGen.RealmRules historyRules = MapGen.RealmRules.All;
+        double historyNomads = 1.0;
         string? appliedHistoryPath = null;
         bool gui = args.Length == 0;
         bool staticOnly = false;
@@ -213,6 +214,11 @@ public static class Program
                 // leaves the history as it was before the rule existed.
                 case "--history-rules" when i + 1 < args.Length:
                     historyRules = (MapGen.RealmRules)int.Parse(args[++i]);
+                    break;
+
+                // The Nomad fragility dial for the --history-years run (1 when left out).
+                case "--history-nomads" when i + 1 < args.Length:
+                    historyNomads = double.Parse(args[++i], System.Globalization.CultureInfo.InvariantCulture);
                     break;
 
                 // Write the world with the history saved in this proctool_history.json, as a full
@@ -1062,7 +1068,7 @@ public static class Program
             if (modDir is not null)
             {
                 var written = Generator.WriteMod(result, options, modDir);
-                if (historyYears.Count > 0) AcceptHistory(result, written, modDir, options.GameDir, historyYears, historyRules);
+                if (historyYears.Count > 0) AcceptHistory(result, written, modDir, options.GameDir, historyYears, historyRules, historyNomads);
             }
             if (debugImages ?? modDir is null)
                 Core.Stage.Time("debug images", () => Generator.WriteDebugImages(result, outDir, scale));
@@ -1087,7 +1093,7 @@ public static class Program
     /// player watches the history and accepts, continues and accepts again.
     /// </summary>
     private static void AcceptHistory(GenerationResult result, Emit.WrittenContent written, string modDir,
-        string gameDir, List<int> years, MapGen.RealmRules rules)
+        string gameDir, List<int> years, MapGen.RealmRules rules, double nomads = 1.0)
     {
         MapGen.AppliedHistory? applied = null;
         foreach (int span in years)
@@ -1095,10 +1101,11 @@ public static class Program
             var history = AppGUI.QuickHistory.PrepareAsync(result, written, applied).GetAwaiter().GetResult()
                 ?? throw new InvalidOperationException("This world has no grown realms to run a history on.");
             if (rules != MapGen.RealmRules.All) history.Rules = rules;
+            if (nomads != 1.0) history.Settings = history.Settings with { Nomads = nomads };
             for (int y = 0; y < span; y++) history.Tick();
 
             applied = history.Capture();
-            Console.WriteLine($"History: run on {span} years, accepted in {applied.Year}{history.PeoplesSummary()}");
+            Console.WriteLine($"History: run on {span} years, accepted in {applied.Year}{history.PeoplesSummary()}{history.NomadSummary()}");
             (result, written) = Core.Stage.Time("apply history",
                 () => Emit.ContentWriter.ApplyHistory(modDir, gameDir, result, written, applied));
             applied.Save(modDir);

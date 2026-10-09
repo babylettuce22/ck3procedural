@@ -470,6 +470,13 @@ public static class Formation
         /// <summary>How readily they fall apart. Settable as <see cref="Aggression"/> is.</summary>
         public required double Turbulence { get; set; }
 
+        /// <summary>
+        /// A realm's own multiplier on <see cref="Turbulence"/> — how much more or less readily
+        /// this realm in particular comes apart. Only the History workspace sets it (nomads, see
+        /// <c>HistorySim.Fragility</c>); unset, every realm strains alike, as generation always has.
+        /// </summary>
+        public Func<Polity, double>? Fragility { get; set; }
+
         public int NextId;
         public int Year;
 
@@ -1029,6 +1036,7 @@ public static class Formation
         // strained realm carries a small standing risk each reign and a badly strained one rarely
         // survives two, which is the behaviour the thresholds were reaching for.
         double instability = 1.0 - Cohesion(sim, p);
+        double turbulence = sim.Fragility is { } fragility ? sim.Turbulence * fragility(p) : sim.Turbulence;
 
         // A realm's vassals walk out together. This is the event that makes de jure and de facto
         // diverge for good: the ground the empire held goes on being drawn the way the empire drew
@@ -1036,7 +1044,7 @@ public static class Formation
         var vassals = sim.Polities.Where(v => v.Alive && v.Suzerain == p)
                                   .OrderBy(v => v.Capital.Index).ToList();
 
-        if (vassals.Count > 0 && rng.Chance(PerTick(sim, instability * sim.Turbulence * 0.9))
+        if (vassals.Count > 0 && rng.Chance(PerTick(sim, instability * turbulence * 0.9))
             && sim.Rules.HasFlag(RealmRules.Collapse))
         {
             foreach (var v in vassals)
@@ -1055,7 +1063,7 @@ public static class Formation
         // not a handful of enclaves. The size floor stays a hard gate: a realm of five counties
         // shedding two is not a fragmenting empire, it is noise.
         if (p.Counties.Count < 6) return;
-        if (!rng.Chance(PerTick(sim, instability * sim.Turbulence * 1.5))) return;
+        if (!rng.Chance(PerTick(sim, instability * turbulence * 1.5))) return;
         if (!sim.Rules.HasFlag(RealmRules.Secession)) return;
 
         var block = PeripheralBlock(sim, p, Math.Max(2, p.Counties.Count / 3));

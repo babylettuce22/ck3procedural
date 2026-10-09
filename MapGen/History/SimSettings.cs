@@ -24,6 +24,13 @@ public sealed record SimSettings
     /// <summary>How readily vassals throw off their lieges, times the usual. 0 is never.</summary>
     public double Independence { get; init; } = 1.0;
 
+    /// <summary>
+    /// How readily nomad realms come apart — strain, vassals walking out, a khan's realm divided
+    /// among his sons — times the usual. The usual is a little steadier than a settled realm's
+    /// (see <see cref="HistorySim.NomadSteadiness"/>); 0 holds every horde together.
+    /// </summary>
+    public double Nomads { get; init; } = 1.0;
+
     /// <summary>How often a partition finds a second and a third heir, times the usual 50% and 25%.</summary>
     public double Heirs { get; init; } = 1.0;
 

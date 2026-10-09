@@ -249,8 +249,10 @@ public sealed partial class HistorySim
         bool newHouse = rng.Chance(law == SuccessionLaw.Elective
             ? 0.5
             : Math.Min(1.0, (0.02 + 0.25 * instability) * _settings.Crises));
-        int younger = (rng.Chance(Math.Min(1.0, 0.5 * _settings.Heirs)) ? 1 : 0)
-                    + (rng.Chance(Math.Min(1.0, 0.25 * _settings.Heirs)) ? 1 : 0);
+        // A nomad realm's heirs are as many as its fragility makes them: see HistoryNomads.
+        double heirs = _settings.Heirs * Fragility(p);
+        int younger = (rng.Chance(Math.Min(1.0, 0.5 * heirs)) ? 1 : 0)
+                    + (rng.Chance(Math.Min(1.0, 0.25 * heirs)) ? 1 : 0);
 
         // Clerical appointment is not partition or a child inheriting the priesthood. Even with
         // succession's political effects disabled, seat an adult cleric without a parent link.

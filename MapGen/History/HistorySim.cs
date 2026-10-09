@@ -152,6 +152,7 @@ public sealed partial class HistorySim
         };
 
         var history = new HistorySim(sim, rules.Seed, startYear);
+        sim.Fragility = history.Fragility;
         history.SeatStartRulers(rulers, prehistory, earlier);
         history.SeatGrudges(prehistory);
         history.SeatStanding(earlier);

@@ -146,6 +146,9 @@ internal sealed class HistoryPanel : Panel
             3.0, s => s.Turbulence, (s, v) => s with { Turbulence = v }),
         ("Realms", "Independence", "How readily vassals throw off their lieges — 0 keeps every vassal loyal",
             3.0, s => s.Independence, (s, v) => s with { Independence = v }),
+        ("Realms", "Nomad fragility", "How readily nomad realms break up — strain, vassals walking out, a khan's land divided "
+            + "among his sons. 1× holds them a little tighter than settled realms; 3× and up splinters the hordes; 0 never",
+            4.0, s => s.Nomads, (s, v) => s with { Nomads = v }),
         ("People", "Heirs", "How often a partition finds a second and a third heir — 0 means one heir takes all",
             2.0, s => s.Heirs, (s, v) => s with { Heirs = v }),
         ("People", "Crises", "How likely a succession in an unstable realm goes to a new house",

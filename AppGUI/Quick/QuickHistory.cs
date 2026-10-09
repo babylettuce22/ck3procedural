@@ -141,6 +141,16 @@ internal sealed class QuickHistory
     }
 
     /// <summary>The rules in force: the world's own, all of them, unless the command line narrows them.</summary>
+    /// <inheritdoc cref="HistorySim.NomadSummary"/>
+    public string NomadSummary() => _sim.NomadSummary();
+
+    /// <summary>The rules and dials in force, for the headless run's flags. See <see cref="HistorySim.Settings"/>.</summary>
+    public SimSettings Settings
+    {
+        get => _sim.Settings;
+        set => _sim.Settings = value;
+    }
+
     public RealmRules Rules
     {
         get => _sim.Rules;

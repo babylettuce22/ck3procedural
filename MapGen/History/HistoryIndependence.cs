@@ -95,7 +95,9 @@ public sealed partial class HistorySim
         double turbulence = 0.5 + _sim.Turbulence;
 
         return Math.Min(IndependenceCap,
-            IndependenceBase * overreach * power * foreign * reign * turbulence * _settings.Independence);
+            IndependenceBase * overreach * power * foreign * reign * turbulence * _settings.Independence
+            // A nomad liege holds his vassals as loosely as his own land: see HistoryNomads.
+            * Fragility(liege));
     }
 
     /// <summary>The year's breakaways, decided on the year's start and then applied, after the successions they feed on.</summary>

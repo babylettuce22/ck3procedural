@@ -48,6 +48,13 @@ $exists = $LASTEXITCODE -eq 0
 $ErrorActionPreference = 'Stop'
 if (-not $exists) {
     if (-not $NotesFile) { throw "Release $Tag doesn't exist. Pass -NotesFile (and -Title) to create it." }
+    # Every release opens with the Ko-fi line (skipped if the notes already link it).
+    $notes = Get-Content $NotesFile -Raw
+    if ($notes -notmatch 'ko-fi\.com') {
+        $notes = "[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20development-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/babylettuce22)`n`n" + $notes
+        $NotesFile = Join-Path $env:TEMP "release-notes-$Tag.md"
+        Set-Content $NotesFile $notes -Encoding utf8
+    }
     $create = @('release', 'create', $Tag, '--target', 'main', '--notes-file', $NotesFile)
     if ($Title) { $create += @('--title', $Title) }
     if ($Prerelease) { $create += '--prerelease' }
