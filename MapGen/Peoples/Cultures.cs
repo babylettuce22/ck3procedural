@@ -388,7 +388,7 @@ public static class Cultures
         // Where each heritage name was first planted, for the compass qualifier below.
         var firstClaim = new Dictionary<string, (double X, double Y)>(StringComparer.OrdinalIgnoreCase);
 
-        var eligibleLooks = FilterLooks(vocab.Looks, cfg.CultureAestheticsTheme);
+        var eligibleLooks = FilterLooks(vocab.Looks, cfg.CultureThemeSet);
         var lookPool = eligibleLooks.Count > 0 ? eligibleLooks : vocab.Looks;
 
         // Which heritages border which, so a language can be born a sister of a neighbour's.
@@ -839,7 +839,7 @@ public static class Cultures
         var usedDynasties = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var firstClaim = new Dictionary<string, (double X, double Y)>(StringComparer.OrdinalIgnoreCase);
 
-        var eligibleLooks = FilterLooks(vocab.Looks, cfg.CultureAestheticsTheme);
+        var eligibleLooks = FilterLooks(vocab.Looks, cfg.CultureThemeSet);
         var lookPool = eligibleLooks.Count > 0 ? eligibleLooks : vocab.Looks;
 
         foreach (var (root, members) in family.GroupBy(kv => kv.Value, kv => kv.Key)
@@ -1404,15 +1404,15 @@ public static class Cultures
     }
 
     /// <summary>
-    /// Filters vanilla culture aesthetic looks against the user's selected theme.
-    /// Checks both the source culture name and the gfx definitions.
+    /// Filters vanilla culture aesthetic looks against the user's selected themes: a look stays if
+    /// any of them takes it. Checks both the source culture name and the gfx definitions.
     /// </summary>
     public static List<VanillaVocabulary.Look> FilterLooks(
-        List<VanillaVocabulary.Look> looks, MapConfig.CultureLookTheme theme)
+        List<VanillaVocabulary.Look> looks, IReadOnlyList<MapConfig.CultureLookTheme> themes)
     {
-        if (theme == MapConfig.CultureLookTheme.VariedGlobal) return looks;
+        if (themes.Count == 0 || themes.Contains(MapConfig.CultureLookTheme.VariedGlobal)) return looks;
 
-        return looks.Where(l => MatchesTheme(l, theme)).ToList();
+        return looks.Where(l => themes.Any(t => MatchesTheme(l, t))).ToList();
 
         static bool MatchesTheme(VanillaVocabulary.Look l, MapConfig.CultureLookTheme t)
         {

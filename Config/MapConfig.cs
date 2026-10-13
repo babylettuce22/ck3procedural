@@ -3153,7 +3153,28 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     [Category("10 Cultures and faiths")]
     [Description("Restricts culture clothing, unit models, holding graphics, and coat-of-arms palettes to a specific visual theme.")]
-    public CultureLookTheme CultureAestheticsTheme { get; set; } = CultureLookTheme.VariedGlobal;
+    public CultureLookTheme CultureAestheticsTheme
+    {
+        get => _cultureAestheticsTheme;
+        // As DominantLook: a theme picked on the grid drops the Quick dialog's set it cannot show.
+        set { if (value != _cultureAestheticsTheme) CultureThemes = []; _cultureAestheticsTheme = value; }
+    }
+    private CultureLookTheme _cultureAestheticsTheme = CultureLookTheme.VariedGlobal;
+
+    /// <summary>
+    /// Several culture themes at once — the wardrobe filter and the language pool become the union of
+    /// them. Only read with two or more in it; empty or one leaves <see cref="CultureAestheticsTheme"/>
+    /// in charge, so a single theme makes exactly the world it always made. Set from the Quick
+    /// inspiration dialog; off the grid because a list has no good editor there.
+    /// </summary>
+    [Browsable(false)]
+    public List<CultureLookTheme> CultureThemes { get; set; } = [];
+
+    /// <summary>The culture themes in force: <see cref="CultureThemes"/> when it holds two or more,
+    /// else the single <see cref="CultureAestheticsTheme"/>.</summary>
+    [Browsable(false)]
+    public IReadOnlyList<CultureLookTheme> CultureThemeSet
+        => CultureThemes.Distinct().Count() > 1 ? [.. CultureThemes.Distinct()] : [CultureAestheticsTheme];
 
     /// <summary>
     /// How strongly culture borders follow the ground. 0 ignores terrain entirely and gives a plain
@@ -3706,7 +3727,47 @@ public sealed class MapConfig : CustomTypeDescriptor
 
     [Category("14 Fantasy/Ethnicities")]
     [Description("Which real-world looks the world's humans are drawn from. Varied deals the four look families (European, African, Asian, Middle Eastern & South Asian) out evenly across the heritages and places each where its climate fits — Sámi-like peoples in the taiga, Mediterranean ones on dry-summer coasts, African ones in the tropics; a preset narrows the world to one region's vanilla templates in fixed proportions, placed the same way. Colouring is vanilla's own, with each culture's skin tone shaded for its climate. Affects HUMANS only — fantasy races keep their own colouring either way. A single culture can be moved off its look afterwards in the Cultures inspector without disturbing the rest of its heritage.")]
-    public HumanLook DominantLook { get; set; } = HumanLook.Varied;
+    public HumanLook DominantLook
+    {
+        get => _dominantLook;
+        // A preset picked on the grid is meant to be the world's faces; a region set from the Quick
+        // dialog, which the grid cannot show, would otherwise quietly outrank it.
+        set { if (value != _dominantLook) FaceRegions = []; _dominantLook = value; }
+    }
+    private HumanLook _dominantLook = HumanLook.Varied;
+
+    /// <summary>
+    /// The face regions a world's humans are drawn from when more than one preset's worth is wanted:
+    /// any set of <see cref="FaceRegion"/>s, so a player can pick two regions, or every region but
+    /// one. Empty (the default) leaves <see cref="DominantLook"/> in charge, so presets and worlds
+    /// made before this existed are untouched.
+    ///
+    /// A set that is exactly one preset's footprint (all of Europe is Western European + Slavic +
+    /// Mediterranean) is made by that preset, curated weights and all; the full set is
+    /// <see cref="HumanLook.Varied"/>. Anything else is an even blend of the regions; see
+    /// <c>Ethnicities.LookTemplates(MapConfig)</c>. Set from the Quick inspiration dialog; off the
+    /// grid because a list has no good editor there.
+    /// </summary>
+    [Browsable(false)]
+    public List<FaceRegion> FaceRegions { get; set; } = [];
+
+    /// <summary>
+    /// The disjoint regions the faces can be picked by, each owning its own vanilla templates. Unlike
+    /// <see cref="HumanLook"/>'s presets none contains another, which is what lets "everything but
+    /// the Steppe" mean what it says.
+    /// </summary>
+    public enum FaceRegion
+    {
+        WesternEuropean,
+        Slavic,
+        Mediterranean,
+        MiddleEastern,
+        Steppe,
+        SubSaharan,
+        Indian,
+        EastAsian,
+        SoutheastAsian
+    }
 
     [Category("14 Fantasy/Ethnicities")]
     [Description("Race distribution mode across the generated world.")]

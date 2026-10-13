@@ -1,5 +1,6 @@
 using System.Drawing.Drawing2D;
 using Ck3MapGen.Config;
+using Ck3MapGen.MapGen;
 using static Ck3MapGen.AppGUI.LaunchUi;
 
 namespace Ck3MapGen.AppGUI;
@@ -50,11 +51,18 @@ internal sealed class InspirationDialog : ChromeForm
     private readonly TextLink _apartLink = new() { Name = "inspirationApart", LinkFont = Small };
 
     private readonly Label _cultureTitle = MakeLabel("Culture", Strong, Theme.Text);
-    private readonly Label _cultureHint = MakeLabel("Names, dress, buildings and heraldry", Small, Theme.TextDim);
+    private readonly Label _cultureHint = MakeLabel("Names, dress, buildings and heraldry  ·  pick any", Small, Theme.TextDim);
     private readonly List<(QuickInspiration.CultureOption Option, Chip Chip)> _cultureChips = [];
     private readonly Label _facesTitle = MakeLabel("Faces", Strong, Theme.Text);
-    private readonly Label _facesHint = MakeLabel("The vanilla faces humans are drawn from", Small, Theme.TextDim);
+    private readonly Label _facesHint = MakeLabel("The vanilla faces humans are drawn from  ·  pick any", Small, Theme.TextDim);
+    private readonly Chip _anyFacesChip = new() { Text = "Anywhere", Name = "inspirationFaces-Anywhere", AccessibleName = "Faces from anywhere" };
     private readonly List<(QuickInspiration.FaceOption Option, Chip Chip)> _faceChips = [];
+
+    // What the chips show, which may be nothing: an empty row is a step on the way to a pick (clear
+    // Anywhere, then choose), and only on the inspiration does it read as Anywhere. Every theme or
+    // every region lit is Anywhere, so leaving one out of it is a click.
+    private HashSet<MapConfig.CultureLookTheme> _themes;
+    private HashSet<MapConfig.FaceRegion> _regions;
 
     private readonly Label _note = MakeLabel("", Small, Theme.TextDim, wrap: true);
     private readonly TextLink _climateLink = new() { Name = "inspirationClimate", LinkFont = Small };
@@ -75,6 +83,8 @@ internal sealed class InspirationDialog : ChromeForm
         _startClimate = _climate = climate;
         _races = races;
         _apart = _inspiration.MatchingPreset is null;
+        _themes = _inspiration.ThemeSet is { Count: > 0 } themes ? [.. themes] : [.. QuickInspiration.AllThemes];
+        _regions = [.. _inspiration.RegionSet];
 
         Text = "Inspiration";
         FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -99,14 +109,28 @@ internal sealed class InspirationDialog : ChromeForm
         foreach (var option in QuickInspiration.Cultures)
         {
             var chip = new Chip { Text = option.Name, Name = "inspirationCulture-" + option.Theme, AccessibleName = option.Name + " culture" };
-            chip.Click += (_, _) => Set(option.Theme, _inspiration.Look);
+            chip.Click += (_, _) =>
+            {
+                if (option.Theme == MapConfig.CultureLookTheme.VariedGlobal) Toggle(_themes, QuickInspiration.AllThemes);
+                else Toggle(_themes, option.Theme);
+                Changed();
+            };
             _cultureChips.Add((option, chip));
         }
 
+        _anyFacesChip.Click += (_, _) =>
+        {
+            Toggle(_regions, QuickInspiration.AllRegions);
+            Changed();
+        };
         foreach (var option in QuickInspiration.Faces)
         {
-            var chip = new Chip { Text = option.Name, Name = "inspirationFaces-" + option.Look, AccessibleName = option.Name + " faces" };
-            chip.Click += (_, _) => Set(_inspiration.Theme, option.Look);
+            var chip = new Chip { Text = option.Name, Name = "inspirationFaces-" + option.Region, AccessibleName = option.Name + " faces" };
+            chip.Click += (_, _) =>
+            {
+                Toggle(_regions, option.Region);
+                Changed();
+            };
             _faceChips.Add((option, chip));
         }
 
@@ -119,7 +143,7 @@ internal sealed class InspirationDialog : ChromeForm
         _climateLink.Click += (_, _) =>
         {
             // An offer taken can be taken back: the link then puts the World step's climate back.
-            _climate = _climate == _startClimate ? _inspiration.Culture.Suits : _startClimate;
+            _climate = _climate == _startClimate ? _inspiration.Suits : _startClimate;
             Describe();
         };
         _reset.Click += (_, _) => Set(MapConfig.CultureLookTheme.VariedGlobal, MapConfig.HumanLook.Varied);
@@ -129,7 +153,7 @@ internal sealed class InspirationDialog : ChromeForm
             Close();
         };
 
-        _body.Controls.AddRange([_intro, _apartLink, _cultureTitle, _cultureHint, _facesTitle, _facesHint,
+        _body.Controls.AddRange([_intro, _apartLink, _cultureTitle, _cultureHint, _facesTitle, _facesHint, _anyFacesChip,
             _note, _climateLink, _reset, _cancel, _done]);
         foreach (var (_, card) in _tiles) _body.Controls.Add(card);
         foreach (var (_, chip) in _cultureChips) _body.Controls.Add(chip);
@@ -186,10 +210,31 @@ internal sealed class InspirationDialog : ChromeForm
 
     // ------------------------------------------------------------------ state
 
+    /// <summary>A tile's pairing, or Anywhere's: one theme and a preset's face regions.</summary>
     private void Set(MapConfig.CultureLookTheme theme, MapConfig.HumanLook look)
     {
-        _inspiration.Theme = theme;
-        _inspiration.Look = look;
+        _themes = theme == MapConfig.CultureLookTheme.VariedGlobal ? [.. QuickInspiration.AllThemes] : [theme];
+        _regions = Ethnicities.Footprint(look);
+        Changed();
+    }
+
+    /// <summary>One pick in or out; or, for Anywhere, all of them in, or out if they all were.</summary>
+    private static void Toggle<T>(HashSet<T> set, T item)
+    {
+        if (!set.Remove(item)) set.Add(item);
+    }
+
+    private static void Toggle<T>(HashSet<T> set, T[] all)
+    {
+        if (set.Count == all.Length) set.Clear();
+        else set.UnionWith(all);
+    }
+
+    /// <summary>The chips onto the inspiration, then everything that follows from it.</summary>
+    private void Changed()
+    {
+        _inspiration.Themes = [.. _themes];
+        _inspiration.Regions = [.. _regions];
         // A climate taken for the last culture is not owed to this one; the note offers again if it must.
         _climate = _startClimate;
         Describe();
@@ -200,8 +245,12 @@ internal sealed class InspirationDialog : ChromeForm
     {
         var match = _inspiration.MatchingPreset;
         foreach (var (preset, card) in _tiles) card.Selected = ReferenceEquals(preset, match);
-        foreach (var (option, chip) in _cultureChips) chip.Selected = option.Theme == _inspiration.Theme;
-        foreach (var (option, chip) in _faceChips) chip.Selected = option.Look == _inspiration.Look;
+        foreach (var (option, chip) in _cultureChips)
+            chip.Selected = option.Theme == MapConfig.CultureLookTheme.VariedGlobal
+                ? _themes.Count == QuickInspiration.AllThemes.Length
+                : _themes.Contains(option.Theme);
+        _anyFacesChip.Selected = _regions.Count == QuickInspiration.AllRegions.Length;
+        foreach (var (option, chip) in _faceChips) chip.Selected = _regions.Contains(option.Region);
 
         _apartLink.Glyph = _apart ? "" : "";
         // Folded over a pairing no tile makes, the link is the only place it shows.
@@ -211,17 +260,25 @@ internal sealed class InspirationDialog : ChromeForm
         foreach (var c in (Control[])[_cultureTitle, _cultureHint, _facesTitle, _facesHint]) c.Visible = _apart;
         foreach (var (_, chip) in _cultureChips) chip.Visible = _apart;
         foreach (var (_, chip) in _faceChips) chip.Visible = _apart;
+        _anyFacesChip.Visible = _apart;
 
         _reset.Enabled = !_inspiration.IsDefault;
 
-        var culture = _inspiration.Culture;
         string races = _races
             ? " Elves, dwarves and the other races keep their own faces and tongues, but dress and build like the peoples around them."
             : "";
+        // A row cleared on the way to a pick: say what Done would make of it.
+        string empty = (_themes.Count == 0, _regions.Count == 0) switch
+        {
+            (true, true) => "Nothing is picked for culture or faces, so both come from anywhere. ",
+            (true, false) => "No culture is picked, so it comes from anywhere. ",
+            (false, true) => "No faces are picked, so they come from anywhere. ",
+            _ => ""
+        };
         if (_climate != _startClimate)
         {
             _note.ForeColor = Theme.TextDim;
-            _note.Text = $"The world's climate becomes {ClimateNames[_climate]}, to suit {culture.Dress}.{races}";
+            _note.Text = $"{empty}The world's climate becomes {ClimateNames[_climate]}, to suit {_inspiration.Dress}.{races}";
             _climateLink.Text = $"Keep {ClimateNames[_startClimate]} climate";
             _climateLink.Visible = true;
         }
@@ -229,17 +286,17 @@ internal sealed class InspirationDialog : ChromeForm
         {
             // Full text colour rather than danger: advice, not an error. Done still goes ahead.
             _note.ForeColor = Theme.Text;
-            _note.Text = $"{culture.Dress} has nothing made for {culture.Lacks}, and there is much of that on "
+            _note.Text = $"{empty}{_inspiration.Dress} has nothing made for {_inspiration.Lacks}, and there is much of that on "
                          + $"{MapOf[_climate]}. The peoples who live there wear the nearest it has.{races}";
-            _climateLink.Text = $"Use {ClimateNames[culture.Suits]} climate";
+            _climateLink.Text = $"Use {ClimateNames[_inspiration.Suits]} climate";
             _climateLink.Visible = true;
         }
         else
         {
             _note.ForeColor = Theme.TextDim;
-            _note.Text = _inspiration.IsDefault
+            _note.Text = _inspiration.IsDefault && empty.Length == 0
                 ? "Anywhere deals every region's looks out across the map, each people where its climate suits it." + races
-                : races.TrimStart();
+                : (empty + races.TrimStart()).TrimEnd();
             _climateLink.Visible = false;
         }
 
@@ -277,7 +334,7 @@ internal sealed class InspirationDialog : ChromeForm
         if (_apart)
         {
             y = Section(_cultureTitle, _cultureHint, _cultureChips.Select(c => c.Chip), x, y + S(4), w) + S(10);
-            y = Section(_facesTitle, _facesHint, _faceChips.Select(c => c.Chip), x, y, w);
+            y = Section(_facesTitle, _facesHint, _faceChips.Select(c => c.Chip).Prepend(_anyFacesChip), x, y, w);
         }
 
         y += S(12);

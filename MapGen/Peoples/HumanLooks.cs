@@ -351,9 +351,9 @@ public static class HumanLooks
         public int Group;
     }
 
-    private static List<Group> GroupsFor(HumanLook look, IReadOnlyList<(string Template, int Weight)> preset)
+    private static List<Group> GroupsFor(IReadOnlyList<(string Template, int Weight)> preset)
     {
-        if (look == HumanLook.Varied || preset.Count == 0)
+        if (preset.Count == 0)
             return Families.Select(f => new Group(f, f,
                 Roots.Where(r => r.Family == f).Select(r => r.Key).ToArray(), 1.0 / Families.Length)).ToList();
 
@@ -381,15 +381,15 @@ public static class HumanLooks
     /// <summary>
     /// Places every human people and returns, per culture, the template it wears. Cultures that
     /// hold no land (<paramref name="ghosts"/>) take their heritage's template without counting
-    /// toward anything.
+    /// toward anything. An empty <paramref name="preset"/> is Varied: the four families evenly.
     /// </summary>
     public static Dictionary<Culture, string> Place(
         IReadOnlyList<Heritage> heritages, IReadOnlyList<Culture> humanCultures, ISet<Culture> ghosts,
-        Func<Culture, int> landOf, HumanLook look, IReadOnlyList<(string Template, int Weight)> preset,
+        Func<Culture, int> landOf, IReadOnlyList<(string Template, int Weight)> preset,
         Inputs inputs, int seed, Action<string> say)
     {
         var rng = Rng.For(seed, 0x4C0C, 0);
-        var groups = GroupsFor(look, preset);
+        var groups = GroupsFor(preset);
 
         ClothingClimate.Climate? ClimateOf(IEnumerable<Culture> cs)
             => ClothingClimate.Of(cs.SelectMany(c => c.Counties), inputs.ProvinceClimate);
@@ -531,7 +531,7 @@ public static class HumanLooks
             var group = groups[unit.Group];
             string template = PickByFit(group.Templates, unit.Climate, inputs.Data, rng);
 
-            var siblings = look == HumanLook.Varied
+            var siblings = preset.Count == 0
                 ? group.Templates
                 : groups.Where(g => g.Family == group.Family).SelectMany(g => g.Templates).ToArray();
 

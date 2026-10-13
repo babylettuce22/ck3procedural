@@ -763,13 +763,38 @@ public sealed class LanguageFlavour
     /// region; the unthemed default draws from every real-world flavour. The invented fantasy
     /// flavours are never in it — they belong to races, not to the draw.
     /// </summary>
+    /// <remarks>
+    /// Several themes blend evenly: each one's pool is scaled to the same total and a flavour two
+    /// themes share gets both shares. One theme is returned unscaled, so its draws are the ones it
+    /// always made.
+    /// </remarks>
     public static List<(LanguageFlavour Flavour, double Weight)> Pool(MapConfig cfg)
+    {
+        var themes = cfg.CultureThemeSet;
+        if (themes.Count == 1) return Pool(themes[0]);
+
+        var blend = new List<(LanguageFlavour Flavour, double Weight)>();
+        foreach (var theme in themes)
+        {
+            var pool = Pool(theme);
+            double total = pool.Sum(p => p.Weight);
+            foreach (var (flavour, weight) in pool)
+            {
+                int at = blend.FindIndex(b => b.Flavour == flavour);
+                if (at < 0) blend.Add((flavour, weight / total));
+                else blend[at] = (flavour, blend[at].Weight + weight / total);
+            }
+        }
+        return blend;
+    }
+
+    private static List<(LanguageFlavour Flavour, double Weight)> Pool(MapConfig.CultureLookTheme theme)
     {
         var pool = new List<(LanguageFlavour, double)>();
 
         void Add(LanguageFlavour f, double w = 1.0) => pool.Add((f, w));
 
-        switch (cfg.CultureAestheticsTheme)
+        switch (theme)
         {
             case MapConfig.CultureLookTheme.WesternEuropean:
                 Add(Anglic); Add(Norse, 0.6); Add(Germanic); Add(Latinate); Add(Celtic); Add(Iberic, 0.6);
@@ -818,7 +843,7 @@ public sealed class LanguageFlavour
     }
 
     /// <summary>Whether the first heritage of a world of this theme should speak the Anglic tongue.</summary>
-    public static bool AnglicFirst(MapConfig cfg) => cfg.CultureAestheticsTheme is
+    public static bool AnglicFirst(MapConfig cfg) => cfg.CultureThemeSet.Any(t => t is
         MapConfig.CultureLookTheme.VariedGlobal or MapConfig.CultureLookTheme.WesternEuropean
-        or MapConfig.CultureLookTheme.NorthernNorse;
+        or MapConfig.CultureLookTheme.NorthernNorse);
 }

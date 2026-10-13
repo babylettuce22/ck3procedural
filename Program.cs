@@ -102,6 +102,9 @@ public static class Program
                 case "--verify-mountain-snow":
                     return Tools.MountainSnowChecks.Run();
 
+                case "--verify-inspiration":
+                    return Tools.InspirationChecks.Run();
+
                 case "--verify-tenets":
                     return Tools.TenetChecks.Run(options.GameDir);
 
@@ -530,6 +533,23 @@ public static class Program
                 case "--culture-theme" when i + 1 < args.Length:
                     cfg.CultureAestheticsTheme = Enum.Parse<MapConfig.CultureLookTheme>(args[++i], ignoreCase: true);
                     break;
+
+                // Several of each, comma-separated: the inspiration dialog's multi-select. See
+                // MapConfig.FaceRegions and MapConfig.CultureThemes.
+                case "--face-regions" when i + 1 < args.Length:
+                    cfg.FaceRegions = [.. args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Select(r => Enum.Parse<MapConfig.FaceRegion>(r, ignoreCase: true))];
+                    break;
+
+                case "--culture-themes" when i + 1 < args.Length:
+                {
+                    List<MapConfig.CultureLookTheme> themes = [.. args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .Select(t => Enum.Parse<MapConfig.CultureLookTheme>(t, ignoreCase: true))];
+                    // The single theme first: setting it drops any list, so the list goes on after.
+                    if (themes.Count > 0) cfg.CultureAestheticsTheme = themes[0];
+                    cfg.CultureThemes = themes;
+                    break;
+                }
 
                 case "--no-history":
                     options.WriteHistory = false;

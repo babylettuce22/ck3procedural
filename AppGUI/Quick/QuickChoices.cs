@@ -144,7 +144,8 @@ public sealed class QuickChoices
                + $"size {Size} ({w}x{h}{(SizeVerified ? "" : ", unverified")}), era {Era}, climate {Climate}, density {Density}, "
                + $"people {People}"
                + (InspirationInWorld is { } inspiration
-                   ? $" (inspiration: {inspiration.Describe()}; theme {inspiration.Theme}, faces {inspiration.Look})" : "")
+                   ? $" (inspiration: {inspiration.Describe()}; theme {(inspiration.ThemeSet is { Count: > 0 } themes ? string.Join("+", themes) : "VariedGlobal")}, "
+                     + $"faces {string.Join("+", inspiration.RegionSet)})" : "")
                + $", fantasy {FantasyInWorld}"
                + (MixInWorld is { } mix ? $" (custom mix: {mix.Describe(FantasyInWorld)})" : "")
                + $", politics {Politics}, rulers {Rulers}, "

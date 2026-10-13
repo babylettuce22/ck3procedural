@@ -544,6 +544,9 @@ public static class Ethnicities
 
         int ethIndex = 0;
 
+        // The world's face table, resolved once: a preset's, a blend of regions, or empty for Varied.
+        var looks = LookTemplates(cfg);
+
         // The mode's human:fantasy ratio, expressed as the counties fantasy races may hold.
         // Under TieRaceToHeritage the heritage phase spends it; otherwise the culture loop does,
         // and the heritage phase runs budgetless because its output is only the suggestion the
@@ -573,7 +576,7 @@ public static class Ethnicities
         foreach (var heritage in heritages)
         {
             var archetype = heritageArchetypes.GetValueOrDefault(heritage, RaceArchetype.Human);
-            var heritageEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", archetype, heritage.Name, cfg.RaceMode, cfg.DominantLook, rng);
+            var heritageEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", archetype, heritage.Name, cfg.RaceMode, looks, rng);
 
             ethnicities[heritageEth.Key] = heritageEth;
             byHeritage[heritage] = heritageEth;
@@ -635,7 +638,7 @@ public static class Ethnicities
 
             if (importedRace is { } race && race != (heritageEth?.Archetype ?? RaceArchetype.Human))
             {
-                cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", race, culture.Name, cfg.RaceMode, cfg.DominantLook, rng);
+                cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", race, culture.Name, cfg.RaceMode, looks, rng);
                 ethnicities[cultureEth.Key] = cultureEth;
                 usedArchetypes.Add(race);
                 if (race != RaceArchetype.Human)
@@ -776,7 +779,7 @@ public static class Ethnicities
                     mix?.Spend(subArchetype, LandCount(culture));
                 }
 
-                cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", subArchetype, culture.Name, cfg.RaceMode, cfg.DominantLook, rng);
+                cultureEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", subArchetype, culture.Name, cfg.RaceMode, looks, rng);
                 ethnicities[cultureEth.Key] = cultureEth;
                 usedArchetypes.Add(subArchetype);
             }
@@ -804,8 +807,8 @@ public static class Ethnicities
             var humanCultures = cultures.Where(c => byCulture[c].Archetype == RaceArchetype.Human).ToList();
             if (humanCultures.Count > 0)
             {
-                var placed = HumanLooks.Place(heritages, humanCultures, ghosts, LandCount, cfg.DominantLook,
-                    LookTemplates(cfg.DominantLook), humanLooks, cfg.Seed, Say);
+                var placed = HumanLooks.Place(heritages, humanCultures, ghosts, LandCount,
+                    looks, humanLooks, cfg.Seed, Say);
 
                 // The definitions the loop made for humans are replaced wholesale; any a heritage
                 // with no human culture still points at is put back below.
@@ -921,7 +924,7 @@ public static class Ethnicities
             if (bestHost is null) break;
 
             var minorityEth = CreateEthnicity($"gen_ethnicity_{ethIndex++}", minorityRace,
-                bestHost.Name, cfg.RaceMode, cfg.DominantLook, rng);
+                bestHost.Name, cfg.RaceMode, looks, rng);
             ethnicities[minorityEth.Key] = minorityEth;
 
             string entry = minorityEth.Variants.Count > 0
@@ -1867,7 +1870,7 @@ public static class Ethnicities
         RaceArchetype archetype,
         string name,
         FantasyRaceMode mode,
-        HumanLook look,
+        IReadOnlyList<(string Template, int Weight)> looks,
         Rng rng,
         string? forcedTemplate = null)
     {
@@ -1891,7 +1894,7 @@ public static class Ethnicities
         // which is why nothing on the generation path may ever pass it.
         var (family, template) = forcedTemplate is { } forced
             ? (FamilyOf(forced), forced)
-            : PickHumanLook(look, rng);
+            : PickHumanLook(looks, rng);
 
         var def = new EthnicityDef
         {
@@ -1988,6 +1991,101 @@ public static class Ethnicities
     };
 
     /// <summary>
+    /// The templates a world's humans are drawn from, as configured: the <see cref="MapConfig.FaceRegions"/>
+    /// when a set is given, else the <see cref="MapConfig.DominantLook"/> preset. Empty means Varied.
+    ///
+    /// A region set resolves in three ways, so that offering regions changes no world a preset made:
+    /// every region is Varied; a set that is exactly one preset's footprint is that preset, weights
+    /// and minorities included; anything else blends the regions' own tables evenly, keeping only
+    /// templates whose home region was picked. That last rule is what makes an exclusion real: a
+    /// Mediterranean table carries an Arab minority, and "everything but the Middle East" must not
+    /// bring it back through the side door.
+    /// </summary>
+    internal static IReadOnlyList<(string Template, int Weight)> LookTemplates(MapConfig cfg)
+    {
+        var regions = cfg.FaceRegions.Distinct().ToHashSet();
+        if (regions.Count == 0) return LookTemplates(cfg.DominantLook);
+        if (PresetFor(regions) is { } preset) return LookTemplates(preset);
+
+        var blend = new List<(string Template, double Weight)>();
+        foreach (var region in Enum.GetValues<FaceRegion>().Where(regions.Contains))
+        {
+            var own = RegionTemplates(region).Where(t => regions.Contains(HomeRegion(t.Template))).ToList();
+            double total = own.Sum(t => t.Weight);
+            foreach (var (template, weight) in own)
+            {
+                int at = blend.FindIndex(b => b.Template == template);
+                if (at < 0) blend.Add((template, weight / total));
+                else blend[at] = (template, blend[at].Weight + weight / total);
+            }
+        }
+        return [.. blend.Select(b => (b.Template, Math.Max(1, (int)Math.Round(b.Weight * 1000))))];
+    }
+
+    /// <summary>The preset a region set is exactly the footprint of: <see cref="HumanLook.Varied"/>
+    /// for all of them, null for a set no preset makes.</summary>
+    internal static HumanLook? PresetFor(IReadOnlySet<FaceRegion> regions)
+    {
+        if (regions.Count == 0) return null;
+        foreach (var look in Enum.GetValues<HumanLook>())
+            if (Footprint(look).SetEquals(regions)) return look;
+        return null;
+    }
+
+    /// <summary>The regions a preset's faces come from, as the dialog shows it selected.</summary>
+    internal static HashSet<FaceRegion> Footprint(HumanLook look) => look switch
+    {
+        HumanLook.Varied => [.. Enum.GetValues<FaceRegion>()],
+        HumanLook.WesternEuropean => [FaceRegion.WesternEuropean],
+        HumanLook.Mediterranean => [FaceRegion.Mediterranean],
+        HumanLook.SubSaharan => [FaceRegion.SubSaharan],
+        HumanLook.EastAsian => [FaceRegion.EastAsian],
+        HumanLook.SoutheastAsian => [FaceRegion.SoutheastAsian],
+        HumanLook.MixedEuropean => [FaceRegion.WesternEuropean, FaceRegion.Slavic, FaceRegion.Mediterranean],
+        HumanLook.MixedMediterranean => [FaceRegion.Mediterranean, FaceRegion.SubSaharan],
+        HumanLook.MixedAsian => [FaceRegion.EastAsian, FaceRegion.SoutheastAsian, FaceRegion.Indian],
+        HumanLook.MiddleEastern => [FaceRegion.MiddleEastern],
+        HumanLook.Steppe => [FaceRegion.Steppe],
+        _ => []
+    };
+
+    /// <summary>
+    /// A region's own table: its single-region preset where there is one, so a region reads the same
+    /// alone or in a blend. Slavic and Indian have no preset of their own — they were only ever the
+    /// European and Asian mixes' share — so they get their templates evenly.
+    /// </summary>
+    private static IReadOnlyList<(string Template, int Weight)> RegionTemplates(FaceRegion region) => region switch
+    {
+        FaceRegion.WesternEuropean => LookTemplates(HumanLook.WesternEuropean),
+        FaceRegion.Slavic => [("slavic", 100)],
+        FaceRegion.Mediterranean => LookTemplates(HumanLook.Mediterranean),
+        FaceRegion.MiddleEastern => LookTemplates(HumanLook.MiddleEastern),
+        FaceRegion.Steppe => LookTemplates(HumanLook.Steppe),
+        FaceRegion.SubSaharan => LookTemplates(HumanLook.SubSaharan),
+        FaceRegion.Indian => [("indian", 50), ("south_indian", 50)],
+        FaceRegion.EastAsian => LookTemplates(HumanLook.EastAsian),
+        FaceRegion.SoutheastAsian => LookTemplates(HumanLook.SoutheastAsian),
+        _ => []
+    };
+
+    /// <summary>
+    /// The one region each template belongs to. Turkic_west goes with the Middle East (Persia and
+    /// Anatolia) and turkic with the steppe; the Mongol look is the steppe's, not East Asia's.
+    /// </summary>
+    private static FaceRegion HomeRegion(string template) => template switch
+    {
+        "caucasian" or "circumpolar" => FaceRegion.WesternEuropean,
+        "slavic" => FaceRegion.Slavic,
+        "mediterranean" or "byzantine" => FaceRegion.Mediterranean,
+        "arab" or "turkic_west" => FaceRegion.MiddleEastern,
+        "turkic" or "asian_mongol" => FaceRegion.Steppe,
+        "african" or "east_african" => FaceRegion.SubSaharan,
+        "indian" or "south_indian" => FaceRegion.Indian,
+        "asian_malay" or "asian_austronesian" or "papuan" => FaceRegion.SoutheastAsian,
+        _ => FaceRegion.EastAsian
+    };
+
+    /// <summary>
     /// Which of the four look families a vanilla template belongs to — the families the even split
     /// in <see cref="HumanLooks"/> is kept over. One table, there, so the split and the label a
     /// culture's inspector shows cannot disagree.
@@ -2003,16 +2101,11 @@ public static class Ethnicities
     /// number of values from the sequence, so folding Varied into the same path would give every
     /// seed generated before this setting existed a different world.
     /// </summary>
-    private static (string Family, string Template) PickHumanLook(HumanLook look, Rng rng)
+    /// <param name="templates">The world's table (<see cref="LookTemplates(MapConfig)"/>); empty is Varied,
+    /// as is an enum member with no table yet, rather than a throw.</param>
+    private static (string Family, string Template) PickHumanLook(IReadOnlyList<(string Template, int Weight)> templates, Rng rng)
     {
-        if (look == HumanLook.Varied)
-        {
-            string family = rng.Pick(["caucasian", "african", "asian", "mena"]);
-            return (family, PickVanillaTemplate(family, rng));
-        }
-
-        var templates = LookTemplates(look);
-        if (templates.Count == 0) // An enum member with no table yet; behave as Varied rather than throw.
+        if (templates.Count == 0)
         {
             string family = rng.Pick(["caucasian", "african", "asian", "mena"]);
             return (family, PickVanillaTemplate(family, rng));
@@ -2071,7 +2164,7 @@ public static class Ethnicities
         if (match is null) return false;
 
         var def = CreateEthnicity($"gen_ethnicity_{culture.Key}_edit", RaceArchetype.Human,
-            culture.Name, mode, HumanLook.Varied, rng, forcedTemplate: match);
+            culture.Name, mode, [], rng, forcedTemplate: match);
 
         // Dressed by the rules generation used — a vanilla people's mix, a skin window for the
         // culture's climate, its heritage's leans — with a fresh draw for the rest, so a second
