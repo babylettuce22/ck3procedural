@@ -73,7 +73,7 @@ request_court_chaplain_cardinalate_interaction = {
 					NOT = {
 						exists = scope:actor.faith.religious_head
 					}
-					scope:actor.rite = scope:recipient.rite
+					scope:actor.faith = scope:recipient.faith
 					scope:recipient = {
 						pam_leads_college_of_cardinals_trigger = yes
 					}
@@ -338,6 +338,12 @@ request_court_chaplain_cardinalate_interaction = {
 						}
 					}
 				}
+				# 1.20.1: the Head of Faith's letter to a player made cardinal
+				if = {
+					limit = { scope:new_cardinal = { is_ai = no } }
+					scope:recipient = { save_scope_as = head_of_faith }
+					scope:new_cardinal = { pam_notify_player_became_cardinal_effect = yes }
+				}
 				if = {
 					limit = {
 						scope:actor = {
@@ -485,6 +491,12 @@ request_court_chaplain_cardinalate_interaction = {
 					target = cp:councillor_court_chaplain
 					value < 0
 				}
+			}
+		}
+		modifier = {
+			factor = 0
+			scope:actor.cp:councillor_court_chaplain ?= {
+				pam_ai_cardinal_candidate_is_immersive_trigger = no
 			}
 		}
 	}

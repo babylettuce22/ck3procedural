@@ -544,6 +544,7 @@ pool_repopulate_local_flavor = {
 					}
 				}
 				set_character_faith = root.capital_county.faith
+				set_character_rite = root.capital_county.rite # 1.20.1
 			}
 		}
 		else_if = {

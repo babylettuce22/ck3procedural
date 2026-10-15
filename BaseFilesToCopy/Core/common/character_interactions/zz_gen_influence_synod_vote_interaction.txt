@@ -64,7 +64,6 @@ influence_papal_vote_interaction = {
 					if = {
 						limit = {
 							this != scope:recipient
-							this != scope:actor
 							NOT = { scope:actor.faith.religious_head ?= this }
 							is_alive = yes
 							is_papabile = yes

@@ -10,6 +10,10 @@
 # for generated Synod faiths (qw 2026-09-30). Vanilla's Pope escapes only through the Christianity
 # exclusion below. For every faith without electors this is vanilla unchanged.
 #
+# 1.20.1 dropped order_of_succession = theocratic and the pool config from vanilla's own copy (heads
+# of faith now keep Clerical Appointment), which removes the clash above; the can_keep exclusion stays
+# so elector faiths never carry the law at all. Succession block re-copied from 1.20.1.1.
+#
 # Re-copy on a patch that changes the vanilla law.
 
 same_faith_theocratic_succession_law = {
@@ -26,8 +30,6 @@ same_faith_theocratic_succession_law = {
 		}
 	}
 	succession = {
-		order_of_succession = theocratic
 		faith = same_faith
-		pool_character_config = pool_theocratic_succession
 	}
 }

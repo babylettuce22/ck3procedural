@@ -1429,9 +1429,13 @@ public static class GuiWriter
             var grid = doc.Unique("rulers in region grid", n => n.IsBlock && n.Key == "fixedgridbox"
                 && n.Children.Any(c => !c.IsBlock && c.Key == "datamodel"
                     && (c.Value ?? "").Contains("GetRealmsInRegion", StringComparison.Ordinal)));
-            var portrait = grid.Node?.Children.FirstOrDefault(c => c.IsBlock && c.Key == "item")
-                ?.Children.FirstOrDefault(c => c.IsBlock && c.Key == "portrait_head_small");
-            doc.At("rulers in region portrait", portrait)
+            // The item's one child is the cell: the bare portrait up to 1.20.0, and from 1.20.1 a
+            // `widget` holding a rank banner, the portrait and a rite icon. Hidden whole, or a dummy
+            // would leave its banner and rite icon behind.
+            var cell = grid.Node?.Children.FirstOrDefault(c => c.IsBlock && c.Key == "item")
+                ?.Children.FirstOrDefault(c => c.IsBlock && (c.Key == "portrait_head_small"
+                    || c.Key == "widget" && c.Children.Any(d => d.IsBlock && d.Key == "portrait_head_small")));
+            doc.At("rulers in region portrait", cell)
                .Append(GuiNode.Leaf("visible",
                    GuiExpr.Not(GuiExpr.Raw("Character.GetGovernment.IsType('wilderness_government')")).Quoted));
         }

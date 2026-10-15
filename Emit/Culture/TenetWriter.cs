@@ -12,6 +12,8 @@ public static class TenetWriter
     private const string AdaptationPath = "common/religion/tenet_types/zz_gen_bga_tenets.txt";
     internal const string TextPath = "common/religion/tenet_types/zzz_gen_tenet_text.txt";
     internal const string LocalisationPath = "localization/english/gen_tenets_l_english.yml";
+    /// <summary>Empty, in <see cref="LocalisationPath"/>.</summary>
+    private const string NoGlossaryKey = "gen_tenet_no_historical_glossary";
 
     public static void WriteEligibility(string modDir, FaithMap faiths)
     {
@@ -119,6 +121,21 @@ public static class TenetWriter
                 .Add(GuiNode.Block("trigger", "=").Add(condition))
                 .Add(GuiNode.Leaf("desc", $"gen_{key}_{field}"));
             choices[0].InsertFirst(choice);
+        }
+
+        // 1.20.1 moved each tenet's real-world history ("…salvation through Jesus Christ…") out of
+        // desc into historical_glossary, shown as the tooltip subtitle. Generated religions get the
+        // empty subtitle every glossary-less tenet already shows.
+        foreach (var glossary in definition.ChildrenNamed("historical_glossary"))
+        {
+            var choices = glossary.ChildrenNamed("first_valid").ToList();
+            if (!glossary.IsBlock || choices.Count != 1 || !choices[0].IsBlock)
+                throw new InvalidDataException($"Tenet text adaptation: {key}.historical_glossary no longer has the expected first_valid structure.");
+            var condition = GuiParser.Parse(trigger).Roots.Single();
+            condition.LeadingTrivia = null;
+            choices[0].InsertFirst(GuiNode.Block("triggered_desc", "=")
+                .Add(GuiNode.Block("trigger", "=").Add(condition))
+                .Add(GuiNode.Leaf("desc", NoGlossaryKey)));
         }
         return document.Print();
     }

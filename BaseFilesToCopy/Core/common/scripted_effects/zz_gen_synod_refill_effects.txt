@@ -41,6 +41,7 @@ pam_seed_cardinals_effect = {
 						this != scope:pam_seed_hof
 						pam_can_hold_cardinalate_trigger = yes
 						pam_pope_is_head_of_faith_or_rite_trigger = yes
+						pam_ai_cardinal_candidate_is_immersive_trigger = yes # 1.20.1
 					}
 				}
 				order_by = holder.piety_level
@@ -53,6 +54,14 @@ pam_seed_cardinals_effect = {
 						}
 						grant_cardinal_title_effect = {
 							CARDINAL_COUNTY = capital_county
+						}
+						if = { # 1.20.1: the Head of Faith's letter to a player seeded later in play
+							limit = {
+								is_ai = no
+								NOT = { current_date_is_start_date_trigger = yes }
+							}
+							scope:pam_seed_hof = { save_scope_as = head_of_faith }
+							pam_notify_player_became_cardinal_effect = yes
 						}
 						add_to_list = pam_seeded_cardinals
 					}
@@ -145,6 +154,8 @@ pam_cardinal_vacancy_on_death_effect = {
 								this != scope:head_of_faith
 								pam_can_hold_cardinalate_trigger = yes
 								pam_pope_is_head_of_faith_or_rite_trigger = yes
+								pam_ai_cardinal_candidate_is_immersive_trigger = yes # 1.20.1
+								pam_is_antipope_trigger = no # 1.20.1
 							}
 						}
 						order_by = holder.piety_level
@@ -174,6 +185,8 @@ pam_cardinal_vacancy_on_death_effect = {
 								this != scope:head_of_faith
 								pam_can_hold_cardinalate_trigger = yes
 								pam_pope_is_head_of_faith_or_rite_trigger = yes
+								pam_ai_cardinal_candidate_is_immersive_trigger = yes # 1.20.1
+								pam_is_antipope_trigger = no # 1.20.1
 							}
 						}
 						order_by = holder.piety_level

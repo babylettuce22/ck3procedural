@@ -29,6 +29,9 @@
 # Rebased on 1.20 (Crozier): hostility is judged between rites (the faith's main rite against the
 # holder's rite), and the holy-site barony list is any_holy_site_barony -- any_holy_site now walks
 # the new holy-site objects rather than baronies.
+#
+# Checked against 1.20.1.1: its changes (faith:christian_faith beside faith:catholic in the historical
+# arms, and Chalcedonianism excluded from the "under attack" arm) only touch arms dropped here.
 
 namespace = great_holy_war
 

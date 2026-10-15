@@ -741,6 +741,24 @@ appoint_cardinal_interaction = {
 				subtract = 20
 			}
 		}
+		# 1.20.1: vanilla's two new vetoes, for both branches
+		modifier = {
+			factor = 0
+			scope:recipient = {
+				pam_ai_cardinal_candidate_is_immersive_trigger = no
+			}
+		}
+		# Players request their courtiers' cardinalates themselves
+		modifier = {
+			factor = 0
+			scope:recipient = {
+				is_ruler = no
+				employer ?= {
+					is_ai = no
+					this != scope:puppet_or_actor
+				}
+			}
+		}
 	}
 	on_send = {
 		if = {
