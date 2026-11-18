@@ -39,21 +39,32 @@ public static partial class BuildingStripWriter
         string ours = Path.Combine(StaticFileWriter.BaseDirectory, StaticFileWriter.Wilderness, "common", "buildings");
         if (Directory.Exists(ours)) sources.Add(ours);
 
-        var primaryStems = PrimaryStems(Path.Combine(gameDir, "common", "holdings"));
+        var (primaries, primaryStems) = Primaries(gameDir);
         var wildernessFamily = WildernessFamily();
 
         var keys = new SortedSet<string>(StringComparer.Ordinal);
         foreach (string source in sources)
         {
             if (!Directory.Exists(source)) continue;
-            foreach (string path in Directory.GetFiles(source, "*.txt"))
+            // Recursive: CK3 1.21 moved every building into per-district subfolders.
+            foreach (string path in Directory.GetFiles(source, "*.txt", SearchOption.AllDirectories))
+            {
+                // Wonders and great buildings stay standing (see the summary). 1.21 dropped the
+                // `type` field that used to say so; these two folders are what says it now, and
+                // the primary-building rule below catches the same chains again.
+                string folder = Path.GetFileName(Path.GetDirectoryName(path)) ?? "";
+                if (folder is "special_buildings" or "great_district_buildings") continue;
+
                 foreach (var (key, type) in Buildings(File.ReadAllText(path)))
                 {
                     if (type is "special" or "great_building") continue;
                     if (wildernessFamily.Contains(key) || key.EndsWith("_cleared", StringComparison.Ordinal)) continue;
-                    if (primaryStems.Any(stem => LevelOf(stem).IsMatch(key))) continue;
+                    // A district's primary building is the district itself, not a slot in it —
+                    // castle_01 is the castle, and pulling it would leave a district with no body.
+                    if (primaries.Contains(key) || primaryStems.Any(stem => LevelOf(stem).IsMatch(key))) continue;
                     keys.Add(key);
                 }
+            }
         }
 
         var b = new StringBuilder();
@@ -115,39 +126,53 @@ public static partial class BuildingStripWriter
     }
 
     /// <summary>
-    /// The stem of each holding's <c>primary_building</c> (<c>castle</c> from <c>castle_01</c>),
-    /// from the game's holdings and the Wilderness set's. A building named stem + two digits is a
-    /// level of that holding, not a slot.
+    /// Every <c>primary_building</c> the game and the Wilderness set name — in districts since CK3
+    /// 1.21, in holdings before it — and the stem of each numbered one (<c>castle</c> from
+    /// <c>castle_01</c>, <c>grain_resource_building</c> from <c>grain_resource_building_1</c>). A
+    /// building named stem + digits is a level of that chain, not a slot.
     /// </summary>
-    private static List<string> PrimaryStems(string gameHoldings)
+    private static (HashSet<string> Primaries, List<string> Stems) Primaries(string gameDir)
     {
+        var primaries = new HashSet<string>(StringComparer.Ordinal);
         var stems = new List<string>();
-        var dirs = new[] { gameHoldings, Path.Combine(StaticFileWriter.BaseDirectory, StaticFileWriter.Wilderness, "common", "holdings") };
+        string wilderness = Path.Combine(StaticFileWriter.BaseDirectory, StaticFileWriter.Wilderness, "common");
+        var dirs = new[]
+        {
+            Path.Combine(gameDir, "common", "districts"), Path.Combine(gameDir, "common", "holdings"),
+            Path.Combine(wilderness, "districts"), Path.Combine(wilderness, "holdings"),
+        };
         foreach (string dir in dirs)
         {
             if (!Directory.Exists(dir)) continue;
-            foreach (string path in Directory.GetFiles(dir, "*.txt"))
+            foreach (string path in Directory.GetFiles(dir, "*.txt", SearchOption.AllDirectories))
                 foreach (Match m in PrimaryBuilding().Matches(File.ReadAllText(path)))
                 {
-                    string stem = Regex.Replace(m.Groups[1].Value, @"_\d+$", "");
+                    string key = m.Groups[1].Value;
+                    primaries.Add(key);
+                    if (!Regex.IsMatch(key, @"_\d+$")) continue;
+                    string stem = Regex.Replace(key, @"_\d+$", "");
                     if (!stems.Contains(stem)) stems.Add(stem);
                 }
         }
-        return stems;
+        return (primaries, stems);
     }
 
     /// <summary>
-    /// The keys <c>wilderness_holding</c> lists as its buildings — the obstacles and the two ruin
-    /// rungs — read from the set's own holdings file so the exclusion follows it.
+    /// The keys the wilderness holding lists as its buildings — the obstacles and the two ruin
+    /// rungs — read from the set's own file so the exclusion follows it: its holding district
+    /// since CK3 1.21, the holding itself before.
     /// </summary>
     private static HashSet<string> WildernessFamily()
     {
         var family = new HashSet<string>(StringComparer.Ordinal);
-        string path = Path.Combine(StaticFileWriter.BaseDirectory, StaticFileWriter.Wilderness, "common", "holdings", "00_wilderness_holdings.txt");
+        string common = Path.Combine(StaticFileWriter.BaseDirectory, StaticFileWriter.Wilderness, "common");
+        var (path, block) = (Path.Combine(common, "districts", "00_wilderness_districts.txt"), "wilderness_holding_district = {");
+        if (!File.Exists(path))
+            (path, block) = (Path.Combine(common, "holdings", "00_wilderness_holdings.txt"), "wilderness_holding = {");
         if (!File.Exists(path)) return family;
 
         string text = File.ReadAllText(path);
-        int start = text.IndexOf("wilderness_holding = {", StringComparison.Ordinal);
+        int start = text.IndexOf(block, StringComparison.Ordinal);
         if (start < 0) return family;
         int list = text.IndexOf("buildings = {", start, StringComparison.Ordinal);
         int end = list < 0 ? -1 : text.IndexOf('}', list);
@@ -158,7 +183,7 @@ public static partial class BuildingStripWriter
         return family;
     }
 
-    private static Regex LevelOf(string stem) => new($"^{Regex.Escape(stem)}_\\d\\d$");
+    private static Regex LevelOf(string stem) => new($"^{Regex.Escape(stem)}_\\d+$");
 
     [GeneratedRegex(@"^([a-z_0-9]+)\s*=\s*\{")]
     private static partial Regex TopKey();

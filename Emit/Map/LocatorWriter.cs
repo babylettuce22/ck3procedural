@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using Ck3MapGen.Core;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
@@ -60,6 +60,9 @@ public static class LocatorWriter
         // file                            name                       layer              clamp  sea    yaw  jitter
         ("building_locators.txt",          "buildings",               "building_layer",   true,  false,   0,  180),
         ("special_building_locators.txt",  "special_building",        "building_layer",   true,  false,  85,  137),
+        // CK3 1.21: entrepots. Vanilla's file is its special_building one under another name (same
+        // positions), so it takes the same anchors.
+        ("entrepot_locators.txt",          "entrepot",                "building_layer",   true,  false,  85,  137),
         ("combat_locators.txt",            "combat",                  "unit_layer",       true,  true,  226,  127),
         ("siege_locators.txt",             "siege",                   "unit_layer",       false, false, 186,  144),
         ("stack_locators.txt",             "unit_stack",              "unit_layer",       true,  false,   0,    0),
@@ -102,7 +105,7 @@ public static class LocatorWriter
         {
             // The special building is the one thing that shares a province with the holding rather
             // than replacing it, so it is the one thing that needs its own point to stand on.
-            var points = kind.Name == "special_building" ? anchors.Special : anchors.Holding;
+            var points = kind.Name is "special_building" or "entrepot" ? anchors.Special : anchors.Holding;
             WriteLocators(dir, kind, provinces, byId, points, cfg.Seed);
         }
 

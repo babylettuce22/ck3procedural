@@ -411,7 +411,7 @@ can_promote_colony_trigger = {
 	}
 	custom_tooltip = {
 		text = colonize_needs_development_tt
-		development_level >= 4
+		prosperity_level >= 4
 	}
 	custom_tooltip = {
 		text = colonize_needs_full_settlement_tt

@@ -2562,7 +2562,7 @@ public static partial class CompatibilityWriter
     /// Finds top-level `key = {` blocks and reports whether each declares generate_modifiers.
     ///
     /// That flag must be preserved exactly: it is what creates the
-    /// &lt;region&gt;_development_growth[_factor] modifiers that
+    /// &lt;region&gt;_prosperity_growth[_factor] modifiers (development_growth before CK3 1.21) that
     /// common/modifier_definition_formats/00_region_definitions.txt declares. Dropping it makes
     /// those modifier types unknown, which then breaks 00_traits.txt, common/modifiers/* and
     /// holy_site_types with errors pointing at completely unrelated files.

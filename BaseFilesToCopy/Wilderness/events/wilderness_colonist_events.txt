@@ -268,7 +268,7 @@ wilderness_colonist.0002 = {
 		name = wilderness_colonist.0002.a
 
 		scope:colony = {
-			change_development_progress = 15
+			change_prosperity_progress = 15
 			change_county_control = -5
 		}
 
@@ -295,7 +295,7 @@ wilderness_colonist.0002 = {
 		add_internal_flag = dangerous
 
 		scope:colony = {
-			change_development_progress = 5
+			change_prosperity_progress = 5
 			change_county_control = 5
 		}
 
@@ -518,7 +518,7 @@ wilderness_colonist.0003 = {
 		remove_short_term_gold = 30
 
 		scope:colony = {
-			change_development_progress = 10
+			change_prosperity_progress = 10
 			change_county_control = 5
 		}
 
@@ -538,7 +538,7 @@ wilderness_colonist.0003 = {
 	option = {
 		name = wilderness_colonist.0003.c
 
-		scope:colony = { change_development_progress = -10 }
+		scope:colony = { change_prosperity_progress = -10 }
 
 		stress_impact = {
 			content = minor_stress_impact_loss
@@ -931,7 +931,7 @@ wilderness_colonist.0005 = {
 	option = {
 		name = wilderness_colonist.0005.c
 
-		scope:colony = { change_development_progress = 5 }
+		scope:colony = { change_prosperity_progress = 5 }
 
 		stress_impact = {
 			diligent = minor_stress_impact_loss

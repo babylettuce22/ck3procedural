@@ -295,7 +295,7 @@ restor_forge_charters_interaction = {
 						tier = tier_county
 						restor_power_forgeable_title_trigger = yes
 					}
-					order_by = development_level
+					order_by = prosperity_level
 					save_scope_as = restor_forged_title
 				}
 			}
@@ -599,7 +599,7 @@ restor_grant_heir_seat_interaction = {
 			ordered_held_title = {
 				limit = { restor_power_grantable_county_trigger = yes }
 				order_by = {
-					value = development_level
+					value = prosperity_level
 					if = {
 						limit = { restor_crown_county_trigger = yes }
 						add = 1000

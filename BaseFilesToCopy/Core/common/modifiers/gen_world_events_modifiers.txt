@@ -6,7 +6,7 @@
 gen_world_quiet_roads_modifier = {
 	icon = economy_positive
 	domain_tax_mult = 0.05
-	development_growth_factor = 0.05
+	prosperity_growth_factor = 0.05
 }
 
 # Men in the yard, not in the fields.

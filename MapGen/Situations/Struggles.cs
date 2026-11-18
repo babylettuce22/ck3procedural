@@ -406,7 +406,7 @@ public sealed class StruggleMap
         ("catalyst_new_building_in_temple", "minor_struggle_catalyst_gain"),
         ("catalyst_sign_truce_outside_war", "minor_struggle_catalyst_gain"),
         ("catalyst_very_important_child_change_culture_or_faith", "minor_struggle_catalyst_gain"),
-        ("catalyst_improve_development_vassal_diff_faith_culture", "minimal_struggle_catalyst_gain"),
+        ("catalyst_improve_prosperity_vassal_diff_faith_culture", "minimal_struggle_catalyst_gain"),
     ];
 
     /// <summary>
@@ -736,7 +736,7 @@ public sealed class StruggleMap
             ("OTHER_EFFECTS_NAME", "involved", "struggle_unlocks_befriend_schemes_for_everyone"),
             ("OTHER_EFFECTS_NAME", "involved", "struggle_becoming_friend_gives_prestige"),
             ("OTHER_EFFECTS_NAME", "involved", "apply_truce_when_sending_ward"),
-            ("OTHER_EFFECTS_NAME", "involved", "completing_building_in_castle_gives_development"),
+            ("OTHER_EFFECTS_NAME", "involved", "completing_building_in_castle_gives_prosperity"),
         ],
 
         _ =>
@@ -780,18 +780,18 @@ public sealed class StruggleMap
             ("WAR_EFFECTS_NAME", "involved_character_modifier", "ai_war_chance", "5"),
             ("WAR_EFFECTS_NAME", "involved_character_modifier", "ai_war_cooldown", "-0.25"),
             ("WAR_EFFECTS_NAME", "involved_character_modifier", "mercenary_hire_cost_mult", "-0.3"),
-            ("OTHER_EFFECTS_NAME", "interloper_county_modifier", "county_opinion_add", "-15"),
-            ("OTHER_EFFECTS_NAME", "interloper_county_modifier", "tax_mult", "-0.2"),
-            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "county_opinion_add", "-20"),
-            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "tax_mult", "-0.25"),
+            ("OTHER_EFFECTS_NAME", "interloper_county_modifier", "popular_opinion_add", "-15"),
+            ("OTHER_EFFECTS_NAME", "interloper_county_modifier", "all_tax_mult", "-0.2"),
+            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "popular_opinion_add", "-20"),
+            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "all_tax_mult", "-0.25"),
         ],
 
         StruggleMood.Ambition =>
         [
-            ("OTHER_EFFECTS_NAME", "interloper_character_modifier", "county_opinion_add", "-5"),
-            ("OTHER_EFFECTS_NAME", "interloper_character_modifier", "tax_mult", "-0.1"),
-            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "county_opinion_add", "-10"),
-            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "tax_mult", "-0.15"),
+            ("OTHER_EFFECTS_NAME", "interloper_character_modifier", "popular_opinion_add", "-5"),
+            ("OTHER_EFFECTS_NAME", "interloper_character_modifier", "all_tax_mult", "-0.1"),
+            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "popular_opinion_add", "-10"),
+            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "all_tax_mult", "-0.15"),
         ],
 
         StruggleMood.Accommodation =>
@@ -799,7 +799,7 @@ public sealed class StruggleMap
             ("WAR_EFFECTS_NAME", "involved_character_modifier", "ai_war_chance", "-3"),
             ("OTHER_EFFECTS_NAME", "involved_character_modifier", "different_faith_opinion", "5"),
             ("OTHER_EFFECTS_NAME", "involved_character_modifier", "different_culture_opinion", "5"),
-            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "county_opinion_add", "-10"),
+            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "popular_opinion_add", "-10"),
         ],
 
         _ =>
@@ -808,8 +808,8 @@ public sealed class StruggleMap
             ("WAR_EFFECTS_NAME", "involved_character_modifier", "ai_war_cooldown", "0.5"),
             ("OTHER_EFFECTS_NAME", "involved_character_modifier", "different_faith_opinion", "10"),
             ("OTHER_EFFECTS_NAME", "involved_character_modifier", "different_culture_opinion", "10"),
-            ("OTHER_EFFECTS_NAME", "all_county_modifier", "development_growth_factor", "0.1"),
-            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "county_opinion_add", "-10"),
+            ("OTHER_EFFECTS_NAME", "all_county_modifier", "prosperity_growth_factor", "0.1"),
+            ("OTHER_EFFECTS_NAME", "uninvolved_county_modifier", "popular_opinion_add", "-10"),
         ],
     };
 

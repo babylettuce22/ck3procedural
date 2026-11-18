@@ -1,4 +1,4 @@
-namespace Ck3MapGen.MapGen;
+﻿namespace Ck3MapGen.MapGen;
 
 /// <summary>
 /// One edge of the road as the caravans travel it: the network edge, and the hub at the end they
@@ -122,8 +122,10 @@ public static class SilkRoad
         ("tibet", "c_lhasa", "lhasa_market_01", (239, 208, 40)),
         ("india", "c_lahur", "lahur_bazaar_01", (237, 103, 89)),
         ("central_asia", "c_shazhou", "dunhuang_market_01", (57, 105, 168)),
-        ("transcaspia", "c_khiva", "khiva_bazaar_01", (95, 161, 51)),
-        ("occident", "c_dvin", "dvin_shuka_01", (164, 72, 138)),
+        // CK3 1.21 moved these two stops: transcaspia from Khiva to Gurganj, occident from Dvin to
+        // Tabriz (tgp_silk_road.txt's capital_province, the visit-a-market decision's county keys).
+        ("transcaspia", "c_gurganj", "gurganj_bazaar_01", (95, 161, 51)),
+        ("occident", "c_tabriz", "tabriz_bazaar_01", (164, 72, 138)),
     ];
 
     private const int China = 0, Tibet = 1, India = 2, CentralAsia = 3, Transcaspia = 4, Occident = 5;

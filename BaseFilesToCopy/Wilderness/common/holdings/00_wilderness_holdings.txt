@@ -2,32 +2,18 @@
 #
 #     wilderness_holding  ->  settlement_holding  ->  castle / city / church / tribal
 #
-# The blocker buildings appear in BOTH lists on purpose. A blocker is a fact about the ground, not
-# about who owns it, so claiming a county does not clear its wolves — it inherits them. That single
-# decision is what makes colonisation a project rather than a purchase.
+# ---- CK3 1.21: a holding is its primary district ----
+#
+# Since 1.21 (Silk and Silver free update) a holding no longer lists a primary building and its
+# buildings itself. It names a `primary_district` (type = holding), and that district carries the
+# primary building and the building list — see common/districts/00_wilderness_districts.txt. The
+# lists that used to be here, and why the blockers appear in both, now live there.
+#
+# Neither holding lists any other `districts`: nothing but the holding district can be built on
+# unsettled ground or in a colony, which is what the old single building list meant.
 
 wilderness_holding = {
-	primary_building = wilderness_01
-
-	buildings = {
-		beast_dens
-		bandit_camps
-		dense_growth
-		flooded_lands
-		scree_slopes
-		killing_cold
-
-		# The two spawn rungs of the ruins ladder — see the note in 00_wilderness_buildings.txt.
-		# Listed here so a ruin can stand on a county nobody has claimed yet, which is the normal
-		# state of one: a county that falls is unclaimed by definition.
-		#
-		# `ruins_cleared` is deliberately absent. The wilderness dummy cannot build (its government
-		# has `buildings = no`), so the bottom rung would be unreachable here anyway, and a ruin is
-		# only ever cleared by somebody who has claimed the ground — at which point the holding is a
-		# settlement_holding and the list below applies.
-		ruins_large
-		ruins_small
-	}
+	primary_district = wilderness_holding_district
 
 	# The dummy holder is immortal and blocks inheritance anyway, but saying it here means a
 	# wilderness barony cannot leak into a real succession even if the dummy is somehow removed.
@@ -35,55 +21,14 @@ wilderness_holding = {
 }
 
 settlement_holding = {
-	primary_building = settlement_01
-
-	buildings = {
-		beast_dens
-		beast_dens_cleared
-		bandit_camps
-		bandit_camps_cleared
-		dense_growth
-		dense_growth_cleared
-		flooded_lands
-		flooded_lands_cleared
-		scree_slopes
-		scree_slopes_cleared
-		killing_cold
-		killing_cold_cleared
-
-		# All three rungs. A colony inherits whatever rung the ground was on when it was claimed and
-		# has to work down the rest of it.
-		ruins_large
-		ruins_small
-		ruins_cleared
-		colony_timber_works_01
-		colony_timber_works_02
-		colony_pallisade_01
-		colony_pallisade_02
-		colony_office_01
-		colony_office_02
-		colony_office_03
-
-		# The tribal chains. Which set a colony sees is decided in the buildings' own
-		# can_construct_potential (colony_is_tribal_trigger), not here — a holding's list cannot
-		# ask who holds it.
-		colony_hall_01
-		colony_hall_02
-		colony_hall_03
-		colony_hunting_camps_01
-		colony_hunting_camps_02
-		colony_kin_muster_01
-		colony_kin_muster_02
-	}
+	primary_district = settlement_holding_district
 
 	# ---- There is no `can_be_built` here, and there cannot be ----
 	#
-	# CK3 holdings accept six fields: buildings, can_be_inherited,
-	# counts_toward_domain_limit_if_disabled, parameters, primary_building and
-	# required_heir_government_types. `can_be_built` is not one of them — it appears nowhere in the
-	# game files — so a block by that name is read, ignored, and reported by nothing except
-	# ck3-tiger. It was here, and on wilderness_holding, and on five holdings in a verbatim copy of
-	# vanilla's 00_holdings.txt, and none of it did anything.
+	# CK3 holdings accept a fixed set of fields (since 1.21: primary_district, districts,
+	# can_be_inherited, counts_toward_domain_limit_if_disabled, required_heir_government_types,
+	# parameters). `can_be_built` is not one of them — it appears nowhere in the game files — so a
+	# block by that name is read, ignored, and reported by nothing except ck3-tiger.
 	#
 	# What it was reaching for is already true by a different route. No government lists
 	# settlement_holding in `required_county_holdings`, which is the engine's precondition for

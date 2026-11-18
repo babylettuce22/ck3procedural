@@ -1310,7 +1310,7 @@ public static class HistoryWriter
                     if (government != GovernmentMap.Feudal) b.Field("government", government);
 
                     b.Field("liege", liege?.Key);
-                    if (level > 0) b.Field("change_development_level", level);
+                    if (level > 0) b.Field("change_prosperity_level", level);
 
                     // Once per ruler, on the one title that is theirs: the effect acts on the holder,
                     // and a man holding a kingdom and six counties would otherwise run it seven times.
@@ -1902,7 +1902,7 @@ public static class HistoryWriter
 
                         if (eraLevel > 0 && eraLevel != levelWritten)
                         {
-                            b.Field("change_development_level", eraLevel);
+                            b.Field("change_prosperity_level", eraLevel);
                             levelWritten = eraLevel;
                         }
 

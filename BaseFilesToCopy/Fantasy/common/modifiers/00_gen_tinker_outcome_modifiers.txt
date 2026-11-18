@@ -125,16 +125,16 @@ gen_tk_curio_chess_masterwork_modifier = {
 
 # ---------------------------------------------------------------- Waterworks (county, 20 years)
 gen_tk_waterworks_modifier = {
-	icon = county_modifier_development_positive
-	development_growth_factor = 0.15
-	tax_mult = 0.05
+	icon = county_modifier_prosperity_positive
+	prosperity_growth_factor = 0.15
+	all_tax_mult = 0.05
 }
 # A masterwork is the real prize (user, 2026-09-30): the plain works stay modest.
 gen_tk_waterworks_masterwork_modifier = {
-	icon = county_modifier_development_positive
-	development_growth_factor = 0.4
-	tax_mult = 0.2
-	county_opinion_add = 5
+	icon = county_modifier_prosperity_positive
+	prosperity_growth_factor = 0.4
+	all_tax_mult = 0.2
+	popular_opinion_add = 5
 }
 
 # ---------------------------------------------------------------- War engine (character, 10 years)
@@ -193,7 +193,7 @@ gen_tk_apprentice_learned_modifier = {
 
 # ---------------------------------------------------------------- An explosion (county, 3 years)
 gen_tk_workshop_ruins_modifier = {
-	icon = county_modifier_development_negative
-	development_growth_factor = -0.15
-	county_opinion_add = -5
+	icon = county_modifier_prosperity_negative
+	prosperity_growth_factor = -0.15
+	popular_opinion_add = -5
 }

@@ -144,7 +144,7 @@ wilderness_clearing_obstacle_returns_effect = {
 			hidden_effect = { add_building = $OBSTACLE$ }
 		}
 		else = {
-			county ?= { change_development_progress = -50 }
+			county ?= { change_prosperity_progress = -50 }
 		}
 	}
 }

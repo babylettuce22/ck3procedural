@@ -24,13 +24,13 @@
  # be shown alone or together. Which ones show is decided in the event (see the note on 0001).
  gen_ruins.0001.t:0 "[gen_ruin_target.GetNameNoTier] Is Failing"
  gen_ruins.0001.desc_intro:0 "A letter has come from your reeve in [gen_ruin_target.GetNameNoTier]. People are leaving. Half the fields have gone unworked this year, two of the mills have stopped, and the reeve can no longer collect what is owed.\n\nThe reeve lays out what is wrong:"
- gen_ruins.0001.desc_levers:0 "\n\nIf things go on like this for about #V [gen_ruin_years_left|0] more years#!, the last families will leave and [gen_ruin_target.GetNameNoTier] will be lost.\n\nOne good year ends the danger. Get [county_control|E] there up to #V [gen_ruin_recover_ctl|0]#! or more, or get its [county_development|E] growing again. Setting your [marshal|E] to #V Increase Control in County#! there is the surest way, and every siege or occupation sets it back. A quiet year that is neither good nor bad eases things a little but does not end it."
+ gen_ruins.0001.desc_levers:0 "\n\nIf things go on like this for about #V [gen_ruin_years_left|0] more years#!, the last families will leave and [gen_ruin_target.GetNameNoTier] will be lost.\n\nOne good year ends the danger. Get [county_control|E] there up to #V [gen_ruin_recover_ctl|0]#! or more, or get its [county_prosperity|E] growing again. Setting your [marshal|E] to #V Increase Control in County#! there is the surest way, and every siege or occupation sets it back. A quiet year that is neither good nor bad eases things a little but does not end it."
  gen_ruins.0001.a:0 "I will see to it."
  gen_ruins.0001.a.tt:0 "If [gen_ruin_target.GetNameNoTier] is still failing when the time runs out, you will get #V one chance to pay#! to keep it. Refuse, and the county is #N lost#!."
 
  gen_ruins.cause_control:0 "\n\n#N Your hold is slipping.#! [county_control|E] in [gen_ruin_target.GetNameNoTier] is very low and is not recovering on its own."
- gen_ruins.cause_opinion:0 "\n\n#N The people hate their lord.#! [county_opinion|E] in [gen_ruin_target.GetNameNoTier] has fallen far below zero."
- gen_ruins.cause_poorer:0 "\n\n#N It is getting poorer.#! The [county_development|E] of [gen_ruin_target.GetNameNoTier] has been falling, year after year."
+ gen_ruins.cause_opinion:0 "\n\n#N The people hate their lord.#! [popular_opinion|E] in [gen_ruin_target.GetNameNoTier] has fallen far below zero."
+ gen_ruins.cause_poorer:0 "\n\n#N It is getting poorer.#! The [county_prosperity|E] of [gen_ruin_target.GetNameNoTier] has been falling, year after year."
 
  # ---- The reprieve modifier ----
  #
@@ -53,7 +53,7 @@
  # tooltip-traps note says can render blank.
  gen_ruins.0005.t:0 "Last Chance for [gen_ruin_target.GetNameNoTier]"
  gen_ruins.0005.desc_intro:0 "Your reeve in [gen_ruin_target.GetNameNoTier] has come to court in person. The list of households still living there is short enough to read aloud, and if nothing changes before spring, they will leave too."
- gen_ruins.0005.desc_offer:0 "\n\nIf you do nothing, #N [gen_ruin_target.GetNameNoTier] will be abandoned.#! It will no longer be yours or anyone's, and only ruins will be left.\n\nYou can pay to hold it together for #V [gen_ruin_reprieve_n|0] years#!, with gold, prestige or piety. It cannot fall while that lasts. This buys time, not a cure: if the bad years go on, about #V [gen_ruin_setback_years|0] more#! will bring you back here, and the price goes up each time.\n\nWhat actually saves the county is one good year: [county_control|E] at #V [gen_ruin_recover_ctl|0]#! or more, or its [county_development|E] growing again."
+ gen_ruins.0005.desc_offer:0 "\n\nIf you do nothing, #N [gen_ruin_target.GetNameNoTier] will be abandoned.#! It will no longer be yours or anyone's, and only ruins will be left.\n\nYou can pay to hold it together for #V [gen_ruin_reprieve_n|0] years#!, with gold, prestige or piety. It cannot fall while that lasts. This buys time, not a cure: if the bad years go on, about #V [gen_ruin_setback_years|0] more#! will bring you back here, and the price goes up each time.\n\nWhat actually saves the county is one good year: [county_control|E] at #V [gen_ruin_recover_ctl|0]#! or more, or its [county_prosperity|E] growing again."
 
  gen_ruins.0005.a_gold:0 "Pay for repairs and wages. (@gold_icon![gen_ruin_gold_cost|0])"
  gen_ruins.0005.b_prestige:0 "I will go there myself and call in favours. (@prestige_icon![gen_ruin_prestige_cost|0])"
@@ -71,7 +71,7 @@
  # can be resettled). It used to be mood only and charged prestige with no choice; the prestige now
  # sits on 0005's decline option, where it shows before the click.
  gen_ruins.0010.t:0 "[gen_ruin_target.GetNameNoTier] Is Abandoned"
- gen_ruins.0010.desc:0 "The last families have left [gen_ruin_target.GetNameNoTier]. No army took it. People simply went, a few at a time, to kin elsewhere or to whatever town would take them, and nobody came to replace them.\n\n#N You no longer hold [gen_ruin_target.GetNameNoTier].#! Its [county_development|E] is gone, its land has gone back to the wild, and only ruins are left standing. Nobody holds it now.\n\nIt can be settled again. Whoever colonises it will have to clear the ruins first, and may find something worth having among them."
+ gen_ruins.0010.desc:0 "The last families have left [gen_ruin_target.GetNameNoTier]. No army took it. People simply went, a few at a time, to kin elsewhere or to whatever town would take them, and nobody came to replace them.\n\n#N You no longer hold [gen_ruin_target.GetNameNoTier].#! Its [county_prosperity|E] is gone, its land has gone back to the wild, and only ruins are left standing. Nobody holds it now.\n\nIt can be settled again. Whoever colonises it will have to clear the ruins first, and may find something worth having among them."
  gen_ruins.0010.a:0 "We should have done more, sooner."
 
  # ---- What the lords above are told ----
@@ -159,10 +159,10 @@
  gen_ruins.9000.d_tick_tt:0 "Runs exactly the evaluation the yearly pulse runs, on this county only: score the year, add one if it was a bad one or #V reset the count to zero if it was not#!, send the warning or collapse if either line is crossed, then record this year's development for next year to compare against."
 
  gen_ruins.9000.e_fall:0 "Collapse it now"
- gen_ruins.9000.e_fall_tt:0 "Calls the collapse directly, BYPASSING the vetoes. The county is stripped, wiped to zero development, seeded with obstacles, given ruins, and handed to the ruins holder."
+ gen_ruins.9000.e_fall_tt:0 "Calls the collapse directly, BYPASSING the vetoes. The county is stripped, wiped to zero prosperity, seeded with obstacles, given ruins, and handed to the ruins holder."
 
  gen_ruins.9000.f_large:0 "Place LARGE ruins without collapsing it"
- gen_ruins.9000.f_large_tt:0 "Adds #V ruins_large#! and changes nothing else — the county keeps its holder, its people and its development. Two construction jobs from cleared: #V ruins_small#! first, then #V ruins_cleared#!. Only the second fires the discovery event."
+ gen_ruins.9000.f_large_tt:0 "Adds #V ruins_large#! and changes nothing else — the county keeps its holder, its people and its prosperity. Two construction jobs from cleared: #V ruins_small#! first, then #V ruins_cleared#!. Only the second fires the discovery event."
 
  gen_ruins.9000.f_small:0 "Place SMALL ruins without collapsing it"
  gen_ruins.9000.f_small_tt:0 "Adds #V ruins_small#! — the lower rung, most of the malus already gone. One construction job from cleared, so this is the fast way to reach the discovery event."
@@ -174,7 +174,7 @@
  gen_ruins.9000.m_offer_tt:0 "Fires #V gen_ruins.0005#! on this county without waiting for the counter, so the three prices and the escalation can be read at any time. #X This is not a preview#! — declining there calls the real collapse, and paying there really spends the gold, prestige or piety and applies the reprieve."
 
  gen_ruins.9000.h_reset:0 "Forget this county"
- gen_ruins.9000.h_reset_tt:0 "Clears the decay counter, the warning flag and the remembered development, and takes the county off the watchlist. What recovery looks like."
+ gen_ruins.9000.h_reset_tt:0 "Clears the decay counter, the warning flag and the remembered prosperity, and takes the county off the watchlist. What recovery looks like."
 
  # ---- Retargeting ----
  #
@@ -194,7 +194,7 @@
 
  # ---- 9010, mass ruin ----
  gen_ruins.9010.t:0 "DEBUG — Ruin Everything"
- gen_ruins.9010.desc_open:0 "Collapses whole realms at once, through the same path the yearly pulse uses: every county stripped, wiped to zero development, seeded with obstacles, given ruins, and handed to the ruins holder. The vetoes are bypassed.\n\n"
+ gen_ruins.9010.desc_open:0 "Collapses whole realms at once, through the same path the yearly pulse uses: every county stripped, wiped to zero prosperity, seeded with obstacles, given ruins, and handed to the ruins holder. The vetoes are bypassed.\n\n"
  gen_ruins.9010.desc_no_dummy:0 "#X No ruins holder on this map.#! There is nobody to hand the counties to, so nothing here can run."
  gen_ruins.9010.desc_nothing:0 "#X Nothing to ruin.#! You hold no county that is not already ruined, and neither does anyone below you."
  gen_ruins.9010.desc_counts:0 "Your domain: #V [gen_ruin_domain_n|0]#! counties. Your whole realm, vassals included: #V [gen_ruin_realm_n|0]#!.\n\n#EMP Sparing capitals#! leaves every ruler landed and the realm in one piece. The all-in options do not: a vassal with no county drops out of the realm, and if you lose your last county with no titular title above it, that is the end of the game."

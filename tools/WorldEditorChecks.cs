@@ -24,7 +24,7 @@ internal static class WorldEditorChecks
             Write("descriptor.mod", "name=\"Fixture\"\r\n", false);
             Write("common/landed_titles/00_landed_titles.txt", "# Preserve this comment\r\nk_test = { color = { 100 120 140 }\r\n\tcapital = c_test\r\n\tc_test = { color = { 150 160 170 } b_test = { province = 1 color = { 1 2 3 } } } }\r\nk_other = { color = { 1 1 1 } }\r\n");
             Write("common/culture/cultures/00_generated_cultures.txt", "gen_culture_0 = { color = { 10 20 30 } name_list = name_list_gen_culture_0 ethos = ethos_bellicose traditions = { tradition_welcoming # keep me\r\n tradition_forest_folk } unknown_future_field = yes }\r\ngen_culture_1 = { color = { 40 50 60 } ethos = ethos_communal }\r\n");
-            Write("history/titles/00_generated_titles.txt", "k_test = {\r\n\t900.1.1 = {\r\n\t\tholder = gen_char_0\r\n\t\tgovernment = feudal_government\r\n\t}\r\n}\r\nc_test = {\r\n\t900.1.1 = {\r\n\t\tholder = gen_char_0\r\n\t\tgovernment = feudal_government\r\n\t\tchange_development_level = 3\r\n\t}\r\n}\r\n");
+            Write("history/titles/00_generated_titles.txt", "k_test = {\r\n\t900.1.1 = {\r\n\t\tholder = gen_char_0\r\n\t\tgovernment = feudal_government\r\n\t}\r\n}\r\nc_test = {\r\n\t900.1.1 = {\r\n\t\tholder = gen_char_0\r\n\t\tgovernment = feudal_government\r\n\t\tchange_prosperity_level = 3\r\n\t}\r\n}\r\n");
             Write("common/dynasties/00_generated_dynasties.txt", "gen_dynasty_0 = {\r\n\tname = \"dynn_gen_0\"\r\n\tculture = \"gen_culture_0\"\r\n}\r\n");
             Write("common/dynasty_houses/00_generated_houses.txt", "house_gen_0 = {\r\n\tname = \"dynn_gen_0\"\r\n\tdynasty = gen_dynasty_0\r\n}\r\n");
             Write("common/religion/holy_site_types/01_generated_holy_sites.txt", "gen_hs_c_test = {\r\n\tcounty = c_test\r\n\tcharacter_modifier = { monthly_piety_gain_mult = 0.1 }\r\n}\r\n");
@@ -33,7 +33,7 @@ internal static class WorldEditorChecks
             Write("map_data/default.map", "definitions = \"definition.csv\"\r\nprovinces = \"provinces.png\"\r\n", false);
             Write("common/religion/religion_types/00_generated_religions.txt", "gen_religion_0 = { doctrine = doctrine_monogamy faiths = { gen_faith_0 = { color = { 0.5 0.2 0.8 } doctrine = tenet_pacifism holy_site = gen_hs_c_test } } }\r\n");
             Write("history/characters/00_generated_characters.txt", "gen_char_0 = { name=\"Álvar\" dynasty_house=house_gen_0 martial=8 culture=gen_culture_0 religion=gen_faith_0 trait=brave 860.1.1={birth=yes} 900.1.1={effect={add_gold=50 add_prestige=75 add_diplomacy_lifestyle_perk_points=2 dynasty={add_dynasty_prestige=10}}} }\r\n");
-            Write("history/provinces/00_generated_provinces.txt", "1 = { culture = gen_culture_0 religion = gen_faith_0 holding = castle_holding special_building_slot = wonder_slot_01 }\r\n", false);
+            Write("history/provinces/00_generated_provinces.txt", "1 = { culture = gen_culture_0 religion = gen_faith_0 holding = castle_holding special_district_slot = wonder_slot_01_district }\r\n", false);
             Write("common/bookmarks/bookmarks/00_bookmarks.txt", "bm_generated = { start_date = 900.1.1 character = { name = \"bm_char_test\" history_id = gen_char_0 culture = gen_culture_0 religion = gen_faith_0 birth = 860.1.1 } }\r\n");
             Write("localization/english/gen_test_l_english.yml", "l_english:\r\n k_test:0 \"Old Kingdom\" # retain comment\r\n c_test:0 \"Old County\"\r\n b_test:0 \"Old Castle\"\r\n gen_culture_0:0 \"Old Culture\"\r\n gen_religion_0:0 \"Old Religion\"\r\n gen_faith_0:0 \"Old Faith\"\r\n bm_char_test:0 \"Álvar $nick_the_brave$\"\r\n dynn_gen_0:0 \"Old House\"\r\n cul_a:0 \"Aldo\"\r\n cul_b:0 \"Bram\"\r\n cul_c:0 \"Cara\"\r\n");
             Write("localization/english/gen_title_tiers_l_english.yml", "l_english:\r\n gen_flav_gen_culture_0_0_kingdom:0 \"Tsardom\"\r\n gen_flav_gen_culture_0_0_kingdom_male:0 \"Tsar\"\r\n gen_flav_gen_culture_0_0_kingdom_female:0 \"Tsaritsa\"\r\n gen_flav_gen_culture_0_1_kingdom:0 \"Khanate\"\r\n gen_flav_gen_culture_0_1_kingdom_male:0 \"Khan\"\r\n gen_flav_gen_culture_0_1_kingdom_female:0 \"Khatun\"\r\n gen_flav_k_other_kingdom:0 \"League\"\r\n gen_flav_k_other_kingdom_male:0 \"Doge\"\r\n");
@@ -153,8 +153,8 @@ internal static class WorldEditorChecks
             Check(titleFields.Capital == "c_test", "Capital read from landed_titles");
             Reject(() => titleFields.Capital = "c_missing", "Reject a capital outside the title");
             var baronyFields = new AppGUI.TitleInspector.LoadedFields(world.Titles["b_test"], view, view.Realm);
-            Check(baronyFields.SpecialSlot == "wonder_slot_01", "Special building slot read from the province");
-            baronyFields.SpecialSlot = "wonder_slot_02";
+            Check(baronyFields.SpecialSlot == "wonder_slot_01_district", "Special district slot read from the province");
+            baronyFields.SpecialSlot = "wonder_slot_02_district";
             Reject(() => baronyFields.SpecialBuilding = "some_building", "Reject a building line the province does not carry");
 
             // Holy sites: the faith lists them, the site definition names the county.

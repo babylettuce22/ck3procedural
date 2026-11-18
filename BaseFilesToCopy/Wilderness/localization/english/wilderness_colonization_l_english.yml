@@ -88,6 +88,13 @@
  settlement_holding:0 "Colony"
  settlement_holding_desc:0 "A foothold rather than a holding — a palisade, a few families, and a great deal still to do."
 
+ # CK3 1.21: each holding is its holding district (common/districts/00_wilderness_districts.txt),
+ # worded the way vanilla words its own ("Castle Holding District", flavour from the building).
+ wilderness_holding_district:0 "Wilderness"
+ wilderness_holding_district_desc_flavor:0 "$wilderness_holding_desc$"
+ settlement_holding_district:0 "Colony"
+ settlement_holding_district_desc_flavor:0 "$settlement_holding_desc$"
+
  # A holding type needs a SECOND name, not just the one above. Anywhere the UI says "$TYPE$
  # Holding" it looks up `<key>_concept_key`, not `<key>`, and vanilla points that at a game
  # concept (`castle_holding_concept_key` is "[castle|E]") so the phrase is clickable. These two
@@ -355,7 +362,7 @@ wilderness_colonization.0029.t:0 "The Starving Winter"
  WILDERNESS_PROMOTE_TEMPLE_BUTTON:0 "Consecrate a Temple"
  colonize_settle_button_effect_tt:0 "Send settlers into this country, and make it ours to hold — or to lose."
  colonize_obstacles_remain_tt:0 "Nothing may still be blocking the land"
- colonize_needs_development_tt:0 "The county must have reached #V 4 #! Development"
+ colonize_needs_development_tt:0 "The county must have reached #V 4 #! Prosperity"
  colonize_needs_full_settlement_tt:0 "The colony must be fully established"
  colonize_construction_in_progress_tt:0 "Nothing may still be under construction here"
 
@@ -642,7 +649,7 @@ building_colony_office_01:0 "Colonial Bailiff's Office"
  wilderness_colonization.0030.b:0 "Rally the guard. We ride out to secure the perimeter ourselves!"
  wilderness_colonization.0030.c:0 "Bolt the granaries. The colony must survive, whatever the toll."
 
- wilderness_rationing_success_tt:0 "#P Supplies are distributed fairly, boosting development growth and loyalty.#!"
+ wilderness_rationing_success_tt:0 "#P Supplies are distributed fairly, boosting prosperity growth and loyalty.#!"
  wilderness_sortie_success_desc:0 "You drive off the threat, earning the awe of the settlers!"
  wilderness_sortie_fail_desc:0 "The sortie turns into a chaotic rout in the snow, leaving you battered."
  wilderness_hard_winter_tt:0 "#N Sacrifices are made; control is maintained at the cost of settler resentment.#!"
@@ -751,7 +758,7 @@ return_home_from_colony_decision:0 "Return Home from the Colony"
  
 OVERSEE_COLONY_ACTIVITY_STATUS:0 "You are dwelling among the settlers, directing the expansion firsthand."
  OVERSEEING_THE_SETTLEMENT_TOOLTIP:0 "#T Overseeing the Settlement#!\n#negative @prestige_icon! -0.5#! Monthly Prestige\n\nThe colony also pays its lord while he stays, more as it grows: #positive @gold_icon! +0.5 / +1.0 / +1.5#! Monthly Income by settlement level, or #positive @prestige_icon! +0.5 / +1.0 / +1.5#! Monthly Prestige for a tribal lord.\n\n#flavor The lord dwells in the palisade, directing the work firsthand.#!"
- SETTLEMENT_OVERSEEN_TOOLTIP:0 "#T Colony Growth#!\n#positive @development_icon! +30%#! Development Growth\n#positive @control_icon! +0.5#! Monthly Control Growth\n#positive +20#! County Opinion\n#positive -15%#! Construction Time\n\n#flavor A colony develops rapidly when its lord is present to govern it.#!"
+ SETTLEMENT_OVERSEEN_TOOLTIP:0 "#T Colony Growth#!\n#positive @prosperity_icon! +30%#! Prosperity Growth\n#positive @control_icon! +0.5#! Monthly Control Growth\n#positive +20#! County Opinion\n#positive -15%#! Construction Time\n\n#flavor A colony develops rapidly when its lord is present to govern it.#!"
  
  # --- Was promised colony, now what
  wilderness_colonization.0025.t: "The Pioneer's Charter"

@@ -61,7 +61,7 @@
 
  councillor_colony_speaker:0 "Speaker for the Settlers"
  councillor_colony_speaker_possessive:0 "Speaker for the Settlers'"
- councillor_colony_speaker_desc:0 "Not appointed by the settlers, but the only man in the camp they would think to send for. He carries their complaints up and the lord's answers back down, and he is the reason more wagons come next spring.\n\nThe colony's #P diplomacy#! seat. Calling for settlers raises [development|E] growth and [county_opinion|E] together — the two things a colony needs to stop being one, since promotion wants [development|E] 4 and unhappy settlers do not build.\n\nHe is an alternative to the Homestead law rather than an addition to it; running both is not twice the effect."
+ councillor_colony_speaker_desc:0 "Not appointed by the settlers, but the only man in the camp they would think to send for. He carries their complaints up and the lord's answers back down, and he is the reason more wagons come next spring.\n\nThe colony's #P diplomacy#! seat. Calling for settlers raises [prosperity|E] growth and [popular_opinion|E] together — the two things a colony needs to stop being one, since promotion wants [prosperity|E] 4 and unhappy settlers do not build.\n\nHe is an alternative to the Homestead law rather than an addition to it; running both is not twice the effect."
  councillor_colony_speaker_modifier:0 "Speaker for the Settlers"
 
  councillor_colony_pathfinder:0 "Pathfinder"
@@ -82,7 +82,7 @@
  task_hold_the_palisade_modifier:0 "Holding the Palisade"
 
  task_clear_the_wilds:0 "Clear the Wilds"
- task_clear_the_wilds_effect_desc:0 "The Warden's men on the worst of the country instead of on the wall — the axe route to a clear county, paid for in his time rather than the colony's gold.\n\n$EFFECT_LIST_BULLET$#P On completion, removes the county's most serious obstacle, worst first, taking its [development|E], [supply_limit|E], [garrison|E] and [travel_danger|E] penalties off with it#!\n$EFFECT_LIST_BULLET$#P Then begins again on the next obstacle, until the county is clear#!\n$EFFECT_LIST_BULLET$#N Cannot complete in a month when anything is under construction in the colony#!\n[councillor.GetModifierDescForTask('task_clear_the_wilds')]"
+ task_clear_the_wilds_effect_desc:0 "The Warden's men on the worst of the country instead of on the wall — the axe route to a clear county, paid for in his time rather than the colony's gold.\n\n$EFFECT_LIST_BULLET$#P On completion, removes the county's most serious obstacle, worst first, taking its [prosperity|E], [supply_limit|E], [garrison|E] and [travel_danger|E] penalties off with it#!\n$EFFECT_LIST_BULLET$#P Then begins again on the next obstacle, until the county is clear#!\n$EFFECT_LIST_BULLET$#N Cannot complete in a month when anything is under construction in the colony#!\n[councillor.GetModifierDescForTask('task_clear_the_wilds')]"
  task_clear_the_wilds_modifier:0 "Clearing the Wilds"
  colony_clearing_blocked_toast:0 "Every hand in [county.GetNameNoTier] is on the scaffolding, so the wilds around it are still standing"
 

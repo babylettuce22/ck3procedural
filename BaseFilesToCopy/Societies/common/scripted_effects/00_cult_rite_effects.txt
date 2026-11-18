@@ -103,7 +103,7 @@ cult_mass_taint_list_effect = {
 	}
 	ordered_in_list = {
 		list = $LIST$
-		order_by = development_level
+		order_by = prosperity_level
 		max = scope:cult_profane_n
 		check_range_bounds = no
 		add_county_modifier = {

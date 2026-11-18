@@ -475,14 +475,14 @@ wilderness_yearly_government_repair = {
 # growth modifier.
 #
 # Held titles, not the holder's capital: a lord can hold several colonies in his domain, and every
-# one of them is capped. change_development_level with `value = N subtract = development_level` is
+# one of them is capped. change_prosperity_level with `value = N subtract = prosperity_level` is
 # vanilla's own "set to N" (01_dlc_fp1_scripted_effects.txt, the Rus capital).
 wilderness_yearly_colony_development_ceiling = {
 	trigger = {
 		any_held_title = {
 			tier = tier_county
 			is_colony_county_trigger = yes
-			development_level > colony_development_ceiling
+			prosperity_level > colony_development_ceiling
 		}
 	}
 
@@ -491,11 +491,11 @@ wilderness_yearly_colony_development_ceiling = {
 			limit = {
 				tier = tier_county
 				is_colony_county_trigger = yes
-				development_level > colony_development_ceiling
+				prosperity_level > colony_development_ceiling
 			}
-			change_development_level = {
+			change_prosperity_level = {
 				value = colony_development_ceiling
-				subtract = development_level
+				subtract = prosperity_level
 			}
 		}
 	}

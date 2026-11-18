@@ -632,7 +632,7 @@ public sealed class TitleInspector : InspectorForm
         }
 
         [Category("Development")]
-        [Description("The county's development at the start date — its change_development_level line in the title history.")]
+        [Description("The county's development at the start date — its change_prosperity_level line in the title history (development before CK3 1.21).")]
         public int Development
         {
             get => world.DevelopmentOf(Shell);
@@ -644,13 +644,17 @@ public sealed class TitleInspector : InspectorForm
         }
 
         [Category("Buildings")]
-        [DisplayName("Special building slot")]
-        [Description("The special_building_slot line of this barony's province, where it has one.")]
+        [DisplayName("Special district slot")]
+        [Description("The special_district_slot line of this barony's province (special_building_slot in a world written before CK3 1.21), where it has one.")]
         public string SpecialSlot
         {
-            get => Shell.Tier == "b" ? world.ProvinceOf(Shell)?.Value("special_building_slot") ?? "" : "—";
-            set => SetProvinceLeaf("special_building_slot", value);
+            get => Shell.Tier == "b" ? world.ProvinceOf(Shell)?.Value(SlotKey) ?? "" : "—";
+            set => SetProvinceLeaf(SlotKey, value);
         }
+
+        /// <summary>The slot line this world's province history uses: CK3 1.21 renamed it.</summary>
+        private string SlotKey => world.ProvinceOf(Shell)?.Value("special_district_slot") is { Length: > 0 }
+            ? "special_district_slot" : "special_building_slot";
 
         [Category("Buildings")]
         [DisplayName("Special building")]

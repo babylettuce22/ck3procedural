@@ -267,7 +267,7 @@ gen_ruin_shock_effect = {
 #
 # Order matters and is not arbitrary: the reading happens first, the threshold is tested second, and
 # only then is this year's development recorded for next year to compare against. Stamping the
-# development first would make `development_level < var:ruin_last_dev` compare a number to itself
+# development first would make `prosperity_level < var:ruin_last_dev` compare a number to itself
 # and the trajectory signal would never fire once.
 gen_ruin_tick_county_effect = {
 	if = {
@@ -416,7 +416,7 @@ gen_ruin_tick_county_effect = {
 	# Last, and after the reading above rather than before it. Stamped first, the trajectory arm of
 	# gen_ruin_is_suffering_trigger would be comparing this year's development against itself and
 	# could never once be true.
-	set_variable = { name = ruin_last_dev value = development_level }
+	set_variable = { name = ruin_last_dev value = prosperity_level }
 
 	# And this year's control, for the same reason and with the same ordering constraint. The control
 	# arm is a trajectory now, not a floor, so it compares against last year — and stamped before the
@@ -952,8 +952,8 @@ gen_ruin_debug_payload_effect = {
 	gen_ruin_debug_init_effect = yes
 
 	set_variable = { name = ruin_dbg_ctl value = county_control }
-	set_variable = { name = ruin_dbg_op value = county_opinion }
-	set_variable = { name = ruin_dbg_dev value = development_level }
+	set_variable = { name = ruin_dbg_op value = popular_opinion }
+	set_variable = { name = ruin_dbg_dev value = prosperity_level }
 	set_variable = { name = ruin_dbg_since value = var:ruin_streak_year }
 
 	# Reporting 0 for a county nothing ever measured is honest; printing ERROR is not.
@@ -1004,8 +1004,8 @@ gen_ruin_debug_readout_effect = {
 	save_scope_value_as = { name = gen_ruin_tel_looted value = var:ruin_s_looted }
 
 	save_scope_value_as = { name = gen_ruin_tel_ctl value = county_control }
-	save_scope_value_as = { name = gen_ruin_tel_op value = county_opinion }
-	save_scope_value_as = { name = gen_ruin_tel_dev value = development_level }
+	save_scope_value_as = { name = gen_ruin_tel_op value = popular_opinion }
+	save_scope_value_as = { name = gen_ruin_tel_dev value = prosperity_level }
 }
 
 # County scope. One suffering year, attributed. Called by the tick immediately after the point is

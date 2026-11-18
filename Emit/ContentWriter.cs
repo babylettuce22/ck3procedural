@@ -107,7 +107,7 @@ public static partial class ContentWriter
         Core.Stage.Time("winter", () => WinterWriter.WriteAll(modDir,
             WinterWriter.Severity(classified.Field, provinces, order, landCount), baronyCount, landCount));
 
-        Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, gameDir, worldCenters));
+        Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, gameDir, worldCenters, cfg.EnableWilderness));
         Core.Stage.Time("wonder index", () => WonderIndex.Write(modDir, worldCenters));
 
         Core.Stage.Time("title tiers", () => TitleTierWriter.WriteAll(modDir, cultures, empires, faiths,
@@ -1515,6 +1515,25 @@ public static partial class ContentWriter
     /// whose government had changed would desync the rest of that stream. One serialiser either
     /// way — the generator calls Build then this, an overwrite calls this alone.
     /// </summary>
+    /// <summary>The special district that hosts a special building (CK3 1.21): its key plus
+    /// <c>_district</c>, which is how vanilla names every one of them.</summary>
+    public static string SpecialDistrictKey(string building) => building + "_district";
+
+    /// <summary>
+    /// The district level that stands <paramref name="building"/> on a slot whose first rung is
+    /// <paramref name="slot"/>: level N is the Nth building of the primary chain, so a wonder's
+    /// <c>x_03</c> on an <c>x_01</c> slot is level 3. Anything else — a market that is its own
+    /// slot, a building off another chain — is the district as founded, level 1.
+    /// </summary>
+    public static int SpecialDistrictLevel(string slot, string building)
+    {
+        if (building == slot) return 1;
+        int cut = slot.LastIndexOf('_');
+        if (cut < 0 || slot[(cut + 1)..] != "01" || !building.StartsWith(slot[..(cut + 1)], StringComparison.Ordinal))
+            return 1;
+        return int.TryParse(building[(cut + 1)..], out int level) && level > 0 ? level : 1;
+    }
+
     internal static void EmitProvinceHistory(string modDir, IReadOnlyList<ProvinceRow> rows,
         IReadOnlyDictionary<int, string> holdings, EraHoldings? eras = null)
     {
@@ -1537,8 +1556,23 @@ public static partial class ContentWriter
                 if (row.Rite is { } rite) b.Field("rite", rite);
                 b.Field("holding", holding);
 
-                if (row.SpecialSlot is { } slot) b.Field("special_building_slot", slot);
-                if (row.SpecialBuilding is { } building) b.Field("special_building", building);
+                // CK3 1.21 hosts every special building in a special district, named after its
+                // primary building (vanilla: hagios_demetrios -> hagios_demetrios_district), and
+                // dropped special_building_slot/special_building from province history. The rows
+                // keep building keys, which is what the editor and the wonder ladder speak; this
+                // is the one place they turn into districts.
+                if (row.SpecialSlot is { } slot)
+                {
+                    string district = SpecialDistrictKey(slot);
+                    b.Field("special_district_slot", district);
+                    if (row.SpecialBuilding is { } building)
+                        using (b.Block("districts"))
+                        using (b.Block("district"))
+                        {
+                            b.Field("type", district);
+                            b.Field("level", SpecialDistrictLevel(slot, building));
+                        }
+                }
 
                 // A seat an additional bookmark's ruler sits in under another government: that
                 // government's holding from its date, and the start date's back when its holder

@@ -39,9 +39,9 @@ colony_sponsorship = {
 			tax = 0
 
 			subject_modifier = {
-				development_growth_factor = -0.20
+				prosperity_growth_factor = -0.20
 				build_gold_cost = 0.20
-				monthly_county_control_growth_add = -0.15
+				monthly_control_change_when_below_baseline_add = -0.15
 			}
 
 			subject_opinion = -15
@@ -105,9 +105,9 @@ colony_sponsorship = {
 			}
 
 			subject_modifier = {
-				development_growth_factor = 0.25
+				prosperity_growth_factor = 0.25
 				build_gold_cost = -0.20
-				monthly_county_control_growth_add = 0.20
+				monthly_control_change_when_below_baseline_add = 0.20
 			}
 
 			subject_opinion = 25

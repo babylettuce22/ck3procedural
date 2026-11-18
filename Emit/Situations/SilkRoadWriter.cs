@@ -1,4 +1,4 @@
-using Ck3MapGen.Config;
+﻿using Ck3MapGen.Config;
 using Ck3MapGen.Io;
 using Ck3MapGen.MapGen;
 
@@ -150,7 +150,13 @@ public static class SilkRoadWriter
         using (b.Block("effect"))
         using (b.Block("if"))
         {
-            using (b.Block("limit")) b.Field("has_tgp_dlc_trigger", "yes");
+            // Vanilla's own gate since CK3 1.21: either All Under Heaven or Silk and Silver.
+            using (b.Block("limit"))
+            using (b.Block("OR"))
+            {
+                b.Field("has_tgp_dlc_trigger", "yes");
+                b.Field("has_gdp_dlc_trigger", "yes");
+            }
             using (b.Block("start_situation")) b.Field("type", TypeKey);
         }
 
@@ -187,7 +193,8 @@ public static class SilkRoadWriter
         {
             using (b.Block("limit"))
             {
-                b.Field("has_tgp_dlc_trigger", "yes");
+                // The situation's existence is the real gate: history started it only with either
+                // DLC that carries it (WriteHistory).
                 b.Field("exists", $"situation:{TypeKey}");
             }
 

@@ -20,8 +20,8 @@
 # real escape ruination has.
 #
 #   control growth   answers the `county_control < 10` arm
-#   opinion          answers the `county_opinion < -70` arm
-#   development      answers the trajectory arm, `development_level < var:ruin_last_dev`
+#   opinion          answers the `popular_opinion < -70` arm
+#   development      answers the trajectory arm, `prosperity_level < var:ruin_last_dev`
 #
 # So the reprieve is not a stay of execution on its own. It is a stay of execution plus the means to
 # make it permanent, and a holder who pays and then goes back to ignoring the place still loses it —
@@ -29,7 +29,7 @@
 ruin_reprieve = {
 	icon = county_modifier_control_positive
 
-	monthly_county_control_growth_add = 0.5
-	county_opinion_add = 10
-	development_growth = 0.15
+	monthly_control_change_when_below_baseline_add = 0.5
+	popular_opinion_add = 10
+	prosperity_growth = 0.15
 }

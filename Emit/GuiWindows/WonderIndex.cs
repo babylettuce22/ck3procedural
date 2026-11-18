@@ -143,9 +143,9 @@ public static class WonderIndex
                     .Margin(14, 10)
                     .Spacing(4)
 
-                    // The building actually standing there, so the panel reports what the province
-                    // has now rather than what the generator laid down at year zero.
-                    .DataContext(GuiExpr.Raw("Province.GetHolding.GetSpecialBuildingType"))
+                    // The wonder the province's special district hosts (CK3 1.21 reaches it through
+                    // the district's primary building; every rung shares the wonder's name).
+                    .DataContext(GuiExpr.Raw("Province.GetHolding.GetSpecialDistrictType.GetPrimaryBuildingType"))
 
                     .Gap().Add(GuiBuilder.TextSingle()
                         .Format("#high")
@@ -318,14 +318,16 @@ public static class WonderIndex
             // tooltip, modifiers and all.
             //
             // The datacontext is the building rather than the province, because `Building` is what
-            // tiger calls what `GetSpecialBuildingType` yields, and the name hangs off that.
+            // tiger calls what `GetPrimaryBuildingType` yields, and the name hangs off that. CK3 1.21
+            // reaches the building through the special district (GetSpecialDistrictType); every
+            // rung of a wonder carries the same name, so the primary rung reads the same.
             .Gap().Add(GuiBuilder.TextSingle()
                 .Position(TextLeft, 10)
                 .MaxWidth(RowWidth - TextLeft - 12)
                 .Elide("right")
                 .Format("#high")
                 .Using("Font_Size_Medium")
-                .DataContext(GuiExpr.Raw($"{Province(wonder).Inner}.GetHolding.GetSpecialBuildingType"))
+                .DataContext(GuiExpr.Raw($"{Province(wonder).Inner}.GetHolding.GetSpecialDistrictType.GetPrimaryBuildingType"))
                 .Text(GuiExpr.Raw("Building.GetName")))
 
             .Gap().Add(GuiBuilder.TextSingle()

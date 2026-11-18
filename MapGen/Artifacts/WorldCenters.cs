@@ -79,8 +79,32 @@ public sealed class GeneratedWonder
             if (name.EndsWith(".dds.dds", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
             if (!name.EndsWith(".dds", StringComparison.OrdinalIgnoreCase)) name += ".dds";
 
-            return name;
+            return BuildingIcon(name);
         }
+    }
+
+    /// <summary>
+    /// A pre-1.21 building icon name as CK3 1.21 files it. The update moved every building icon
+    /// into a subfolder of <c>gfx/interface/icons/building_types</c> and dropped the prefixes:
+    /// <c>icon_structure_x.dds</c> is now <c>special_buildings/x.dds</c> (the Great Wall
+    /// <c>great_buildings/</c>), <c>icon_building_x.dds</c> <c>old_buildings/x.dds</c> (the
+    /// legendary set <c>special_buildings/</c>), and the duchy pair <c>duchy_buildings/</c>.
+    /// A name already carrying a folder passes through. Checked against every icon this generator
+    /// names on 1.21.0; the Wilderness set's static buildings use the same spellings.
+    /// </summary>
+    public static string BuildingIcon(string name)
+    {
+        if (name.Contains('/')) return name;
+        if (name is "icon_megalith.dds" or "icon_building_royal_forest.dds")
+            return "duchy_buildings/" + name.Replace("icon_building_", "").Replace("icon_", "");
+        if (name == "icon_structure_the_great_wall.dds") return "great_buildings/the_great_wall.dds";
+        if (name.StartsWith("icon_structure_", StringComparison.Ordinal))
+            return "special_buildings/" + name["icon_structure_".Length..];
+        if (name.StartsWith("icon_building_legendary_", StringComparison.Ordinal))
+            return "special_buildings/" + name["icon_building_".Length..];
+        if (name.StartsWith("icon_building_", StringComparison.Ordinal))
+            return "old_buildings/" + name["icon_building_".Length..];
+        return name;
     }
 
     /// <summary>
@@ -392,15 +416,15 @@ public sealed class WorldCenterMap
                 charMod["monthly_piety"] = "1.0";
                 charMod["same_faith_opinion"] = "10";
                 charMod["monthly_dynasty_prestige_mult"] = "0.05";
-                countyMod["county_opinion_add"] = "20";
-                countyMod["development_growth_factor"] = "0.35";
+                countyMod["popular_opinion_add"] = "20";
+                countyMod["prosperity_growth_factor"] = "0.35";
                 provMod["monthly_income"] = "2.0";
                 break;
 
             case WonderArchetype.GreatHarbor:
                 charMod["monthly_prestige"] = "1.0";
                 charMod["monthly_dynasty_prestige_mult"] = "0.05";
-                countyMod["development_growth_factor"] = "0.45";
+                countyMod["prosperity_growth_factor"] = "0.45";
                 provMod["monthly_income"] = "4.0";
                 provMod["supply_limit_mult"] = "0.5";
                 break;
@@ -409,7 +433,7 @@ public sealed class WorldCenterMap
                 charMod["learning"] = "5";
                 charMod["cultural_head_fascination_mult"] = "0.3";
                 charMod["monthly_lifestyle_xp_gain_mult"] = "0.3";
-                countyMod["development_growth_factor"] = "0.45";
+                countyMod["prosperity_growth_factor"] = "0.45";
                 provMod["monthly_income"] = "1.5";
                 break;
 
@@ -417,7 +441,7 @@ public sealed class WorldCenterMap
                 charMod["dread_gain_mult"] = "0.3";
                 charMod["advantage"] = "6";
                 countyMod["defender_holding_advantage"] = "20";
-                countyMod["development_growth_factor"] = "0.2";
+                countyMod["prosperity_growth_factor"] = "0.2";
                 provMod["fort_level"] = "5";
                 provMod["garrison_size"] = "0.35";
                 provMod["monthly_income"] = "1.0";
@@ -429,7 +453,7 @@ public sealed class WorldCenterMap
                 charMod["vassal_limit"] = "10";
                 charMod["court_grandeur_baseline_add"] = "8";
                 charMod["monthly_dynasty_prestige_mult"] = "0.05";
-                countyMod["development_growth_factor"] = "0.45";
+                countyMod["prosperity_growth_factor"] = "0.45";
                 provMod["monthly_income"] = "3.0";
                 break;
         }

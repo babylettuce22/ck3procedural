@@ -1523,7 +1523,7 @@ public sealed class ArtifactMap
         new("Anyone who studies it properly finds the rest of their education accelerating.",
             ("learning_lifestyle_xp_gain_mult", "0.3")),
         new("The capital grows around it, though its builders work slowly and argue often.",
-            ("character_capital_county_monthly_development_growth_add", "0.05"), ("build_speed", "-0.2")),
+            ("character_capital_county_monthly_prosperity_growth_add", "0.05"), ("build_speed", "-0.2")),
         new("Its tables of accounts and precedence have never been improved upon.",
             ("stewardship_per_prestige_level", "1"), ("diplomacy_per_prestige_level", "1")),
         new("Its chapters on regimen and physic are copied out far more often than its philosophy.",

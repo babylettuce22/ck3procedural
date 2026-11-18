@@ -125,7 +125,7 @@ wilderness_government = {
 
 		# Its counties never revolt: a peasant rising in an empty county is a war the player cannot
 		# reach and the AI cannot resolve.
-		county_opinion_add = 100
+		popular_opinion_add = 100
 
 		# ---- Control: the wilds are unclaimed, never restive ----
 		#
@@ -137,20 +137,20 @@ wilderness_government = {
 		# it (`COUNTY_CONTROL_LOSS_ON_HOSTILE_OWNER_CHANGE = 75`); whatever the wilderness was
 		# sitting on is what the new colony starts its first winter on.
 		#
-		# Counties open at `DEFAULT_COUNTY_CONTROL = 100`, so on a quiet map this changes nothing.
-		# What it fixes is the county a war marched through, a ruin sat on, or a plague crossed:
-		# that county is back at 100 within a year instead of being handed to a colonist half-held.
+		# CK3 1.21 rebuilt control: counties open at `DEFAULT_COUNTY_CONTROL = 25` and drift toward
+		# a baseline (`COUNTY_CONTROL_DEFAULT_BASELINE = 35`) that modifiers move. So the wilds are
+		# now held at 100 by raising their baseline to it, and every wilderness county climbs there
+		# within a year of game start — as does a county a war marched through, a ruin sat on, or a
+		# plague crossed, instead of being handed to a colonist half-held.
 		# The `if county_control < 50 -> change_county_control = 50` floor in
 		# 00_colonization_effects.txt stays as a backstop, and should now never fire.
 		#
 		# Both dummies get this: the ruins holder runs the same government (see the trait file).
 		#
-		# Growth is signed the obvious way. DECLINE is not, and it is worth writing down: vanilla's
-		# epidemics use `monthly_county_control_decline_add = -0.1` as a PENALTY, while the dread
-		# special building uses `+0.5` as a BONUS — so a positive add counteracts decline. The
-		# factor runs the other way (`decline_factor` is `color = bad` when positive; vanilla's
-		# fortifications buy `-0.1` to shave a tenth off it). Setting both cancels decline twice
-		# over, which is the point: nothing should be able to reintroduce it.
+		# 1.20 did this with growth and decline modifiers, and the decline pair's signs ran opposite
+		# ways. 1.21 has one baseline instead: `control_baseline_add` lifts it from 35 to 100,
+		# `…_when_below_baseline_add` is the fast climb to it, and `…_when_above_baseline_mult = -1`
+		# stops anything that lifted control past a lower baseline from drifting back down.
 		#
 		# It costs no travel danger worth having, and this was measured rather than assumed.
 		# `COUNTY_CONTROL_DANGER_MULTIPLIER = 0.6` does mean control below 100 is itself danger, so
@@ -172,9 +172,9 @@ wilderness_government = {
 		#
 		# Do NOT compensate on the obstacles. The wilds are dangerous on a deliberate number now
 		# instead of partly on an accounting figure, and the deliberate number is the larger one.
-		monthly_county_control_growth_add = 10
-		monthly_county_control_decline_add = 10
-		monthly_county_control_decline_factor = -1
+		control_baseline_add = 65   # COUNTY_CONTROL_DEFAULT_BASELINE 35 + 65 = 100
+		monthly_control_change_when_below_baseline_add = 10
+		monthly_control_change_when_above_baseline_mult = -1
 	}
 
 	ai = {

@@ -55,7 +55,7 @@ gen_ruins.0001 = {
 			desc = gen_ruins.cause_control
 		}
 		triggered_desc = {
-			trigger = { scope:gen_ruin_target = { county_opinion < -45 } }
+			trigger = { scope:gen_ruin_target = { popular_opinion < -45 } }
 			desc = gen_ruins.cause_opinion
 		}
 		triggered_desc = {
@@ -63,7 +63,7 @@ gen_ruins.0001 = {
 				scope:gen_ruin_target = {
 					NOR = {
 						county_control < 10
-						county_opinion < -45
+						popular_opinion < -45
 					}
 				}
 			}
@@ -179,7 +179,7 @@ gen_ruins.0005 = {
 			desc = gen_ruins.cause_control
 		}
 		triggered_desc = {
-			trigger = { scope:gen_ruin_target = { county_opinion < -45 } }
+			trigger = { scope:gen_ruin_target = { popular_opinion < -45 } }
 			desc = gen_ruins.cause_opinion
 		}
 		triggered_desc = {
@@ -187,7 +187,7 @@ gen_ruins.0005 = {
 				scope:gen_ruin_target = {
 					NOR = {
 						county_control < 10
-						county_opinion < -45
+						popular_opinion < -45
 					}
 				}
 			}
@@ -269,7 +269,7 @@ gen_ruins.0005 = {
 			# county at development 2 is worth about what the reprieve costs.
 			modifier = {
 				add = 40
-				scope:gen_ruin_target = { development_level >= 10 }
+				scope:gen_ruin_target = { prosperity_level >= 10 }
 			}
 
 			modifier = {
@@ -384,7 +384,7 @@ gen_ruins.0005 = {
 			# should not: one county among forty, poor, and not worth a year's income.
 			modifier = {
 				add = 60
-				scope:gen_ruin_target = { development_level <= 4 }
+				scope:gen_ruin_target = { prosperity_level <= 4 }
 			}
 
 			modifier = {

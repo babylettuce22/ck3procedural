@@ -713,7 +713,7 @@ public static class StruggleWriter
 
               	same_culture_opinion = 10
               	different_culture_opinion = -5
-              	monthly_county_control_growth_add = 0.5
+              	monthly_control_change_when_below_baseline_add = 0.5
               	monthly_prestige_gain_mult = 0.15
               	dread_baseline_add = 10
               	knight_effectiveness_mult = 0.1
@@ -752,7 +752,7 @@ public static class StruggleWriter
               {{StruggleMap.Modifier(StruggleEnding.Foothold)}} = {
               	icon = martial_positive
 
-              	monthly_county_control_growth_add = 0.5
+              	monthly_control_change_when_below_baseline_add = 0.5
               	different_culture_opinion = -10
               	garrison_size = 0.15
               	monthly_prestige_gain_mult = 0.15
@@ -768,18 +768,18 @@ public static class StruggleWriter
               {{StruggleMap.Aftermath(StruggleEnding.Dominance)}} = {
               	icon = martial_positive
 
-              	monthly_county_control_growth_add = 0.5
+              	monthly_control_change_when_below_baseline_add = 0.5
               	levy_size = 0.15
               	garrison_size = 0.15
-              	county_opinion_add = -5
+              	popular_opinion_add = -5
               }
 
               # A border nobody is pushing any more is a border you can build behind.
               {{StruggleMap.Aftermath(StruggleEnding.StatusQuo)}} = {
-              	icon = county_modifier_development_positive
+              	icon = county_modifier_prosperity_positive
 
-              	development_growth_factor = 0.25
-              	county_opinion_add = 10
+              	prosperity_growth_factor = 0.25
+              	popular_opinion_add = 10
               	defender_holding_advantage = 10
               	hostile_raid_time = 0.5
               }
@@ -788,9 +788,9 @@ public static class StruggleWriter
               {{StruggleMap.Aftermath(StruggleEnding.Concord)}} = {
               	icon = county_modifier_opinion_positive
 
-              	development_growth_factor = 0.4
-              	county_opinion_add = 15
-              	tax_mult = 0.1
+              	prosperity_growth_factor = 0.4
+              	popular_opinion_add = 15
+              	all_tax_mult = 0.1
               	build_speed = -0.1
               }
 
@@ -798,9 +798,9 @@ public static class StruggleWriter
               {{StruggleMap.Aftermath(StruggleEnding.Foothold)}} = {
               	icon = martial_mixed
 
-              	monthly_county_control_growth_add = 0.5
+              	monthly_control_change_when_below_baseline_add = 0.5
               	garrison_size = 0.25
-              	county_opinion_add = -15
+              	popular_opinion_add = -15
               	levy_size = -0.1
               }
 
@@ -814,26 +814,26 @@ public static class StruggleWriter
               {{StruggleMap.Settlement(StruggleEnding.Dominance)}} = {
               	icon = county_modifier_opinion_negative
 
-              	development_growth_factor = 0.1
-              	county_opinion_add = -10
+              	prosperity_growth_factor = 0.1
+              	popular_opinion_add = -10
               	hostile_raid_time = 0.25
               }
 
               # Nobody won, so nobody lost, and every county in the region gets the same quiet.
               {{StruggleMap.Settlement(StruggleEnding.StatusQuo)}} = {
-              	icon = county_modifier_development_positive
+              	icon = county_modifier_prosperity_positive
 
-              	development_growth_factor = 0.2
-              	county_opinion_add = 5
+              	prosperity_growth_factor = 0.2
+              	popular_opinion_add = 5
               	hostile_raid_time = 0.5
               }
 
               # Concord is the one ending whose neighbours do about as well out of it as its author.
               {{StruggleMap.Settlement(StruggleEnding.Concord)}} = {
-              	icon = county_modifier_development_positive
+              	icon = county_modifier_prosperity_positive
 
-              	development_growth_factor = 0.3
-              	county_opinion_add = 10
+              	prosperity_growth_factor = 0.3
+              	popular_opinion_add = 10
               	travel_danger = -10
               }
 
@@ -841,8 +841,8 @@ public static class StruggleWriter
               {{StruggleMap.Settlement(StruggleEnding.Foothold)}} = {
               	icon = county_modifier_opinion_negative
 
-              	development_growth_factor = 0.1
-              	county_opinion_add = -10
+              	prosperity_growth_factor = 0.1
+              	popular_opinion_add = -10
               	levy_size = -0.1
               }
 

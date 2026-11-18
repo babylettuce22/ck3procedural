@@ -103,7 +103,7 @@ colony_government = {
 		stress_gain_mult = 0.15
 
 		# Quick control recovery on virgin ground
-		monthly_county_control_growth_add = 0.05
+		monthly_control_change_when_below_baseline_add = 0.05
 
 		# --- Frontier Palisade Resilience ---
 		garrison_size = 0.35                 # Every settler grabs a spear when attacked

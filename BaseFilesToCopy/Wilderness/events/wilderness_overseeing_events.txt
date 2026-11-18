@@ -136,16 +136,16 @@ wilderness_colonization.0030 = {
 		if = {
 			limit = { has_realm_law = colony_law_homestead }
 			remove_short_term_gold = 15
-			scope:colony = { change_development_progress = 25 }
+			scope:colony = { change_prosperity_progress = 25 }
 		}
 		else_if = {
 			limit = { has_realm_law = colony_law_corvee }
 			remove_short_term_gold = 45
-			scope:colony = { change_development_progress = 10 }
+			scope:colony = { change_prosperity_progress = 10 }
 		}
 		else = {
 			remove_short_term_gold = 30
-			scope:colony = { change_development_progress = 15 }
+			scope:colony = { change_prosperity_progress = 15 }
 		}
 
 		scope:colony = {
@@ -467,7 +467,7 @@ wilderness_colonization.0040 = {
 				modifier = colony_rich_seam
 				years = 10
 			}
-			change_development_progress = 30
+			change_prosperity_progress = 30
 		}
 
 		stress_impact = {
@@ -640,7 +640,7 @@ wilderness_colonization.0041 = {
 
 		scope:colony = {
 			change_county_control = 10
-			change_development_progress = -20
+			change_prosperity_progress = -20
 			add_county_modifier = {
 				modifier = colony_purged_quarter
 				years = 5

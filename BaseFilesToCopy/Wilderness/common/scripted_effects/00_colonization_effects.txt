@@ -1104,7 +1104,7 @@ colonization_make_colonist_effect = {
 					tier = tier_county
 					is_colony_county_trigger = yes
 				}
-				order_by = development_level
+				order_by = prosperity_level
 				position = 0
 
 				title_province ?= { save_scope_as = colony_camp_ground }
@@ -1445,7 +1445,7 @@ abandon_county_effect = {
 				}
 				resolve_title_and_vassal_change = scope:change
 
-				change_development_level = -100
+				change_prosperity_level = -100
 
 				every_county_province = {
 					limit = { has_holding = yes  is_county_capital = no }
@@ -1683,7 +1683,7 @@ release_excess_colony_effect = {
 				NOT = { this = root.capital_county }
 			}
 			order_by = {
-				value = development_level
+				value = prosperity_level
 				multiply = -1
 			}
 			position = 0

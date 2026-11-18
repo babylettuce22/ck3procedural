@@ -30,7 +30,7 @@
 # type's own `can_county_create` and `is_valid`. A populist uprising against the wilderness is the
 # case that started all this, and it is one of the four this file cannot reach.
 #
-# ---- On the existing county_opinion_add = 100 ----
+# ---- On the existing popular_opinion_add = 100 ----
 #
 # 00_wilderness_government.txt already gives the dummy's counties +100 opinion, with a note saying
 # its counties never revolt. That was not enough and could not have been: a populist faction's

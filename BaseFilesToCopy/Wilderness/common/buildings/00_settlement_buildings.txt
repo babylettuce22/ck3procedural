@@ -21,9 +21,8 @@ settlement_01 = {
 	max_garrison = 100
 	garrison_reinforcement_factor = 0.01
 
-	province_modifier = {
-		building_slot_add = -1
-	}
+	# CK3 1.21: slots are per district, and the holding district has one of its own. 1.20's
+	# capital had two and this rung took one away, so the rung now adds none.
 
 	# build_prestige_cost = -1 on all three rungs: the clearing buildings and settlement_02/03 list a
 	# prestige price beside their gold, and this cancels it for everybody. A tribal colony's
@@ -32,7 +31,7 @@ settlement_01 = {
 	# anything, and none survives promotion, which is what confines the cancellation to colonies.
 	county_modifier = {
 		travel_danger = 20
-		development_growth_factor = -0.95
+		prosperity_growth_factor = -0.95
 		build_prestige_cost = -1
 	}
 
@@ -40,7 +39,7 @@ settlement_01 = {
 		domain_tax_mult = -0.06
 	}
 
-	type_icon = "icon_building_outposts.dds"
+	type_icon = "old_buildings/outposts.dds"
 	ai_value = { base = 100 }
 }
 
@@ -73,13 +72,12 @@ settlement_02 = {
 	max_garrison = 200
 	garrison_reinforcement_factor = 0.02
 
-	province_modifier = {
-		building_slot_add = -1
-	}
+	# CK3 1.21: slots are per district, and the holding district has one of its own. 1.20's
+	# capital had two and this rung took one away, so the rung now adds none.
 
 	county_modifier = {
 		travel_danger = 10
-		development_growth_factor = -0.85
+		prosperity_growth_factor = -0.85
 		build_prestige_cost = -1
 	}
 
@@ -87,7 +85,7 @@ settlement_02 = {
 		domain_tax_mult = -0.03
 	}
 
-	type_icon = "icon_building_outposts.dds"
+	type_icon = "old_buildings/outposts.dds"
 	ai_value = {
 		base = 300
 		modifier = {
@@ -123,15 +121,20 @@ settlement_03 = {
 	max_garrison = 300
 	garrison_reinforcement_factor = 0.03
 
+	# CK3 1.21: the holding district's own slot plus this is the two a finished colony had on 1.20.
+	province_modifier = {
+		building_slots_for_host_district = 1
+	}
+
 	county_modifier = {
-		development_growth_factor = -0.80
+		prosperity_growth_factor = -0.80
 		build_prestige_cost = -1
 	}
 
 	character_modifier = {
 	}
 
-	type_icon = "icon_building_outposts.dds"
+	type_icon = "old_buildings/outposts.dds"
 	ai_value = {
 		base = 300
 		modifier = {
@@ -169,10 +172,10 @@ colony_timber_works_01 = {
 	}
 
 	county_modifier = {
-		development_growth_factor = 0.08
+		prosperity_growth_factor = 0.08
 	}
 
-	type_icon = "icon_building_logging_camps.dds"
+	type_icon = "old_buildings/logging_camps.dds"
 
 	ai_value = {
 		base = 1800
@@ -200,10 +203,10 @@ colony_timber_works_02 = {
 	}
 
 	county_modifier = {
-		development_growth_factor = 0.15
+		prosperity_growth_factor = 0.15
 	}
 
-	type_icon = "icon_building_logging_camps.dds"
+	type_icon = "old_buildings/logging_camps.dds"
 
 	ai_value = {
 		base = 2200
@@ -237,7 +240,7 @@ colony_pallisade_01 = {
 		travel_danger = -25
 	}
 
-	type_icon = "icon_structure_kano_walls.dds"
+	type_icon = "special_buildings/kano_walls.dds"
 
 	ai_value = {
 		base = 1800
@@ -267,7 +270,7 @@ colony_pallisade_02 = {
 		travel_danger = -50
 	}
 
-	type_icon = "icon_structure_kano_walls.dds"
+	type_icon = "special_buildings/kano_walls.dds"
 
 	ai_value = {
 		base = 1800
@@ -303,11 +306,11 @@ colony_office_01 = {
 	}
 	
 	county_modifier = {
-		development_growth_factor = 0.15
-		development_growth = 0.1
+		prosperity_growth_factor = 0.15
+		prosperity_growth = 0.1
 	}
 
-	type_icon = "icon_structure_ghana_palace.dds"
+	type_icon = "special_buildings/ghana_palace.dds"
 
 	ai_value = {
 		base = 1800
@@ -336,11 +339,11 @@ colony_office_02 = {
 	}
 
 	county_modifier = {
-		development_growth_factor = 0.30
-		development_growth = 0.3
+		prosperity_growth_factor = 0.30
+		prosperity_growth = 0.3
 	}
 
-	type_icon = "icon_structure_ghana_palace.dds"
+	type_icon = "special_buildings/ghana_palace.dds"
 
 	ai_value = {
 		base = 1800
@@ -369,30 +372,30 @@ colony_office_03 = {
 	# ---- Both numbers were outside anything vanilla ships, and this is the one building the
 	#      whole promotion clock runs on ----
 	#
-	# `development_growth` is the ONLY flat growth anywhere in this file set, so the office chain
+	# `prosperity_growth` is the ONLY flat growth anywhere in this file set, so the office chain
 	# is not one contributor among many — it is the entire numerator. Everything else in the
 	# system, this mod's modifiers and the Wilds situation alike, is a factor multiplying it.
 	# That makes these two lines the colony's speed, and they were set as if they were flavour.
 	#
-	# The flat was 1.5. Vanilla's largest building `development_growth` is 0.5, on one special
-	# building, and its named band tops out at `very_large_development_growth_gain = 0.5`
+	# The flat was 1.5. Vanilla's largest building `prosperity_growth` is 0.5, on one special
+	# building, and its named band tops out at `very_large_prosperity_growth_gain = 0.5`
 	# (00_basic_values.txt); an ordinary building's base is 0.02-0.04. 1.5 was three times the
 	# ceiling and better than half a stewardship-15 steward running Increase Development
 	# (0.1 + 15 x 0.175 = 2.725) — permanently, on one county, from one building.
 	#
-	# The factor was 0.80. Vanilla's largest building `development_growth_factor` is 0.4, on the
+	# The factor was 0.80. Vanilla's largest building `prosperity_growth_factor` is 0.4, on the
 	# top tier of the city chain.
 	#
 	# 0.5 and 0.40 are those two ceilings exactly. The colony still finishes — the gate is
-	# development_level >= 4 in can_promote_colony_trigger, which is 1000 progress against
+	# prosperity_level >= 4 in can_promote_colony_trigger, which is 1000 progress against
 	# LEVELS_DEVELOPMENT — it finishes on a clock a player can watch rather than one that
 	# resolves while they are looking at something else.
 	county_modifier = {
-		development_growth_factor = 0.40
-		development_growth = 0.5
+		prosperity_growth_factor = 0.40
+		prosperity_growth = 0.5
 	}
 
-	type_icon = "icon_structure_ghana_palace.dds"
+	type_icon = "special_buildings/ghana_palace.dds"
 
 	ai_value = {
 		base = 1800
@@ -411,7 +414,7 @@ colony_office_03 = {
 # is tribal) builds these instead of the office and the timber works. Two reasons, and the first is
 # the one that mattered in play:
 #
-#   * Price. The office chain is 1150 gold and is also the colony's only flat development_growth,
+#   * Price. The office chain is 1150 gold and is also the colony's only flat prosperity_growth,
 #     so it IS the promotion clock (see the note on colony_office_03). A chief cannot pay that, so a
 #     tribal colony simply stalled. These are priced like vanilla's own tribal buildings — mostly
 #     prestige, a token of gold — see colony_hall_* in 00_colonization_values.txt.
@@ -458,16 +461,16 @@ colony_hall_01 = {
 	}
 
 	county_modifier = {
-		development_growth_factor = 0.15
-		development_growth = 0.1
-		monthly_county_control_growth_add = 0.1
+		prosperity_growth_factor = 0.15
+		prosperity_growth = 0.1
+		monthly_control_change_when_below_baseline_add = 0.1
 	}
 
 	character_modifier = {
 		monthly_prestige = 0.1
 	}
 
-	type_icon = "icon_building_longhouses.dds"
+	type_icon = "old_buildings/longhouses.dds"
 
 	ai_value = {
 		base = 1800
@@ -499,16 +502,16 @@ colony_hall_02 = {
 	}
 
 	county_modifier = {
-		development_growth_factor = 0.30
-		development_growth = 0.3
-		monthly_county_control_growth_add = 0.2
+		prosperity_growth_factor = 0.30
+		prosperity_growth = 0.3
+		monthly_control_change_when_below_baseline_add = 0.2
 	}
 
 	character_modifier = {
 		monthly_prestige = 0.2
 	}
 
-	type_icon = "icon_building_longhouses.dds"
+	type_icon = "old_buildings/longhouses.dds"
 
 	ai_value = {
 		base = 1800
@@ -539,16 +542,16 @@ colony_hall_03 = {
 
 	# The office's ceiling figures — see colony_office_03 for why these two are the limit.
 	county_modifier = {
-		development_growth_factor = 0.40
-		development_growth = 0.5
-		monthly_county_control_growth_add = 0.3
+		prosperity_growth_factor = 0.40
+		prosperity_growth = 0.5
+		monthly_control_change_when_below_baseline_add = 0.3
 	}
 
 	character_modifier = {
 		monthly_prestige = 0.3
 	}
 
-	type_icon = "icon_building_longhouses.dds"
+	type_icon = "old_buildings/longhouses.dds"
 
 	ai_value = {
 		base = 1800
@@ -587,11 +590,11 @@ colony_hunting_camps_01 = {
 	}
 
 	county_modifier = {
-		development_growth_factor = 0.08
+		prosperity_growth_factor = 0.08
 		build_prestige_cost = -0.1
 	}
 
-	type_icon = "icon_building_hunting_grounds.dds"
+	type_icon = "old_buildings/hunting_grounds.dds"
 
 	ai_value = {
 		base = 1800
@@ -622,11 +625,11 @@ colony_hunting_camps_02 = {
 	}
 
 	county_modifier = {
-		development_growth_factor = 0.15
+		prosperity_growth_factor = 0.15
 		build_prestige_cost = -0.15
 	}
 
-	type_icon = "icon_building_hunting_grounds.dds"
+	type_icon = "old_buildings/hunting_grounds.dds"
 
 	ai_value = {
 		base = 2200
@@ -665,10 +668,10 @@ colony_kin_muster_01 = {
 	max_garrison = 50
 
 	county_modifier = {
-		development_growth_factor = 0.10
+		prosperity_growth_factor = 0.10
 	}
 
-	type_icon = "icon_building_warcamps.dds"
+	type_icon = "old_buildings/warcamps.dds"
 
 	ai_value = {
 		base = 1500
@@ -698,10 +701,10 @@ colony_kin_muster_02 = {
 	max_garrison = 100
 
 	county_modifier = {
-		development_growth_factor = 0.20
+		prosperity_growth_factor = 0.20
 	}
 
-	type_icon = "icon_building_warcamps.dds"
+	type_icon = "old_buildings/warcamps.dds"
 
 	ai_value = {
 		base = 1500

@@ -149,7 +149,7 @@ task_clear_the_wilds = {
 	# copy here to be kept in step with them is not worth a few points of AI judgement.
 	ai_target_score = {
 		value = 10
-		add = scope:county.development_level
+		add = scope:county.prosperity_level
 	}
 
 	ai_will_do = {
@@ -301,13 +301,13 @@ task_call_for_settlers = {
 
 	council_owner_modifier = {
 		name = task_call_for_settlers_modifier
-		development_growth_factor = 1
+		prosperity_growth_factor = 1
 		scale = colony_speaker_growth
 	}
 
 	council_owner_modifier = {
 		name = task_call_for_settlers_modifier
-		county_opinion_add = 1
+		popular_opinion_add = 1
 		scale = colony_speaker_opinion
 	}
 

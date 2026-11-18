@@ -34,6 +34,6 @@ cult_unveiler_modifier = {
 # A county where the cult has worked: shrines defiled, prayers said backwards, the priest paid off.
 cult_county_tainted = {
 	icon = county_modifier_opinion_negative
-	county_opinion_add = -5
-	development_growth_factor = -0.1
+	popular_opinion_add = -5
+	prosperity_growth_factor = -0.1
 }

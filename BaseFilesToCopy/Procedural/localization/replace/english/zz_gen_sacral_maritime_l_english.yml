@@ -31,7 +31,7 @@
  game_concept_mandala_decrees: "Sacral Decrees"
  game_concept_mandala_decree_desc: "The $game_concept_mandala_decrees$ are the three Decrees mandated by the [mandala|E] [ruler|E] — signified by [prosperity_decree|E], [expansion_decree|E] and [reverence_decree|E].\n\nGenerally the Sacral realm has a very centralized authority, where the power over [subjects|E] and [laws|E] lies with the associated Ruler who can change them as required with little to no objection from its denizens."
  game_concept_mandala_decree_prosperity: "Prosperity Decree"
- game_concept_mandala_decree_prosperity_desc: "With the [GetLaw('mandala_decree_prosperity').GetName], the [mandala|E] [ruler|E] is focused on stimulating and inspiring all [subjects|E] to enact constructive changes.\n\nEfforts are funneled into furthering [development|E], [buildings|E], amassing wealth as well as strengthening community via personal relations."
+ game_concept_mandala_decree_prosperity_desc: "With the [GetLaw('mandala_decree_prosperity').GetName], the [mandala|E] [ruler|E] is focused on stimulating and inspiring all [subjects|E] to enact constructive changes.\n\nEfforts are funneled into furthering [prosperity|E], [buildings|E], amassing wealth as well as strengthening community via personal relations."
  game_concept_mandala_decree_expansion: "Expansion Decree"
  game_concept_mandala_decree_expansion_desc: "The [GetLaw('mandala_decree_expansion').GetName] dictate that all [subjects|E] focus their efforts on expanding the [realm|E].\n\nIncreasing soldier count, military accommodations and supporting any eventual [wars|E] directed by their [mandala|E] [ruler|E] is imperative."
  game_concept_mandala_decree_reverence: "Reverence Decree"

@@ -3242,7 +3242,7 @@ wilderness_colonization.9999 = {
 			}
 
 			change_county_control = 25
-			change_development_progress = 50
+			change_prosperity_progress = 50
 
 			title_province = {
 				# Clear raw obstacles
@@ -3280,8 +3280,8 @@ wilderness_colonization.9999 = {
 
 			change_county_control  = 100
 			if = {
-				limit = { development_level < 5 }
-				change_development_level = 5
+				limit = { prosperity_level < 5 }
+				change_prosperity_level = 5
 			}
 
 			title_province = {
@@ -3414,7 +3414,7 @@ wilderness_colonization.9998 = {
 						remove_building = settlement_02
 						add_building = settlement_03
 					}
-					change_development_level = 5
+					change_prosperity_level = 5
 
 					# Trigger promotion
 					promote_colony_effect = { COUNTY = this }
@@ -3501,7 +3501,7 @@ wilderness_colonization.9998 = {
 					tier = tier_county
 					is_colony_county_trigger = yes
 				}
-				order_by = development_level
+				order_by = prosperity_level
 				position = 0
 
 				title_province ?= { save_scope_as = colony_camp_ground }

@@ -87,10 +87,10 @@ wilderness_01 = {
 		# -1.0 is total: no tax, no levy, no garrison, and development that cannot creep upward on
 		# its own. A wilderness county must be worth exactly nothing until somebody settles it,
 		# or the AI will hoard them as free income.
-		tax_mult = -1.0
+		all_tax_mult = -1.0
 		levy_size = -1.0
 		garrison_size = -1.0
-		development_growth_factor = -1.0
+		prosperity_growth_factor = -1.0
 
 		# The one number that makes the map feel different rather than just look emptier. Crossing
 		# the wilderness is dangerous, so an army or a travelling character pays for the shortcut.
@@ -99,12 +99,16 @@ wilderness_01 = {
 
 	province_modifier = {
 		fort_level = -1
+
+		# CK3 1.21: slots are per district. The holding district's own one plus this makes the two
+		# obstacles an unsettled capital held on 1.20 (wilderness_seed_obstacle_effect measures it).
+		building_slots_for_host_district = 1
 	}
 
 	levy = 0
 	max_garrison = 0
 
-	type_icon = "icon_building_royal_forest.dds"
+	type_icon = "duchy_buildings/royal_forest.dds"
 
 	# Placed by script; the AI must never consider it.
 	ai_value = { base = -100 }
@@ -122,16 +126,16 @@ beast_dens = {
 	can_construct_potential = { always = no }
 
 	county_modifier = {
-		development_growth_factor = -0.20
+		prosperity_growth_factor = -0.20
 		supply_limit_mult = -0.30
-		tax_mult = -0.20
+		all_tax_mult = -0.20
 		garrison_size = -0.15
 		levy_size = -0.10
 		travel_danger = 50
 	}
 
 	next_building = beast_dens_cleared
-	type_icon = "icon_building_hunting_grounds.dds"
+	type_icon = "old_buildings/hunting_grounds.dds"
 	flag = obstacle
 	flag = clearable_obstacle
 	ai_value = { base = -100 }
@@ -144,7 +148,7 @@ beast_dens_cleared = {
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
-	type_icon = "icon_building_hunting_grounds.dds"
+	type_icon = "old_buildings/hunting_grounds.dds"
 	ai_value = {
 			base = 200
 			modifier = {
@@ -170,13 +174,13 @@ bandit_camps = {
 	county_modifier = {
 		hostile_raid_time = -0.50
 		supply_limit_mult = -0.30
-		tax_mult = -0.25
-		monthly_county_control_growth_add = -0.10
+		all_tax_mult = -0.25
+		monthly_control_change_when_below_baseline_add = -0.10
 		travel_danger = 50
 	}
 
 	next_building = bandit_camps_cleared
-	type_icon = "icon_building_warcamps.dds"
+	type_icon = "old_buildings/warcamps.dds"
 	flag = obstacle
 	flag = clearable_obstacle
 	ai_value = { base = -100 }
@@ -189,7 +193,7 @@ bandit_camps_cleared = {
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
-	type_icon = "icon_building_warcamps.dds"
+	type_icon = "old_buildings/warcamps.dds"
 	ai_value = {
 			base = 300
 			modifier = {
@@ -212,7 +216,7 @@ dense_growth = {
 
 	county_modifier = {
 		supply_limit_mult = -0.50
-		development_growth_factor = -0.25
+		prosperity_growth_factor = -0.25
 		travel_danger = 25
 	}
 
@@ -223,7 +227,7 @@ dense_growth = {
 	}
 
 	next_building = dense_growth_cleared
-	type_icon = "icon_building_logging_camps.dds"
+	type_icon = "old_buildings/logging_camps.dds"
 	flag = obstacle
 	flag = clearable_obstacle
 	ai_value = { base = -100 }
@@ -236,7 +240,7 @@ dense_growth_cleared = {
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
-	type_icon = "icon_building_logging_camps.dds"
+	type_icon = "old_buildings/logging_camps.dds"
 	ai_value = {
 			base = 300
 			modifier = {
@@ -258,8 +262,8 @@ flooded_lands = {
 	can_construct_potential = { always = no }
 
 	county_modifier = {
-		development_growth_factor = -0.50
-		county_opinion_add = -10
+		prosperity_growth_factor = -0.50
+		popular_opinion_add = -10
 		travel_danger = 15
 	}
 
@@ -274,7 +278,7 @@ flooded_lands = {
 	}
 
 	next_building = flooded_lands_cleared
-	type_icon = "icon_building_waterworks.dds"
+	type_icon = "old_buildings/waterworks.dds"
 	flag = obstacle
 	flag = clearable_obstacle
 	ai_value = { base = -100 }
@@ -287,7 +291,7 @@ flooded_lands_cleared = {
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
-	type_icon = "icon_building_waterworks.dds"
+	type_icon = "old_buildings/waterworks.dds"
 	ai_value = {
 			base = 300
 			modifier = {
@@ -309,7 +313,7 @@ scree_slopes = {
 	can_construct_potential = { always = no }
 
 	county_modifier = {
-		development_growth_factor = -0.40
+		prosperity_growth_factor = -0.40
 		supply_limit_mult = -0.25
 		travel_danger = 15
 	}
@@ -322,7 +326,7 @@ scree_slopes = {
 	}
 
 	next_building = scree_slopes_cleared
-	type_icon = "icon_building_hill_forts.dds"
+	type_icon = "old_buildings/hill_forts.dds"
 	flag = obstacle
 	flag = clearable_obstacle
 	ai_value = { base = -100 }
@@ -335,7 +339,7 @@ scree_slopes_cleared = {
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
-	type_icon = "icon_building_hill_forts.dds"
+	type_icon = "old_buildings/hill_forts.dds"
 	ai_value = {
 			base = 300
 			modifier = {
@@ -358,7 +362,7 @@ killing_cold = {
 	can_construct_potential = { always = no }
 
 	county_modifier = {
-		development_growth_factor = -0.65
+		prosperity_growth_factor = -0.65
 		holding_build_speed = 0.20
 		supply_limit_mult = -0.40
 		levy_size = -0.20
@@ -370,7 +374,7 @@ killing_cold = {
 	}
 
 	next_building = killing_cold_cleared
-	type_icon = "icon_building_hillside_grazing.dds"
+	type_icon = "old_buildings/hillside_grazing.dds"
 	flag = obstacle
 	flag = clearable_obstacle
 	ai_value = { base = -100 }
@@ -384,7 +388,7 @@ killing_cold_cleared = {
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
-	type_icon = "icon_building_hillside_grazing.dds"
+	type_icon = "old_buildings/hillside_grazing.dds"
 	ai_value = {
 			base = 300
 			modifier = {
@@ -450,8 +454,8 @@ ruins_large = {
 
 	county_modifier = {
 		# Peasants will not settle next to it and will not go near it after dark.
-		county_opinion_add = -10
-		development_growth_factor = -0.20
+		popular_opinion_add = -10
+		prosperity_growth_factor = -0.20
 		travel_danger = 40
 	}
 
@@ -462,7 +466,7 @@ ruins_large = {
 	}
 
 	next_building = ruins_small
-	type_icon = "icon_megalith.dds"
+	type_icon = "duchy_buildings/megalith.dds"
 
 	# In the way, but not something a work party can be pointed at — see the two-flag note at the
 	# top of this file. `clearable_obstacle` is deliberately absent.
@@ -498,8 +502,8 @@ ruins_small = {
 	# one long job to nothing. The walls are down and carted off; what is left is foundations, a
 	# cellar or two, and a reputation.
 	county_modifier = {
-		county_opinion_add = -3
-		development_growth_factor = -0.05
+		popular_opinion_add = -3
+		prosperity_growth_factor = -0.05
 		travel_danger = 10
 	}
 
@@ -508,7 +512,7 @@ ruins_small = {
 	}
 
 	next_building = ruins_cleared
-	type_icon = "icon_megalith.dds"
+	type_icon = "duchy_buildings/megalith.dds"
 
 	# Still in the way. Promotion still waits.
 	flag = obstacle
@@ -532,7 +536,7 @@ ruins_cleared = {
 	can_construct = { wilderness_can_clear_obstacle_trigger = yes }
 	can_construct_potential = { wilderness_can_clear_obstacle_trigger = yes }
 
-	type_icon = "icon_megalith.dds"
+	type_icon = "duchy_buildings/megalith.dds"
 	ai_value = {
 			base = 200
 			modifier = {

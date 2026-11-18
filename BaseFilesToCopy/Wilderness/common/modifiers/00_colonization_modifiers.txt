@@ -11,7 +11,7 @@
 # stay wild forever (a dead heart of a continent, ground reserved for a later mechanic) without
 # needing a second holding type, and so hand-written content in a specific world can do the same.
 block_settlement_ability = {
-	icon = county_modifier_development_negative
+	icon = county_modifier_prosperity_negative
 }
 
 
@@ -22,7 +22,7 @@ block_settlement_ability = {
 # cannot be aimed at a second time, by its sponsor or by anybody else — and to be SEEN, so a player
 # looking at the map can tell that empty county is spoken for.
 settling_expedition_underway = {
-	icon = county_modifier_development_mixed
+	icon = county_modifier_prosperity_mixed
 }
 
 
@@ -57,7 +57,7 @@ settling_expedition_underway = {
 # it would put a prestige price on every building the tribe raises there. Every exit from the
 # colony state calls the refresh, and wilderness_yearly_tribal_labour_sweep backs them up.
 colony_tribal_labour = {
-	icon = county_modifier_development_positive
+	icon = county_modifier_prosperity_positive
 
 	build_gold_cost = -0.6
 	build_prestige_cost = 1
@@ -182,7 +182,7 @@ overseeing_yield_prestige_3 = {
 
 # County scope, on the colony being overseen.
 settlement_overseen = {
-	icon = county_modifier_development_positive
+	icon = county_modifier_prosperity_positive
 
 	# A colony with its lord in it develops like ordinary land; a colony without one does not.
 	# That is the cleanest statement of the rule this file exists to express, and it is why the
@@ -202,10 +202,10 @@ settlement_overseen = {
 	# single number cannot cancel all three. 0.30 is the honest reading of what presence is worth
 	# against the tier where it matters — a lord rides out to a colony that is still settlement_01
 	# or 02 — and it leaves the ground still harder than ordinary land, which it should be.
-	development_growth_factor = 0.30
+	prosperity_growth_factor = 0.30
 
-	monthly_county_control_growth_add = 0.5
-	county_opinion_add = 20
+	monthly_control_change_when_below_baseline_add = 0.5
+	popular_opinion_add = 20
 
 	# Work goes faster when whoever is paying for it is watching it.
 	build_speed = -0.15
@@ -225,26 +225,26 @@ settlement_overseen = {
 
 # County scope: applied when the ruler pays for supplies
 settlement_well_provisioned = {
-	icon = county_modifier_development_positive
+	icon = county_modifier_prosperity_positive
 
-	development_growth_factor = 0.10
-	monthly_county_control_growth_add = 0.25
-	county_opinion_add = 15
+	prosperity_growth_factor = 0.10
+	monthly_control_change_when_below_baseline_add = 0.25
+	popular_opinion_add = 15
 }
 
 # County scope: applied when rationing strictly
 settlement_hardened_winter = {
 	icon = county_modifier_control_positive
 
-	monthly_county_control_growth_add = 0.4
-	county_opinion_add = -20
+	monthly_control_change_when_below_baseline_add = 0.4
+	popular_opinion_add = -20
 }
 
 # County scope: quarry and iron vein found
 colony_rich_seam = {
-	icon = county_modifier_development_positive
+	icon = county_modifier_prosperity_positive
 
-	development_growth_factor = 0.15
+	prosperity_growth_factor = 0.15
 	build_speed = -0.20
 	build_gold_cost = -0.15
 }
@@ -253,24 +253,24 @@ colony_rich_seam = {
 colony_purged_quarter = {
 	icon = county_modifier_control_negative
 
-	county_opinion_add = -25
-	development_growth_factor = -0.10
+	popular_opinion_add = -25
+	prosperity_growth_factor = -0.10
 }
 
 # Rewarding the pioneers with freeholder rights
 settlers_freeholder_charter = {
-	icon = county_modifier_development_positive
-	tax_mult = -0.15
-	development_growth_factor = 0.25
-	county_opinion_add = 20
-	monthly_county_control_growth_add = 0.2
+	icon = county_modifier_prosperity_positive
+	all_tax_mult = -0.15
+	prosperity_growth_factor = 0.25
+	popular_opinion_add = 20
+	monthly_control_change_when_below_baseline_add = 0.2
 }
 
 # Settlers bought out with cash compensation
 settlers_commuted_settlement = {
-	icon = county_modifier_development_positive
-	development_growth_factor = 0.10
-	county_opinion_add = 5
+	icon = county_modifier_prosperity_positive
+	prosperity_growth_factor = 0.10
+	popular_opinion_add = 5
 }
 
 # County scope: wilderness a Pathfinder has walked. Applied by task_survey_the_wilds for 25 years.
@@ -284,7 +284,7 @@ settlers_commuted_settlement = {
 # The icon is the only thing it does on its own, and that is worth something: surveyed country reads
 # as surveyed on the map, so a player can see what his Pathfinder has been doing.
 colony_surveyed_ground = {
-	icon = county_modifier_development_mixed
+	icon = county_modifier_prosperity_mixed
 }
 
 
@@ -294,9 +294,9 @@ colony_surveyed_ground = {
 # _negative and _mixed variants, and the bare name silently drew nothing.
 settlers_betrayed_unrest = {
 	icon = county_modifier_corruption_negative
-	county_opinion_add = -35
-	monthly_county_control_growth_factor = -0.50
-	tax_mult = 0.10
+	popular_opinion_add = -35
+	monthly_control_change_when_below_baseline_mult = -0.50
+	all_tax_mult = 0.10
 }
 
 # =====================================================================================

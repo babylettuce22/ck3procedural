@@ -400,7 +400,7 @@ public sealed class LoadedWorld
                 entry.Fields.Add(new WorldField { Name = date.Field("birth") == "yes" ? "Birth date" : "Death date", Category = "History", Read = () => date.Key });
             AddStanding(entry, file, node);
         }
-        else if (kind == "Province") AddFields(entry, file, node, "culture", "religion", "faith", "holding", "special_building_slot", "special_building");
+        else if (kind == "Province") AddFields(entry, file, node, "culture", "religion", "faith", "holding", "special_district_slot", "special_building_slot", "special_building");
         else if (kind is "Dynasty" or "House")
         {
             (kind == "Dynasty" ? Dynasties : Houses).Add(node.Key, entry);
@@ -472,9 +472,12 @@ public sealed class LoadedWorld
             }
             string? liege = dates.Select(n => n.Field("liege")).LastOrDefault(v => v is not null);
             if (liege is not null && liege != "0") Lieges[node.Key] = liege;
-            if (dates.SelectMany(d => d.ChildrenNamed("change_development_level")).LastOrDefault(n => !n.IsBlock && n.Value is not null) is { } level)
+            // CK3 1.21 renamed development to prosperity, same scale; a world written before it
+            // still carries the old line. The field keeps its "Development" name for the editor.
+            if (dates.SelectMany(d => d.ChildrenNamed("change_prosperity_level").Concat(d.ChildrenNamed("change_development_level")))
+                    .LastOrDefault(n => !n.IsBlock && n.Value is not null) is { } level)
                 AddLeaf(entry, file, level, "Development", "Development", Range(0, 100),
-                    "The county's development at the start date — the change_development_level line in its title history.");
+                    "The county's prosperity (development before CK3 1.21) at the start date — the change_prosperity_level line in its title history.");
         }
     }
 

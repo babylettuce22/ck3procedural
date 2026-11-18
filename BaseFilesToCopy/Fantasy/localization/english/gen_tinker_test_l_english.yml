@@ -8,7 +8,7 @@
  gen_tinker.0010.a: "A clockwork curio. Something beautiful and completely unnecessary."
  gen_tinker.0010.a.tt: "If it works: one of ten clockwork curios, each good for something different. A trinket (songbird, dancer, music box, brass hound, pocket clock), or with a royal court mostly a court piece (orrery, singing tree, steam organ, clockwork knight, chess automaton) that adds #V Court Grandeur#!. A masterwork is stronger, and leans to the grandest pieces"
  gen_tinker.0010.b: "Waterworks. Wheels, sluices, pumps: the fields will thank me."
- gen_tinker.0010.b.tt: "If it works: waterworks on your capital county for #V 20 years#!: #P +15%#! development growth and #P +5%#! tax. A masterwork: #P +40%#!, #P +20%#! and #P +5#! county opinion"
+ gen_tinker.0010.b.tt: "If it works: waterworks on your capital county for #V 20 years#!: #P +15%#! prosperity growth and #P +5%#! tax. A masterwork: #P +40%#!, #P +20%#! and #P +5#! county opinion"
  gen_tinker.0010.c: "A war engine. Let the next castle wall see what a gnome can throw."
  gen_tinker.0010.c.tt: "If it works: for #V 10 years#!, #P +20%#! siege value and #P 10%#! faster siege phases. A masterwork: #P +35%#!, #P 15%#! faster, and #P +5%#! army damage"
  gen_tinker.0010.d: "A clockwork limb. For myself, since nobody else will make one properly."

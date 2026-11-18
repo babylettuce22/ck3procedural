@@ -30,7 +30,7 @@ public static class PassWriter
             modifiers.Field("icon", "martial_positive");
             modifiers.Field("fort_level", 1);
             modifiers.Field("defender_holding_advantage", 5);
-            modifiers.Field("tax_mult", 0.15, "0.0#");
+            modifiers.Field("all_tax_mult", 0.15, "0.0#");
         }
         string modifierDir = Path.Combine(modDir, "common", "modifiers");
         Directory.CreateDirectory(modifierDir);
@@ -168,31 +168,31 @@ public static class PassWriter
     private static (string Icon, (string Field, double Value)[] Effects, string Description) Worth(string kind, bool heights)
         => (kind, heights) switch
     {
-        ("basin", false) => ("county_modifier_development_positive",
-            [("development_growth_factor", 0.1), ("supply_limit_mult", 0.1)],
+        ("basin", false) => ("county_modifier_prosperity_positive",
+            [("prosperity_growth_factor", 0.1), ("supply_limit_mult", 0.1)],
             "This land lies on the floor of the great crater. The lake that once filled it left a deep, rich soil behind."),
         ("basin", true) => ("rock_positive",
-            [("tax_mult", 0.1), ("build_gold_cost", -0.05)],
+            [("all_tax_mult", 0.1), ("build_gold_cost", -0.05)],
             "The crater's rim is full of ore melted out by the impact, and its rock is cut for building all over the basin."),
         ("sea", false) => ("economy_positive",
-            [("tax_mult", 0.1), ("development_growth_factor", 0.05)],
+            [("all_tax_mult", 0.1), ("prosperity_growth_factor", 0.05)],
             "These shores ring a round sea in a crater's bowl. The rim keeps out the storms, so the harbours are safe and the fishing is good all year."),
         ("sea", true) => ("martial_positive",
             [("defender_holding_advantage", 2)],
             "The crater's rim drops straight into the sea here. No fleet can land under these cliffs."),
         ("scar", _) => ("rock_mixed",
-            [("tax_mult", 0.05), ("stationed_maa_damage_mult", 0.05), ("supply_limit_mult", -0.1), ("travel_danger", 5)],
+            [("all_tax_mult", 0.05), ("stationed_maa_damage_mult", 0.05), ("supply_limit_mult", -0.1), ("travel_danger", 5)],
             heights
                 ? "The rims of the craters stand up in broken rings. Iron that fell from the sky is dug out of them and forged into fine blades."
                 : "The ground here is pocked with craters from something that fell out of the sky. Its iron makes fine blades, but the broken ground is hard to cross or feed an army on."),
-        ("rift", false) => ("county_modifier_development_positive",
-            [("development_growth_factor", 0.1), ("supply_limit_mult", 0.1)],
+        ("rift", false) => ("county_modifier_prosperity_positive",
+            [("prosperity_growth_factor", 0.1), ("supply_limit_mult", 0.1)],
             "The rift floor lies sunk between high walls. Its lakes and dark volcanic soil make it the richest land for many miles."),
         ("rift", true) => ("martial_mixed",
             [("defender_holding_advantage", 3), ("travel_danger", 5)],
             "The rift's walls rise in steep steps of broken rock. They are easy to hold and hard to climb, and the ground still shakes now and then."),
         ("range", false) => ("economy_positive",
-            [("tax_mult", 0.1)],
+            [("all_tax_mult", 0.1)],
             "Where the valleys of the great range open onto the plain, market towns trade the wool and ore brought down from the mountains."),
         ("range", true) => ("martial_positive",
             [("defender_holding_advantage", 2), ("hostile_raid_time", 0.25)],

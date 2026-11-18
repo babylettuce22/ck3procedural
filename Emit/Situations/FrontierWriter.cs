@@ -406,7 +406,7 @@ public static class FrontierWriter
         							# under -1.0 and makes this a nudge rather than the line that
         							# breaks it.
         							build_speed = -0.10
-        							monthly_county_control_growth_add = 0.15
+        							monthly_control_change_when_below_baseline_add = 0.15
         						}
         					}
         				}
@@ -414,7 +414,7 @@ public static class FrontierWriter
         					icon = "gfx/interface/icons/situations/situation_modifier_military.dds"
         					marcher_lords = {
         						county_modifier = {
-        							development_growth_factor = 0.1
+        							prosperity_growth_factor = 0.1
         						}
         						parameters = {
         							wilds_cheaper_expeditions = yes
@@ -468,8 +468,8 @@ public static class FrontierWriter
         					icon = "gfx/interface/icons/situations/situation_modifier_fertility.dds"
         					colonists = {
         						county_modifier = {
-        							monthly_county_control_growth_add = 0.1
-        							development_growth_factor = 0.1
+        							monthly_control_change_when_below_baseline_add = 0.1
+        							prosperity_growth_factor = 0.1
         						}
         					}
         					marcher_lords = {
@@ -488,7 +488,7 @@ public static class FrontierWriter
         							# +0.05 is the figure wilds_peace_set gives a settled frontier,
         							# which is the right band for a bonus that is really about
         							# proximity rather than effort.
-        							development_growth_factor = 0.05
+        							prosperity_growth_factor = 0.05
         							supply_limit_mult = 0.1
         						}
         					}
@@ -522,7 +522,7 @@ public static class FrontierWriter
         					icon = "gfx/interface/icons/situations/situation_modifier_fertility.dds"
         					marcher_lords = {
         						county_modifier = {
-        							development_growth_factor = 0.05
+        							prosperity_growth_factor = 0.05
         						}
         					}
         				}
@@ -1349,7 +1349,7 @@ public static class FrontierWriter
             ("wilds_glory_set", "Renown of the Frontier", "[prestige|E]"),
             ("wilds_settlement_set", "Settling the Wild", "[county_control|E]"),
             ("wilds_marches_set", "The Marches", "[war|E]"),
-            ("wilds_prosperity_set", "The Frontier Closes", "[county_development|E]"),
+            ("wilds_prosperity_set", "The Frontier Closes", "[county_prosperity|E]"),
             ("wilds_peace_set", "A Settled Land", "[county|E]"),
         })
         {

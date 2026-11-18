@@ -50,13 +50,13 @@ gen_ruin_can_fall_trigger = {
 	# ---- Would destroy generated content ----
 	#
 	# A world centre's wonder stands on its county's CAPITAL barony (Emit/ContentWriter.cs writes the
-	# special_building_slot there), which is the one barony a collapse keeps — but keeps as a
+	# special_district_slot there), which is the one barony a collapse keeps — but keeps as a
 	# wilderness holding, with the slot on it and nobody able to build in it ever again. AGOT hit the
 	# same wall and wrote agot_citadel_transfer_effect to move the Citadel out of the way first;
 	# refusing the county outright is the cheaper answer and loses nothing worth having.
 	title_province ?= {
-		has_special_building = no
-		has_special_building_slot = no
+		has_special_district = no
+		has_special_district_slot = no
 	}
 
 	# Somebody's sacred ground. A faith whose holy site falls into the wilderness loses the site for
@@ -169,7 +169,7 @@ gen_ruin_is_suffering_trigger = {
 # ---- `gen_ruin_suffer_plague_trigger` left this list on 2026-09-26, for the contested arm's reason ----
 #
 # An epidemic works on a county by holding its control down (vanilla's infection modifiers use
-# `monthly_county_control_decline_add`), and gen_ruin_suffer_control_trigger already scores exactly
+# `monthly_control_change_when_above_baseline_add`), and gen_ruin_suffer_control_trigger already scores exactly
 # that. So the plague arm was the epidemic counted a second time, the same double charge the
 # contested arm was removed for.
 #
@@ -251,7 +251,7 @@ gen_ruin_suffer_contested_trigger = {
 # not the height of the number — is the thing worth ruining a county over.
 #
 # It also gives the thing suppressing control a way to matter. Devastation, an epidemic and a
-# natural disaster all work by holding control down (`monthly_county_control_growth_add` and
+# natural disaster all work by holding control down (`monthly_control_change_when_below_baseline_add` and
 # `_factor` in vanilla's disaster modifiers), so a county under one of those cannot recover and
 # keeps scoring, while an ordinary poor county recovers a point a year and does not.
 #
@@ -305,7 +305,7 @@ gen_ruin_suffer_control_trigger = {
 # -70, "a county in open contempt of whoever claims it", which sounds right and is not.
 #
 # Measured over 71 years of one world with the telemetry running: **not one streak in 2,198 ever saw
-# county_opinion below -70.** Not rare — zero. The arm was not strict, it was unreachable, and for
+# popular_opinion below -70.** Not rare — zero. The arm was not strict, it was unreachable, and for
 # most of a year it was costing a trigger evaluation to always answer no. At -40 the same sample
 # gives 7.1% and at -30 gives 11.8%, against a median opinion of 0.
 #
@@ -317,7 +317,7 @@ gen_ruin_suffer_control_trigger = {
 # it gets one ordinary year and the count is gone. The bar only has to describe a hated county now,
 # not defend against a false positive that something else already catches.
 gen_ruin_suffer_opinion_trigger = {
-	county_opinion < -45
+	popular_opinion < -45
 }
 
 # Plague. Reachable only with the relevant content installed; on a base-game install the list is
@@ -334,7 +334,7 @@ gen_ruin_suffer_plague_trigger = {
 # gen_ruin_tick_county_effect; on the first tick it does not exist yet and this arm is simply false.
 gen_ruin_suffer_devdrop_trigger = {
 	has_variable = ruin_last_dev
-	development_level < var:ruin_last_dev
+	prosperity_level < var:ruin_last_dev
 }
 
 # County (title) scope. Is somebody actually putting this county back together?
@@ -360,7 +360,7 @@ gen_ruin_suffer_devdrop_trigger = {
 #
 # ---- Opinion is not in here, and that is deliberate ----
 #
-# It is the obvious fourth clause and it is the wrong signal. county_opinion measures whether the
+# It is the obvious fourth clause and it is the wrong signal. popular_opinion measures whether the
 # population likes whoever holds the title, not whether anyone is administering the place: Mokehe
 # fell in 923 at opinion +38, and three of the seven falls in that run had positive opinion at the
 # end. Popularity is not governance, and letting it absolve a county would forgive exactly the
@@ -393,7 +393,7 @@ gen_ruin_is_recovering_trigger = {
 		# means the same thing at every development level.
 		AND = {
 			has_variable = ruin_last_dev
-			development_level > var:ruin_last_dev
+			prosperity_level > var:ruin_last_dev
 		}
 	}
 }
@@ -479,8 +479,8 @@ gen_ruin_veto_dejure_trigger = {
 # No wonder or other special building standing on the capital barony.
 gen_ruin_veto_special_trigger = {
 	title_province ?= {
-		has_special_building = no
-		has_special_building_slot = no
+		has_special_district = no
+		has_special_district_slot = no
 	}
 }
 
