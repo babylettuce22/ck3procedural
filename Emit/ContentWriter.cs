@@ -206,9 +206,11 @@ public static partial class ContentWriter
             // side of the traced course is the land a river takes. See PlaceDisasterRegions.
             var riverside = MapGen.MajorRivers.RiversideCounties(terra.MajorRiversList, provinces,
                 order, baronyCount, counties, Math.Max(2, (int)Math.Round(cfg.Scaled(4))));
+            var entrepotProvinces = PlaceEntrepots(regionMembers, counties, development, provinces, order,
+                baronyCount, wilderness);
             CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires, cultures, regionMembers,
                 wilderness, everyCountyAdjacency, provinceTerrain,
-                Realms.HegemonRealmCounties(realms, empires, wilderness), riverside);
+                Realms.HegemonRealmCounties(realms, empires, wilderness), riverside, entrepotProvinces);
             CompatibilityWriter.WriteHolySites(modDir, gameDir, empires, generatedFaiths);
             CompatibilityWriter.WriteDecisionBlocks(modDir, gameDir);
             CompatibilityWriter.WriteHistoricalSetupStubs(modDir, gameDir, cfg);
@@ -1891,6 +1893,24 @@ public static partial class ContentWriter
     /// <summary>Names and adjectives of generated counties that carry a vanilla key (the Silk Road's
     /// bazaar counties), in localization/replace/english.</summary>
     internal const string ReservedTitleLocFile = "gen_reserved_titles_l_english.yml";
+
+    /// <summary>
+    /// Fills vanilla's two entrepôt regions (see <see cref="MapGen.Entrepots"/>): the counties
+    /// into <paramref name="regionMembers"/>, their capital provinces returned as the province
+    /// list for <see cref="CompatibilityWriter.WriteGeographicalRegions"/>.
+    /// </summary>
+    private static Dictionary<string, List<int>> PlaceEntrepots(Dictionary<string, List<Title>> regionMembers,
+        List<Title> counties, Dictionary<Title, int> development, ProvinceMap provinces, int[] order,
+        int baronyCount, MapGen.WildernessMap wilderness)
+    {
+        var hubs = MapGen.Entrepots.Pick(counties, development,
+            MapGen.ProvinceSurvey.Take(provinces, order, baronyCount, null), wilderness, provinces.Width, provinces.Height);
+        if (hubs.Count == 0) return [];
+
+        regionMembers["entrepot_counties_region"] = hubs.Select(h => h.County).ToList();
+        Console.WriteLine($"  entrepots: {hubs.Count} ({string.Join(", ", hubs.Select(h => $"{h.County.Key} dev {development.GetValueOrDefault(h.County)}"))})");
+        return new() { ["entrepot_provinces_region"] = hubs.Select(h => h.Barony.ProvinceId).ToList() };
+    }
 
     private static void BlankVanillaData(string modDir, string gameDir)
     {

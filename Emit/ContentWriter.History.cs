@@ -456,9 +456,12 @@ public static partial class ContentWriter
                 (int)Math.Round(cfg.Scaled(cfg.SeaBridgePixelsAtVanilla)));
             var riverside = MapGen.MajorRivers.RiversideCounties(result.Terra.MajorRiversList, provinces,
                 order, result.BaronyCount, counties, Math.Max(2, (int)Math.Round(cfg.Scaled(4))));
+            // The entrepôts follow prosperity and the settled land, as at generation.
+            var entrepotProvinces = PlaceEntrepots(regionMembers, counties, development, provinces, order,
+                result.BaronyCount, wilderness);
             CompatibilityWriter.WriteGeographicalRegions(modDir, gameDir, empires, cultures, regionMembers,
                 wilderness, everyCountyAdjacency, world.ProvinceTerrain,
-                Realms.HegemonRealmCounties(realms, empires, wilderness), riverside);
+                Realms.HegemonRealmCounties(realms, empires, wilderness), riverside, entrepotProvinces);
         });
 
         // The Wilds situation, cut from the wilderness as the history left it. Deterministic from the

@@ -2171,7 +2171,8 @@ public static partial class CompatibilityWriter
         Dictionary<Title, HashSet<Title>>? countyAdjacency = null,
         MapGen.TerrainClass[]? provinceTerrain = null,
         HashSet<Title>? hegemonRealm = null,
-        HashSet<Title>? riverside = null)
+        HashSet<Title>? riverside = null,
+        Dictionary<string, List<int>>? regionProvinces = null)
     {
         string source = Path.Combine(gameDir, "map_data", "geographical_regions");
         string destination = Path.Combine(modDir, "map_data", "geographical_regions");
@@ -2287,6 +2288,15 @@ public static partial class CompatibilityWriter
                         using (b.Block("counties"))
                             for (int i = 0; i < members.Count; i += 10)
                                 b.Token(string.Join(' ', members.Skip(i).Take(10).Select(c => c.Key)));
+                    }
+                    else if (regionProvinces is not null
+                             && regionProvinces.TryGetValue(key, out var listed) && listed.Count > 0)
+                    {
+                        // A province-list region with a meaning on this map: the entrepôt
+                        // provinces, one barony of each entrepôt county (see MapGen.Entrepots).
+                        using (b.Block("provinces"))
+                            for (int i = 0; i < listed.Count; i += 20)
+                                b.Token(string.Concat(listed.Skip(i).Take(20).Select(p => $"{p} ")));
                     }
                     else if (graphicalProvinces.TryGetValue(key, out var provinces))
                     {
