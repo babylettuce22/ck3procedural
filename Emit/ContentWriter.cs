@@ -104,8 +104,17 @@ public static partial class ContentWriter
         // Beside province_terrain's 00 file rather than inside the stage above, because it is
         // climate, not titles: every province's winter, and the climate.txt that would otherwise
         // load vanilla's ids onto this map. See WinterWriter.
-        Core.Stage.Time("winter", () => WinterWriter.WriteAll(modDir,
-            WinterWriter.Severity(classified.Field, provinces, order, landCount), baronyCount, landCount));
+        double[] winterBias = [];
+        Core.Stage.Time("winter", () =>
+        {
+            winterBias = WinterWriter.Severity(classified.Field, provinces, order, landCount);
+            WinterWriter.WriteAll(modDir, winterBias, baronyCount, landCount);
+        });
+
+        // After winter, because a good's odds read the same winter bias the game will.
+        Core.Stage.Time("trade goods", () => TradeGoodsWriter.Write(modDir, MapGen.TradeGoods.Assign(
+            cfg.Seed, counties, provinceTerrain, winterBias,
+            MapGen.ProvinceSurvey.Take(provinces, order, baronyCount, null), provinces.Width, provinces.Height)));
 
         Core.Stage.Time("wonders", () => WonderWriter.WriteAll(modDir, gameDir, worldCenters, cfg.EnableWilderness));
         Core.Stage.Time("wonder index", () => WonderIndex.Write(modDir, worldCenters));
