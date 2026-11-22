@@ -41,7 +41,8 @@ colony_sponsorship = {
 			subject_modifier = {
 				prosperity_growth_factor = -0.20
 				build_gold_cost = 0.20
-				monthly_control_change_when_below_baseline_add = -0.15
+				# CK3 1.21: a lower baseline, not a negative monthly drift (see 00_march_modifiers.txt).
+				control_baseline_add = -10
 			}
 
 			subject_opinion = -15

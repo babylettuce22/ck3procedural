@@ -285,15 +285,26 @@ gen_ruin_suffer_contested_trigger = {
 # are simply finished growing, so there the stricter test is right; control does not plateau, it is
 # either climbing or being held down.
 #
-# `has_variable` first, so the first tick of a streak is simply false rather than an error — the
-# same shape and the same reason as the development arm below.
+# ---- CK3 1.21: the trajectory is now the engine's, and the slack test stopped meaning anything ----
+#
+# Everything above is the 1.20 history and stays as the record of why the arm is a trajectory. 1.21
+# replaced the control model under it. Control now converges on a BASELINE (35 by default) at only
+# 0.1 a month, 1.2 a year, and a county's troubles lower that baseline (vanilla's devastation,
+# epidemics and disasters: control_baseline_add -5/-10/-15) rather than its monthly growth. So
+# "gained two points or fewer" was true of every low county in the world, healing or not: measured
+# on a 115-year 1.21 game (2026-11-19), this arm was 802 of 843 bad years and streaks ran to 98.
+#
+# The engine now answers the question this arm was approximating. `county_control_baseline` is
+# where control is heading. A county under 10 whose baseline is healthy is a conquest or a raid
+# on its way back up, the case the shock hooks and gen_ruin_shock_immunity_years already handle;
+# one whose baseline is itself below gen_ruin_suffer_control_baseline is being held down by
+# something and will not climb out on its own. That is the county this arm always meant.
+#
+# Governments do not move the baseline (no vanilla government carries control_baseline_add), so
+# this cannot turn back into the tribal-vs-feudal sorter the floor once was.
 gen_ruin_suffer_control_trigger = {
 	county_control < 10
-	has_variable = ruin_last_ctl
-	county_control <= {
-		value = var:ruin_last_ctl
-		add = 2
-	}
+	county_control_baseline < gen_ruin_suffer_control_baseline
 }
 
 # The people in it want somebody else.
@@ -378,9 +389,8 @@ gen_ruin_is_recovering_trigger = {
 		county_control >= gen_ruin_recovering_control_level
 
 		# Or climbing hard. `has_variable` first and in the same block, which is the shape the
-		# suffering arms already use and the one measured not to throw — see the note on
-		# gen_ruin_suffer_control_trigger. The gain has to clear the +2 slack that arm allows, or a
-		# county could be suffering and recovering in the same year.
+		# development arm uses and the one measured not to throw. Under CK3 1.21 natural drift is
+		# 1.2 a year, so a gain of gen_ruin_recovering_control_gain means somebody is working at it.
 		AND = {
 			has_variable = ruin_last_ctl
 			county_control >= {

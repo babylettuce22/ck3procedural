@@ -41,8 +41,9 @@
 #
 # The tick does not record which arm made the year bad (only the debug tally does), and by the time
 # this window renders, ruin_last_dev has been stamped with this year's value, so the development
-# arm reads false. So the description asks the two LEVELS directly — control under 10, opinion
-# under -45 — and when neither holds, the only arm left that could have scored is falling
+# arm reads false. So the description asks the two arms that keep no history directly — the
+# control arm (since CK3 1.21 it reads the engine's control baseline, not a stamped value) and
+# opinion under -45 — and when neither holds, the only arm left that could have scored is falling
 # development. Shared with 0005 through the gen_ruins.cause_* keys.
 
 gen_ruins.0001 = {
@@ -51,7 +52,7 @@ gen_ruins.0001 = {
 	desc = {
 		desc = gen_ruins.0001.desc_intro
 		triggered_desc = {
-			trigger = { scope:gen_ruin_target = { county_control < 10 } }
+			trigger = { scope:gen_ruin_target = { gen_ruin_suffer_control_trigger = yes } }
 			desc = gen_ruins.cause_control
 		}
 		triggered_desc = {
@@ -62,7 +63,7 @@ gen_ruins.0001 = {
 			trigger = {
 				scope:gen_ruin_target = {
 					NOR = {
-						county_control < 10
+						gen_ruin_suffer_control_trigger = yes
 						popular_opinion < -45
 					}
 				}
@@ -175,7 +176,7 @@ gen_ruins.0005 = {
 		desc = gen_ruins.0005.desc_intro
 		# Why, the same three lines as 0001 (see the note there on reading levels, not arms).
 		triggered_desc = {
-			trigger = { scope:gen_ruin_target = { county_control < 10 } }
+			trigger = { scope:gen_ruin_target = { gen_ruin_suffer_control_trigger = yes } }
 			desc = gen_ruins.cause_control
 		}
 		triggered_desc = {
@@ -186,7 +187,7 @@ gen_ruins.0005 = {
 			trigger = {
 				scope:gen_ruin_target = {
 					NOR = {
-						county_control < 10
+						gen_ruin_suffer_control_trigger = yes
 						popular_opinion < -45
 					}
 				}

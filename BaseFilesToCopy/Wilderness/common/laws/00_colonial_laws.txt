@@ -208,7 +208,8 @@
 
 		modifier = {
 			all_tax_mult = 0.35
-			monthly_control_change_when_below_baseline_add = -0.15
+			# CK3 1.21: a lower baseline, not a negative monthly drift (see 00_march_modifiers.txt).
+			control_baseline_add = -10
 			popular_opinion_add = -10
 			defender_holding_advantage = -3
 		}

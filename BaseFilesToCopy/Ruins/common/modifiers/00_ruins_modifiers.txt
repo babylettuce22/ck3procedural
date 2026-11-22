@@ -19,7 +19,8 @@
 # chance at a GOOD year — and one good year sets the counter to zero outright, which is the only
 # real escape ruination has.
 #
-#   control growth   answers the `county_control < 10` arm
+#   control growth   answers the control arm (control < 10 with a low CK3 1.21 baseline): it lifts
+#                    control toward the baseline, past 10, within a year or two
 #   opinion          answers the `popular_opinion < -70` arm
 #   development      answers the trajectory arm, `prosperity_level < var:ruin_last_dev`
 #

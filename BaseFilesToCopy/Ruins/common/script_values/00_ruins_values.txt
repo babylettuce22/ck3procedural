@@ -110,13 +110,19 @@ gen_ruin_decay_bleed = 3
 # suffering. Neither of these is a rate lever — see the note on that trigger — so retuning the fall
 # rate means moving gen_ruin_decay_threshold, not these.
 #
-# A level of control at which the county is simply well held. Above the +2 slack in the suffering
-# arm by a wide margin, so the two can never both be true.
+# A level of control at which the county is simply well held. Above the suffering arm's floor of 10
+# by a wide margin, so the two can never both be true.
 gen_ruin_recovering_control_level = 20
 
-# Or a one-year gain in control this large. Five rather than three because the suffering arm already
-# forgives a gain of two as "treading water": the gap between them is the drift band, and collapsing
-# it to nothing would put the hair trigger straight back.
+# CK3 1.21. The suffering arm counts a year only when control is under 10 AND the county's control
+# baseline (where 1.21 control is heading) is under this. 20 is the default baseline of 35 less a
+# vanilla -15 (the heaviest single devastation/epidemic step) — so one ordinary trouble does not
+# count, a deep march alone (-15) does not count, and two stacked do. See the note on
+# gen_ruin_suffer_control_trigger. A semantic line, like the level above, not a rate lever.
+gen_ruin_suffer_control_baseline = 20
+
+# Or a one-year gain in control this large. Under 1.21's slow drift (1.2 a year) only real effort —
+# a marshal on Increase Control, a governor, an event — reaches it, which is what it should mean.
 gen_ruin_recovering_control_gain = 5
 
 # ---- What the world does to a county, outside the yearly tick -----------------------------------
