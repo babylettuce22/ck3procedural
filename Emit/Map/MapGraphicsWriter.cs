@@ -446,6 +446,15 @@ public static class MapGraphicsWriter
 
         string radius = Math.Max(2.0, cfg.Scaled(EffectFadeRadius)).ToString("0.0##", System.Globalization.CultureInfo.InvariantCulture);
 
+        // The noise the disc turns and swells by is the one vanilla's own drought and grass masks
+        // read. 1.21 (Florin) folded the separate ProvinceEffectsNoise sampler into the
+        // MapEffectTextures array, as its layer NOISE_2; naming the old sampler there is an
+        // undeclared identifier, which fails every terrain, tree, building and decal shader that
+        // includes this file: a black map, then a crash in the bloom pass on the first frame.
+        string Noise(string uv) => patch.Contains("MapEffectTextures")
+            ? $"PdxTex2D( MapEffectTextures, float3( {uv}, MAP_EFFECT_TEXTURE_INDEX_NOISE_2 ) )"
+            : $"PdxTex2D( ProvinceEffectsNoise, {uv} )";
+
         // Vanilla's two samplers are kept, renamed, and run first; ours then overwrite only the four
         // seasonal effects this softens. Two things follow from running vanilla first:
         //
@@ -477,8 +486,8 @@ public static class MapGraphicsWriter
             			#ifndef LOW_SPEC_SHADERS
             			// Fine noise turns the disc per pixel; coarse noise swells and shrinks it.
             			float2 NoiseUV = float2( MapCoords.x * 2.0f, MapCoords.y );
-            			float Spin = PdxTex2D( ProvinceEffectsNoise, NoiseUV * 900.0f ).r * 6.2831853f;
-            			float Reach = PROCTOOL_EFFECT_RADIUS * ( 0.6f + 0.8f * PdxTex2D( ProvinceEffectsNoise, NoiseUV * 18.0f ).r );
+            			float Spin = {{Noise("NoiseUV * 900.0f")}}.r * 6.2831853f;
+            			float Reach = PROCTOOL_EFFECT_RADIUS * ( 0.6f + 0.8f * {{Noise("NoiseUV * 18.0f")}}.r );
 
             			float2 Centre = MapCoords * IndirectionMapSize;
             			float Weight = 1.0f / PROCTOOL_EFFECT_TAPS;
