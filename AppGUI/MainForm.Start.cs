@@ -68,6 +68,7 @@ public sealed partial class MainForm
         };
         _start.OpenWorldPicked += () => OpenGeneratedWorldAsync().Forget("open generated world");
         _start.UpdateWorldPicked += () => UpdateOldWorldAsync().Forget("update old world");
+        _start.RegenLastPicked += () => RegenLastWorldAsync().Forget("regen last world");
         _start.GuidePicked += ShowWelcomeGuide;
         _start.GameFolderPicked += PickGameFolder;
         return _start;
@@ -81,7 +82,62 @@ public sealed partial class MainForm
         _start.Present(Core.GameLocator.IsGameDir(_options.GameDir), _options.GameDir, _modRoot);
         _start.SetRemember(_state.RememberStartChoice, _state.StartWith);
         _start.SetDarkMode(_state.DarkMode);
+        _start.SetRegenLast(LastQuickWorld() is { } last
+            ? $"Make \"{last.ModName}\" again: the same Quick choices and seed ({last.Choices.Seed}), "
+              + $"written over the same folder.\n{last.ModDir}"
+            : null);
         _start.Focus();
+    }
+
+    /// <summary>
+    /// The last world written, when it was a Quick world that can be made again exactly: the
+    /// choices the Quick page saved at its last Create, and the folder the window last wrote. The
+    /// folder's own record has to agree — a Quick world, at that seed — or the two describe
+    /// different worlds (a Complex or Azgaar write since, or a Quick run that was cancelled), and
+    /// there is nothing to offer. Read from what is already saved, so it survives a restart.
+    /// </summary>
+    private (QuickChoices Choices, string ModDir, string ModName)? LastQuickWorld()
+    {
+        if (_state.Quick is not { } choices || _lastModDir is not { } dir || !RunLog.WroteFolder(dir)) return null;
+        if (choices.ImportsHeightmap && !File.Exists(choices.HeightmapPath)) return null;
+
+        string? quick = null, seed = null, name = null;
+        try
+        {
+            foreach (string line in File.ReadLines(Path.Combine(dir, RunLog.FileName)))
+            {
+                if (line.StartsWith("====", StringComparison.Ordinal)) break;
+                static string After(string l) => l[(l.IndexOf(':') + 1)..].Trim();
+                if (line.StartsWith("Quick:", StringComparison.Ordinal)) quick = After(line);
+                else if (line.StartsWith("Seed:", StringComparison.Ordinal)) seed = After(line);
+                else if (line.StartsWith("Mod name:", StringComparison.Ordinal)) name = After(line);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+
+        if (quick is null || quick.StartsWith("(not a Quick world)", StringComparison.Ordinal)) return null;
+        if (seed != choices.Seed.ToString(System.Globalization.CultureInfo.InvariantCulture)) return null;
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        return (choices, dir, name);
+    }
+
+    /// <summary>
+    /// The start page's Regen last: the last Quick world made again through the Quick page's own
+    /// Create, with its progress and done screens — the page is only set to the old choices first.
+    /// </summary>
+    private async Task RegenLastWorldAsync()
+    {
+        if (_busy || LastQuickWorld() is not { } last) return;
+        string modRoot = Path.GetDirectoryName(Path.GetFullPath(last.ModDir)) ?? _modRoot;
+
+        ShowLauncherPage(_quick);
+        _quick.Begin(last.Choices, Core.GameLocator.IsGameDir(_options.GameDir), _options.GameDir, modRoot,
+            ComplexSettingsNote());
+        _quick.Repeat(last.Choices, last.ModName);
+        await QuickCreateAsync(last.Choices, last.ModDir, last.ModName, modRoot);
     }
 
     /// <summary>

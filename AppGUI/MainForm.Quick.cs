@@ -37,7 +37,7 @@ public sealed partial class MainForm
     private QuickPage BuildQuickPage()
     {
         _quick.BackToStart += ShowStartPage;
-        _quick.CreateRequested += () => QuickCreateAsync().Forget("quick world");
+        _quick.CreateRequested += () => QuickCreateAsync(_quick.Choices, _quick.ModDir, _quick.ModName, _quick.ModRoot).Forget("quick world");
         _quick.CancelRequested += () => { RequestCancel(); _quick.Run.CancelPending(); };
         _quick.LaunchRequested += LaunchGame;
         _quick.OpenFolderRequested += OpenModFolder;
@@ -84,14 +84,14 @@ public sealed partial class MainForm
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "Ck3MapGen", "settings-before-quick.json");
 
-    private async Task QuickCreateAsync()
+    /// <summary>
+    /// Makes a Quick world. Takes what it makes as arguments rather than reading the page, so the
+    /// start page's Regen last can hand it the last world's choices and folder; the page is set to
+    /// the same choices first (<see cref="QuickPage.Repeat"/>) so its run and done views match.
+    /// </summary>
+    private async Task QuickCreateAsync(QuickChoices choices, string modDir, string modName, string modRoot)
     {
         if (_busy) return;
-
-        var choices = _quick.Choices;
-        string modDir = _quick.ModDir;
-        string modName = _quick.ModName;
-        string modRoot = _quick.ModRoot;
 
         // An opened mod is edited, not generated; it has to be put down first, the way File ▸
         // Return to generator would.

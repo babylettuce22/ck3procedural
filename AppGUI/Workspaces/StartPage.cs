@@ -32,6 +32,9 @@ internal sealed class StartPage : Panel
     public event Action? GuidePicked;
     public event Action? GameFolderPicked;
 
+    /// <summary>The corner's Regen last link: make the last world again, as it was made.</summary>
+    public event Action? RegenLastPicked;
+
     /// <summary>The "Remember my choice" switch was flipped by the user.</summary>
     public event Action<bool>? RememberChanged;
 
@@ -57,6 +60,12 @@ internal sealed class StartPage : Panel
     private readonly LinkButton _gameChange;
     private readonly RememberSwitch _remember = new() { Name = "startRemember" };
     private readonly ThemeGlyph _theme = new() { Name = "startTheme" };
+
+    /// <summary>
+    /// A shortcut for testing a world over and over: out of the column, in the corner beside the
+    /// dark-mode glyph, and only there when there is a last world to make again.
+    /// </summary>
+    private readonly LinkButton _regenLast = new() { Name = "startRegenLast", Glyph = "", Text = "Regen last", Visible = false };
     private readonly WrappingToolTip _tips = new() { InitialDelay = 400 };
 
     public StartPage()
@@ -147,11 +156,23 @@ internal sealed class StartPage : Panel
             "Open straight into whichever you pick next — Azgaar, Quick or Complex — from now on.\n"
             + "The Start link on the Quick page, or File ▸ Start page, brings this page back.");
         _theme.Click += (_, _) => DarkModeToggled?.Invoke();
+        _regenLast.Click += (_, _) => RegenLastPicked?.Invoke();
 
         // A window too short for the page scrolls it; see OnLayout.
         WheelFollowsMouse.Install();
         Controls.AddRange([_banner, _title, _subtitle, _azgaar, _quick, _complex, _openWorld, _updateWorld, _guide, _remember,
-                           _rule, _gameGlyph, _gameText, _gameChange, _theme]);
+                           _rule, _gameGlyph, _gameText, _gameChange, _theme, _regenLast]);
+    }
+
+    /// <summary>
+    /// Shows the Regen last link with <paramref name="tip"/> saying what it will make, or hides it
+    /// when there is no last world to make again.
+    /// </summary>
+    public void SetRegenLast(string? tip)
+    {
+        _regenLast.Visible = tip is not null;
+        _tips.SetToolTip(_regenLast, tip);
+        PerformLayout();
     }
 
     protected override void OnControlAdded(ControlEventArgs e)
@@ -278,6 +299,7 @@ internal sealed class StartPage : Panel
 
         // Out of the column altogether, tucked in the page's corner above where the banner starts.
         _theme.Bounds = new Rectangle(ClientSize.Width - S(6) - S(24), S(2), S(24), S(24));
+        _regenLast.Location = new Point(_theme.Left - S(12) - _regenLast.Width, _theme.Top + (_theme.Height - _regenLast.Height) / 2);
 
         int titleH = _title.PreferredHeight;
         int cardH = CardHeight(width);

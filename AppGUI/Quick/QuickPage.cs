@@ -308,6 +308,22 @@ internal sealed class QuickPage : Panel
         RenderPreview();
     }
 
+    /// <summary>
+    /// Sets the page to a world made before, seed and name included, after <see cref="Begin"/>:
+    /// the start page's Regen last, which then makes it again without walking the steps.
+    /// </summary>
+    public void Repeat(QuickChoices choices, string modName)
+    {
+        _choices = choices.Clone();
+        _previousSeeds.Clear();
+        _settingName = true;
+        _name.Text = modName;
+        _settingName = false;
+        _nameTouched = true;
+        SyncControls();
+        RenderPreview();
+    }
+
     public void SetGameFolder(bool found, string gameDir)
     {
         _gameFound = found;
