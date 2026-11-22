@@ -2184,14 +2184,6 @@ public sealed class MapConfig : CustomTypeDescriptor
     public double HoldingScale { get; set; } = 1.0;
 
     /// <summary>
-    /// PROTOTYPE — the whole feature is <see cref="Emit.CityScatterWriter"/>, this flag and one
-    /// call site, on its own Rng stream, so turning it off changes nothing else in the output.
-    /// </summary>
-    [Category("06 Map Objects")]
-    [Description("Scatters small suburb models around settled holdings, sized by development and styled by the local culture, so towns grow visible outskirts and no two look alike. PROTOTYPE - the placements are baked at generation and do not change in-game. Turning it off removes them completely and affects nothing else.")]
-    public bool EnableCityScatter { get; set; } = true;
-
-    /// <summary>
     /// Whether the map table keeps its clutter — the candles, goblets, coins, chess pieces and
     /// ground props that dress vanilla's four tabletops.
     ///

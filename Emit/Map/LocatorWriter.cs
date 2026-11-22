@@ -80,11 +80,8 @@ public static class LocatorWriter
         ["layers.txt", "game_object_layers.txt", "effect_layers.txt"];
 
     /// <param name="anchors">
-    /// Taken rather than computed because <see cref="CityScatterWriter"/> needs the same set, and
-    /// <see cref="ProvinceAnchor.Compute"/> is a slope field and a distance transform at full
-    /// province resolution — a second of the run on a large map, paid twice for one answer. The
-    /// caller computes it once; that both writers see the identical points is now structural
-    /// rather than a property of Compute being deterministic.
+    /// Computed by the caller: <see cref="ProvinceAnchor.Compute"/> is a slope field and a
+    /// distance transform at full province resolution, about a second of the run on a large map.
     /// </param>
     public static void WriteAll(string modDir, string gameDir, ProvinceMap provinces,
         int[] order, int landCount, ProvinceAnchor.Anchors anchors, Config.MapConfig cfg)

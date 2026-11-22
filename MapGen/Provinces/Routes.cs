@@ -67,6 +67,20 @@ public sealed class RouteNetwork
     public required IReadOnlyList<RouteHub> Hubs { get; init; }
     public required IReadOnlyList<RouteEdge> Edges { get; init; }
 
+    /// <summary>
+    /// Every candidate before pruning: a road between each two duchies that touch, a lane from
+    /// each port to its nearest ports. <see cref="Edges"/> is the pruned network; this is the dense
+    /// one CK3 1.21's road file wants (see <c>Emit/Gameplay/RoadWriter.cs</c>). Includes the edges.
+    /// </summary>
+    public IReadOnlyList<RouteEdge> Candidates { get; init; } = [];
+
+    /// <summary>
+    /// CK3 1.21's sea roads: every port to every port it can reach within
+    /// <see cref="Routes.SeaRoadHops"/> water provinces, whether or not a road joins them too.
+    /// Separate from the lane candidates so the pruned network does not move.
+    /// </summary>
+    public IReadOnlyList<RouteEdge> SeaRoads { get; init; } = [];
+
     /// <summary>How many separate systems there are once lanes are counted — ideally one.</summary>
     public required int Components { get; init; }
 
@@ -107,6 +121,13 @@ public static class Routes
 
     /// <summary>How many other ports each port reaches for, nearest first.</summary>
     private const int LanesPerPort = 4;
+
+    /// <summary>
+    /// How far a 1.21 sea road reaches, in water provinces. Vanilla's 2,141 sea roads join each of
+    /// its 358 port duchies to 12 others (median) over 4 water provinces (median), 6 at the 90th
+    /// percentile, measured by <c>ck3devtools\calibration\roads_duchy.py</c>.
+    /// </summary>
+    public const int SeaRoadHops = 6;
 
     /// <summary>The longest lane, as a share of the map's width in weighted pixels.</summary>
     private const double MaxLaneShare = 0.12;
@@ -446,10 +467,81 @@ public static class Routes
 
         int components = hubs.Select(h => Find(h.Index)).Distinct().Count();
 
+        // --- Sea roads (CK3 1.21): every port to every port within SeaRoadHops water provinces.
+        // After pruning and apart from it, so the network above stays as it was.
+        var seaRoads = new List<RouteEdge>();
+        var seaSeen = new HashSet<(int, int)>();
+        var hops = new Dictionary<int, int>();
+        foreach (var hub in hubs.Where(h => h.Port))
+        {
+            waterDist.Clear();
+            waterPrev.Clear();
+            hops.Clear();
+            var queue = new PriorityQueue<int, double>();
+            foreach (int w in water.Shore[hub.ProvinceId])
+            {
+                double d0 = Distance(position[hub.ProvinceId], position[w]) * water.Cost[w];
+                if (waterDist.TryGetValue(w, out double known) && known <= d0) continue;
+                waterDist[w] = d0;
+                waterPrev[w] = 0;
+                hops[w] = 1;
+                queue.Enqueue(w, d0);
+            }
+
+            // The cheapest landing for each port reached: the water province it was reached from.
+            var reached = new Dictionary<int, (int Water, double Cost)>();
+            while (queue.TryDequeue(out int at, out double d))
+            {
+                if (d > waterDist[at]) continue;
+
+                if (portsByWater.TryGetValue(at, out var ports))
+                    foreach (int other in ports)
+                    {
+                        if (other == hub.Index) continue;
+                        double cost = d + Distance(position[at], position[hubs[other].ProvinceId]) * CoastalWater;
+                        if (!reached.TryGetValue(other, out var best) || cost < best.Cost) reached[other] = (at, cost);
+                    }
+
+                if (hops[at] >= SeaRoadHops || !water.Links.TryGetValue(at, out var around)) continue;
+                foreach (int next in around)
+                {
+                    if (next >= 1 && next <= baronyCount) continue;   // the shore, not more sea
+                    double candidate = d + Distance(position[at], position[next]) * 0.5 * (water.Cost[at] + water.Cost[next]);
+                    if (waterDist.TryGetValue(next, out double known) && candidate >= known) continue;
+                    waterDist[next] = candidate;
+                    waterPrev[next] = at;
+                    hops[next] = hops[at] + 1;
+                    queue.Enqueue(next, candidate);
+                }
+            }
+
+            foreach (var (other, (landing, cost)) in reached.OrderBy(kv => kv.Key))
+            {
+                int a = Math.Min(hub.Index, other), b = Math.Max(hub.Index, other);
+                if (!seaSeen.Add((a, b))) continue;
+
+                var lane = new List<int>();
+                for (int p = landing; p != 0; p = waterPrev[p]) lane.Add(p);
+                lane.Reverse();
+                var path = new List<int> { hub.ProvinceId };
+                path.AddRange(lane);
+                path.Add(hubs[other].ProvinceId);
+                if (a != hub.Index) path.Reverse();
+
+                seaRoads.Add(new RouteEdge
+                {
+                    A = a, B = b, Kind = RouteKind.Sea, Provinces = path,
+                    Cost = cost, Length = Length(path, position),
+                });
+            }
+        }
+
         return new RouteNetwork
         {
             Hubs = hubs,
             Edges = kept,
+            Candidates = candidates,
+            SeaRoads = seaRoads,
             Components = components,
             Unreachable = unreachable,
         };

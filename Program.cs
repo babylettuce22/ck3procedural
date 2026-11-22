@@ -687,11 +687,6 @@ public static class Program
                     cfg.ScaleReliefWithMapSize = false;
                     break;
 
-                // Kill switch for the city-scatter prototype. See MapConfig.EnableCityScatter.
-                case "--no-city-scatter":
-                    cfg.EnableCityScatter = false;
-                    break;
-
                 // Extra zoom steps of 3D terrain before the map goes flat to the paper map. See
                 // MapConfig.FlatMapHandoffBias; 0 is vanilla's own handoff.
                 case "--flat-map-bias" when i + 1 < args.Length:

@@ -66,6 +66,10 @@ public static class ModWriter
         "common/bookmarks/challenge_characters",
         "common/bookmark_portraits",
         "history/characters",
+        // CK3 1.21 moved its Han characters into this subfolder, and replace_path does not reach
+        // into subfolders: without it they loaded into a generated world and logged ~7,000
+        // "Failed to read key reference" and missing-character errors in a 30-year run (2026-11-19).
+        "history/characters/han",
         "history/provinces",
         "history/titles",
 
@@ -83,6 +87,12 @@ public static class ModWriter
         "history/wars",
         "history/struggles",
         "history/situations",
+
+        // CK3 1.21's roads are chains of vanilla province ids (00_base_roads, 02_sea_roads, and
+        // whatever a DLC adds between them). On a generated map those ids are unrelated
+        // provinces, so the chains run across seas and between strangers and grant their tax,
+        // prosperity and safety to whatever they land on. RoadWriter writes this map's own.
+        "common/roads/road_types",
     ];
 
     /// <summary>

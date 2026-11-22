@@ -62,7 +62,7 @@ public static class RiverMap
     /// chains at corner-shaped turns and reports the pieces as orphans — so a regression here
     /// shows up in the log rather than in the game.
     /// </summary>
-    public static byte[] Generate(MapConfig cfg, ProvinceMap provinces, Drainage drainage)
+    public static byte[] Generate(MapConfig cfg, ProvinceMap provinces, Drainage drainage, bool quiet = false)
     {
         int width = cfg.ProvinceWidth;
         int height = cfg.ProvinceHeight;
@@ -282,12 +282,12 @@ public static class RiverMap
             sources++;
         }
 
-        Console.WriteLine($"  minor rivers: {drawnRivers} streams in rivers.png — {mouths} reaching water ({sources} with a " +
+        if (!quiet) Console.WriteLine($"  minor rivers: {drawnRivers} streams in rivers.png — {mouths} reaching water ({sources} with a " +
                           $"green source), {joins} tributaries joining another river; skipped {tooShort} too short, " +
                           $"{stranded} stranded on land, {refusedAtMarker} landing beside a marker or segment end, " +
                           $"{refusedSecondJoin} landing on a pixel already taking a tributary");
 
-        Audit(indices, width, height);
+        if (!quiet) Audit(indices, width, height);
         return indices;
 
         // Orthogonal neighbours of p that are river pixels, other than the course's own previous

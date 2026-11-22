@@ -228,11 +228,11 @@ public static class MapDataWriter
         ParadoxText.WriteNoBom(path, sb.ToString());
     }
 
-    public static byte[] RiverIndices(MapConfig cfg, ProvinceMap provinces, MapGen.Drainage? drainage = null)
+    public static byte[] RiverIndices(MapConfig cfg, ProvinceMap provinces, MapGen.Drainage? drainage = null, bool quiet = false)
     {
         if (drainage != null)
         {
-            return MapGen.RiverMap.Generate(cfg, provinces, drainage);
+            return MapGen.RiverMap.Generate(cfg, provinces, drainage, quiet);
         }
 
         var indices = new byte[cfg.ProvinceWidth * cfg.ProvinceHeight];

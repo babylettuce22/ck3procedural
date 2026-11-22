@@ -294,6 +294,9 @@ public static partial class ContentWriter
         });
 
         Core.Stage.Time("locators", () => LocatorWriter.WriteAll(modDir, gameDir, provinces, order, landCount, anchors, cfg));
+        // The road file and its spline network, after the locators: the network's hubs stand on the
+        // holdings' anchors, so a drawn road starts at the castle. Its land lines carry the bridges.
+        var roadLines = Core.Stage.Time("roads", () => RoadWriter.WriteAll(modDir, routes, baronyCount, provinces, order, anchors));
         Core.Stage.Time("casus belli", () => CasusBelliWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("council tasks", () => CouncilTaskWriter.WriteAll(modDir, gameDir, cfg));
         Core.Stage.Time("faction rules", () => FactionWriter.WriteAll(modDir, gameDir, cfg));
@@ -351,15 +354,6 @@ public static partial class ContentWriter
         // of each other in length, so by the time this runs the branch has essentially finished.
         var shipped = shippedHeightmap();
 
-        // The city models stand where the generated world's holdings are. An applied history moves
-        // the holdings in the province history with its governments, but the map objects are part
-        // of the written world that applying keeps — so a full write and the re-emit agree. Rolled
-        // over the counties in the order the world was generated in: de jure drift has since moved
-        // the tree, and walking the moved tree would roll the same dice onto different baronies.
-        var scatterHoldings = ReferenceEquals(world.GeneratedGovernments, governments)
-            ? holdings
-            : BuildProvinceHistory(cfg, empires, provinceTerrain, development, generatedCultures, generatedFaiths,
-                world.GeneratedGovernments, generatedWilderness, worldCenters, silkRoad, cfg.Seed, azgaar, counties).Holdings;
 
         // Where an army can march across water: straits and major-river crossings, written into
         // map_data/adjacencies.csv over the stub the map writer left. See MapGen/Provinces/Crossings.cs.
@@ -406,13 +400,15 @@ public static partial class ContentWriter
             classified.RiverWater));
         Core.Stage.Time("animals", () => AnimalWriter.WriteAll(modDir, cfg, terrain, renderedElevation, rng));
         Core.Stage.Time("env effects", () => EnvEffectWriter.WriteAll(modDir, cfg, terrain, renderedElevation, rng));
-        Core.Stage.Time("bridges", () => BridgeWriter.WriteAll(modDir, cfg, terra.MajorRiversList, classified.Climate, renderedElevation, rng));
-        // Prototype, deliberately severable: its own Rng stream and its own output file, so
-        // MapConfig.EnableCityScatter (--no-city-scatter) removes it without moving anything else.
-        // The counties as BuildWorld listed them, before an applied history's de jure drift moved
-        // any: the same list, in the same order, as walking the tree gives a generated world.
-        Core.Stage.Time("city scatter", () => CityScatterWriter.WriteAll(modDir, cfg, counties,
-            scatterHoldings, development, generatedCultures, provinces, order, anchors, renderedElevation));
+        // A bridge wherever a drawn road crosses a river, as vanilla 1.21 does. Its rivers.png is
+        // rebuilt (quietly, ~0.1 s) rather than passed down from the map data writer.
+        Core.Stage.Time("bridges", () => BridgeWriter.WriteAll(modDir, cfg, provinces, roadLines,
+            MapDataWriter.RiverIndices(cfg, provinces, drainage, quiet: true), classified.Climate));
+        // City scatter (suburbs around developed holdings) was retired with CK3 1.21, whose
+        // districts draw a city's outskirts in game. The mod folder is not wiped between runs, so
+        // clear the file older builds left behind.
+        string retiredCityScatter = Path.Combine(modDir, "gfx", "map", "map_object_data", "city_scatter.txt");
+        if (File.Exists(retiredCityScatter)) File.Delete(retiredCityScatter);
         Core.Stage.Time("map table", () => MapTableWriter.WriteAll(modDir, cfg, gameDir));
         Core.Stage.Time("holding models", () => HoldingModelWriter.WriteAll(modDir, gameDir, cfg));
         });
