@@ -24,7 +24,7 @@
 # slot AFTER this has run, and makes one by dropping an obstacle — see the note there.
 wilderness_seed_obstacle_effect = {
 	if = {
-		limit = { free_building_slots > 0 }
+		limit = { holding_district ?= { free_building_slots > 0 } }
 		wilderness_seed_obstacle_roll_effect = yes
 	}
 }
@@ -38,7 +38,7 @@ wilderness_seed_obstacle_roll_effect = {
 				OR = { terrain = taiga  terrain = mountains  terrain = desert_mountains }
 			}
 			modifier = { terrain = taiga  add = 20 }
-			add_building = killing_cold
+			gen_place_building_effect = { BUILDING = killing_cold }
 		}
 
 		# Standing water: marsh, delta, river bottom, and any low coast.
@@ -52,7 +52,7 @@ wilderness_seed_obstacle_roll_effect = {
 				}
 			}
 			modifier = { terrain = wetlands  add = 25 }
-			add_building = flooded_lands
+			gen_place_building_effect = { BUILDING = flooded_lands }
 		}
 
 		# Ground you cannot get a cart across.
@@ -63,7 +63,7 @@ wilderness_seed_obstacle_roll_effect = {
 			}
 			modifier = { terrain = mountains  add = 20 }
 			modifier = { terrain = desert_mountains  add = 20 }
-			add_building = scree_slopes
+			gen_place_building_effect = { BUILDING = scree_slopes }
 		}
 
 		# Trees, and what lives in them.
@@ -73,14 +73,14 @@ wilderness_seed_obstacle_roll_effect = {
 				OR = { terrain = forest  terrain = jungle  terrain = taiga }
 			}
 			modifier = { terrain = jungle  add = 25 }
-			add_building = dense_growth
+			gen_place_building_effect = { BUILDING = dense_growth }
 		}
 		10 = {
 			trigger = {
 				NOT = { has_building = beast_dens }
 				OR = { terrain = forest  terrain = taiga  terrain = hills  terrain = jungle }
 			}
-			add_building = beast_dens
+			gen_place_building_effect = { BUILDING = beast_dens }
 		}
 
 		# People. Anywhere at all, but likeliest on open ground somebody could live off.
@@ -90,7 +90,7 @@ wilderness_seed_obstacle_roll_effect = {
 				OR = { terrain = plains  terrain = steppe  terrain = drylands  terrain = farmlands }
 				add = 15
 			}
-			add_building = bandit_camps
+			gen_place_building_effect = { BUILDING = bandit_camps }
 		}
 	}
 }
@@ -627,12 +627,12 @@ colony_settling_success_effect = {
 			change_county_control = 15
 
 			title_province ?= {
-				if = { limit = { has_building = killing_cold }  remove_building = killing_cold }
-				else_if = { limit = { has_building = flooded_lands } remove_building = flooded_lands }
-				else_if = { limit = { has_building = bandit_camps }  remove_building = bandit_camps }
-				else_if = { limit = { has_building = beast_dens }    remove_building = beast_dens }
-				else_if = { limit = { has_building = dense_growth }  remove_building = dense_growth }
-				else_if = { limit = { has_building = scree_slopes }  remove_building = scree_slopes }
+				if = { limit = { has_building = killing_cold }  holding_district ?= { remove_building = killing_cold } }
+				else_if = { limit = { has_building = flooded_lands } holding_district ?= { remove_building = flooded_lands } }
+				else_if = { limit = { has_building = bandit_camps }  holding_district ?= { remove_building = bandit_camps } }
+				else_if = { limit = { has_building = beast_dens }    holding_district ?= { remove_building = beast_dens } }
+				else_if = { limit = { has_building = dense_growth }  holding_district ?= { remove_building = dense_growth } }
+				else_if = { limit = { has_building = scree_slopes }  holding_district ?= { remove_building = scree_slopes } }
 			}
 		}
 	}
@@ -698,9 +698,9 @@ promote_colony_effect = {
 		}
 
 		title_province ?= {
-			if = { limit = { has_building = settlement_01 }  remove_building = settlement_01 }
-			if = { limit = { has_building = settlement_02 }  remove_building = settlement_02 }
-			if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
+			# CK3 1.21: no teardown of the settlement chain here. It is the holding district's primary
+			# building, which remove_building refuses ("Can not remove the primary building"); the
+			# set_holding_type below replaces the whole holding district, chain included.
 
 			if = {
 				limit = { colony_promotes_to_tribe_trigger = yes }
@@ -1527,20 +1527,18 @@ colony_convert_to_pasture_effect = {
 		title_province ?= {
 			gen_strip_buildings_effect = yes
 
-			# The settlement chain. Skipped by the strip effect as settlement_holding's own level
-			# building, which it no longer is once the line below has run.
-			if = { limit = { has_building = settlement_03 }  remove_building = settlement_03 }
-			if = { limit = { has_building = settlement_02 }  remove_building = settlement_02 }
-			if = { limit = { has_building = settlement_01 }  remove_building = settlement_01 }
+			# CK3 1.21: no teardown of the settlement chain here. It is the holding district's primary
+			# building, which remove_building refuses ("Can not remove the primary building"); the
+			# set_holding_type below replaces the whole holding district, chain included.
 
 			# The six blockers. Not the ladder in wilderness_clear_hardest_obstacle_effect — that
 			# one takes the hardest and stops, which is right for a season's work and wrong here.
-			if = { limit = { has_building = killing_cold }   remove_building = killing_cold }
-			if = { limit = { has_building = flooded_lands }  remove_building = flooded_lands }
-			if = { limit = { has_building = bandit_camps }   remove_building = bandit_camps }
-			if = { limit = { has_building = beast_dens }     remove_building = beast_dens }
-			if = { limit = { has_building = dense_growth }   remove_building = dense_growth }
-			if = { limit = { has_building = scree_slopes }   remove_building = scree_slopes }
+			if = { limit = { has_building = killing_cold }   holding_district ?= { remove_building = killing_cold } }
+			if = { limit = { has_building = flooded_lands }  holding_district ?= { remove_building = flooded_lands } }
+			if = { limit = { has_building = bandit_camps }   holding_district ?= { remove_building = bandit_camps } }
+			if = { limit = { has_building = beast_dens }     holding_district ?= { remove_building = beast_dens } }
+			if = { limit = { has_building = dense_growth }   holding_district ?= { remove_building = dense_growth } }
+			if = { limit = { has_building = scree_slopes }   holding_district ?= { remove_building = scree_slopes } }
 
 			# A herder is a nomad's vassal and holds herder_holding, not nomad_holding; handing him
 			# his liege's holding type would leave him as badly off as the colony did. Read from the
@@ -1605,12 +1603,12 @@ wilderness_clear_hardest_obstacle_effect = {
 		county ?= { wilds_situation_obstacle_cleared_effect = { COUNTY = this } }
 	}
 
-	if = { limit = { has_building = killing_cold }        remove_building = killing_cold }
-	else_if = { limit = { has_building = flooded_lands }  remove_building = flooded_lands }
-	else_if = { limit = { has_building = bandit_camps }   remove_building = bandit_camps }
-	else_if = { limit = { has_building = beast_dens }     remove_building = beast_dens }
-	else_if = { limit = { has_building = dense_growth }   remove_building = dense_growth }
-	else_if = { limit = { has_building = scree_slopes }   remove_building = scree_slopes }
+	if = { limit = { has_building = killing_cold }        holding_district ?= { remove_building = killing_cold } }
+	else_if = { limit = { has_building = flooded_lands }  holding_district ?= { remove_building = flooded_lands } }
+	else_if = { limit = { has_building = bandit_camps }   holding_district ?= { remove_building = bandit_camps } }
+	else_if = { limit = { has_building = beast_dens }     holding_district ?= { remove_building = beast_dens } }
+	else_if = { limit = { has_building = dense_growth }   holding_district ?= { remove_building = dense_growth } }
+	else_if = { limit = { has_building = scree_slopes }   holding_district ?= { remove_building = scree_slopes } }
 }
 
 

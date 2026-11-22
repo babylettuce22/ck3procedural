@@ -75,10 +75,17 @@ public static partial class BuildingStripWriter
         b.Append("# Wonders, great projects and the holding's own level building are left standing; the\n");
         b.Append("# wilderness obstacle and ruin family is skipped because it is what the caller is placing.\n");
         b.Append("# Each removal is guarded, so the cost is one has_building test per key on a province\n");
-        b.Append("# that is being ruined, and nothing at all anywhere else.\n\n");
+        b.Append("# that is being ruined, and nothing at all anywhere else.\n");
+        b.Append("#\n");
+        b.Append("# CK3 1.21: buildings are added and removed in DISTRICT scope (vanilla writes\n");
+        b.Append("# holding_district = { remove_building = ... }). At province scope remove_building does\n");
+        b.Append("# nothing and logs nothing, so the list runs inside the holding district, whose slots the\n");
+        b.Append("# obstacles and the ruin go into. Regular and resource districts are not touched.\n\n");
         b.Append(EffectName).Append(" = {\n");
+        b.Append("\tholding_district ?= {\n");
         foreach (string key in keys)
-            b.Append("\tif = { limit = { has_building = ").Append(key).Append(" } remove_building = ").Append(key).Append(" }\n");
+            b.Append("\t\tif = { limit = { has_building = ").Append(key).Append(" } remove_building = ").Append(key).Append(" }\n");
+        b.Append("\t}\n");
         b.Append("}\n");
 
         string dir = Path.Combine(modDir, "common", "scripted_effects");

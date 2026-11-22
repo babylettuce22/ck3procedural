@@ -138,10 +138,10 @@ wilderness_clearing_obstacle_returns_effect = {
 			limit = {
 				county ?= { is_colony_county_trigger = yes }
 				NOT = { has_building = $OBSTACLE$ }
-				free_building_slots > 0
+				holding_district ?= { free_building_slots > 0 }
 			}
 			custom_tooltip = wilderness_clearing_returns_$OBSTACLE$_tt
-			hidden_effect = { add_building = $OBSTACLE$ }
+			hidden_effect = { gen_place_building_effect = { BUILDING = $OBSTACLE$ } }
 		}
 		else = {
 			county ?= { change_prosperity_progress = -50 }

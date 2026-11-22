@@ -15,6 +15,13 @@
 wilderness_holding = {
 	primary_district = wilderness_holding_district
 
+	# CK3 1.21: the holding view hides its resource and regular district slots for any holding
+	# with this parameter (GuiWriter.PatchCountyView). Neither holding lists any `districts`, so
+	# those slots could never be filled and only read as "Empty District Slot".
+	parameters = {
+		gen_no_districts
+	}
+
 	# The dummy holder is immortal and blocks inheritance anyway, but saying it here means a
 	# wilderness barony cannot leak into a real succession even if the dummy is somehow removed.
 	can_be_inherited = no
@@ -22,6 +29,13 @@ wilderness_holding = {
 
 settlement_holding = {
 	primary_district = settlement_holding_district
+
+	# CK3 1.21: the holding view hides its resource and regular district slots for any holding
+	# with this parameter (GuiWriter.PatchCountyView). Neither holding lists any `districts`, so
+	# those slots could never be filled and only read as "Empty District Slot".
+	parameters = {
+		gen_no_districts
+	}
 
 	# ---- There is no `can_be_built` here, and there cannot be ----
 	#

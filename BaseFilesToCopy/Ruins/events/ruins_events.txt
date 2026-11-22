@@ -780,7 +780,7 @@ gen_ruins.9000 = {
 						}
 					}
 					gen_ruins_make_room_effect = yes
-					add_building = ruins_large
+					gen_place_building_effect = { BUILDING = ruins_large }
 				}
 			}
 		}
@@ -807,7 +807,7 @@ gen_ruins.9000 = {
 						}
 					}
 					gen_ruins_make_room_effect = yes
-					add_building = ruins_small
+					gen_place_building_effect = { BUILDING = ruins_small }
 				}
 			}
 		}
@@ -833,9 +833,9 @@ gen_ruins.9000 = {
 			title_province ?= {
 				# All three, unconditionally guarded. Only one can be standing, but which one is the
 				# question this option exists to stop having to ask.
-				if = { limit = { has_building = ruins_large }   remove_building = ruins_large }
-				if = { limit = { has_building = ruins_small }   remove_building = ruins_small }
-				if = { limit = { has_building = ruins_cleared } remove_building = ruins_cleared }
+				if = { limit = { has_building = ruins_large }   holding_district ?= { remove_building = ruins_large } }
+				if = { limit = { has_building = ruins_small }   holding_district ?= { remove_building = ruins_small } }
+				if = { limit = { has_building = ruins_cleared } holding_district ?= { remove_building = ruins_cleared } }
 			}
 
 			if = { limit = { has_variable = ruin_former_culture } remove_variable = ruin_former_culture }

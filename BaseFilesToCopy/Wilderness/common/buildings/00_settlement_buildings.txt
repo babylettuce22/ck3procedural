@@ -21,8 +21,11 @@ settlement_01 = {
 	max_garrison = 100
 	garrison_reinforcement_factor = 0.01
 
-	# CK3 1.21: slots are per district, and the holding district has one of its own. 1.20's
-	# capital had two and this rung took one away, so the rung now adds none.
+	# CK3 1.21: slots are per district, and a holding district has NONE of its own (seen in game
+	# 2026-11-19: wilderness_01's +1 showed as 0/1). 1.20's colony had one slot on this rung.
+	province_modifier = {
+		building_slots_for_host_district = 1
+	}
 
 	# build_prestige_cost = -1 on all three rungs: the clearing buildings and settlement_02/03 list a
 	# prestige price beside their gold, and this cancels it for everybody. A tribal colony's
@@ -47,8 +50,8 @@ settlement_02 = {
 	construction_time = slow_construction_time
 	cost = { gold = settlement_upgrade_cost  prestige = settlement_upgrade_cost }
 
-	can_construct = { wilderness_can_grow_settlement_trigger = yes }
-	can_construct_potential = { wilderness_can_grow_settlement_trigger = yes }
+	can_construct = { trigger_if = { limit = { NOT = { gen_script_placement_trigger = yes } } wilderness_can_grow_settlement_trigger = yes } }
+	can_construct_potential = { trigger_if = { limit = { NOT = { gen_script_placement_trigger = yes } } wilderness_can_grow_settlement_trigger = yes } }
 
 	next_building = settlement_03
 
@@ -72,8 +75,11 @@ settlement_02 = {
 	max_garrison = 200
 	garrison_reinforcement_factor = 0.02
 
-	# CK3 1.21: slots are per district, and the holding district has one of its own. 1.20's
-	# capital had two and this rung took one away, so the rung now adds none.
+	# CK3 1.21: slots are per district, and a holding district has NONE of its own (seen in game
+	# 2026-11-19: wilderness_01's +1 showed as 0/1). 1.20's colony had one slot on this rung.
+	province_modifier = {
+		building_slots_for_host_district = 1
+	}
 
 	county_modifier = {
 		travel_danger = 10
@@ -99,8 +105,8 @@ settlement_03 = {
 	construction_time = very_slow_construction_time
 	cost = { gold = settlement_upgrade_cost  prestige = settlement_upgrade_cost }
 
-	can_construct = { wilderness_can_grow_settlement_trigger = yes }
-	can_construct_potential = { wilderness_can_grow_settlement_trigger = yes }
+	can_construct = { trigger_if = { limit = { NOT = { gen_script_placement_trigger = yes } } wilderness_can_grow_settlement_trigger = yes } }
+	can_construct_potential = { trigger_if = { limit = { NOT = { gen_script_placement_trigger = yes } } wilderness_can_grow_settlement_trigger = yes } }
 
 	# As settlement_02.
 	on_complete = {
@@ -121,9 +127,10 @@ settlement_03 = {
 	max_garrison = 300
 	garrison_reinforcement_factor = 0.03
 
-	# CK3 1.21: the holding district's own slot plus this is the two a finished colony had on 1.20.
+	# CK3 1.21: a holding district has no slot of its own, so this is all of them: the two a
+	# finished colony had on 1.20.
 	province_modifier = {
-		building_slots_for_host_district = 1
+		building_slots_for_host_district = 2
 	}
 
 	county_modifier = {

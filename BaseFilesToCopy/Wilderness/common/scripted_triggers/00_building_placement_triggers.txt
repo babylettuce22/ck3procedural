@@ -1,0 +1,6 @@
+﻿# Province scope (a building's can_construct root). True only while gen_place_building_effect is
+# placing a building by script — see common/scripted_effects/00_building_placement_effects.txt for
+# why CK3 1.21 needs it.
+gen_script_placement_trigger = {
+	has_variable = gen_script_placement
+}

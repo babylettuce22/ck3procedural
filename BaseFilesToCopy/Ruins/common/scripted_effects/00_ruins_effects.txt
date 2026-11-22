@@ -134,8 +134,8 @@ gen_ruins_place_effect = {
 		gen_ruins_make_room_effect = yes
 
 		random_list = {
-			50 = { add_building = ruins_large }
-			50 = { add_building = ruins_small }
+			50 = { gen_place_building_effect = { BUILDING = ruins_large } }
+			50 = { gen_place_building_effect = { BUILDING = ruins_small } }
 		}
 	}
 }
@@ -159,14 +159,14 @@ gen_ruins_place_effect = {
 # and pulling it would silently throw that work away.
 gen_ruins_make_room_effect = {
 	if = {
-		limit = { free_building_slots <= 0 }
+		limit = { holding_district ?= { free_building_slots <= 0 } }
 
-		if = { limit = { has_building = beast_dens }        remove_building = beast_dens }
-		else_if = { limit = { has_building = bandit_camps } remove_building = bandit_camps }
-		else_if = { limit = { has_building = dense_growth } remove_building = dense_growth }
-		else_if = { limit = { has_building = scree_slopes } remove_building = scree_slopes }
-		else_if = { limit = { has_building = flooded_lands } remove_building = flooded_lands }
-		else_if = { limit = { has_building = killing_cold } remove_building = killing_cold }
+		if = { limit = { has_building = beast_dens }        holding_district ?= { remove_building = beast_dens } }
+		else_if = { limit = { has_building = bandit_camps } holding_district ?= { remove_building = bandit_camps } }
+		else_if = { limit = { has_building = dense_growth } holding_district ?= { remove_building = dense_growth } }
+		else_if = { limit = { has_building = scree_slopes } holding_district ?= { remove_building = scree_slopes } }
+		else_if = { limit = { has_building = flooded_lands } holding_district ?= { remove_building = flooded_lands } }
+		else_if = { limit = { has_building = killing_cold } holding_district ?= { remove_building = killing_cold } }
 	}
 }
 

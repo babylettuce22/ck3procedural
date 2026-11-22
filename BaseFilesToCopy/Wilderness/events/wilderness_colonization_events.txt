@@ -3246,25 +3246,19 @@ wilderness_colonization.9999 = {
 
 			title_province = {
 				# Clear raw obstacles
-				if = { limit = { has_building = beast_dens } remove_building = beast_dens }
-				if = { limit = { has_building = bandit_camps } remove_building = bandit_camps }
-				if = { limit = { has_building = dense_growth } remove_building = dense_growth }
-				if = { limit = { has_building = flooded_lands } remove_building = flooded_lands }
-				if = { limit = { has_building = scree_slopes } remove_building = scree_slopes }
-				if = { limit = { has_building = killing_cold } remove_building = killing_cold }
+				if = { limit = { has_building = beast_dens } holding_district ?= { remove_building = beast_dens } }
+				if = { limit = { has_building = bandit_camps } holding_district ?= { remove_building = bandit_camps } }
+				if = { limit = { has_building = dense_growth } holding_district ?= { remove_building = dense_growth } }
+				if = { limit = { has_building = flooded_lands } holding_district ?= { remove_building = flooded_lands } }
+				if = { limit = { has_building = scree_slopes } holding_district ?= { remove_building = scree_slopes } }
+				if = { limit = { has_building = killing_cold } holding_district ?= { remove_building = killing_cold } }
 
-				# Remove misplaced secondary slot settlement buildings if previously bugged
-				if = { limit = { has_building = settlement_03 } remove_building = settlement_03 }
-				if = { limit = { has_building = settlement_02 } remove_building = settlement_02 }
-
-				# If primary building was removed/broken, reset holding to restore settlement_01
-				if = {
-					limit = { NOT = { has_building = settlement_01 } }
-					set_holding_type = settlement_holding
+				# Up one rung, in place. CK3 1.21: the settlement chain is the holding district's
+				# primary building, which remove_building cannot touch; upgrade_building_effect replaces
+				# a building with its next_building.
+				holding_district ?= {
+					if = { limit = { has_building = settlement_01 } upgrade_building_effect = settlement_01 }
 				}
-
-				# Upgrade in-place to Tier 2 (WITHOUT remove_building)
-				add_building = settlement_02
 			}
 		}
 	}
@@ -3286,25 +3280,18 @@ wilderness_colonization.9999 = {
 
 			title_province = {
 				# Strip all obstacles
-				if = { limit = { has_building = beast_dens } remove_building = beast_dens }
-				if = { limit = { has_building = bandit_camps } remove_building = bandit_camps }
-				if = { limit = { has_building = dense_growth } remove_building = dense_growth }
-				if = { limit = { has_building = flooded_lands } remove_building = flooded_lands }
-				if = { limit = { has_building = scree_slopes } remove_building = scree_slopes }
-				if = { limit = { has_building = killing_cold } remove_building = killing_cold }
+				if = { limit = { has_building = beast_dens } holding_district ?= { remove_building = beast_dens } }
+				if = { limit = { has_building = bandit_camps } holding_district ?= { remove_building = bandit_camps } }
+				if = { limit = { has_building = dense_growth } holding_district ?= { remove_building = dense_growth } }
+				if = { limit = { has_building = flooded_lands } holding_district ?= { remove_building = flooded_lands } }
+				if = { limit = { has_building = scree_slopes } holding_district ?= { remove_building = scree_slopes } }
+				if = { limit = { has_building = killing_cold } holding_district ?= { remove_building = killing_cold } }
 
-				# Clean up any bugged secondary slots
-				if = { limit = { has_building = settlement_03 } remove_building = settlement_03 }
-				if = { limit = { has_building = settlement_02 } remove_building = settlement_02 }
-
-				# Ensure primary slot exists
-				if = {
-					limit = { NOT = { has_building = settlement_01 } }
-					set_holding_type = settlement_holding
+				# Up the primary chain to settlement_03, a rung at a time (see option A).
+				holding_district ?= {
+					if = { limit = { has_building = settlement_01 } upgrade_building_effect = settlement_01 }
+					if = { limit = { has_building = settlement_02 } upgrade_building_effect = settlement_02 }
 				}
-
-				# Advance primary chain straight to settlement_03
-				add_building = settlement_03
 			}
 		}
 	}
@@ -3403,16 +3390,17 @@ wilderness_colonization.9998 = {
 				scope:test_county = {
 					# Clear blockers & set max building
 					title_province = {
-						if = { limit = { has_building = beast_dens } remove_building = beast_dens }
-						if = { limit = { has_building = bandit_camps } remove_building = bandit_camps }
-						if = { limit = { has_building = dense_growth } remove_building = dense_growth }
-						if = { limit = { has_building = flooded_lands } remove_building = flooded_lands }
-						if = { limit = { has_building = scree_slopes } remove_building = scree_slopes }
-						if = { limit = { has_building = killing_cold } remove_building = killing_cold }
+						if = { limit = { has_building = beast_dens } holding_district ?= { remove_building = beast_dens } }
+						if = { limit = { has_building = bandit_camps } holding_district ?= { remove_building = bandit_camps } }
+						if = { limit = { has_building = dense_growth } holding_district ?= { remove_building = dense_growth } }
+						if = { limit = { has_building = flooded_lands } holding_district ?= { remove_building = flooded_lands } }
+						if = { limit = { has_building = scree_slopes } holding_district ?= { remove_building = scree_slopes } }
+						if = { limit = { has_building = killing_cold } holding_district ?= { remove_building = killing_cold } }
 
-						remove_building = settlement_01
-						remove_building = settlement_02
-						add_building = settlement_03
+						holding_district ?= {
+							if = { limit = { has_building = settlement_01 } upgrade_building_effect = settlement_01 }
+							if = { limit = { has_building = settlement_02 } upgrade_building_effect = settlement_02 }
+						}
 					}
 					change_prosperity_level = 5
 

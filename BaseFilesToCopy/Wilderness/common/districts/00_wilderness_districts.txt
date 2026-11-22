@@ -10,9 +10,9 @@
 #
 # ---- Slots ----
 #
-# A district has COUNTY_BUILDING_SLOTS / BARONY_BUILDING_SLOTS = 1 slot of its own, plus whatever
-# `building_slots_for_host_district` its primary building grants (vanilla's castle_01 grants 1).
-# The primary buildings in 00_wilderness_buildings.txt and 00_settlement_buildings.txt set that so
+# A holding district has NO slot of its own, whatever COUNTY_BUILDING_SLOTS suggests: in game
+# (2026-11-19) wilderness_01's `building_slots_for_host_district = 1` showed as 0/1. So the slots are
+# exactly what the primary building grants (vanilla's castle_01 grants 1). The primary buildings in 00_wilderness_buildings.txt and 00_settlement_buildings.txt set that so
 # the counts are what 1.20 measured: an unsettled capital holds two obstacles (see
 # wilderness_seed_obstacle_effect), a colony one slot on its first two rungs and two on the third.
 

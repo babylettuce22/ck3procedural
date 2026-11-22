@@ -63,7 +63,7 @@ gen_mandala_starting_temples = {
 				if = {
 					limit = { less_than_max_amount_of_mandala_capitals_trigger = yes }
 					capital_province = {
-						add_great_building = mandala_capital_01
+						add_great_district = mandala_capital_01_district
 						add_to_global_variable_list = {
 							name = mandala_poi_list
 							target = this
@@ -81,7 +81,7 @@ gen_mandala_starting_temples = {
 				if = {
 					limit = { less_than_max_amount_of_mandala_capitals_trigger = yes }
 					capital_province = {
-						add_great_building = mandala_capital_01
+						add_great_district = mandala_capital_01_district
 						add_to_global_variable_list = {
 							name = mandala_poi_list
 							target = this

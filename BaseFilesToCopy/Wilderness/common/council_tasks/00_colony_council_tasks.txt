@@ -184,7 +184,7 @@ task_clear_the_wilds = {
 	on_finish_task_county = {
 		scope:province = {
 			if = {
-				limit = { has_ongoing_construction = no }
+				limit = { has_ongoing_holding_construction = no }
 
 				wilderness_clear_hardest_obstacle_effect = yes
 				wilderness_obstacle_cleared_effect = yes

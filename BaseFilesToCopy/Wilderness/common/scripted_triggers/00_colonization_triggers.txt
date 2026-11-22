@@ -434,7 +434,7 @@ can_promote_colony_trigger = {
 	# One home for the rule means the AI and the three buttons cannot disagree about it again.
 	custom_tooltip = {
 		text = colonize_construction_in_progress_tt
-		title_province ?= { has_ongoing_construction = no }
+		title_province ?= { has_ongoing_holding_construction = no }
 	}
 }
 

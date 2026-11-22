@@ -1092,7 +1092,7 @@ wilderness_yearly_colonist_development_aid_check = {
 							has_building = settlement_02
 						}
 						NOT = { has_building = settlement_03 }
-						has_ongoing_construction = no
+						has_ongoing_holding_construction = no
 					}
 				}
 			}
@@ -1114,7 +1114,7 @@ wilderness_yearly_colonist_development_aid_check = {
 								has_building = settlement_02
 							}
 							NOT = { has_building = settlement_03 }
-							has_ongoing_construction = no
+							has_ongoing_holding_construction = no
 						}
 					}
 				}

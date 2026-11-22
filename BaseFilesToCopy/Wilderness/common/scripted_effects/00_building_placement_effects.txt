@@ -1,0 +1,25 @@
+﻿# Placing a building by script, CK3 1.21.
+#
+# Province scope. Every obstacle, ruin and settlement level this mod puts down by script goes
+# through here, and nothing else in the Wilderness or Ruins sets calls add_building directly.
+#
+# Two things changed in 1.21, and each one silently undid the obstacles on its own:
+#
+# 1. add_building runs in DISTRICT scope. Vanilla writes `holding_district = { add_building = x }`;
+#    on the province it adds nothing and logs nothing.
+#
+# 2. add_building now asks the building's own triggers first (is_enabled, can_construct_potential,
+#    can_construct; ck3.exe 1.21 0x1431a67a0 -> 0x143639e70) and refuses with "Building 'x' cannot
+#    be constructed in district 'y'" when one fails. Until 1.20 it ignored them, which is what let an
+#    obstacle be `can_construct = { always = no }`: never buildable by a player, placed freely by
+#    script. 175 placements failed that way on the first 1.21 world.
+#
+# So the flag below stands for "script is placing this right now". The obstacles and ruins_large
+# accept nothing else (gen_script_placement_trigger), and the levels that already have rules of
+# their own OR it in. It is set and cleared around the one effect call, so no player and no AI ever
+# sees it, and a building that should not be constructible stays that way.
+gen_place_building_effect = {
+	set_variable = gen_script_placement
+	holding_district ?= { add_building = $BUILDING$ }
+	remove_variable = gen_script_placement
+}

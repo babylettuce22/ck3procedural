@@ -627,6 +627,17 @@ public static class GuiWriter
         doc.NameField("modifiers", "county_modifiers_grid").InsertVisible(wilderness.IsHidden());
         doc.NameField("build-holding prompt", "construct_holding").InsertVisible(unfinished.IsHidden());
 
+        // CK3 1.21 districts. Every province gets a resource district slot and a row of regular
+        // district slots, but wilderness_holding and settlement_holding list no `districts` and the
+        // wilderness dummy cannot build at all, so those slots are permanently empty — "Empty
+        // District Slot" on every unsettled county. Both holdings carry the `gen_no_districts`
+        // parameter (common/holdings/00_wilderness_holdings.txt); asking the holding type rather
+        // than a scripted_gui keeps this one engine read with no scope to get wrong. The holding
+        // district itself — where the obstacles stand — is a separate widget and stays.
+        var hasDistricts = GuiExpr.Not(GuiExpr.Raw("HoldingView.GetHolding.GetType.HasParameter( 'gen_no_districts' )"));
+        doc.Widget("resource district slot", "resource_district").AndVisible(hasDistricts);
+        doc.NameField("regular district slots", "regular_districts_tutorial_uses_this").InsertVisible(hasDistricts);
+
         doc.NameField("settle button", "county_info").InsertBefore(FrontierActions(wilderness));
 
         doc.Ship(modDir);

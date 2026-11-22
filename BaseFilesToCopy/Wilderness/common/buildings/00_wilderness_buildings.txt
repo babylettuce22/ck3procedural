@@ -44,8 +44,9 @@
 # for it is the toast or one of the clearing events (wilderness_clearing_works_done_effect), fired
 # before the remove so they see the province as the works left it.
 #
-# The `x` half is never constructible (`can_construct = always no`) — it is placed by script when
-# the county is seeded. The `x_cleared` half is constructible by anyone EXCEPT the wilderness dummy,
+# The `x` half is never constructible by anyone — it is placed by script when the county is seeded.
+# Its can_construct passes only during gen_place_building_effect (gen_script_placement_trigger),
+# because since CK3 1.21 add_building refuses a building whose own triggers fail. The `x_cleared` half is constructible by anyone EXCEPT the wilderness dummy,
 # whose AI is off anyway; the guard is there so the build menu of an unclaimed county is empty
 # rather than merely unusable.
 #
@@ -100,9 +101,10 @@ wilderness_01 = {
 	province_modifier = {
 		fort_level = -1
 
-		# CK3 1.21: slots are per district. The holding district's own one plus this makes the two
-		# obstacles an unsettled capital held on 1.20 (wilderness_seed_obstacle_effect measures it).
-		building_slots_for_host_district = 1
+		# CK3 1.21: slots are per district, and a holding district has none of its own (in game
+		# 2026-11-19 this +1 showed as 0/1). Two is what an unsettled capital held on 1.20
+		# (wilderness_seed_obstacle_effect measures it).
+		building_slots_for_host_district = 2
 	}
 
 	levy = 0
@@ -122,8 +124,8 @@ wilderness_01 = {
 # --- Beasts: wolves, bears, big cats. Forest, taiga and hill country. ---
 
 beast_dens = {
-	can_construct = { always = no }
-	can_construct_potential = { always = no }
+	can_construct = { gen_script_placement_trigger = yes }
+	can_construct_potential = { gen_script_placement_trigger = yes }
 
 	county_modifier = {
 		prosperity_growth_factor = -0.20
@@ -160,7 +162,7 @@ beast_dens_cleared = {
 		# A toast, or for a human one of three events in events/wilderness_clearing_events.txt.
 		# Called before the remove so the events see the province as it was finished.
 		wilderness_clearing_works_done_effect = { FIRST = 0101 SECOND = 0102 THIRD = 0103 }
-		remove_building = beast_dens_cleared  # <-- Deletes the building and frees the slot
+		holding_district ?= { remove_building = beast_dens_cleared }  # <-- Deletes the building and frees the slot
 	}
 }
 
@@ -168,14 +170,16 @@ beast_dens_cleared = {
 # --- Bandits: whoever was already living here and would rather you had not come. ---
 
 bandit_camps = {
-	can_construct = { always = no }
-	can_construct_potential = { always = no }
+	can_construct = { gen_script_placement_trigger = yes }
+	can_construct_potential = { gen_script_placement_trigger = yes }
 
 	county_modifier = {
 		hostile_raid_time = -0.50
 		supply_limit_mult = -0.30
 		all_tax_mult = -0.25
-		monthly_control_change_when_below_baseline_add = -0.10
+		# CK3 1.21: lowers where control settles rather than the monthly drift, which a negative
+		# monthly add would outrun (see 00_march_modifiers.txt).
+		control_baseline_add = -5
 		travel_danger = 50
 	}
 
@@ -203,7 +207,7 @@ bandit_camps_cleared = {
 		}
 	on_complete = {
 		wilderness_clearing_works_done_effect = { FIRST = 0201 SECOND = 0202 THIRD = 0203 }
-		remove_building = bandit_camps_cleared
+		holding_district ?= { remove_building = bandit_camps_cleared }
 	}
 }
 
@@ -211,8 +215,8 @@ bandit_camps_cleared = {
 # --- Dense growth: forest and jungle that has to come down before anything goes up. ---
 
 dense_growth = {
-	can_construct = { always = no }
-	can_construct_potential = { always = no }
+	can_construct = { gen_script_placement_trigger = yes }
+	can_construct_potential = { gen_script_placement_trigger = yes }
 
 	county_modifier = {
 		supply_limit_mult = -0.50
@@ -250,7 +254,7 @@ dense_growth_cleared = {
 		}
 	on_complete = {
 		wilderness_clearing_works_done_effect = { FIRST = 0301 SECOND = 0302 THIRD = 0303 }
-		remove_building = dense_growth_cleared
+		holding_district ?= { remove_building = dense_growth_cleared }
 	}
 }
 
@@ -258,8 +262,8 @@ dense_growth_cleared = {
 # --- Flooded lands: marsh, delta and river bottom. The one obstacle that follows the holder. ---
 
 flooded_lands = {
-	can_construct = { always = no }
-	can_construct_potential = { always = no }
+	can_construct = { gen_script_placement_trigger = yes }
+	can_construct_potential = { gen_script_placement_trigger = yes }
 
 	county_modifier = {
 		prosperity_growth_factor = -0.50
@@ -301,7 +305,7 @@ flooded_lands_cleared = {
 		}
 	on_complete = {
 		wilderness_clearing_works_done_effect = { FIRST = 0401 SECOND = 0402 THIRD = 0403 }
-		remove_building = flooded_lands_cleared
+		holding_district ?= { remove_building = flooded_lands_cleared }
 	}
 }
 
@@ -309,8 +313,8 @@ flooded_lands_cleared = {
 # --- Scree slopes: loose rock and no level ground. Mountains, desert mountains, high hills. ---
 
 scree_slopes = {
-	can_construct = { always = no }
-	can_construct_potential = { always = no }
+	can_construct = { gen_script_placement_trigger = yes }
+	can_construct_potential = { gen_script_placement_trigger = yes }
 
 	county_modifier = {
 		prosperity_growth_factor = -0.40
@@ -349,7 +353,7 @@ scree_slopes_cleared = {
 		}
 	on_complete = {
 		wilderness_clearing_works_done_effect = { FIRST = 0501 SECOND = 0502 THIRD = 0503 }
-		remove_building = scree_slopes_cleared
+		holding_district ?= { remove_building = scree_slopes_cleared }
 	}
 }
 
@@ -358,8 +362,8 @@ scree_slopes_cleared = {
 # --- Killing cold: arctic and high taiga. Never fully cleared, only endured. ---
 
 killing_cold = {
-	can_construct = { always = no }
-	can_construct_potential = { always = no }
+	can_construct = { gen_script_placement_trigger = yes }
+	can_construct_potential = { gen_script_placement_trigger = yes }
 
 	county_modifier = {
 		prosperity_growth_factor = -0.65
@@ -398,7 +402,7 @@ killing_cold_cleared = {
 		}
 	on_complete = {
 		wilderness_clearing_works_done_effect = { FIRST = 0601 SECOND = 0602 THIRD = 0603 }
-		remove_building = killing_cold_cleared
+		holding_district ?= { remove_building = killing_cold_cleared }
 	}
 }
 
@@ -449,8 +453,8 @@ killing_cold_cleared = {
 
 ruins_large = {
 	# Placed by script, never built. Nothing upgrades INTO this rung.
-	can_construct = { always = no }
-	can_construct_potential = { always = no }
+	can_construct = { gen_script_placement_trigger = yes }
+	can_construct_potential = { gen_script_placement_trigger = yes }
 
 	county_modifier = {
 		# Peasants will not settle next to it and will not go near it after dark.
@@ -479,8 +483,8 @@ ruins_large = {
 #
 # CONSTRUCTIBLE, unlike ruins_large, and that is what makes the ladder work at all: `next_building`
 # still honours the target's own can_construct, so a rung nothing may build is a rung nothing may
-# climb to. `add_building` ignores can_construct entirely, so the script-placed route is unaffected
-# by the guard below.
+# climb to. Since CK3 1.21 `add_building` honours it too, so the script-placed route passes through
+# the gen_script_placement_trigger branch of the OR below.
 #
 # `has_building = ruins_large` is what stops it being offered as a fresh build on a province with no
 # ruin on it. During the upgrade the old building is still standing, so the test is true exactly
@@ -490,12 +494,18 @@ ruins_small = {
 	cost = { gold = wilderness_clear_cost_dear  prestige = wilderness_clear_cost_dear }
 
 	can_construct = {
-		wilderness_can_clear_obstacle_trigger = yes
-		has_building = ruins_large
+		trigger_if = {
+			limit = { NOT = { gen_script_placement_trigger = yes } }
+			wilderness_can_clear_obstacle_trigger = yes
+			has_building = ruins_large
+		}
 	}
 	can_construct_potential = {
-		wilderness_can_clear_obstacle_trigger = yes
-		has_building = ruins_large
+		trigger_if = {
+			limit = { NOT = { gen_script_placement_trigger = yes } }
+			wilderness_can_clear_obstacle_trigger = yes
+			has_building = ruins_large
+		}
 	}
 
 	# Most of the malus lifted, which is the reason this rung exists rather than being folded into
@@ -567,6 +577,6 @@ ruins_cleared = {
 		county ?= { save_scope_as = gen_ruins_county }
 		county.holder ?= { trigger_event = wilderness_ruins.0001 }
 
-		remove_building = ruins_cleared
+		holding_district ?= { remove_building = ruins_cleared }
 	}
 }
