@@ -12,9 +12,9 @@ public static class ModWriter
     /// <summary>
     /// The game version the launcher checks the mod against. A wildcard patch, so a 1.20 hotfix does
     /// not flag every generated world as outdated; the generator reads the installed game's own
-    /// files, so it follows hotfixes within a version.
+    /// files, so it follows hotfixes within a version. 1.21 (Florin) since the 1.21 port.
     /// </summary>
-    public const string SupportedVersion = "1.20.*";
+    public const string SupportedVersion = "1.21.*";
 
     /// <summary>
     /// Directories where a vanilla file left in place is actively harmful because it is keyed to
