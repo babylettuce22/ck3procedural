@@ -373,6 +373,32 @@ public static class Faiths
             ? rng.Chance(0.8) ? "doctrine_scriptural" : "doctrine_oral_storytelling"
             : rng.Chance(0.3) ? "doctrine_mythic_literary" : "doctrine_oral_storytelling");
 
+        // CK3 1.21 (Florin) added usury, alcohol and dietary restrictions. Every vanilla religion
+        // names a usury doctrine (41 accepted, 5 discouraged, 2 forbidden, 1 outsiders-only on
+        // 1.21.0); alcohol and diet sit mostly on rites (~125 permitted/unrestricted against a
+        // couple of dozen restrictive ones). A religion-level pick reaches every rite, which only
+        // overrides a group it sets itself. Drawn on a stream of their own, after the 1.20 groups,
+        // so no earlier roll moves (Rng.For with a new salt).
+        var florin = Rng.For(cfg.Seed, 0xF10A, Rng.StableHash(religionKey));
+
+        Fill("doctrine_usury", abrahamic
+            ? florin.Chance(0.35) ? "doctrine_usury_forbidden"
+              : florin.Chance(0.35) ? "doctrine_usury_discouraged"
+              : florin.Chance(0.3) ? "doctrine_usury_outsiders_only" : "doctrine_usury_accepted"
+            : florin.Chance(0.12) ? "doctrine_usury_discouraged" : "doctrine_usury_accepted");
+
+        Fill("alcohol_restrictions", florin.Chance(abrahamic ? 0.2 : 0.03)
+            ? "special_doctrine_alcohol_forbidden"
+            : florin.Chance(0.06) ? "doctrine_alcohol_highborn_only" : "doctrine_alcohol_permitted");
+
+        Fill("dietary_restrictions", florin.NextDouble() switch
+        {
+            < 0.08 => "special_doctrine_meat_forbidden_temples",
+            < 0.12 => "special_doctrine_meat_forbidden",
+            < 0.14 => "special_doctrine_meat_forbidden_temples_fish",
+            _ => "doctrine_diet_unrestricted",
+        });
+
         // Only what this install declares, and only beside what the religion already holds.
         void Fill(string group, string pick)
         {
