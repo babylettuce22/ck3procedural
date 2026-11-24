@@ -711,6 +711,34 @@ public static class Governments
                     assigned[county] = realmGovernment;
                 }
             }
+
+            // A merchant republic's lands and vassals are republican too. In CK3 1.21 a republic is
+            // governed by its assembly: the ruler plus every adult direct vassal of republic
+            // government holding a patrician family title (republic_assembly_composition_patrician;
+            // vanilla's game start hands the titles out). The draw above flips single ports, so a
+            // republic seat could rule feudal vassals, who never qualified: its assembly was the
+            // ruler alone until they converted one by one in play (reported from a 1.21 beta game,
+            // 2026-11-23). Vanilla's Venice has republican vassals throughout; so does this, at
+            // every level, so a republican duke inside a feudal kingdom has republican counts.
+            // Repeated until nothing moves, because a vassal made republican makes its own vassals
+            // so. Nomad marches keep their own government, as they do under any liege.
+            for (bool moved = true; moved;)
+            {
+                moved = false;
+                foreach (var county in realmCounties)
+                {
+                    if (assigned.GetValueOrDefault(county) is GovernmentMap.Republic or GovernmentMap.Nomad) continue;
+                    var held = HistoryWriter.Primary(county, realms);
+                    bool republicanHolder = realms.HolderCounty.TryGetValue(held, out var seat)
+                                            && assigned.GetValueOrDefault(seat) == GovernmentMap.Republic;
+                    bool republicanLiege = realms.Liege.TryGetValue(held, out var liege)
+                                           && realms.HolderCounty.TryGetValue(liege, out var liegeSeat)
+                                           && assigned.GetValueOrDefault(liegeSeat) == GovernmentMap.Republic;
+                    if (!republicanHolder && !republicanLiege) continue;
+                    assigned[county] = GovernmentMap.Republic;
+                    moved = true;
+                }
+            }
         }
 
         return new GovernmentMap(assigned, adminTitles, nomadTitles);
