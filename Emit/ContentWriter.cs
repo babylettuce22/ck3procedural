@@ -1408,7 +1408,38 @@ public static partial class ContentWriter
     /// </summary>
     public sealed record ProvinceRow(
         int ProvinceId, string Culture, string Faith, string? SpecialSlot, string? SpecialBuilding,
-        string? Rite = null);
+        string? Rite = null, int Size = 1);
+
+    /// <summary>
+    /// CK3 1.21's settlement size on the start date (<c>province_size</c>, 1 Hamlet to 10). History
+    /// that omits it starts the holding at 1 (<c>DEFAULT_PROVINCE_SIZE</c>), and size then drifts
+    /// toward a baseline at 0.2 a month, about a level in 40 years, so without this every generated
+    /// town was a Hamlet for generations.
+    ///
+    /// Calibrated on vanilla's 1066 history (measured 2026-11-24): it sizes only ~10% of holdings,
+    /// nearly all county capitals, and how often grows with the county's prosperity: ~10% of
+    /// capitals below prosperity 9, ~50% at 12-14, ~75% from 15. A sized capital is mostly 3-5, more
+    /// in the richest counties; other baronies are sized 2-4% of the time. Vanilla's prosperity
+    /// scale is lower than the generator's, so the curve below is shifted (see its comment). Tribal, nomad and herder
+    /// seats run about a level smaller (vanilla tribal 2.7 against castles' 3.8). Empty and
+    /// unsettled baronies have no settlement to size.
+    /// </summary>
+    internal static int StartingSettlementSize(string holding, bool seat, int prosperity, Rng rng)
+    {
+        if (holding is "none" or "wilderness_holding" or "settlement_holding") return 1;
+
+        // Generated prosperity runs higher than vanilla's (counties to 30 and past, where vanilla's
+        // rarely pass 16), so the curve sits further up the scale: 4% at 12 or below, half at 22,
+        // 60% from 24. That sizes ~10% of a world's holdings, as vanilla does (measured on the
+        // h121 verify world: 163 counties).
+        double chance = seat ? Math.Clamp((prosperity - 12) / 20.0, 0.04, 0.6) : 0.03;
+        if (!rng.Chance(chance)) return 1;
+
+        // About 3 at prosperity 12, 4 at 20, 6 at 30: vanilla's sized capitals are mostly 3-5.
+        int size = seat ? 1 + prosperity / 6 + rng.Int(-1, 1) : rng.Int(2, 4);
+        if (holding is "tribal_holding" or "nomad_holding" or "herder_holding") size--;
+        return Math.Clamp(size, 2, 8);
+    }
 
     /// <summary>
     /// What a province is on an additional bookmark where that differs from the start date: its
@@ -1580,6 +1611,12 @@ public static partial class ContentWriter
                             b.Field("level", SpecialDistrictLevel(slot, building));
                         }
                 }
+
+                // Dated at 1.1.1, as vanilla only ever writes it inside a dated block, so it stands on
+                // every bookmark; after the undated fields and before any later date, in date order.
+                // See StartingSettlementSize.
+                if (row.Size > 1)
+                    using (b.Block("1.1.1")) b.Field("province_size", row.Size);
 
                 // A seat an additional bookmark's ruler sits in under another government: that
                 // government's holding from its date, and the start date's back when its holder
@@ -1762,7 +1799,8 @@ public static partial class ContentWriter
                     building = market;
                 }
 
-                rows.Add(new ProvinceRow(barony.ProvinceId, cultureKey, faith, slot, building, rite));
+                rows.Add(new ProvinceRow(barony.ProvinceId, cultureKey, faith, slot, building, rite,
+                    StartingSettlementSize(holding, i == 0, level, Rng.For(cfgSeed, 0x512E, barony.ProvinceId))));
             }
         }
 
