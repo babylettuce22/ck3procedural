@@ -12,4 +12,14 @@
 	# Correct legitimacy keys (DLC / 1.12+ engine support)
 	monthly_legitimacy_add = 0.5
 	legitimacy_gain_mult = 0.25
+
+	# A founding peace for the AI. A generated world opens as many small independent realms that all
+	# border each other, and in two observed CK3 1.21 games (2026-11-24) 110 titles changed hands by
+	# conquest on a 231-county map in eight years. Every hostile conquest costs a county 20 control
+	# (LOSS_ON_HOSTILE_OWNER_CHANGE), which climbs back about 1.2 a year, so by year 8 a quarter of
+	# settled counties sat under 10 control. Halving the AI's appetite for war and lengthening its
+	# rest between wars for this grace period damps that opening scramble; it ends with the
+	# modifier. The same two keys vanilla's warlike culture traditions use, with the sign flipped.
+	ai_war_chance = -0.5
+	ai_war_cooldown = 0.5
 }

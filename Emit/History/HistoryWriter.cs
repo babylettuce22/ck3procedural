@@ -232,6 +232,20 @@ public static class HistoryWriter
         return (first, dynasty);
     }
 
+    /// <summary>
+    /// Written after every <c>change_prosperity_level</c>: puts the county halfway into the level
+    /// rather than at its very bottom. In two observed CK3 1.21 games (2026-11-24) about half the
+    /// counties lost exactly one level in their first two years and then held roughly flat, the
+    /// first small setback tipping a county that had no progress to spare. Progress runs 0-100 a
+    /// level (change_prosperity_progress_with_overflow's own description: +100 is one level). An
+    /// <c>effect</c> block, as vanilla's title history uses for effects (00_other_titles.txt); its
+    /// scope is the title.
+    /// </summary>
+    private static void StartMidLevel(JominiBuilder b)
+    {
+        using (b.Block("effect")) b.Field("change_prosperity_progress", 50);
+    }
+
     public static Title Primary(Title county, RealmMap realms)
     {
         var best = county;
@@ -1310,7 +1324,11 @@ public static class HistoryWriter
                     if (government != GovernmentMap.Feudal) b.Field("government", government);
 
                     b.Field("liege", liege?.Key);
-                    if (level > 0) b.Field("change_prosperity_level", level);
+                    if (level > 0)
+                    {
+                        b.Field("change_prosperity_level", level);
+                        StartMidLevel(b);
+                    }
 
                     // Once per ruler, on the one title that is theirs: the effect acts on the holder,
                     // and a man holding a kingdom and six counties would otherwise run it seven times.
@@ -1903,6 +1921,7 @@ public static class HistoryWriter
                         if (eraLevel > 0 && eraLevel != levelWritten)
                         {
                             b.Field("change_prosperity_level", eraLevel);
+                            StartMidLevel(b);
                             levelWritten = eraLevel;
                         }
 
