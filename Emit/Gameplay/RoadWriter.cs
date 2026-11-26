@@ -16,8 +16,8 @@ namespace Ck3MapGen.Emit;
 /// <c>roads_duchy.py</c>. So the land roads here are the land <see cref="RouteNetwork.Candidates"/>,
 /// which are that same rule (every touching duchy pair, cheapest barony path, crossings
 /// included), and the sea roads are <see cref="RouteNetwork.SeaRoads"/>. Neither is the pruned
-/// <see cref="RouteNetwork.Edges"/> the Silk Road arrows draw. A road with a wilderness market at
-/// either end is left out: nobody trades with the empty land.</para>
+/// <see cref="RouteNetwork.Edges"/> the Silk Road arrows draw. Wilderness markets are included, so
+/// unsettled land between realms does not cut the network.</para>
 ///
 /// <para><b>Tiers.</b> Vanilla starts 125 of its 2,060 land roads (6 %) at tier 1, and only a road above
 /// tier 0 is drawn. Here the routes' primary roads (<see cref="RouteEdge.Primary"/>, the most travelled
@@ -32,10 +32,15 @@ public static class RoadWriter
     public static IReadOnlyList<List<(double X, double Y)>> WriteAll(string modDir, RouteNetwork routes, int baronyCount,
         ProvinceMap provinces, int[] order, ProvinceAnchor.Anchors anchors)
     {
-        bool Settled(RouteEdge e) => !routes.Hubs[e.A].Wilderness && !routes.Hubs[e.B].Wilderness && e.Provinces.Count >= 2;
-        var landRoads = routes.Candidates.Where(e => e.Kind == RouteKind.Land && Settled(e))
+        // Wilderness markets get their roads too. They used to be left out ("nobody trades with
+        // the empty land"), which cut the network wherever unsettled land lay between two realms:
+        // a trade route could not cross it, and a colony founded there sat off every road
+        // (reported from a 1.21 beta game, 2026-11-25). They start at tier 0 like most of
+        // vanilla's, so nothing is drawn until use levels them.
+        bool Usable(RouteEdge e) => e.Provinces.Count >= 2;
+        var landRoads = routes.Candidates.Where(e => e.Kind == RouteKind.Land && Usable(e))
             .OrderBy(e => e.A).ThenBy(e => e.B).ToList();
-        var seaRoads = routes.SeaRoads.Where(Settled).OrderBy(e => e.A).ThenBy(e => e.B).ToList();
+        var seaRoads = routes.SeaRoads.Where(Usable).OrderBy(e => e.A).ThenBy(e => e.B).ToList();
 
         string dir = Path.Combine(modDir, "common", "roads", "road_types");
         Directory.CreateDirectory(dir);

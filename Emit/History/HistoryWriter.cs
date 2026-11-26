@@ -1204,9 +1204,15 @@ public static class HistoryWriter
     /// fails and nothing happens, which is why it is written unconditionally rather than gated on
     /// anything this tool can see about the player's install.
     /// </summary>
-    private static void WriteAdministrativeFallback(JominiBuilder b)
+    private static void WriteAdministrativeFallback(JominiBuilder b, bool midLevel = false)
     {
-        using (b.Block("effect"))
+        using var effect = b.Block("effect");
+
+        // One effect block per date block: a second `effect` in the same date is a redefinition
+        // (ck3-tiger, duplicate-field), so the mid-level prosperity start rides in this one when
+        // both are due. See StartMidLevel.
+        if (midLevel) b.Field("change_prosperity_progress", 50);
+
         using (b.Block("if"))
         {
             using (b.Block("limit"))
@@ -1324,17 +1330,18 @@ public static class HistoryWriter
                     if (government != GovernmentMap.Feudal) b.Field("government", government);
 
                     b.Field("liege", liege?.Key);
-                    if (level > 0)
-                    {
-                        b.Field("change_prosperity_level", level);
-                        StartMidLevel(b);
-                    }
 
                     // Once per ruler, on the one title that is theirs: the effect acts on the holder,
                     // and a man holding a kingdom and six counties would otherwise run it seven times.
-                    if (government == GovernmentMap.Administrative
-                        && ReferenceEquals(title, Primary(holder, realms)))
-                        WriteAdministrativeFallback(b);
+                    bool adminFallback = government == GovernmentMap.Administrative
+                                         && ReferenceEquals(title, Primary(holder, realms));
+                    if (level > 0)
+                    {
+                        b.Field("change_prosperity_level", level);
+                        if (!adminFallback) StartMidLevel(b);
+                    }
+
+                    if (adminFallback) WriteAdministrativeFallback(b, midLevel: level > 0);
                 }
             }
         }
@@ -1918,16 +1925,18 @@ public static class HistoryWriter
                             b.Field("liege", liege ?? "0");
                         liegeWritten = liege;
 
+                        bool adminFallback = ReferenceEquals(map, realms) && government == GovernmentMap.Administrative
+                                             && ReferenceEquals(title, Primary(holder, realms));
+                        bool midLevel = false;
                         if (eraLevel > 0 && eraLevel != levelWritten)
                         {
                             b.Field("change_prosperity_level", eraLevel);
-                            StartMidLevel(b);
+                            midLevel = true;
+                            if (!adminFallback) StartMidLevel(b);
                             levelWritten = eraLevel;
                         }
 
-                        if (ReferenceEquals(map, realms) && government == GovernmentMap.Administrative
-                            && ReferenceEquals(title, Primary(holder, realms)))
-                            WriteAdministrativeFallback(b);
+                        if (adminFallback) WriteAdministrativeFallback(b, midLevel);
                     }
 
                     held = true;

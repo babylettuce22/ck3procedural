@@ -12,20 +12,15 @@
 # Neither holding lists any other `districts`: nothing but the holding district can be built on
 # unsettled ground or in a colony, which is what the old single building list meant.
 
-wilderness_holding = {
-	primary_district = wilderness_holding_district
-
-	# CK3 1.21: the holding view hides its resource and regular district slots for any holding
-	# with this parameter (GuiWriter.PatchCountyView). Neither holding lists any `districts`, so
-	# those slots could never be filled and only read as "Empty District Slot".
-	parameters = {
-		gen_no_districts
-	}
-
-	# The dummy holder is immortal and blocks inheritance anyway, but saying it here means a
-	# wilderness barony cannot leak into a real succession even if the dummy is somehow removed.
-	can_be_inherited = no
-}
+# ---- settlement_holding comes FIRST, and must ----
+#
+# In this file's old order (wilderness, then settlement) CK3 1.21 loaded wilderness_holding and
+# silently dropped settlement_holding: no parse error, but colony_government's holding reference,
+# every `set_holding_type = settlement_holding` and the generated settlement_holding_* modifiers all
+# failed, so every colonisation left the capital a wilderness holding and the leak check
+# (wilderness_colonization.0099) handed the county back a week later. Swapping the two blocks, and
+# changing nothing else, loads both with no holding errors at all (tested in game 2026-11-25). Why
+# the second entry is lost is not known; keep this order until it is.
 
 settlement_holding = {
 	primary_district = settlement_holding_district
@@ -49,4 +44,19 @@ settlement_holding = {
 	# raising anything new in a county — so a county whose only holding is a colony never satisfies
 	# it and the empty baronies stay shut until the colony is promoted. See the long note in
 	# 00_wilderness_government.txt, which is where that rule is explained and where it belongs.
+}
+
+wilderness_holding = {
+	primary_district = wilderness_holding_district
+
+	# CK3 1.21: the holding view hides its resource and regular district slots for any holding
+	# with this parameter (GuiWriter.PatchCountyView). Neither holding lists any `districts`, so
+	# those slots could never be filled and only read as "Empty District Slot".
+	parameters = {
+		gen_no_districts
+	}
+
+	# The dummy holder is immortal and blocks inheritance anyway, but saying it here means a
+	# wilderness barony cannot leak into a real succession even if the dummy is somehow removed.
+	can_be_inherited = no
 }
